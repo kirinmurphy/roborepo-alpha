@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
-import { addRepositorySource, enablePlanBoard, removeRepositorySources } from "./helpers.mjs";
+import { addRepositorySource, enablePlanBoard, portalToken, removeRepositorySources } from "./helpers.mjs";
 
 const document = ({ id, title, deps = [], summary = `Purpose of ${title}.` }) => [
   "---", `id: ${id}`, "next_action: Do it", `depends_on: [${deps.join(", ")}]`, "---", "",
@@ -164,7 +164,7 @@ test.describe("Backlog directory and ordering", () => {
     await openNamespace(page);
     await expect(page.getByRole("heading", { name: /^(Needs prioritization|Prioritized)/ })).toHaveCount(0);
     await expect(page.locator(".title-link")).toHaveText(["Storage", "Retrieval", "Diagnostics"]);
-    await expect(page.locator(".backlog-prioritize-banner")).toContainText("1 new plan needs prioritization");
+    await expect(page.locator(".backlog-prioritize-banner")).toContainText("1 plan needs prioritization");
     await expect(page.locator("backlog-block")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Move up" })).toHaveCount(0);
     await expect(page.getByText("linked plans")).toHaveCount(0);
@@ -225,7 +225,7 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".title-link")).toHaveText(["Diagnostics"]);
-    await expect(page.locator(".backlog-prioritize-banner")).toContainText("new plans need prioritization");
+    await expect(page.locator(".backlog-prioritize-banner")).toContainText("plans need prioritization");
   });
 
   test("a sustained hover reads the description on over the page, with nothing moving", async ({ page }) => {
@@ -301,7 +301,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(prioritize).not.toHaveCSS("background-color", resting);
   });
 
-  test("other lifecycles keep the larger description, with no hover expansion", async ({ page }) => {
+  test("other lifecycles keep the larger description", async ({ page }) => {
     await page.goto(`/plans?lifecycle=active&repo=${await repoKey(page, repoName)}`);
     const card = page.locator("plan-card", { hasText: "Working plan" });
     await expect(card.locator(".description-line")).toHaveCSS("font-size", "17px");
@@ -546,7 +546,7 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     expect(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.alpha).toBeUndefined();
-    await expect(page.getByText("4 new plans need prioritization")).toBeVisible();
+    await expect(page.getByText("4 plans need prioritization")).toBeVisible();
   });
 
   test("the sustained-hover panel is the default in every lifecycle", async ({ page }) => {
@@ -574,6 +574,168 @@ test.describe("Backlog directory and ordering", () => {
       await expect(region).not.toHaveClass(/is-excerpt-expanded/);
     } finally {
       fs.rmSync(path.join(repo, "docs/plans/active/alpha-long-active.md"));
+    }
+  });
+
+  test("a failed archive names no absolute path and leaves the plan where it was", async ({ page }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-archive-failure-"));
+    const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout;
+    const put = (relative, content) => {
+      fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
+      fs.writeFileSync(path.join(root, relative), content);
+    };
+    const dependent = path.join(root, "docs/plans/backlog/beta-after.md");
+    const lock = path.join(root, ".git/index.lock");
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.name", "Portal Test");
+      git("config", "user.email", "portal@example.invalid");
+      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
+      put("docs/plans/backlog/alpha-free.md", document({ id: "failfree1", title: "Free one" }));
+      put("docs/plans/backlog/alpha-other.md", document({ id: "failother", title: "Other one" }));
+      put("docs/plans/backlog/beta-after.md", document({ id: "failafter", title: "Waits elsewhere", deps: ["failfree1"] }));
+      git("add", ".");
+      git("commit", "-q", "-m", "fixture");
+      await addRepositorySource(page, root);
+      const { backlog } = await (await page.request.get("/api/plans")).json();
+      const { repositoryId, urlKey } = backlog.find((item) => item.name === path.basename(root));
+      const token = await portalToken(page);
+      const archive = async () => {
+        const response = await page.request.post("/api/plans/archive", {
+          headers: { "X-Cli-Portal-Token": token },
+          data: { repositoryId, id: "failfree1", reason: "Abandoned." },
+        });
+        return { status: response.status(), text: await response.text() };
+      };
+      const expectUnchanged = () => {
+        expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
+        expect(git("status", "--porcelain")).toBe("");
+      };
+
+      // Git's own message for a held lock names the lock file's full path.
+      fs.writeFileSync(lock, "");
+      const locked = await archive();
+      fs.rmSync(lock);
+      expect(locked.status).toBe(500);
+      expect(locked.text).toContain("could not be archived");
+      expect(locked.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
+      // Root writes a read-only file anyway, so this case cannot be staged there.
+      if (process.getuid?.() !== 0) {
+        fs.chmodSync(dependent, 0o444);
+        const readOnly = await archive();
+        fs.chmodSync(dependent, 0o644);
+        expect(readOnly.status).toBe(400);
+        expect(readOnly.text).toContain("could not be updated (EACCES)");
+        expect(readOnly.text).not.toContain(path.basename(root));
+        expectUnchanged();
+      }
+
+      // A file where the archive folder belongs raises a raw filesystem error, whose message has the path.
+      const blocker = path.join(root, "docs/plans/archived");
+      fs.rmSync(blocker, { recursive: true, force: true });
+      fs.writeFileSync(blocker, "");
+      const blocked = await archive();
+      fs.rmSync(blocker);
+      expect(blocked.status).toBe(500);
+      expect(blocked.text).toMatch(/could not be archived: E[A-Z]+/);
+      expect(blocked.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
+      // Without its Git directory, the repo's own error text never reaches the browser.
+      const gitDir = path.join(root, ".git");
+      fs.renameSync(gitDir, `${gitDir}-away`);
+      const noGit = await archive();
+      fs.renameSync(`${gitDir}-away`, gitDir);
+      expect(noGit.status).toBe(400);
+      expect(noGit.text).toContain("can't be read as a Git checkout");
+      expect(noGit.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
+      // A refusal's advice to the agent running the command stays out of the dialog's text.
+      git("checkout", "-q", "-b", "feature");
+      const offBase = await archive();
+      git("checkout", "-q", "main");
+      git("branch", "-q", "-D", "feature");
+      expect(offBase.status).toBe(400);
+      expect(offBase.text).toContain("is on feature, not main");
+      expect(offBase.text).not.toContain("Ask the user");
+      expectUnchanged();
+
+      // A bare repo has no checkout to commit from.
+      git("config", "core.bare", "true");
+      const bare = await archive();
+      git("config", "--unset", "core.bare");
+      expect(bare.status).toBe(400);
+      expect(bare.text).toContain("can't be read as a Git checkout");
+      expect(bare.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
+      // A commit that fails after the rename says the plan moved, without git's own text.
+      git("config", "commit.gpgsign", "true");
+      git("config", "gpg.program", "false");
+      const uncommitted = await archive();
+      git("config", "--unset", "commit.gpgsign");
+      git("config", "--unset", "gpg.program");
+      expect(uncommitted.status).toBe(500);
+      expect(uncommitted.text).toContain("moved to docs/plans/archived/alpha-free.md, but the move was not committed");
+      expect(uncommitted.text).not.toContain("gpg failed");
+      expect(uncommitted.text).toContain("Fix what stopped the commit");
+      expect(uncommitted.text).not.toContain(path.basename(root));
+      expect(git("status", "--porcelain")).toContain("R  docs/plans/backlog/alpha-free.md -> docs/plans/archived/alpha-free.md");
+      git("reset", "--quiet", "--hard");
+      expectUnchanged();
+
+      // The dialog gives the reader that way forward, and the list stops offering the moved plan.
+      git("config", "commit.gpgsign", "true");
+      git("config", "gpg.program", "false");
+      const confirmation = page.getByRole("dialog", { name: "Are you sure?" });
+      const archiveFreeOne = page.getByRole("button", { name: "Archive Free one", exact: true });
+      const hitUncommittedMove = async () => {
+        await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
+        await archiveFreeOne.click();
+        await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("textbox").fill("Abandoned.");
+        await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("button", { name: "Continue" }).click();
+        await confirmation.getByRole("button", { name: "Archive Plan" }).click();
+        await expect(confirmation).toContainText("the move was not committed");
+      };
+      await hitUncommittedMove();
+      await expect(confirmation).toContainText("Fix what stopped the commit");
+      await expect(confirmation.getByRole("button", { name: "Archive Plan" })).toBeHidden();
+      await expect(archiveFreeOne).toHaveCount(0);
+      await confirmation.getByRole("button", { name: "Close" }).click();
+      await expect(confirmation).toBeHidden();
+
+      // The next opening starts over, with none of that error's controls left behind.
+      await page.getByRole("button", { name: "Archive Other one", exact: true }).click();
+      const reopened = page.getByRole("dialog", { name: 'Archive "Other one"?' });
+      await expect(reopened.getByRole("button", { name: "Continue" })).toBeVisible();
+      await reopened.getByRole("button", { name: "Cancel" }).click();
+      await expect(reopened).toBeHidden();
+      git("reset", "--quiet", "--hard");
+
+      // A reload that fails can't drop the moved plan from the list, so only its control turns off.
+      const failedReload = /\/api\/plans\/refresh/;
+      await page.route(failedReload, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
+      await hitUncommittedMove();
+      await confirmation.getByRole("button", { name: "Close" }).click();
+      await expect(archiveFreeOne).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Archive Other one", exact: true })).toBeEnabled();
+      await page.unroute(failedReload);
+      git("config", "--unset", "commit.gpgsign");
+      git("config", "--unset", "gpg.program");
+      git("reset", "--quiet", "--hard");
+      expectUnchanged();
+
+      // A later snapshot lifts the hold: the undone plan can be archived again.
+      await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
+      await expect(archiveFreeOne).toBeEnabled();
+
+      expect((await archive()).status).toBe(200);
+      expect(fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 
@@ -1428,7 +1590,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.locator("backlog-block")).toHaveCount(3);
     await expect(page.getByRole("heading", { name: /^Needs prioritization/ })).toHaveText("Needs prioritization");
     await page.getByRole("button", { name: "Details", exact: true }).click();
-    await expect(page.locator(".backlog-prioritize-banner")).toContainText("4 new plans need prioritization");
+    await expect(page.locator(".backlog-prioritize-banner")).toContainText("4 plans need prioritization");
   });
 
   test("a plan with a duplicate id is shown with its reason and no controls", async ({ page }) => {
@@ -1482,6 +1644,37 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.locator(".title-link")).toHaveText(["Diagnostics", "Storage", "Retrieval"]);
     expect(errors).toEqual([]);
   });
+
+  for (const uncommitted of [false, true]) {
+    test(`an archive whose refresh fails holds only that plan until a newer snapshot (uncommitted: ${uncommitted})`, async ({ page }) => {
+      setOrder(["alphaa01", "alphab02"]);
+      await openOrdering(page);
+      await page.route("**/api/plans/archive", (route) => route.fulfill({
+        status: uncommitted ? 500 : 200,
+        contentType: "application/json",
+        body: JSON.stringify(uncommitted ? { error: { message: "Move uncommitted", code: "MOVE_NOT_COMMITTED" } } : { ok: true }),
+      }));
+      const failing = /\/api\/plans\/refresh/;
+      await page.route(failing, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
+      const archive = page.getByRole("button", { name: "Archive Traces", exact: true });
+      await archive.click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("textbox").fill("Superseded.");
+      await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+      await expect(dialog.getByRole("button", { name: "Archive Plan", exact: true })).toBeEnabled();
+      await dialog.getByRole("button", { name: "Archive Plan", exact: true }).click();
+      if (uncommitted) {
+        await expect(dialog.getByText("Move uncommitted")).toBeVisible();
+        await dialog.getByRole("button", { name: "Close", exact: true }).click();
+      }
+      await expect(dialog).toBeHidden();
+      await expect(archive).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Archive Diagnostics", exact: true })).toBeEnabled();
+      await page.unroute(failing);
+      await page.getByRole("button", { name: "Refresh", exact: true }).click();
+      await expect(archive).toBeEnabled();
+    });
+  }
 
   test("a Save whose refresh fails keeps the saved order on screen and says the page is out of date", async ({ page }) => {
     await openOrdering(page);

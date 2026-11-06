@@ -32,6 +32,8 @@ const includesAll = (label, text, phrases) => {
 // The rubric exists as two texts (validation-loop.md and plan-review's inline copy); both must carry
 // the convention checks so an edit to one cannot silently drop them.
 const CONVENTION_CHECK_PHRASES = ["Flow and cohesion", "Data and state", "Comments and abstractions", "length alone is never a finding"];
+// Both rubric texts must also keep issues the plan did not cause out of its findings.
+const OUTSIDE_PLAN_PHRASES = ["Issues the plan did not cause are not findings", "`Outside this plan`"];
 
 const SKILLS = {
   "plan-promote": {
@@ -185,6 +187,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "A silent pass is indistinguishable from a skipped one",
     "only `/plan-review` writes `### Approval`",
     ...CONVENTION_CHECK_PHRASES,
+    ...OUTSIDE_PLAN_PHRASES,
     "A comment the diff adds that only restates the code | `fix`",
   ]);
 
@@ -290,6 +293,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "never an account of the work",
     "Classify every finding by consequence, not size",
     ...CONVENTION_CHECK_PHRASES,
+    ...OUTSIDE_PLAN_PHRASES,
     "a comment the diff adds that only restates the code is a fix",
   ]);
   includesAll("plan-review fixes", review.slice(order[4], order[5]), [
@@ -458,6 +462,7 @@ for (const [id, { risk }] of Object.entries(SKILLS)) {
 }
 assert.ok(byId.get(PLAN_SUITE_PACKAGE).resources.some((r) => r.type === "rules" && r.source === "rules.md"), `${PLAN_SUITE_PACKAGE} carries the Code Outlives Plans rule`);
 assert.match(fs.readFileSync(path.join(repoRoot, "globals/packages", PLAN_SUITE_PACKAGE, "rules.md"), "utf8"), /^## Code Outlives Plans$/m);
+assert.match(fs.readFileSync(path.join(repoRoot, "globals/packages", PLAN_SUITE_PACKAGE, "rules.md"), "utf8"), /^## Plan Records Stay Plan-Specific$/m);
 
 // --- generated slash commands exist for every harness and point at the right SKILL.md ---
 const slashNames = new Set(loadSlashCommandPlan().commands.map((c) => c.name));

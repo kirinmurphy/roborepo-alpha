@@ -90,6 +90,8 @@ Include, when they apply:
 - failed, skipped, or not-run checks, with the exact command not run and why;
 - a Validation Loop that reached the cap, with the last pass's fixes, which were not revalidated;
 - checks that fail on the base branch as well;
+- issues outside this plan, from the Validator or the run, each proposed as separate work when it
+  is worth doing;
 - blocked objectives and what blocks them;
 - paired skills skipped or unavailable, with the reason;
 - a missing feature-verification pairing for UI, server, API, CLI, or performance work, and why;

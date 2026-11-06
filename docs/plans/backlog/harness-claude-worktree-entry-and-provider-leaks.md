@@ -3,7 +3,7 @@ id: 46qth5z8
 next_action: In a fresh Claude desktop session, confirm the app honors a PreToolUse deny for its own change_directory tool before writing the worktree-entry hook.
 blocked_by: []
 depends_on: []
-related: ["4zyo2woj", "wjlt1zvf", "7k3m9qd", "harness-capability-derived-resource-targeting"]
+related: ["4zyo2woj", "wjlt1zvf", "7k3m9qd", "harness-capability-derived-resource-targeting", "uvzskd7z"]
 reviewed_commit: d155e9ae78ac09dbe910aff211838f18d0e0b626
 worktree:
 ---
@@ -97,6 +97,7 @@ manifests and their readers use `app`.
 | `7k3m9qd` (`backlog/packages-resource-provider-delivery.md`) | Owns the per-harness branches in `scripts/cli/packages.mjs` |
 | `harness-capability-derived-resource-targeting` | Changes how `hooks` resources name their harnesses; no shared files |
 | `backlog/telemetry-repository-attribution-and-reset.md` | Owns telemetry repository aliases and canonical labels, the telemetry half of the sidebar report |
+| `uvzskd7z` (`backlog/agent-config-temp-folder-work-without-prompts.md`) | Adds a Bash hook beside the Claude hook sources this plan moves. No shared design, but whichever lands second has a small rebase |
 
 ## Goals
 

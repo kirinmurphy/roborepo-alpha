@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
+import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { reviewFreshness } from "../../modules/plan-suite/review-freshness.mjs";
 import { buildPlanSnapshot } from "../../modules/plan-suite/index.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
@@ -485,6 +486,123 @@ try {
     assert.equal(head(root), before, "a refused archive commits nothing");
     assert.ok(exists(root, backlog("arch-busy")));
     fs.writeFileSync(path.join(root, backlog("arch-dirty")), git(root, "show", `HEAD:${backlog("arch-dirty")}`));
+
+    // A dependent that can't be rewritten refuses before the rename, so nothing is left half moved.
+    git(root, "checkout", "--", backlog("arch-dirty"));
+    const statusBefore = git(root, "status", "--porcelain");
+    // Root writes a read-only file anyway, so these cases cannot be staged there.
+    if (process.getuid?.() !== 0) {
+      fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o444);
+      refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a read-only dependent", /could not be updated \(EACCES\)/);
+      fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o644);
+      assert.equal(head(root), before, "a refused archive commits nothing");
+      assert.equal(git(root, "status", "--porcelain"), statusBefore, "a refused archive leaves no staged move");
+      fs.chmodSync(path.join(root, backlog("arch-busy")), 0o444);
+      refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive of a read-only plan", /plan file could not be updated \(EACCES\)/);
+      fs.chmodSync(path.join(root, backlog("arch-busy")), 0o644);
+      assert.equal(head(root), before, "a refused archive commits nothing");
+      assert.equal(git(root, "status", "--porcelain"), statusBefore, "a read-only plan leaves no staged move");
+    }
+
+    // Edits that can't be written or staged undo the rename, so no half-finished move is left to commit.
+    // The failures are injected because a real one, such as a failing clean filter, can stop `git mv`
+    // first on some systems, before there is anything to undo. The dependent keeps refusing writes
+    // during the undo too, which it survives because that file never changed.
+    const dependentBefore = fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8");
+    const planBefore = fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8");
+    const realWriteFileSync = fs.writeFileSync;
+    const realSpawnSync = childProcess.spawnSync;
+    for (const failure of ["write", "stage"]) {
+      if (failure === "write") {
+        fs.writeFileSync = (file, ...args) => {
+          if (path.basename(String(file)) === path.basename(backlog("arch-dirty"))) throw Object.assign(new Error("injected write failure"), { code: "EIO" });
+          return realWriteFileSync(file, ...args);
+        };
+      } else {
+        childProcess.spawnSync = (binary, args, options) => (args[2] === "add" ? { status: 1, stdout: "", stderr: "injected add failure" } : realSpawnSync(binary, args, options));
+        syncBuiltinESMExports();
+      }
+      try {
+        await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }), { code: "MOVE_FAILED", message: /could not be updated, so it was not moved/ });
+      } finally {
+        fs.writeFileSync = realWriteFileSync;
+        childProcess.spawnSync = realSpawnSync;
+        syncBuiltinESMExports();
+      }
+      assert.equal(head(root), before, `a ${failure} failure commits nothing`);
+      assert.equal(git(root, "status", "--porcelain"), statusBefore, `a ${failure} failure undoes the rename and edits`);
+      assert.equal(fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8"), planBefore, `a ${failure} failure restores the plan's text`);
+      assert.equal(fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8"), dependentBefore, `the dependent still names the plan after a ${failure} failure`);
+    }
+
+    // When the undo fails too, the staged rename lacks the move's edits, so neither the error nor a retry
+    // may recommend committing it, and a retry warns what restoring discards.
+    let moves = 0;
+    childProcess.spawnSync = (binary, args, options) => {
+      if (args[2] === "add") return { status: 1, stdout: "", stderr: "injected add failure" };
+      if (args[2] === "mv" && ++moves === 2) return { status: 1, stdout: "", stderr: "injected undo failure" };
+      return realSpawnSync(binary, args, options);
+    };
+    syncBuiltinESMExports();
+    try {
+      await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }), (err) => {
+        assert.equal(err.code, "MOVE_NOT_COMMITTED");
+        assert.match(err.message, /moved to docs\/plans\/archived\/test-arch-busy\.md, but its edits were not saved/);
+        assert.match(err.resolution, /Committing the staged move would leave its edits out/);
+        return true;
+      });
+    } finally {
+      childProcess.spawnSync = realSpawnSync;
+      syncBuiltinESMExports();
+    }
+    assert.equal(head(root), before, "a failed undo commits nothing");
+    assert.match(git(root, "status", "--porcelain"), /^R {2}docs\/plans\/backlog\/test-arch-busy\.md -> docs\/plans\/archived\/test-arch-busy\.md$/m, "the failed undo leaves the rename staged");
+    assert.equal(fs.readFileSync(path.join(root, "docs/plans/archived/test-arch-busy.md"), "utf8"), planBefore, "the staged rename has none of the move's edits");
+    const retriedUndo = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "retrying after a failed undo", /was not committed/);
+    assert.equal(retriedUndo.code, "MOVE_NOT_COMMITTED");
+    assert.match(retriedUndo.resolution, /Commit the staged move only if every edit it should carry is staged\. To undo it instead, restore those files, which discards any uncommitted edits/);
+    assert.equal(head(root), before, "a retry after a failed undo commits nothing");
+    git(root, "reset", "--quiet", "--hard");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the failed undo restores cleanly");
+
+    // A commit that fails after the rename says the plan moved, and keeps git's reason for this reader.
+    // A signing program that fails stops the commit; a hook could be bypassed by an inherited core.hooksPath.
+    git(root, "config", "commit.gpgsign", "true");
+    git(root, "config", "gpg.program", "false");
+    const uncommitted = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a failing commit", /moved to docs\/plans\/archived\/test-arch-busy\.md, but the move was not committed/);
+    assert.equal(uncommitted.code, "MOVE_NOT_COMMITTED");
+    assert.match(uncommitted.details.join("\n"), /gpg failed/);
+    assert.equal(head(root), before, "nothing was committed");
+    assert.ok(exists(root, "docs/plans/archived/test-arch-busy.md"), "the plan is where the message says");
+    assert.match(git(root, "status", "--porcelain"), /^R {2}docs\/plans\/backlog\/test-arch-busy\.md -> docs\/plans\/archived\/test-arch-busy\.md$/m, "the move stays staged");
+    git(root, "config", "--unset", "commit.gpgsign");
+    git(root, "config", "--unset", "gpg.program");
+    const retriedArchive = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "retrying an uncommitted archive", /was not committed/);
+    assert.equal(retriedArchive.code, "MOVE_NOT_COMMITTED");
+    assert.equal(head(root), before, "a retried archive commits nothing");
+    git(root, "reset", "--quiet", "--hard");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged move restores cleanly");
+
+    // A plan that reads as already at its destination must not commit only that half of the move.
+    commit(root, "Seed a promotable plan", { [backlog("arch-retry")]: planDoc({ id: "archretr" }) });
+    const seeded = head(root);
+    git(root, "config", "commit.gpgsign", "true");
+    git(root, "config", "gpg.program", "false");
+    refused(root, plans(root, "promote", "archretr"), "promote with a failing commit", /was not committed/);
+    git(root, "config", "--unset", "commit.gpgsign");
+    git(root, "config", "--unset", "gpg.program");
+    const retried = refused(root, plans(root, "promote", "archretr"), "retrying an uncommitted promote", /was not committed/);
+    assert.equal(retried.code, "MOVE_NOT_COMMITTED");
+    assert.equal(head(root), seeded, "a retry never commits half the move");
+    git(root, "reset", "--quiet", "--hard");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged promote restores cleanly");
+
+    // An untracked plan had no move to fail, so it gets the plain refusal.
+    fs.mkdirSync(path.join(root, "docs/plans/ready"), { recursive: true });
+    fs.writeFileSync(path.join(root, "docs/plans/ready/test-untracked.md"), planDoc({ id: "archuntr" }));
+    const untracked = refused(root, plans(root, "promote", "archuntr"), "promote of an untracked plan", /is not committed, so it cannot be moved/);
+    assert.equal(untracked.code, "INVALID_CHANGE");
+    fs.rmSync(path.join(root, "docs/plans/ready/test-untracked.md"));
 
     // A dependent bound to a worktree keeps its reference, and the result names it; the clean one clears.
     commit(root, "Bind a dependent", {
