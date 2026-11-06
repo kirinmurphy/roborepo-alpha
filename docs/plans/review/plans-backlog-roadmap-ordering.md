@@ -67,7 +67,7 @@ Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all
 - No global ordering of plans across repositories or namespaces. Next up lists at most one plan per namespace. A pin lifts a whole namespace on the repo screen and in Next up; it ranks no plan against another namespace's.
 - No separate Roadmap page, hierarchy map, or extra grouping metadata.
 - No automatic rewriting of H1s, filename ordinals, or forced `Namespace Part ###` titles.
-- No footer namespace badge or badge-click filter interaction. The only clickable namespace badge is on a Next up card, and it opens that namespace.
+- No footer namespace badge or badge-click filter interaction. Only a Next up card's badge and a `Waiting on` line's badge are clickable, and each opens that namespace.
 - No changes to **any** non-Backlog lifecycle state or its UI presentation, including Ready, Active, Review, Completed, Archived, and Unclassified, except that priority disappears: Ready loses its dropdown and filter, Home loses its chip, and every view drops the priority sort key so it falls through to recency and then title.
 - No general live refresh; that remains [[plans-portal-live-refresh-and-static-preflight]]'s decision.
 - No wiring of validation into other repositories' CI. `roborepo plans validate` is the check they can adopt.
@@ -400,13 +400,13 @@ Run the checks for the tier as each task lands, then let CI run the full gate. E
 | Namespace config conflicts | Dirty Ordering drafts cannot save across a conflicting config revision; invalid/unreadable configs surface errors |
 | Invalid namespace | `roborepo plans validate` exits 1 and promote/start refuse bad filename prefixes in a configured repo, but Backlog displays affected plans with repair findings |
 | Titles | Next up and prerequisite lists badge an approved namespace; Details and Ordering rows show the plain title; authored H1 unchanged; no footer badge |
-| Unprioritized | Section appears first only when needed; moves into a draft Ordered list |
+| Unprioritized | In Ordering, the section appears first only when needed and moves into a draft Ordered list; in Details, a banner gives the count |
 | Ranked controls | Right side: top, up, down, bottom, return, handle; invalid actions disabled |
 | Return to unprioritized | The control or the drop zone sends a whole block to the top of Needs prioritization; Save removes it from the file; an order that drops a plan without naming it is refused |
 | Unranked controls | Right side: down-to-top, bottom, handle; no numeric/select placement |
 | Archive | Per plan, beside its modified time; asks for a reason, then a final yes; commits the plan's paths and its cleared dependents on the base branch; disabled during a dirty draft; a group's other plans stay; the route refuses a ranked plan |
 | Archive clears dependencies | Through the portal or `roborepo plans archive`, the plan leaves unfinished plans' `depends_on` and `blocked_by`; a dirty dependent refuses the move; a worktree-bound dependent is left and reported |
-| Two modes | Same flattened plan order; Details is always flat/un-nested; Ordering alone displays derived dependency group containers and movement controls |
+| Two modes | Same flattened order of ranked plans; Details is always flat/un-nested; Ordering alone displays derived dependency group containers and movement controls |
 | Explicit Save | Multiple moves persist in one atomic write only after Save succeeds |
 | Cancel | Discards uncommitted moves at once and restores persisted order |
 | Guarded exit | Mode/tab/route/repo/page navigation prompts Save and Continue, Discard Changes, or Keep Editing when dirty |
@@ -573,10 +573,10 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `### Verification` omits the UI review's validation passes, and two badge comments describe only the repo filter. — fixed (2c9f548a), with the Verification lines below
 - [x] On the No namespace screen at phone width, a long filename with no hyphens is clipped with no way to scroll. — fixed (e8999b57)
 - [x] The "Long Next up" risk still counts 14 namespaces; `main`'s restructure leaves 12. — fixed (e8999b57)
-- [ ] A failed archive can send an absolute path to the browser and leave a half-finished move staged: `transitionPlan` in `modules/plan-suite/transition.mjs` rewrites dependents after `git mv`, and `archiveBacklogPlan` in `scripts/cli/plans.mjs` passes raw errors and git stderr to the route. Reproduced on a throwaway fixture with a read-only dependent and a held `index.lock`.
-- [ ] `docs/user/reference/plans-portal.md` says `/api/plans` responses expose no absolute paths, but `/api/plans/document` returns one for the drawer's copy button.
-- [ ] `docs/images/plans.png` predates the archive icon and modified age on Prioritize rows.
-- [ ] The test name at `plans-backlog.spec.mjs:304` says "with no hover expansion", which contradicts the hover behavior another test proves; the comment at `backlog-model-check.mjs:135` still describes a position.
+- [x] A failed archive can send an absolute path to the browser and leave a half-finished move staged: `transitionPlan` in `modules/plan-suite/transition.mjs` rewrites dependents after `git mv`, and `archiveBacklogPlan` in `scripts/cli/plans.mjs` passes raw errors and git stderr to the route. Reproduced on a throwaway fixture with a read-only dependent and a held `index.lock`. — fixed (6a76dda1)
+- [x] `docs/user/reference/plans-portal.md` says `/api/plans` responses expose no absolute paths, but `/api/plans/document` returns one for the drawer's copy button. — fixed (fa4db8b9)
+- [x] `docs/images/plans.png` predates the archive icon and modified age on Prioritize rows. — fixed (fa4db8b9)
+- [x] The test name at `plans-backlog.spec.mjs:304` says "with no hover expansion", which contradicts the hover behavior another test proves; the comment at `backlog-model-check.mjs:135` still describes a position. — fixed (fa4db8b9)
 - [x] Waiting on differs from this plan's table, with no Decision Log entry. — decided by the user: keep the merged behavior; requirements and Decision Log updated
 - [x] Details has a banner instead of a Needs prioritization section, with no Decision Log entry. — decided by the user: keep the merged behavior; requirements and Decision Log updated
 - [x] Stale plan text on real ranks. — corrected in this record
