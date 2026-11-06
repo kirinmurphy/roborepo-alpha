@@ -649,6 +649,19 @@ test.describe("Backlog directory and ordering", () => {
       expect(noGit.text).not.toContain(path.basename(root));
       expectUnchanged();
 
+      // A commit that fails after the rename says the plan moved, without git's own text.
+      git("config", "commit.gpgsign", "true");
+      git("config", "gpg.program", "false");
+      const uncommitted = await archive();
+      git("config", "--unset", "commit.gpgsign");
+      git("config", "--unset", "gpg.program");
+      expect(uncommitted.status).toBe(500);
+      expect(uncommitted.text).toContain("moved to docs/plans/archived/alpha-free.md, but the move was not committed");
+      expect(uncommitted.text).not.toContain("gpg failed");
+      expect(uncommitted.text).not.toContain(path.basename(root));
+      git("reset", "--quiet", "--hard");
+      expectUnchanged();
+
       expect((await archive()).status).toBe(200);
       expect(fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
     } finally {

@@ -500,6 +500,20 @@ try {
     assert.equal(head(root), before, "a refused archive commits nothing");
     assert.equal(git(root, "status", "--porcelain"), statusBefore, "a read-only plan leaves no staged move");
 
+    // A commit that fails after the rename says the plan moved, and keeps git's reason for this reader.
+    // A signing program that fails stops the commit; a hook could be bypassed by an inherited core.hooksPath.
+    git(root, "config", "commit.gpgsign", "true");
+    git(root, "config", "gpg.program", "false");
+    const uncommitted = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a failing commit", /moved to docs\/plans\/archived\/test-arch-busy\.md, but the move was not committed/);
+    assert.equal(uncommitted.code, "MOVE_NOT_COMMITTED");
+    assert.match(uncommitted.details.join("\n"), /gpg failed/);
+    assert.equal(head(root), before, "nothing was committed");
+    assert.ok(exists(root, "docs/plans/archived/test-arch-busy.md"), "the plan is where the message says");
+    git(root, "config", "--unset", "commit.gpgsign");
+    git(root, "config", "--unset", "gpg.program");
+    git(root, "reset", "--quiet", "--hard");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged move restores cleanly");
+
     // A dependent bound to a worktree keeps its reference, and the result names it; the clean one clears.
     commit(root, "Bind a dependent", {
       [backlog("arch-dirty")]: linkedDoc("archdirt", "depends_on: [archbusy]\nblocked_by: []\nrelated: []\nworktree: arch-bound"),

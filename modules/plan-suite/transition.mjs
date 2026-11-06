@@ -101,10 +101,20 @@ export async function transitionPlan(options) {
     fs.mkdirSync(path.join(primary, path.dirname(toPath)), { recursive: true });
     gitOrThrow(primary, ["mv", "--", fromPath, toPath]);
   }
-  fs.writeFileSync(path.join(primary, toPath), content);
-  for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.markdown);
-  gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
-  gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
+  try {
+    fs.writeFileSync(path.join(primary, toPath), content);
+    for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.markdown);
+    gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
+    gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
+  } catch (err) {
+    if (atDestination) throw err;
+    // Past the rename the plan already sits at its new path, so saying the move failed would be false.
+    // It isn't undone here: this path can carry uncommitted plan edits that a rollback would lose.
+    throw domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but the move was not committed.`, {
+      resolution: "Run `git status` in the repo. Fix what stopped the commit and commit the staged move, or restore those files to undo it.",
+      details: err.details ?? [pathFreeFileError(err)],
+    });
+  }
   const commit = git(primary, ["rev-parse", "HEAD"]).stdout;
   const fastForward = target ? fastForwardTarget(target.path, base, base0) : undefined;
   return result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, dependentPaths: references.cleared, evidence: { ...(prepared.evidence || {}), ...(fastForward ? { fastForward } : {}), ...(rules.clearsReferences ? { references } : {}) } });

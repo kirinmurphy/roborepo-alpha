@@ -352,7 +352,7 @@ committed.
 same commit, so nothing keeps waiting on it. It does not rewire a chain: archiving B in A → B → C leaves C
 with no link to A. It refuses when one of those plans has uncommitted changes, and leaves a plan bound to a
 worktree alone, reporting it, because that worktree owns the plan's copy. `related` entries stay, as do the
-archived plan's own lists and those of completed and archived plans, which are history. A refusal changes nothing; repeating a move that already happened commits nothing. The
+archived plan's own lists and those of completed and archived plans, which are history. A refusal changes nothing; repeating a move that already happened commits nothing. A commit that fails after the rename leaves the move staged and says so, so you can finish or undo it with Git. The
 page can still show validation findings for a plan that needs repair.
 
 ## Git Metadata
