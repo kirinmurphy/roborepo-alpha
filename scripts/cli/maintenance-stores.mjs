@@ -11,6 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { isMainModule } from "./roots.mjs";
 import { stateDir } from "./state-paths.mjs";
+import { withCleanupStoreLock } from "../../modules/repositories/worktree-cleanup-lock.mjs";
 import { loadSettings } from "../../modules/developer-runtime/settings.mjs";
 import {
   FILE_SET_SHAPE,
@@ -63,7 +64,7 @@ function listStores(args) {
   return 0;
 }
 
-function resetStore(args) {
+async function resetStore(args) {
   const all = args.includes("--all");
   const rest = args.filter((arg) => arg !== "--all");
   if (rest.length !== 1) {
@@ -78,7 +79,17 @@ function resetStore(args) {
     return 2;
   }
 
-  if (all) return clearStore(store);
+  const reset = () => all ? clearStore(store) : trimStore(store);
+  if (!["worktree-removal-log", "worktree-cleanup-transactions"].includes(store.id)) return reset();
+  try {
+    return await withCleanupStoreLock(stateDir, reset);
+  } catch (error) {
+    console.error(`${store.id}: ${error.message}`);
+    return 1;
+  }
+}
+
+function trimStore(store) {
 
   // Apply the store's own policy. This is the same measurement its write path performs, so a reset
   // that reports "nothing to do" is telling the truth about the store being within its bound.
@@ -216,5 +227,5 @@ export function storeHealth() {
 // path normalization does not resolve symlinks, so that comparison silently no-ops when the script
 // is reached through a symlinked path — which is how an installed roborepo runs it.
 if (isMainModule(import.meta.url)) {
-  process.exit(process.argv.includes("--check") ? checkStoreBounds() : maintenanceStores(process.argv.slice(2)));
+  process.exit(process.argv.includes("--check") ? checkStoreBounds() : await maintenanceStores(process.argv.slice(2)));
 }

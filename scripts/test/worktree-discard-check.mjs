@@ -7,7 +7,8 @@ import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
-import { inventoryDiscard, previewWorktreeDiscard, applyWorktreeDiscard, readTransaction, saveTransaction } from "../../modules/repositories/worktree-discard.mjs";
+import { inventoryDiscard, previewWorktreeDiscard, applyWorktreeDiscard } from "../../modules/repositories/worktree-discard.mjs";
+import { deleteTransaction, readTransaction, saveTransaction } from "../../modules/repositories/worktree-transactions.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
 import { appendRemoval, removalLogPath, retryBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
@@ -37,16 +38,16 @@ try {
   const retryRepos = [fixture(), fixture()];
   for (const repo of retryRepos) {
     git(repo.mainPath, "branch", "pending");
-    saveTransaction(retryState, { id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(), target: { repositoryId: repo.mainPath, path: path.join(repo.mainPath, "absent-checkout"), name: "pending", branch: "pending", tip: git(repo.mainPath, "rev-parse", "HEAD") } });
+    await saveTransaction(retryState, { id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(), target: { repositoryId: repo.mainPath, path: path.join(repo.mainPath, "absent-checkout"), name: "pending", branch: "pending", tip: git(repo.mainPath, "rev-parse", "HEAD") } });
   }
   const detached = retryRepos[0];
   const detachedTip = git(detached.mainPath, "rev-parse", "HEAD");
   git(detached.mainPath, "branch", "null", detachedTip);
-  saveTransaction(retryState, { id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(), target: { repositoryId: detached.mainPath, path: path.join(detached.mainPath, "absent-detached"), name: "detached", branch: null, tip: detachedTip } });
+  await saveTransaction(retryState, { id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(), target: { repositoryId: detached.mainPath, path: path.join(detached.mainPath, "absent-detached"), name: "detached", branch: null, tip: detachedTip } });
   assert.equal((await retryBranchRetirement(detached.mainPath, "detached", { stateRoot: retryState, apply: true })).action, "removed");
   assert.equal(git(detached.mainPath, "rev-parse", "refs/heads/null"), detachedTip, "detached retry cannot retire a branch named null");
   git(detached.mainPath, "symbolic-ref", "refs/heads/alias", "refs/heads/main");
-  saveTransaction(retryState, {
+  await saveTransaction(retryState, {
     id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(),
     target: { repositoryId: detached.mainPath, path: path.join(detached.mainPath, "absent-alias"), name: "alias", branch: "alias", tip: detachedTip },
   });
@@ -101,7 +102,7 @@ try {
   rejected = await applyWorktreeDiscard({ ...f, receipt: fourth.receipt, stop: async () => { fs.writeFileSync(path.join(f.work, "server-write"), "late"); return { ok: true }; } });
   assert.equal(rejected.action, "kept"); assert.ok(rejected.differences.added.includes("server-write"));
   const expired = await preview(f), record = readTransaction(f.stateRoot, expired.receipt);
-  record.expiresAt = new Date(0).toISOString(); saveTransaction(f.stateRoot, record);
+  record.expiresAt = new Date(0).toISOString(); await saveTransaction(f.stateRoot, record);
   assert.match((await applyWorktreeDiscard({ ...f, receipt: expired.receipt })).reason, /expired/);
   fs.writeFileSync(path.join(f.work, "<index>"), "tracked arbitrary name");
   git(f.work, "add", "<index>"); git(f.work, "commit", "-qm", "unusual tracked path");
@@ -126,7 +127,7 @@ try {
   git(f.mainPath, "add", "base-new"); git(f.mainPath, "commit", "-qm", "base advances");
   assert.equal((await applyWorktreeDiscard({ ...f, receipt: changedBase.receipt })).action, "kept");
   const consumed = await preview(f), consumedRecord = readTransaction(f.stateRoot, consumed.receipt);
-  consumedRecord.state = "applying"; saveTransaction(f.stateRoot, consumedRecord);
+  consumedRecord.state = "applying"; await saveTransaction(f.stateRoot, consumedRecord);
   assert.match((await applyWorktreeDiscard({ ...f, receipt: consumed.receipt })).reason, /consumed/);
   assert.equal(git(f.mainPath, "for-each-ref", "--format=%(refname)", "refs/roborepo/"), "");
 
@@ -174,6 +175,14 @@ try {
   } finally { fs.lstatSync = originalLstat; }
   await assert.rejects(inventoryDiscard(unreadable.work, { timeoutMs: 0 }), /time limit/);
   const intent = fixture();
+  const prunedPreview = await preview(intent);
+  const pruned = await applyWorktreeDiscard({ ...intent, receipt: prunedPreview.receipt, stop: async () => {
+    await deleteTransaction(intent.stateRoot, prunedPreview.receipt);
+    return { ok: true };
+  } });
+  assert.equal(pruned.action, "kept");
+  assert.match(pruned.reason, /removal intent/);
+  assert.ok(fs.existsSync(intent.work), "removal cannot recreate a pruned receipt");
   const intentPreview = await preview(intent);
   const originalWrite = fs.writeFileSync;
   try {

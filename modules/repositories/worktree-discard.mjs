@@ -6,12 +6,12 @@ import { runGitProcess, GIT_MAX_BINARY_BUFFER } from "./git-exec.mjs";
 import { linkedWorktrees } from "./worktree-inventory.mjs";
 import { checkWorktreeRemoval } from "./worktree-guards.mjs";
 import { inspectBranchLanding, defaultLandingBase } from "./worktree-landed.mjs";
-import { withCleanupLock, removeWorktree } from "./worktree-removal.mjs";
-import { findRetentionStore, measureFileSet } from "../retention/index.mjs";
+import { removeWorktree } from "./worktree-removal.mjs";
+import { withCleanupLock } from "./worktree-cleanup-lock.mjs";
+import { saveTransaction, readTransaction } from "./worktree-transactions.mjs";
 
 const DAY = 86400000;
 const RECEIPT_DETAIL_LIMIT = 2 * 1024 * 1024;
-const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
 // Raw bytes, index identities and flags are independent of filters and worktree conversion rules.
 // No status/diff command is used: those commands may run a configured clean filter.
@@ -105,7 +105,7 @@ export async function previewWorktreeDiscard(options) {
       if (!assessment.eligible) return assessment;
       const now = Date.now();
       const record = { id: randomUUID(), state: "previewed", target: assessment.target, scope: assessment.scope, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + DAY).toISOString(), digest: assessment.inventory.digest, warnings: assessment.warnings, identities: compactIdentities(assessment.inventory.identities) };
-      saveTransaction(stateRoot, record);
+      await saveTransaction(stateRoot, record);
       const { inventory, ...preview } = assessment;
       return { ...preview, receipt: record.id, expiresAt: record.expiresAt };
     } catch (error) { return kept(error.message); }
@@ -182,28 +182,6 @@ function compareAssessment(record, fresh) {
   return null;
 }
 
-export function saveTransaction(stateRoot, record, fsApi = fs) {
-  const dir = path.join(stateRoot, "worktree-cleanup", "transactions");
-  if (!UUID.test(record.id)) throw new Error("invalid transaction id");
-  fsApi.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const file = path.join(dir, `${record.id}.json`);
-  const temporary = `${file}.${randomUUID()}.tmp`;
-  try { fsApi.writeFileSync(temporary, JSON.stringify(record), { mode: 0o600, flag: "wx" }); fsApi.renameSync(temporary, file); }
-  finally { fsApi.rmSync(temporary, { force: true }); }
-  const store = findRetentionStore(stateRoot, "worktree-cleanup-transactions");
-  for (const victim of measureFileSet({ dirPath: dir, policy: store.policy, fsApi }).files) fsApi.rmSync(victim, { force: true });
-  // Losing a live receipt to retention is fail-closed, including pressure from other repos.
-  if (!fsApi.existsSync(file)) throw new Error("transaction pruned; reassessment required");
-}
-
-export function readTransaction(stateRoot, id, fsApi = fs) {
-  if (typeof id !== "string" || !UUID.test(id)) throw new Error("invalid receipt");
-  return JSON.parse(fsApi.readFileSync(path.join(stateRoot, "worktree-cleanup", "transactions", `${id}.json`), "utf8"));
-}
-export function deleteTransaction(stateRoot, id, fsApi = fs) {
-  if (!UUID.test(id)) throw new Error("invalid transaction id");
-  fsApi.rmSync(path.join(stateRoot, "worktree-cleanup", "transactions", `${id}.json`), { force: true });
-}
 export function removalResult(result, worktree) {
   return { action: result.ok ? "removed" : result.kept ? "kept" : "failed", eligible: !result.kept, reason: result.reason || null, path: worktree.path, name: worktree.name, branch: worktree.branch, outcomes: result.outcomes || [], ...(result.entry?.branchDeleted === false ? { retryCommand: `roborepo git worktrees cleanup --remove ${worktree.name} --confirm --apply` } : {}) };
 }

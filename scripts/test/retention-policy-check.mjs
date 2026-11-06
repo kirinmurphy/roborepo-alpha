@@ -11,7 +11,7 @@ import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
 import { appendRemoval, removalLogPath } from "../../modules/repositories/worktree-removal.mjs";
-import { saveTransaction, readTransaction } from "../../modules/repositories/worktree-discard.mjs";
+import { saveTransaction, readTransaction } from "../../modules/repositories/worktree-transactions.mjs";
 import {
   FILE_SET_SHAPE,
   LOG_SHAPE,
@@ -211,17 +211,35 @@ try {
   assert.ok(fs.statSync(logFile).size <= 2 * 1024 * 1024);
   const transactionRoot = path.join(cleanupRoot, "worktree-cleanup", "transactions");
   const stale = { id: randomUUID(), createdAt: new Date().toISOString(), state: "previewed" };
-  saveTransaction(cleanupRoot, stale);
+  await saveTransaction(cleanupRoot, stale);
   const staleFile = path.join(transactionRoot, `${stale.id}.json`);
   const old = new Date(Date.now() - 8 * DAY); fs.utimesSync(staleFile, old, old);
-  for (let i = 0; i < 6; i++) saveTransaction(cleanupRoot, { id: randomUUID(), state: "previewed", padding: "x".repeat(1024 * 1024) });
+  for (let i = 0; i < 6; i++) await saveTransaction(cleanupRoot, { id: randomUUID(), state: "previewed", padding: "x".repeat(1024 * 1024) });
   assert.throws(() => readTransaction(cleanupRoot, stale.id), /ENOENT/, "pruned receipt has no authority");
   assert.ok(fs.readdirSync(transactionRoot).reduce((sum, name) => sum + fs.statSync(path.join(transactionRoot, name)).size, 0) <= 5 * 1024 * 1024);
-  console.log("ok: cleanup retention age/size bounds and 40 cross-process appends");
+  const concurrentRoot = path.join(tempRoot, "concurrent-transactions");
+  const pending = { id: randomUUID(), state: "previewed" };
+  await saveTransaction(concurrentRoot, pending);
+  const pendingFile = path.join(concurrentRoot, "worktree-cleanup", "transactions", `${pending.id}.json`);
+  fs.utimesSync(pendingFile, old, old);
+  let refresh;
+  const interleavedFs = Object.create(fs);
+  interleavedFs.rmSync = (file, options) => {
+    if (file === pendingFile) {
+      refresh = Promise.resolve(saveTransaction(concurrentRoot, { ...pending, state: "applying" }));
+    }
+    return fs.rmSync(file, options);
+  };
+  await saveTransaction(concurrentRoot, { id: randomUUID(), state: "previewed" }, interleavedFs);
+  assert.ok(refresh, "a second writer attempts to refresh the pruned record");
+  await refresh;
+  assert.equal(readTransaction(concurrentRoot, pending.id).state, "applying", "pruning cannot unlink a concurrent replacement");
+  console.log("ok: cleanup retention bounds, concurrent append and transaction refresh");
 
   console.log(`ok: retention policy engine (${stores.length} stores registered)`);
 } finally {
-  fs.rmSync(tempRoot, { recursive: true, force: true });
+  try { fs.rmSync(tempRoot, { recursive: true, force: true }); }
+  catch (error) { console.error(`Fixture cleanup failed: ${error.message}`); process.exitCode = 1; }
 }
 
 function record(at, tag) {

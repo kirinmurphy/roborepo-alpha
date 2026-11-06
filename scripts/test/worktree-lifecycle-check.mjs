@@ -20,7 +20,8 @@ import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "../cli/work
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { loadRegistry } from "../../modules/repositories/registry.mjs";
 import { rootId } from "../../modules/repositories/identity.mjs";
-import { removeWorktree, removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
+import { removeWorktree, removalLogPath } from "../../modules/repositories/worktree-removal.mjs";
+import { withCleanupLock } from "../../modules/repositories/worktree-cleanup-lock.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mjs";
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";

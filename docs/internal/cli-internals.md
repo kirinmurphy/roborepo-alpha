@@ -148,8 +148,10 @@ CLI and portal adapters in `worktree-cleanup.mjs` call shared repository policy.
 | --- | --- |
 | `worktree-artifacts.mjs` | Shared ignored-artifact discovery and shape rules |
 | `worktree-preservation.mjs` | Coherent index/filesystem absorption proofs using temporary objects |
-| `worktree-discard.mjs` | Raw loss inventory, receipts, rechecks, and transaction storage |
-| `worktree-removal.mjs` | Cleanup locks, intent-before-mutation, checkout removal, branch retirement, bounded log |
+| `worktree-discard.mjs` | Raw loss inventory, receipt issuance, and rechecks |
+| `worktree-removal.mjs` | Intent-before-mutation, checkout removal, branch retirement, bounded log |
+| `worktree-transactions.mjs` | Transaction persistence, receipt consumption, and pruning |
+| `worktree-cleanup-lock.mjs` | Per-repo cleanup lock and shared store lock |
 | `worktree-legacy-recovery.mjs` | Exact-object migration inventory, approved deletion, backup restoration |
 | `worktree-snapshot.mjs` | Preservation inventory and legacy snapshot listing, reading, verification, restore |
 
@@ -162,10 +164,10 @@ own outcome. A successful operation deletes the transaction. Retry never uses th
 authority and refuses moved branches, occupied branches, and recreated checkouts.
 
 Transactions contain no file bytes or Git refs. Per-path digest detail over 2 MiB compacts to group
-digests. The file set is bounded to seven days and 5 MiB; pruning a receipt fails closed. Removal-log
-append and compaction share a state-root lock with a bounded wait, preventing concurrent repos from
-losing records during rename. The log keeps 30 days and 2 MiB. A lock cannot prevent editor writes
-after the final check; callers must stop writers operationally.
+digests. The file set is bounded to seven days and 5 MiB. A pruned receipt cannot be consumed.
+A state-root lock with a bounded wait serializes transaction writes, pruning, log append and
+compaction, and maintenance resets of both stores. The log keeps 30 days and 2 MiB. Callers must
+stop writers before the final checkout check because editors do not take the cleanup lock.
 
 Legacy snapshots are version-1 commits under `refs/roborepo/worktree-archives/<uuid>`, with a tip
 parent and manifest plus index/tracked/untracked/ignored payload trees. Production no longer writes

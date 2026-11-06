@@ -1,35 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { inventoryWorktree } from "./worktree-snapshot.mjs";
-import { saveTransaction, readTransaction, deleteTransaction } from "./worktree-discard.mjs";
+import { saveTransaction, readTransaction, deleteTransaction } from "./worktree-transactions.mjs";
+import { withCleanupStoreLock } from "./worktree-cleanup-lock.mjs";
 import { measureLog, findRetentionStore } from "../retention/index.mjs";
 import { runGitProcess } from "./git-exec.mjs";
 
 export function removalLogPath(stateRoot) {
   return path.join(stateRoot, "worktree-cleanup", "removals.jsonl");
-}
-
-export async function withCleanupLock(stateRoot, action, { fsApi = fs, repositoryPath = null } = {}) {
-  const dir = path.join(stateRoot, "worktree-cleanup");
-  fsApi.mkdirSync(dir, { recursive: true });
-  const repositoryKey = repositoryPath ? createHash("sha256").update(repositoryPath).digest("hex").slice(0, 16) : "global";
-  const file = path.join(dir, `${repositoryKey}.lock`);
-  let handle = openLock(file, fsApi);
-  // A cleanup killed by a signal or a reboot never reaches `finally`, and its lock would otherwise
-  // block every later run. Take over only when the recorded process is gone.
-  if (handle == null && staleLock(file, fsApi)) {
-    fsApi.rmSync(file, { force: true });
-    handle = openLock(file, fsApi);
-  }
-  if (handle == null) return { locked: true, result: null };
-  try {
-    fsApi.writeSync(handle, `${process.pid}\n`);
-    return { locked: false, result: await action() };
-  } finally {
-    fsApi.closeSync(handle);
-    fsApi.rmSync(file, { force: true });
-  }
 }
 
 // Callers hold the repo cleanup lock and recheck guards immediately before this operation.
@@ -50,20 +29,20 @@ export async function removeWorktree(mainPath, worktree, { kind, stateRoot, tip,
   const now = Date.now();
   const record = transaction || { id: randomUUID(), target: { repositoryId: mainPath, path: worktree.path, name: worktree.name, branch: worktree.branch, tip }, scope: "proof", evidenceCommit: authority.evidenceCommit, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + 7 * 86400000).toISOString() };
   record.state = "applying";
-  try { saveTransaction(stateRoot, record, fsApi); }
+  try { await saveTransaction(stateRoot, record, fsApi, { requirePreview: Boolean(transaction) }); }
   catch (error) { return { ok: false, kept: true, reason: `could not record removal intent: ${error.message}` }; }
   const removed = await runGit(mainPath, ["worktree", "remove", "--force", worktree.path], { timeoutMs: 120000 });
   if (!removed.ok) return { ok: false, reason: removed.error || "worktree remove failed", outcomes: [{ step: "checkout-removed", ok: false }] };
   const outcomes = [{ step: "checkout-removed", ok: true }];
   record.state = "checkout-removed";
-  try { saveTransaction(stateRoot, record, fsApi); }
+  try { await saveTransaction(stateRoot, record, fsApi); }
   catch (error) { return { ok: false, reason: `checkout removed; transaction recording failed: ${error.message}`, entry: { branchDeleted: false }, outcomes }; }
   const branch = worktree.branch ? await retireBranch(mainPath, worktree.branch, tip, runGit) : { ok: true };
   outcomes.push({ step: "branch-retired", ok: branch.ok });
   const entry = { at: new Date().toISOString(), kind, path: worktree.path, branch: worktree.branch, commit: tip, branchDeleted: branch.ok, scope: authority.scope };
   try {
     await appendRemoval(stateRoot, entry, fsApi);
-    if (branch.ok) deleteTransaction(stateRoot, record.id, fsApi);
+    if (branch.ok) await deleteTransaction(stateRoot, record.id, fsApi);
   } catch (error) { return { ok: false, reason: `removal outcome recording failed: ${error.message}`, entry, outcomes }; }
   return { ok: branch.ok, reason: branch.ok ? null : "worktree removed but branch deletion failed", entry, outcomes };
 }
@@ -79,47 +58,18 @@ export async function removeLandedBranch(mainPath, branch, { stateRoot, tip, run
 
 // All repos share this log. Serialize append plus rename so compaction cannot lose another writer.
 export async function appendRemoval(stateRoot, entry, fsApi = fs) {
-  const deadline = Date.now() + 5000;
-  while (true) {
-    const locked = await withCleanupLock(stateRoot, () => {
-      const file = removalLogPath(stateRoot);
-      fsApi.appendFileSync(file, `${JSON.stringify(entry)}\n`);
-      const store = findRetentionStore(stateRoot, "worktree-removal-log");
-      const verdict = measureLog({ filePath: file, policy: store.policy, fsApi });
-      if (verdict.act) {
-        const kept = fsApi.readFileSync(file, "utf8").split("\n").filter((line) => line.trim()).slice(verdict.dropCount);
-        const temp = `${file}.${randomUUID()}.tmp`;
-        try { fsApi.writeFileSync(temp, `${kept.join("\n")}\n`); fsApi.renameSync(temp, file); }
-        finally { fsApi.rmSync(temp, { force: true }); }
-      }
-    }, { fsApi, repositoryPath: "removal-log" });
-    if (!locked.locked) return;
-    if (Date.now() >= deadline) throw new Error("removal log lock wait expired");
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-}
-
-function openLock(file, fsApi) {
-  try {
-    return fsApi.openSync(file, "wx");
-  } catch (err) {
-    if (err?.code === "EEXIST") return null;
-    throw err;
-  }
-}
-
-// An empty lock may belong to a run that has opened it but not yet written its pid, so only a
-// recorded pid with no live process counts as stale.
-function staleLock(file, fsApi) {
-  let pid;
-  try { pid = Number.parseInt(fsApi.readFileSync(file, "utf8"), 10); } catch { return false; }
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return false;
-  } catch (err) {
-    return err?.code === "ESRCH";
-  }
+  await withCleanupStoreLock(stateRoot, () => {
+    const file = removalLogPath(stateRoot);
+    fsApi.appendFileSync(file, `${JSON.stringify(entry)}\n`);
+    const store = findRetentionStore(stateRoot, "worktree-removal-log");
+    const verdict = measureLog({ filePath: file, policy: store.policy, fsApi });
+    if (verdict.act) {
+      const kept = fsApi.readFileSync(file, "utf8").split("\n").filter((line) => line.trim()).slice(verdict.dropCount);
+      const temp = `${file}.${randomUUID()}.tmp`;
+      try { fsApi.writeFileSync(temp, `${kept.join("\n")}\n`); fsApi.renameSync(temp, file); }
+      finally { fsApi.rmSync(temp, { force: true }); }
+    }
+  }, fsApi);
 }
 
 async function retireBranch(mainPath, branch, tip, runGit) {
@@ -158,7 +108,7 @@ export async function retryBranchRetirement(mainPath, selector, { apply = false,
   if (!retired.ok) return kept("branch retirement failed");
   try {
     await appendRemoval(stateRoot, { at: new Date().toISOString(), branch: target.branch, outcome: target.branch ? "branch-retired" : "checkout-removed", retry: true });
-    deleteTransaction(stateRoot, record.id);
+    await deleteTransaction(stateRoot, record.id);
   } catch (error) { return { action: "failed", reason: `cleanup recording failed: ${error.message}` }; }
   return { action: "removed", eligible: true, reason: null };
 }

@@ -7,7 +7,8 @@ import { findProjectRoot, mainCheckoutPath, resolveGitDir } from "../../modules/
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
-import { removeLandedBranch, removeWorktree, retryBranchRetirement, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
+import { removeLandedBranch, removeWorktree, retryBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
+import { withCleanupLock } from "../../modules/repositories/worktree-cleanup-lock.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { checkoutRootsFor, loadRegistry } from "../../modules/repositories/registry.mjs";
 import { activeWorktreeNames, findPlanAbsorbingCommit, findPlanWorktree, repositoryRecordFor, worktreeFolder } from "./worktree-policy.mjs";
