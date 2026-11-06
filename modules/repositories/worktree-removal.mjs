@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { inventoryWorktree } from "./worktree-snapshot.mjs";
+import { linkedWorktrees } from "./worktree-inventory.mjs";
 import { saveTransaction, readTransaction, deleteTransaction } from "./worktree-transactions.mjs";
 import { withCleanupStoreLock } from "./worktree-cleanup-lock.mjs";
 import { measureLog, findRetentionStore } from "../retention/index.mjs";
@@ -72,9 +73,18 @@ export async function appendRemoval(stateRoot, entry, fsApi = fs) {
   }, fsApi);
 }
 
+async function branchIsUnoccupied(mainPath, branch, runGit) {
+  const ref = `refs/heads/${branch}`;
+  const listed = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
+  if (!listed.ok || listed.stdout.split("\n").includes(`branch ${ref}`)) return false;
+  // Porcelain resolves symbolic branches. Check the raw HEADs for checkouts using an alias.
+  if (linkedWorktrees(path.join(mainPath, ".git")).some((worktree) => worktree.branch === branch)) return false;
+  const primary = await runGit(mainPath, ["symbolic-ref", "--quiet", "--no-recurse", "HEAD"]);
+  return primary.code === 1 || (primary.ok && primary.stdout.trim() !== ref);
+}
+
 async function retireBranch(mainPath, branch, tip, runGit) {
-  const occupied = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
-  if (!occupied.ok || occupied.stdout.split("\n").includes(`branch refs/heads/${branch}`)) return { ok: false, error: "branch is occupied or worktree inventory unavailable" };
+  if (!await branchIsUnoccupied(mainPath, branch, runGit)) return { ok: false, error: "branch is occupied or worktree inventory unavailable" };
   return runGit(mainPath, ["update-ref", "--no-deref", "-d", `refs/heads/${branch}`, tip], { timeoutMs: 10000 });
 }
 
@@ -93,8 +103,7 @@ export async function retryBranchRetirement(mainPath, selector, { apply = false,
   if (!common.ok || (target.repositoryId !== mainPath && target.repositoryPath !== mainPath)) return kept("pending transaction belongs to another repo");
   let branchExists = false;
   if (target.branch) {
-    const occupied = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
-    if (!occupied.ok || occupied.stdout.split("\n").includes(`branch refs/heads/${target.branch}`)) return kept("branch occupied or inventory unavailable");
+    if (!await branchIsUnoccupied(mainPath, target.branch, runGit)) return kept("branch occupied or inventory unavailable");
     const current = await runGit(mainPath, ["rev-parse", "--verify", `refs/heads/${target.branch}`]);
     branchExists = current.ok;
     if (branchExists && current.stdout.trim() !== target.tip) return kept("branch moved; reassessment required");
