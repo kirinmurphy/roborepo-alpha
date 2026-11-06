@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Implement the managed plans worktree and remote commit/push path, then adapt existing plan operations to use it.
+next_action: Implement the remote plans branch and managed worktree, then redirect existing plan operations to it.
 blocked_by: []
 depends_on: []
 related: []
@@ -12,130 +12,163 @@ worktree:
 
 ## Summary
 
-Keep plan-suite Markdown and ordering metadata in `origin/roborepo-plans`, not in implementation branches. RoboRepo manages a persistent local plans worktree for each repository. Agent skills and the Plans portal read from that worktree and use constrained RoboRepo operations to save, commit, and push changes automatically.
+Store plan-suite Markdown and ordering metadata under `plans/` on the remote orphan branch `origin/repo-plans`. RoboRepo maintains a persistent `repo_plans` worktree per repository. Agents and the Plans portal read plans there and use narrowly scoped RoboRepo commands to validate, commit, and push changes automatically. The plans branch never merges into a code branch.
 
 ## Context
 
-Plan-suite derives a plan's lifecycle from its folder under `docs/plans/`. Today, lifecycle moves are committed in the primary checkout, while active and review plans can be edited in a feature worktree. These copies can disagree, and plan edits add noise and merges to code history. A separate, remotely backed branch retains Markdown and Git history without introducing a database.
+Plan-suite derives a plan's lifecycle from its folder. Today, plan files under `docs/plans/` can exist in the primary checkout and an implementation worktree. Edits produce noisy code history and sometimes competing authoritative copies. A dedicated remote Git branch removes that duplication while retaining Markdown as the source of truth.
 
 ## Goals
 
-- One canonical plan per ID, with the existing lifecycle folders, metadata, ordering, and human approval gates.
-- Automatic remote persistence after every successful save or lifecycle operation, including from other repositories and worktrees.
-- Reconnection on a new Mac after cloning the repository, without manual branch checkout or push.
-- Constrained CLI-backed writes for agents and the portal, including upload of externally authored `.md` plans.
-- Safe routine writes to different plans by multiple agents, without adding collaborative editing infrastructure.
+- One canonical plan per ID, with the same lifecycle folders, plan metadata, ordering, and human approval gates; keep the branch root available for other artifacts.
+- Automatic remote persistence for saves and lifecycle changes, from any implementation checkout, skill, or portal action.
+- One-command setup on a new Mac after cloning the code repository, without manual branch checkout or push.
+- Plan writes restricted to named CLI operations, including portal upload of externally authored Markdown.
+- Ordinary different-file writes by multiple agents, without building collaborative same-document editing.
 
 ## Non-goals
 
-- A database, hosted service, or merging the plans branch into `main`.
-- Direct writes to the managed plans worktree by agents.
-- Real-time editing or reconciliation of two conflicting edits to the same plan; this is a follow-up.
-- Deleting plans, force pushes, configurable branch names/remotes, or a separate plans-worktree management interface.
-- Markdown paste in the portal's first release. File upload is sufficient.
+- A database, hosted service, or merging `repo-plans` into `main`.
+- Backward-compatible reads or writes of `docs/plans/` after the switch.
+- Direct agent writes to the managed plans worktree.
+- Same-document conflict resolution; this remains a follow-up task.
+- Plan deletion, force pushes, configurable branch names/remotes, or a separate worktree-management UI.
+- Portal Markdown paste in the initial release; `.md` upload is sufficient.
 
 ## Current state
 
-- `canonical-scan.mjs`, `plan-copies.mjs`, and `plan-authority.mjs` select an authoritative plan from several checkouts.
-- `transition.mjs` commits lifecycle moves in the primary checkout, without pushing.
-- `review-gates.mjs`, `worktree-copy.mjs`, `landing-gate.mjs`, and `sync-base.mjs` assume plans may be present in implementation worktrees.
-- `backlog-registry.mjs` reads and writes `docs/plans/plans-order.json` in the primary checkout.
-- `plans-command.mjs` already owns validation, transitions, ordering, and review checks. `plan-suite-init` creates the folders and namespace config without committing them.
-- `package.json` includes `docs/plans/plans-config.json` in the published package; the migration must preserve packaging behavior.
+- `canonical-scan.mjs`, `plan-copies.mjs`, and `plan-authority.mjs` choose plan copies across checkouts.
+- `transition.mjs` commits lifecycle moves on the primary branch without pushing; review and landing gates assume implementation worktrees can contain plans.
+- `backlog-registry.mjs` stores order in `docs/plans/plans-order.json`; `plans-command.mjs` handles validation, lifecycle actions, and ordering.
+- `plan-suite-init` scaffolds `docs/plans/` but does not create a branch or commit.
+- `docs/plans/plans-config.json` already supports `worktreeRoot` and `worktreeRepoName`; `package.json` also references that config path.
 
 ## Proposed design
 
-### One Git-backed plans store
+### Canonical branch layout and worktree
 
-Reserve the orphan branch `roborepo-plans` on `origin`. It contains only `docs/plans/**`, including `plans-config.json`, `plans-order.json`, and the six existing lifecycle folders. Its remote history is durable; the local plans worktree is a disposable, reconstructible checkout of that branch. Derive its location from existing repository/worktree conventions rather than storing machine-specific paths in plan files or introducing a separate registry.
+Create the orphan branch `repo-plans` on `origin`. Put plan-suite content under a top-level `plans/` directory, without the `docs/` wrapper. Leave the branch root available for other artifact types later; those artifacts are out of scope for this plan:
+
+```text
+repo-plans (branch root)
+└── plans/
+    ├── plans-config.json
+    ├── plans-order.json
+    ├── backlog/
+    ├── ready/
+    ├── active/
+    ├── review/
+    ├── completed/
+    └── archived/
+```
+
+The remote branch is authoritative. Its local worktree is a rebuildable checkout, not another source of truth. Use existing `plans-config.json` values rather than a new path setting:
+
+```text
+<worktreeRoot>/<worktreeRepoName>/repo_plans
+~/.worktrees/roborepo/repo_plans
+```
+
+Reserve `repo_plans` for the plans branch; resolve `worktreeRoot` and `worktreeRepoName` from remote `plans/plans-config.json` on reconnect. For initial setup, use existing repository defaults until the new config is available. Reject an occupied destination belonging to another repository; never replace or delete it. Repositories must have distinct `worktreeRepoName` values when they share a root.
+
+Protect the reserved worktree from RoboRepo's normal cleanup commands and exclude it from agent cleanup permissions. Agent allowlists must not grant raw write, worktree removal, or arbitrary Git access to this path. Use Git-host branch rules where available to disallow remote branch deletion and force pushes while still permitting authorized direct pushes. These are application/permission safeguards, not a claim that a same-user process with unrestricted shell access cannot delete local files.
+
+The plan frontmatter `worktree:` field still identifies its **implementation** worktree, not `repo_plans`. A missing implementation worktree on a newly cloned machine must not hide a plan. Approval freshness and `reviewed_commit` are checked against code commits, never the plans branch HEAD.
+
+### CLI-only writes and synchronization
+
+Reuse existing validation, lifecycle, order, and review commands. Add only:
+
+| Command | Purpose |
+| --- | --- |
+| `roborepo plans init` | Create or reconnect `origin/repo-plans` and the reserved local worktree; recover a missing local checkout |
+| `roborepo plans show <id>` | Refresh remote state and read a plan from the managed worktree |
+| `roborepo plans save <file.md>` | Validate and create a Backlog plan or update an existing plan by ID, without changing lifecycle or granting approval |
+
+The portal uses the same `save` operation for uploads, not an additional import API. Existing lifecycle commands own moves and human approval records. Put Git synchronization and guarded writes in one shared module under `modules/plan-suite/`, not a general storage framework.
+
+Each mutation follows one sequence:
 
 ```mermaid
 flowchart TD
-  A[Agent skills] -->|call allowed commands| C[Existing plans CLI and shared mutations]
-  B[Plans portal] -->|call same mutations| C
-  C -->|read and write plans| W[Managed plans worktree]
-  W -->|push commits| R[origin/roborepo-plans]
-  R -->|fetch changes| W
-  I[Implementation worktrees] -->|provide code and review evidence| C
+  A[Agent skill or Plans portal] -->|invokes allowed operation| B[Plans CLI]
+  B -->|fetches and fast-forwards| C[Managed repo_plans worktree]
+  C -->|provides latest files| B
+  B -->|validates and writes allowed paths| C
+  C -->|commits and pushes| D[origin/repo-plans]
+  D -->|provides remote updates on next fetch| C
 ```
 
-The plan's `worktree:` frontmatter still identifies its **implementation** worktree, not the plans worktree. A missing implementation worktree on another machine must not hide its plan. Evaluate `reviewed_commit`, approval freshness, and landing against code commits, never the plans branch HEAD.
+1. Serialize local mutations with a short repository-level lock; fetch and fast-forward before editing.
+2. Validate the operation, plan ID, existing lifecycle rules, and paths within **`plans/`**. Stage only affected plan and metadata files.
+3. Commit once and push automatically; report success only after the remote accepts the push.
+4. If another machine pushed first, fetch and retry a bounded number of times for non-overlapping changes. Never force-push or silently overwrite edits to the same file.
 
-### Reuse existing commands and one write path
+Preserve unpushed changes on network or Git failure and report **not synchronized**. `plans show` refreshes before reading; the portal refreshes on startup and explicit refresh; mutations always refresh before writing. Avoid fetching on every UI render.
 
-Keep existing transition, ordering, validation, and review-check commands. Add only:
+Agent permissions allow named `roborepo plans` commands, not direct writes or arbitrary Git commands. The CLI also validates the target branch, worktree, paths, and staged changes. Uploaded Markdown is untrusted document content, never an executable instruction. Whitelists only provide real isolation when agents do not also have unrestricted shell/filesystem access.
 
-- `roborepo plans init`: create or reconnect the plans branch and worktree, including recovery from a missing local worktree.
-- `roborepo plans show <id>`: refresh from the remote and read a plan for agents.
-- `roborepo plans save <file.md>`: create a backlog plan or update an existing plan by ID, with validation. It does not move a plan between lifecycle folders or change human approval records.
-
-The portal's **Import Plan** upload uses the same save logic; it does not need a separate import command. Existing lifecycle commands remain responsible for moving plans. Extend the relevant review operation to write its human-approved review record through the same guarded mutation path, rather than allowing `save` to forge an approval.
-
-Put Git synchronization and guarded commits in one cohesive shared module under `modules/plan-suite/`. Do not introduce a generic persistence framework or duplicate the existing lifecycle rules.
-
-Each mutation:
-
-1. Acquire a short local lock for the repository's plans worktree. Fetch and fast-forward from `origin/roborepo-plans` before editing.
-2. Validate the plan ID, requested operation, allowed `docs/plans/**` paths, and existing lifecycle rules. Stage only files affected by that operation.
-3. Commit once and push immediately. Report success only when the remote accepts the push.
-4. If the remote advanced meanwhile, synchronize and retry a limited number of times when the changed files do not overlap. Never force-push or automatically resolve edits to the same file.
-
-If Git or the network fails, preserve the unpushed commit, report **not synchronized**, and allow a later retry. Reads use the managed plans worktree; refresh it for `plans show`, portal startup and explicit refresh, and before mutations rather than on every UI render.
-
-### Constrained access
-
-Agent permissions allow named `roborepo plans` operations, not arbitrary Git commands or direct edits to the managed worktree. CLI validation independently restricts committed files to `docs/plans/**`, rejects path escapes and unexpected staged changes, and disallows arbitrary Git options. Uploaded Markdown is content, never executable instructions. Repository credentials and host branch rules remain a separate security boundary; command allowlists cannot constrain an agent with unrestricted shell access.
-
-### Initialization and migration
+### Initialization and temporary migration
 
 `/plan-suite-init` invokes idempotent `roborepo plans init`:
 
-- **Existing remote branch:** fetch it and create or reconnect the local plans worktree. Use its stored config and plans.
-- **No remote branch:** use the existing plan-authority rules to choose authoritative documents from current checkouts. Refuse ambiguous or conflicting copies. Create the orphan branch, copy plans/config/order/folders, and push it.
-- **New repository:** scaffold folders and the agreed namespace config on the new branch, then push.
-- **No remote or push permission:** return an actionable error; do not silently claim local-only initialization succeeded.
+- If `origin/repo-plans` exists, fetch and reconnect its reserved worktree, using `plans/plans-config.json`. Do not search code branches for plan copies.
+- Otherwise, create and push a scaffolded orphan branch with config, order, and lifecycle folders inside `plans/`. Scaffold namespaces using the existing init flow.
+- If a remote is missing, credentials fail, or the reserved path belongs to another repository, explain the failure; never report a local-only success.
 
-After confirming the remote copy, remove tracked `docs/plans/**` from the code branch in a separate, reviewable commit. Do not discard unresolved local edits. Ignore any obsolete copies still tracked on old feature branches when reading plans; document how to prevent or resolve their reintroduction during merges. Use the existing migration authority logic rather than a second reconciliation engine.
+**No permanent backward-compatibility or migration layer.** Deliver a small, temporary `migrate-plans-once` script for the three existing repositories, run **after** `plan-suite-init`:
 
-### Portal upload
+1. Read the old `docs/plans/` folder from the code checkout.
+2. Confirm the source config’s `worktreeRoot` and `worktreeRepoName` agree with the initialized worktree location; stop for correction if not. Copy `plans-config.json`, `plans-order.json`, and lifecycle folders into the worktree’s `plans/` directory, preserving IDs, lifecycle positions, and review records. Reject overwrites of nonempty destination plans.
+3. Commit and push the imported files on `repo-plans`, then verify the remote copy before reporting success.
+4. Have the operator remove tracked `docs/plans/**` files from the code branch in a separate, reviewable commit. Existing feature branches may require ordinary Git merge cleanup.
+5. Run the same helper for the remaining repositories, then delete the script; do not ship or maintain it as a supported CLI feature.
 
-Add an **Import Plan** action that accepts one `.md` file. Show the parsed title, ID, target lifecycle (`backlog` for new plans), validation errors, and preview before committing. Reject invalid filenames/namespaces and duplicate IDs for a new plan. For an update by existing ID, show a diff and require confirmation. Save through the shared mutation path and display remote push success or failure.
+The helper is an explicit operator-only exception to normal CLI-only agent writes. It must not delete the source files or modify the code branch automatically. Keep normal runtime code focused exclusively on the new `plans/` layout.
+
+### Portal upload location and behavior
+
+On the **Plans lifecycle header panel**, place a **`+` icon button immediately to the right of the Filters control**. Clicking it opens a modal dialog containing the **Import Plan** `.md` upload form.
+
+The modal validates and previews the title, plan ID, filename, and target folder before saving. New plans enter `backlog/`. For an existing ID, show a diff and request confirmation before updating it; never use upload to change lifecycle or approval records. Display validation errors or remote push status in the dialog. The portal calls the shared CLI-backed `save` operation.
 
 ## Implementation checklist
 
-- [ ] **Git store:** Resolve the reserved branch and managed worktree using existing repository utilities; implement init/reconnect and the shared fetch, guarded commit, push, local lock, and disjoint-file push retry. Test against temporary Git remotes.
-- [ ] **Canonical reads and writes:** Point plan scanning, validation, namespace config, and backlog ordering at the plans worktree. Remove normal copy-reconciliation behavior. Route existing transitions and review-record writes through the shared mutation path; add `plans show` and `plans save`.
-- [ ] **Preserve lifecycle gates:** Update review, approval, landing, and base-sync behavior to use the canonical plan but evaluate implementation Git state independently. Ensure implementation cleanup never removes the reserved plans worktree.
-- [ ] **Agent and portal integration:** Update plan-suite skills and generated agent permissions to use allowed CLI commands. Add portal `.md` upload, preview, duplicate/diff confirmation, validation, and push feedback using the same save logic.
-- [ ] **Migration and onboarding:** Make `plan-suite-init` call `plans init`; migrate existing authoritative plans and ordering, retire tracked copies from code branches, test a fresh clone and reconnect, and verify npm packaging.
-- [ ] **Verification and docs:** Test creating, saving, ordering, reviewing, and closing a plan from different code worktrees and from two clones of one remote. Run focused plan-suite tests, `npm run test:portal-ui`, `npm run pack:dry-run`, and the repository CI checks (`npm run check`) where applicable. Update affected plan-suite and user-facing docs.
+- [ ] **Git store and path:** Implement `origin/repo-plans`, `plans/`-level lifecycle directories/config/order, and `<worktreeRoot>/<worktreeRepoName>/repo_plans` resolution. Add init/reconnect, safeguards against path collisions and managed-worktree cleanup, and shared fetch/commit/push with a local lock and bounded retry.
+- [ ] **Canonical plan access:** Redirect scanning, validation, ordering, existing transitions, review records, and CLI reads/writes to the new `plans/` paths. Remove old copy-authority and `docs/plans/` compatibility behavior. Add `plans show` and `plans save`.
+- [ ] **Lifecycle and code separation:** Preserve review, approval, landing, and close gates while evaluating code commits independently of plans commits. Update code-base sync and implementation-worktree cleanup to leave `repo_plans` untouched.
+- [ ] **Agent permissions:** Update plan-suite skills and generated allowlists to permit named plan CLI operations while excluding direct canonical worktree writes/removal. Add remote branch protection guidance.
+- [ ] **Portal:** Add the `+` button immediately after Filters on the lifecycle header, modal `.md` upload, validation/preview, diff confirmation for updates, and push feedback through the existing save path.
+- [ ] **One-time migration:** Deliver a disposable helper to move existing `docs/plans/` contents into an initialized plans branch for three repositories, verify remote persistence, and document code-branch cleanup. Do not retain migration logic in the product.
+- [ ] **Tests and docs:** Test init/reconnect on a fresh clone; save, order, review, close, upload, path conflicts, protections against normal cleanup, and two clones editing different plans. Update packaging paths and run focused suite checks, `npm run test:portal-ui`, `npm run pack:dry-run`, and `npm run check` where applicable.
 
 ## Validation
 
-- A plan created, edited, ordered, or transitioned by an agent or portal is committed and pushed without manual Git work.
-- A fresh clone and one `roborepo plans init` restore the same IDs, folders, config, ordering, and Markdown.
-- Review approval and code-landing checks still gate completion, with no plan merge into `main`.
-- Two clones changing different plans can push successfully despite a remote race; neither change is lost.
-- A failed push is visibly unsynchronized and recoverable; an invalid file or forbidden change never reports success.
-- Portal upload saves a valid new plan to Backlog and requires confirmation before updating an existing one.
-- Migration preserves authoritative plan content and does not let the reserved worktree enter implementation cleanup.
-- Package installation and tests still work after `docs/plans/plans-config.json` moves out of the code branch.
+- Only `repo-plans` contains canonical plan files, under `plans/`; no plan-document merge into a code branch is required.
+- A fresh clone and `roborepo plans init` expose existing remote plans in `~/.worktrees/<worktreeRepoName>/repo_plans` without manual Git work.
+- CLI and portal saves and lifecycle transitions validate, commit, and push automatically; failed pushes are reported as unsynchronized and recoverable.
+- Existing review approval and code landing gates still operate against the implementation branch.
+- RoboRepo cleanup cannot target its reserved plans worktree; another repository's occupied path is never overwritten.
+- Clicking `+` immediately right of Filters opens a modal that uploads a valid Markdown plan to Backlog; an existing plan requires preview and explicit confirmation.
+- A one-time helper migrates all six folders, config, and ordering to `plans/` in each of the three existing repositories without modifying code branches, and can then be deleted.
+- Packaging and tests succeed without `docs/plans/plans-config.json` on the main code branch, using `plans/plans-config.json` on `repo-plans` instead.
 
 ## Risks
 
 | Risk | Minimum safeguard |
 | --- | --- |
-| Another machine pushes between fetch and push | Retry only non-overlapping changes; never force-push |
-| Two local agents use the same Git index | Short lock around one mutation |
-| Remote is unavailable | Preserve the local commit and show unsynchronized status |
-| Existing code branches still track old plan files | Ignore them for reads; remove tracked plans in migration and document merge cleanup |
-| Review logic assumes plans live with code | Keep code Git checks independent of the plans worktree |
-| Git hooks assume a full source checkout | Test commits on the orphan branch; preserve appropriate plan validation |
+| Two machines push between fetch and push | Retry non-overlapping mutations; never force-push |
+| Concurrent local Git writes | Short lock around a mutation |
+| Remote is unavailable | Preserve local changes and report unsynchronized state |
+| A worktree path is shared by two repositories | Check ownership and stop before touching the path |
+| Agent deletes canonical local files using unrestricted shell access | Do not promise absolute prevention; limit permissions and recreate checkout from the protected remote |
+| Old feature branches reintroduce `docs/plans/` on merge | Treat these files as obsolete and remove them from code branches during ordinary merge cleanup |
+| Git hooks assume code is in the orphan checkout | Test hooks and commit behavior with plan-only branch contents |
 
 ## Documentation impact
 
-Update `globals/packages/plan-suite/skills/` and their shared references, especially `plan-write`, `plan-suite-init`, `plan-execute`, `plan-review`, and `plan-close`. Update the Plans portal and CLI instructions in `docs/user/`, plus installation/migration guidance. Replace primary-checkout plan authority instructions while retaining folder-based lifecycle semantics.
+Update plan-suite skills and shared references, especially `plan-write`, `plan-suite-init`, `plan-execute`, `plan-review`, `plan-close`, and worktree cleanup guidance. Update Plans portal/CLI instructions under `docs/user/`, and installation/packaging guidance for the new `plans/` layout. Provide a short operator guide for the temporary three-repository migration and remove it when migration completes.
 
 ## Follow-up task
 
-After rollout, plan **same-document concurrent editing**: detect edits made since an agent read a plan, present differences, and define user-guided resolution. The initial implementation only refuses overlapping automatic push retries.
+After rollout, design same-document concurrent editing: detect a plan changed since an agent read it, display differences, and require user-guided conflict resolution. The initial release only refuses overlapping automatic retries.
