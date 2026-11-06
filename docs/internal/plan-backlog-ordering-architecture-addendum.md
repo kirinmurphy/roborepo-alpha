@@ -192,7 +192,7 @@ flowchart TB
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**3. Repository and namespace selected:** one persistent list, with the mode toggle. **Needs prioritization is first if nonempty**. No congratulatory empty-state text appears when all plans are ranked.
+**3. Repository and namespace selected:** one persistent list, with the mode toggle. **Needs prioritization is first in Ordering if nonempty**; Details shows a banner with its count. No congratulatory empty-state text appears when all plans are ranked.
 
 ### Details mode: full, independent plan cards
 
@@ -236,7 +236,7 @@ A joined dependency (`C` depends on `A` and `B`), an unrelated `X`, and an indep
 
 - Preserve existing rich Backlog card fields, actions, and progress presentation. The content lines are illustrative, not a mandate to invent new card properties.
 - Show the plain title; the breadcrumb names the namespace. Do not add a prefix to the authored H1 or a namespace badge to the card footer.
-- List unfinished prerequisites as `Waiting on N`, where the namespace appears as a badge; the list does **not** imply grouping or enforce adjacency visually.
+- List unfinished prerequisites under `Waiting on:`, where a namespace other than the plan's appears as a badge; the list does **not** imply grouping or enforce adjacency visually.
 - After a successful ordering Save, Details uses the new order. A mode switch does not reset repo/namespace context or scroll unnecessarily.
 
 ### Ordering mode: derived dependency group containers
