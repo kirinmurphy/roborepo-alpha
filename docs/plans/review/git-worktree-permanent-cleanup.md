@@ -654,10 +654,12 @@ regression checks below.
 - Discard regressions exercised before native worktree removal was refused. Retention assertions passed for bounds, 40 cross-process appends, concurrent transaction refresh, and stale-lock recovery. Both suites returned nonzero. Legacy recovery assertions completed before fixture removal was refused.
 - Validator pass 5 reproduced the intermediate-alias and replacement-lock scenarios against `6b6ee7e5` and found no further issues in those fixes.
 - The full gate on `6b6ee7e5` repeated the synchronized base’s three CLI failures and stopped before the worktree and browser suites. Earlier external-terminal results cover the pre-review implementation only.
-- Local `main` advanced to `4013387f86c7fc77c299881ce593318aaee2d337` during review. The next review round needs to synchronize that implementation before approval can be requested.
+- The feature branch incorporated `main` at `4013387f86c7fc77c299881ce593318aaee2d337` in merge `e271cc64`.
+- CI reported that the snapshot suite imported `readTransaction` from its former module. Commit `8664a017` updates the import, and a targeted Validator pass found no other stale consumers. The snapshot suite loaded and verified restored legacy payloads before local permissions blocked synthetic directory removal.
+- The full local gate at `8664a017` passed all 97 doctor checks and hit the same three CLI failures and temporary symlink removal refusal as `test-cli.sh --quiet` on `4013387f`. CI verification of the fixed implementation is pending.
 
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: 6b6ee7e5488940fc0252f716f77ab726c22cc432
-- Base commit: da88e4f38c535afa61afe212a0e56698d369b076
+- Reviewed implementation commit: 8664a0170dbf9d822d5949f138843f100e133787
+- Base commit: 4013387f86c7fc77c299881ce593318aaee2d337
