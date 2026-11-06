@@ -597,7 +597,7 @@ test.describe("Backlog directory and ordering", () => {
       git("commit", "-q", "-m", "fixture");
       await addRepositorySource(page, root);
       const { backlog } = await (await page.request.get("/api/plans")).json();
-      const { repositoryId } = backlog.find((item) => item.name === path.basename(root));
+      const { repositoryId, urlKey } = backlog.find((item) => item.name === path.basename(root));
       const token = await portalToken(page);
       const archive = async () => {
         const response = await page.request.post("/api/plans/archive", {
@@ -649,6 +649,15 @@ test.describe("Backlog directory and ordering", () => {
       expect(noGit.text).not.toContain(path.basename(root));
       expectUnchanged();
 
+      // A bare repo has no checkout to commit from.
+      git("config", "core.bare", "true");
+      const bare = await archive();
+      git("config", "--unset", "core.bare");
+      expect(bare.status).toBe(400);
+      expect(bare.text).toContain("can't be read as a Git checkout");
+      expect(bare.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
       // A commit that fails after the rename says the plan moved, without git's own text.
       git("config", "commit.gpgsign", "true");
       git("config", "gpg.program", "false");
@@ -658,7 +667,26 @@ test.describe("Backlog directory and ordering", () => {
       expect(uncommitted.status).toBe(500);
       expect(uncommitted.text).toContain("moved to docs/plans/archived/alpha-free.md, but the move was not committed");
       expect(uncommitted.text).not.toContain("gpg failed");
+      expect(uncommitted.text).toContain("Fix what stopped the commit");
       expect(uncommitted.text).not.toContain(path.basename(root));
+      expect(git("status", "--porcelain")).toContain("R  docs/plans/backlog/alpha-free.md -> docs/plans/archived/alpha-free.md");
+      git("reset", "--quiet", "--hard");
+      expectUnchanged();
+
+      // The dialog gives the reader that way forward, and the list stops offering the moved plan.
+      git("config", "commit.gpgsign", "true");
+      git("config", "gpg.program", "false");
+      await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
+      await page.getByRole("button", { name: "Archive Free one", exact: true }).click();
+      await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("textbox").fill("Abandoned.");
+      await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("button", { name: "Continue" }).click();
+      const confirmation = page.getByRole("dialog", { name: "Are you sure?" });
+      await confirmation.getByRole("button", { name: "Archive Plan" }).click();
+      await expect(confirmation).toContainText("the move was not committed");
+      await expect(confirmation).toContainText("Fix what stopped the commit");
+      await expect(page.getByRole("button", { name: "Archive Free one", exact: true })).toHaveCount(0);
+      git("config", "--unset", "commit.gpgsign");
+      git("config", "--unset", "gpg.program");
       git("reset", "--quiet", "--hard");
       expectUnchanged();
 

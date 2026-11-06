@@ -33,6 +33,7 @@ const GATE_KINDS = { archived: new Set(["lifecycle"]) };
 // Moving a plan into implementation is the last cheap moment to fix its filename: inbound links and
 // worktree records accumulate from here on. Later transitions never revisit it.
 const NAMING_GATED_TRANSITIONS = new Set(["promote", "start"]);
+const UNCOMMITTED_MOVE_RESOLUTION = "Run `git status` in the repo. Fix what stopped the commit and commit the staged move, or restore those files to undo it.";
 
 export async function transitionPlan(options) {
   const { cwd = process.cwd(), selector, transition: transitionId, base = "main" } = options;
@@ -89,6 +90,10 @@ export async function transitionPlan(options) {
     : []);
 
   const committed = git(primary, ["show", `HEAD:${fromPath}`]);
+  // An earlier run's commit failed after its rename. Committing here would land only half of that move.
+  if (atDestination && !committed.ok) {
+    throw domainError("MOVE_NOT_COMMITTED", `The plan's move to ${fromPath} was not committed.`, { resolution: UNCOMMITTED_MOVE_RESOLUTION });
+  }
   if (atDestination && committed.ok && committed.raw === content && dirty.length === 0) {
     return result({ primary, cwd, base, transition, record, fromPath, toPath, commit: null, options, target, rules, evidence: prepared.evidence || {} });
   }
@@ -111,7 +116,7 @@ export async function transitionPlan(options) {
     // Past the rename the plan already sits at its new path, so saying the move failed would be false.
     // It isn't undone here: this path can carry uncommitted plan edits that a rollback would lose.
     throw domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but the move was not committed.`, {
-      resolution: "Run `git status` in the repo. Fix what stopped the commit and commit the staged move, or restore those files to undo it.",
+      resolution: UNCOMMITTED_MOVE_RESOLUTION,
       details: err.details ?? [pathFreeFileError(err)],
     });
   }

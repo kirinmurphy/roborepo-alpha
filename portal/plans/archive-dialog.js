@@ -59,7 +59,7 @@ export function createArchiveDialog() {
       await target.onConfirm(reason.value.trim());
       dialog.close();
     } catch (err) {
-      slot("error").textContent = err.message;
+      slot("error").textContent = [err.message, err.resolution].filter(Boolean).join(" ");
     } finally {
       archiving = false;
       confirm.disabled = false;

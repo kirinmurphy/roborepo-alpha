@@ -14,7 +14,7 @@ import {
 } from "../../modules/plan-suite/index.mjs";
 import { saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
 import { pathFreeFileError } from "../../modules/plan-suite/naming.mjs";
-import { primaryCheckout, repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
+import { primaryCheckout, repositoryBaseBranch, topLevel } from "../../modules/plan-suite/plan-git.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { loadRegistry } from "../../modules/repositories/index.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockPlanDocument, mockPlansSnapshot } from "./mock-home.mjs";
@@ -142,7 +142,10 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
 // `roborepo plans archive` command keeps them, since its reader is at the machine they name.
 function gitCheckoutForArchive(root) {
   try {
-    return primaryCheckout(root);
+    const primary = primaryCheckout(root);
+    // A bare repo has no checkout to commit from, and the transition's refusal would name a path.
+    if (!topLevel(primary)) throw new Error("no work tree");
+    return primary;
   } catch {
     throw domainError("INVALID_CHANGE", "This repo can't be read as a Git checkout, so nothing was archived.", {
       resolution: "Run `git status` in the repo, resolve what it shows, then try again.",

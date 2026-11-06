@@ -509,10 +509,27 @@ try {
     assert.match(uncommitted.details.join("\n"), /gpg failed/);
     assert.equal(head(root), before, "nothing was committed");
     assert.ok(exists(root, "docs/plans/archived/test-arch-busy.md"), "the plan is where the message says");
+    assert.match(git(root, "status", "--porcelain"), /^R {2}docs\/plans\/backlog\/test-arch-busy\.md -> docs\/plans\/archived\/test-arch-busy\.md$/m, "the move stays staged");
     git(root, "config", "--unset", "commit.gpgsign");
     git(root, "config", "--unset", "gpg.program");
+    assert.notEqual(plans(root, "archive", "archbusy", "--reason", "Abandoned.").status, 0, "retrying an uncommitted archive is refused");
+    assert.equal(head(root), before, "a retried archive commits nothing");
     git(root, "reset", "--quiet", "--hard");
     assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged move restores cleanly");
+
+    // A plan that reads as already at its destination must not commit only that half of the move.
+    commit(root, "Seed a promotable plan", { [backlog("arch-retry")]: planDoc({ id: "archretr" }) });
+    const seeded = head(root);
+    git(root, "config", "commit.gpgsign", "true");
+    git(root, "config", "gpg.program", "false");
+    refused(root, plans(root, "promote", "archretr"), "promote with a failing commit", /was not committed/);
+    git(root, "config", "--unset", "commit.gpgsign");
+    git(root, "config", "--unset", "gpg.program");
+    const retried = refused(root, plans(root, "promote", "archretr"), "retrying an uncommitted promote", /was not committed/);
+    assert.equal(retried.code, "MOVE_NOT_COMMITTED");
+    assert.equal(head(root), seeded, "a retry never commits half the move");
+    git(root, "reset", "--quiet", "--hard");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged promote restores cleanly");
 
     // A dependent bound to a worktree keeps its reference, and the result names it; the clean one clears.
     commit(root, "Bind a dependent", {

@@ -349,7 +349,13 @@ export function createBacklogController(deps) {
       released: titles(false),
       kept: titles(true),
       onConfirm: async (reason) => {
-        await api.archiveBacklogPlan({ repositoryId: entry.repositoryId, id: record.plan.id, reason });
+        try {
+          await api.archiveBacklogPlan({ repositoryId: entry.repositoryId, id: record.plan.id, reason });
+        } catch (err) {
+          // The plan did move, so the list behind the dialog must stop offering it.
+          if (err.code === "MOVE_NOT_COMMITTED") await deps.onSaved();
+          throw err;
+        }
         // The dialog stays up until then, so the archived plan's controls are never offered again.
         await deps.onSaved();
       },
