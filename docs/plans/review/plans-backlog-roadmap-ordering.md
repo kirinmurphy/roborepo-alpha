@@ -596,6 +596,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] Retrying `archive`, `submit`, or `reopen` after `MOVE_NOT_COMMITTED` reports the move as recorded, because the early return in `transitionPlan` runs before the not-committed check. Reproduced with `plans archive` on a throwaway fixture. — fixed (a579c8dd)
 - [x] After `MOVE_NOT_COMMITTED` the archive dialog keeps **Archive Plan** live, and a second click replaces the guidance with a refusal naming a raw id: `portal/plans/archive-dialog.js`. The route is reproduced; the dialog is traced, not run. — fixed (a579c8dd)
 - [x] `docs/internal/plans-portal-internals.md` says a plan at the destination always returns `alreadyRecorded`, and its step list omits the staged outcome. — fixed (a579c8dd)
+- [ ] An untracked plan already in its destination folder gets the not-committed message, though no move ran and nothing is staged: `modules/plan-suite/transition.mjs`. Reproduced with `plans promote` on a throwaway fixture.
 
 ### Verification
 
@@ -632,6 +633,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Manual: the three `## Not tested` entries were confirmed by the user on 2026-11-05: "all UI smoke testing has been completed and all behaviors meet expectations".
 - Post-merge Validator pass 3 at 407711cc (fresh-context subagent): the last 5 findings above, all `fix`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit: 93 of 94, the one failure being the intermittent breadcrumb test above.
 - Post-merge Validator pass 4 at c277ce00 (fresh-context subagent): the last 3 findings above, all `fix`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit passed 94 of 94.
+- Post-merge Validator pass 5 at 365b814c (fresh-context subagent): the last finding above, `fix`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit: 93 of 94, the one failure being the intermittent breadcrumb test.
 
 ### Result
 
