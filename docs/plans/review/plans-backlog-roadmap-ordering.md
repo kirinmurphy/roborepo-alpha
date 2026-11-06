@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Finish the review of f16f87d1, push it when the user asks, confirm CI is green, then get the user's approval.
+next_action: Finish the review of bb7c9ae1, push it when the user asks, confirm CI is green, then get the user's approval.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -604,6 +604,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] Rolling back a write or staging failure overrides the user's decision to explain the staged state, with no new decision recorded. — decided by the user: keep the undo; Decision Log updated
 - [x] This record stops at d8813c34: nothing here covers the undo, the archive hold, the banner wording, or their tests, and `next_action` names the old commit. — corrected in this record
 - [x] `plans-backlog.spec.mjs` uses `#ordering-archive` where `getByRole("dialog")` works. — fixed (f16f87d1)
+- [x] The retry advice at f16f87d1 leads with a restore that discards uncommitted edits a move carries, its staged-diff test can pass on a half move, and the comment above the guard names only a failed commit. Reproduced on a throwaway fixture. — fixed (bb7c9ae1)
 
 ### Verification
 
@@ -650,6 +651,8 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Review of the changes since d8813c34, Validator pass 1 at b6eb206a (fresh-context subagent): the last 5 findings above, 4 `fix` and 1 `escalate`. It also reported 2 the user set aside on 2026-11-06 as not tied to this plan. The merge of `main` at e3658b0b touches only Codex hook and permission files, and its remerge diff is empty.
 - Changes reviewed since d8813c34: the undo of a move whose edits can't be written or staged, the archive control's hold until a newer snapshot arrives, the banner's wording, and their tests. `main` at da88e4f3 is already in the branch.
 - At f16f87d1: `plan-lifecycle-transitions-check` and `docs-reference-check` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 96 of 96.
+- Review of the changes since d8813c34, Validator pass 2 at f16f87d1 (fresh-context subagent): the last finding above, `fix`.
+- At bb7c9ae1: `plan-lifecycle-transitions-check` and `docs-reference-check` passed.
 
 ### Result
 
