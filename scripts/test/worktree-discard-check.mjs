@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
 import { inventoryDiscard, previewWorktreeDiscard, applyWorktreeDiscard, readTransaction, saveTransaction } from "../../modules/repositories/worktree-discard.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
@@ -13,6 +14,7 @@ import { appendRemoval, removalLogPath, retryBranchRetirement } from "../../modu
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "worktree-discard-check-"));
 const restore = isolateGitConfig(root);
+const cli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
 function git(cwd, ...args) {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
@@ -37,6 +39,12 @@ try {
     git(repo.mainPath, "branch", "pending");
     saveTransaction(retryState, { id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(), target: { repositoryId: repo.mainPath, path: path.join(repo.mainPath, "absent-checkout"), name: "pending", branch: "pending", tip: git(repo.mainPath, "rev-parse", "HEAD") } });
   }
+  const detached = retryRepos[0];
+  const detachedTip = git(detached.mainPath, "rev-parse", "HEAD");
+  git(detached.mainPath, "branch", "null", detachedTip);
+  saveTransaction(retryState, { id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(), target: { repositoryId: detached.mainPath, path: path.join(detached.mainPath, "absent-detached"), name: "detached", branch: null, tip: detachedTip } });
+  assert.equal((await retryBranchRetirement(detached.mainPath, "detached", { stateRoot: retryState, apply: true })).action, "removed");
+  assert.equal(git(detached.mainPath, "rev-parse", "refs/heads/null"), detachedTip, "detached retry cannot retire a branch named null");
   for (const repo of retryRepos) {
     assert.equal(git(repo.mainPath, "branch", "--list", "pending"), "pending", "other repo's retirement leaves this branch intact");
     const retry = await retryBranchRetirement(repo.mainPath, "pending", { stateRoot: retryState, apply: true });
@@ -145,6 +153,45 @@ try {
   await Promise.all(Array.from({ length: 20 }, (_, i) => appendRemoval(logState, { at: new Date().toISOString(), i })));
   assert.equal(fs.readFileSync(removalLogPath(logState), "utf8").trim().split("\n").length, 20);
   console.log("worktree discard: stale receipts, scopes, raw inventory, intent-write refusal and serialized log assertions passed");
+  const planFixture = fixture();
+  const planName = planFixture.worktree.name;
+  const planFile = (stage) => path.join(planFixture.mainPath, "docs/plans", stage, "story.md");
+  const planText = `---\nid: abc12345\nworktree: ${planName}\n---\n\n# Story\n`;
+  function planStage(stage) {
+    for (const folder of ["active", "completed"]) fs.rmSync(planFile(folder), { force: true });
+    fs.mkdirSync(path.dirname(planFile(stage)), { recursive: true });
+    fs.writeFileSync(planFile(stage), planText);
+  }
+  const discardCommand = (cwd, ...args) => spawnSync(process.execPath, [cli, "git", "worktrees", "discard", ...args], {
+    cwd, encoding: "utf8", env: { ...process.env, ROBOREPO_STATE_ROOT: planFixture.stateRoot },
+  });
+  const subdir = path.join(planFixture.work, "nested");
+  fs.mkdirSync(subdir);
+  fs.writeFileSync(path.join(subdir, "leftover"), "local work");
+  const currentCheckout = discardCommand(subdir, "feature", "--scope", "all", "--json");
+  assert.equal(currentCheckout.status, 1, currentCheckout.stderr);
+  assert.match(currentCheckout.stdout, /current or main checkout/);
+  planStage("active");
+  const activePreview = discardCommand(planFixture.mainPath, "--plan", "abc12345", "--json");
+  assert.equal(activePreview.status, 1);
+  assert.match(activePreview.stderr, /plan must be completed/);
+  planStage("completed");
+  const planPreview = discardCommand(planFixture.mainPath, "--plan", "abc12345", "--json");
+  assert.equal(planPreview.status, 0, planPreview.stderr || planPreview.stdout);
+  const { receipt, scope } = JSON.parse(planPreview.stdout);
+  assert.ok(receipt);
+  assert.equal(scope, "leftovers");
+  planStage("active");
+  const activeApply = discardCommand(planFixture.mainPath, "--plan", "abc12345", "--receipt", receipt, "--apply", "--json");
+  assert.equal(activeApply.status, 1);
+  assert.match(activeApply.stderr, /plan must be completed/);
+  assert.ok(fs.existsSync(planFixture.work));
+  console.log("worktree discard: current-checkout and plan lifecycle guards passed");
+  planStage("completed");
+  const planApply = discardCommand(planFixture.mainPath, "--plan", "abc12345", "--receipt", receipt, "--apply", "--json");
+  assert.equal(planApply.status, 0, planApply.stderr || planApply.stdout);
+  assert.equal(JSON.parse(planApply.stdout).action, "removed");
+  assert.equal(fs.existsSync(planFixture.work), false, "completed plan can discard approved leftovers at a reachable tip");
   const recreated = await preview(f);
   fs.renameSync(f.work, `${f.work}-original`);
   fs.mkdirSync(f.work);

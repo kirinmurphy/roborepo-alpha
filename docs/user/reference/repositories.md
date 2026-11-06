@@ -233,12 +233,14 @@ verifies its recorded absorbing commit against local `main` (or `--base <branch>
 landing uses `origin/HEAD` when available. `--remove <branch-or-name> --confirm --apply` also requires
 proof of preservation; confirmation alone cannot discard unmerged commits.
 
-Automatic cleanup requires a closed plan, an unlocked worktree beneath the configured worktree
-folder, and proof that committed, staged, and filesystem versions are preserved. The folder comes
+Automatic cleanup can remove worktrees without a plan. An active or review plan naming a
+worktree keeps it protected. Cleanup requires an unlocked worktree beneath the configured worktree
+folder and proof that committed, staged, and filesystem versions are preserved. The folder comes
 from `worktreeRoot` in `docs/plans/plans-config.json`, or the folder confirmed in Home. Proofs
 compare both local layers against one historical base commit, including plan lifecycle moves,
 within 500 first-parent commits and a 30-second budget. Unsupported Git behavior or unavailable
 history keeps the worktree. No backup or snapshot is created.
+Non-disposable empty directories remain as leftovers because Git trees cannot preserve them.
 
 | Preservation result | Outcome | Next action |
 | --- | --- | --- |
@@ -314,9 +316,11 @@ roborepo git worktrees legacy-recovery --approve <digest> --apply --json
 ```
 
 Unique, uncertain, or invalid items stay unless explicitly named with repeated `--discard <ref>`
-options in both preview and apply. Changed inventory requires renewed review. Each deletion checks
-the expected object and reports its own outcome. Recovery refs are local, share the repo's storage,
-and may retain sensitive content; migration never forces Git object pruning.
+options in both preview and apply. If no base is available, inventory and explicit discard still
+work, while preservation stays unknown. Changed inventory requires renewed review. Each deletion
+checks the expected object and reports its own outcome. Deleting a proven-preserved ref also
+verifies the base in the same Git transaction. Recovery refs are local, share the repo's storage,
+and may retain sensitive content. Migration never forces Git object pruning.
 
 With the plan-suite package enabled, `/plan-close` removes each story's worktree as its last step,
 and Home does not offer the hook. With it disabled, a repository card with linked worktrees and no

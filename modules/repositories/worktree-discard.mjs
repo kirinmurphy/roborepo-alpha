@@ -151,8 +151,13 @@ async function assessDiscard({ mainPath, repositoryId, worktree, scope = "all", 
   const baseState = await runGit(mainPath, ["rev-parse", "--verify", `${base}^{commit}`]);
   if (!baseState.ok) throw new Error("base unavailable");
   const baseCommit = baseState.stdout.trim();
-  const landing = fresh.branch ? await inspectBranchLanding(mainPath, fresh.branch, { base, runGit }) : { landed: false };
-  if (scope === "leftovers" && !landing.landed) throw new Error("committed work is not proven landed; leftovers consent cannot discard commits");
+  const reachable = scope === "leftovers" && fresh.branch
+    && (await runGit(mainPath, ["merge-base", "--is-ancestor", inventory.tip, baseCommit])).ok;
+  const landing = reachable ? { landed: true }
+    : fresh.branch ? await inspectBranchLanding(mainPath, fresh.branch, { base: baseCommit, runGit }) : { landed: false };
+  if (scope === "leftovers" && (!landing.landed || (!reachable && landing.tip !== inventory.tip))) {
+    throw new Error("committed work is not proven landed; leftovers consent cannot discard commits");
+  }
   const log = await runGit(mainPath, ["log", "--format=%s", `${baseCommit}..${inventory.tip}`], { maxBuffer: GIT_MAX_BINARY_BUFFER, timeoutMs: 10000 });
   if (!log.ok) throw new Error("unmerged commit inventory unavailable");
   const subjects = log.stdout.trimEnd().split("\n").filter(Boolean);

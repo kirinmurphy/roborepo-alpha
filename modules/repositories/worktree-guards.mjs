@@ -11,7 +11,7 @@ export async function checkWorktreeRemoval({ worktree, kind, landed = false, wor
   if (kind === "automatic" && (!worktree.branch || worktree.detached)) return blocked("detached worktree; suggested for removal");
   if (worktree.locked) return blocked("worktree locked");
   if (exists(path.join(worktree.path, ".gitmodules"), fsApi)) return blocked("worktree has submodules");
-  if (samePath(worktree.path, mainPath) || samePath(worktree.path, currentPath)) return blocked("current or main checkout");
+  if (samePath(worktree.path, mainPath) || (currentPath && (samePath(worktree.path, currentPath) || inside(currentPath, worktree.path)))) return blocked("current or main checkout");
   if (kind === "automatic" && activePlan) return blocked("plan not closed");
   if (running) return blocked("dev server running");
   const success = { ok: true, reason: null, warning: kind === "confirmed" && activePlan ? "plan still active" : null };

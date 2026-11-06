@@ -141,18 +141,24 @@ export async function retryBranchRetirement(mainPath, selector, { apply = false,
   const common = await runGit(mainPath, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
   // A target path alone is not repo identity; the administrative name and branch are verified too.
   if (!common.ok || (target.repositoryId !== mainPath && target.repositoryPath !== mainPath)) return kept("pending transaction belongs to another repo");
-  const occupied = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
-  if (!occupied.ok || occupied.stdout.split("\n").includes(`branch refs/heads/${target.branch}`)) return kept("branch occupied or inventory unavailable");
-  const current = await runGit(mainPath, ["rev-parse", "--verify", `refs/heads/${target.branch}`]);
-  if (current.ok && current.stdout.trim() !== target.tip) return kept("branch moved; reassessment required");
-  if (!current.ok) {
-    const exists = await runGit(mainPath, ["show-ref", "--verify", "--quiet", `refs/heads/${target.branch}`]);
-    if (exists.code !== 1) return kept("branch state unavailable");
+  let branchExists = false;
+  if (target.branch) {
+    const occupied = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
+    if (!occupied.ok || occupied.stdout.split("\n").includes(`branch refs/heads/${target.branch}`)) return kept("branch occupied or inventory unavailable");
+    const current = await runGit(mainPath, ["rev-parse", "--verify", `refs/heads/${target.branch}`]);
+    branchExists = current.ok;
+    if (branchExists && current.stdout.trim() !== target.tip) return kept("branch moved; reassessment required");
+    if (!branchExists) {
+      const exists = await runGit(mainPath, ["show-ref", "--verify", "--quiet", `refs/heads/${target.branch}`]);
+      if (exists.code !== 1) return kept("branch state unavailable");
+    }
   }
   if (!apply) return { action: "kept", eligible: true, reason: null };
-  const retired = current.ok ? await retireBranch(mainPath, target.branch, target.tip, runGit) : { ok: true };
+  const retired = branchExists ? await retireBranch(mainPath, target.branch, target.tip, runGit) : { ok: true };
   if (!retired.ok) return kept("branch retirement failed");
-  try { await appendRemoval(stateRoot, { at: new Date().toISOString(), branch: target.branch, outcome: "branch-retired", retry: true }); deleteTransaction(stateRoot, record.id); }
-  catch (error) { return { action: "failed", reason: `branch retired; recording failed: ${error.message}` }; }
+  try {
+    await appendRemoval(stateRoot, { at: new Date().toISOString(), branch: target.branch, outcome: target.branch ? "branch-retired" : "checkout-removed", retry: true });
+    deleteTransaction(stateRoot, record.id);
+  } catch (error) { return { action: "failed", reason: `cleanup recording failed: ${error.message}` }; }
   return { action: "removed", eligible: true, reason: null };
 }

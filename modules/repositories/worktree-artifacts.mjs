@@ -14,7 +14,11 @@ export async function discoverWorktreeArtifacts(cwd, { git = (args, options) => 
     return result.stdout.split("\0").filter(Boolean);
   };
   const ignored = await read(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"]);
-  const tracked = await read(["ls-files", "--cached", "-z"]);
+  // A staged deletion can leave a committed file on disk under an ignored directory.
+  const tracked = [
+    ...await read(["ls-files", "--cached", "-z"]),
+    ...await read(["ls-tree", "-r", "--name-only", "-z", "HEAD"]),
+  ];
   const disposable = [];
   const protectedPaths = [];
   const scanned = new Map();

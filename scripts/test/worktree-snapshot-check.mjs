@@ -42,6 +42,7 @@ try {
     const restored = await restoreWorktreeSnapshot(main, snapshot.id, destination, { apply: true });
     assert.equal(restored.ok, true, restored.reason);
     for (const file of artifacts) assert.equal(fs.readFileSync(path.join(destination, file), "utf8"), `legacy payload: ${file}\n`, `${file} survives legacy verification and restore`);
+    git(main, "update-ref", "-d", snapshot.ref, snapshot.commit);
     console.log("worktree snapshots: legacy disposable artifact payloads restored and verified");
   }
   const largeText = "x".repeat(GIT_MAX_BUFFER + 1024);
@@ -71,9 +72,10 @@ try {
       if (args[0] === "merge-tree") merges++;
       return runGitProcess(cwd, args, options);
     } });
-    assert.equal(proof.state, explicitMergeBase ? "preserved" : "unknown", JSON.stringify(proof));
-    assert.equal(proof.hasLocalContent, explicitMergeBase ? true : null, "empty directories still require preservation");
-    assert.ok(merges >= (explicitMergeBase ? 3 : 1), "landing and both local layers are still checked");
+    assert.equal(proof.state, "remaining", JSON.stringify(proof));
+    assert.equal(proof.hasLocalContent, true, "empty directories still require preservation");
+    assert.deepEqual(proof.remainingPaths, ["directory-only"]);
+    assert.ok(merges >= 1, "committed landing is still checked");
     assert.equal(hashes, 0, "unchanged filesystem blobs already exist in the assessed trees");
     assert.equal((await inventoryWorktree(work)).fingerprint, before, "assessment does not change local state");
     fs.rmdirSync(path.join(work, "directory-only"));
@@ -201,6 +203,14 @@ try {
     else { write(checkout, "code", fs.readFileSync(path.join(repo, "code"))); git(checkout, "add", "code"); }
     if (shape === "conflict") { write(checkout, "code", "conflicting local work\n"); git(checkout, "add", "code"); }
     const proof = await assessWorktreePreservation(checkout, { branch: "feature" });
+    if (shape === "directory-only") {
+      const [row] = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, "directory-only-cleanup-state"), discover: async () => ({ instances: [] }) });
+      assert.equal(proof.state, "remaining", JSON.stringify(proof));
+      assert.deepEqual(row.remainingPaths, ["generated/packages/__char_test_pkg__/claude"]);
+      assert.equal(row.action, "kept", JSON.stringify(row));
+      assert.equal(fs.statSync(path.join(checkout, row.remainingPaths[0])).isDirectory(), true);
+      continue;
+    }
     if (!explicitMergeBase) { assert.equal(proof.state, "unknown", JSON.stringify(proof)); assert.match(proof.reason, /merge-base|unknown option/); continue; }
     if (shape === "conflict") { assert.equal(proof.state, "unknown", JSON.stringify(proof)); assert.match(proof.reason, /conflict/); continue; }
     assert.equal(proof.state, "preserved", `${shape}: ${JSON.stringify(proof)}`);
@@ -231,7 +241,7 @@ try {
       assert.equal(fs.existsSync(checkout), true, `${shape}: concurrent changes must retain checkout`);
       assert.deepEqual(await listWorktreeSnapshots(repo), [], `${shape}: no recovery ref is created`);
     }
-    if (["redundant", "directory-only"].includes(shape)) {
+    if (shape === "redundant") {
       const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, `${shape}-cleanup-state`), discover: async () => ({ instances: [] }) });
       assert.equal(rows[0].action, "removed", JSON.stringify(rows));
       assert.deepEqual(await listWorktreeSnapshots(repo), [], "automatic cleanup creates no recovery refs");

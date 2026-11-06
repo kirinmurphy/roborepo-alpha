@@ -85,8 +85,10 @@ export function activeWorktreeNames(mainPath) {
 }
 
 // The worktree a plan names, found by id, path, or file name in any lifecycle folder.
-export function findPlanWorktree(mainPath, plan) {
-  return findPlan(mainPath, plan)?.worktree || null;
+export function findPlanWorktree(mainPath, plan, { completed = false } = {}) {
+  const record = findPlan(mainPath, plan);
+  if (completed && record && record.lifecycle !== "completed") throw new Error("plan must be completed before discarding leftovers");
+  return record?.worktree || null;
 }
 
 // The absorbing commit the plan's `## Verification` records, for cleanup to verify instead of
@@ -102,7 +104,7 @@ function findPlan(mainPath, plan) {
   for (const lifecycle of LIFECYCLE_MODEL.folders) {
     for (const file of planFiles(mainPath, lifecycle)) {
       const fields = planFields(file);
-      if (fields.id === plan || file === path.resolve(plan) || path.basename(file) === plan) return { file, worktree: fields.worktree };
+      if (fields.id === plan || file === path.resolve(plan) || path.basename(file) === plan) return { file, lifecycle, worktree: fields.worktree };
     }
   }
   return null;

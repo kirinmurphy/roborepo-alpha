@@ -65,7 +65,21 @@ try {
   const reviewedBase = git(repo, "rev-parse", "main");
   write(repo, "later", "new base content"); git(repo, "add", "later"); git(repo, "commit", "-qm", "base advances");
   assert.equal((await legacyRecovery(repo, { apply: true, approve: preview.digest })).ok, false, "base changes invalidate approval even when refs are unchanged");
+  const advancedBase = git(repo, "rev-parse", "main");
   git(repo, "update-ref", "refs/heads/main", reviewedBase);
+  let advancedDuringApply = false;
+  const staleBase = await legacyRecovery(repo, { apply: true, approve: preview.digest, runGit: async (cwd, args, settings) => {
+    if (!advancedDuringApply && args[0] === "update-ref" && args[1] === "--stdin") {
+      advancedDuringApply = true;
+      git(repo, "update-ref", "refs/heads/main", advancedBase, reviewedBase);
+    }
+    return runGitProcess(cwd, args, settings);
+  } });
+  assert.equal(advancedDuringApply, true);
+  assert.equal(staleBase.ok, false, "base movement during deletion refuses preserved-ref removal");
+  assert.equal(hasRef(repo, mismatch), true);
+  assert.equal(hasRef(repo, preserved.ref), true);
+  git(repo, "update-ref", "refs/heads/main", reviewedBase, advancedBase);
   const applied = await legacyRecovery(repo, { apply: true, approve: preview.digest });
   assert.equal(applied.ok, true, JSON.stringify(applied));
   assert.equal(hasRef(repo, mismatch), false); assert.equal(hasRef(repo, preserved.ref), false);
@@ -74,7 +88,7 @@ try {
   const explicit = await legacyRecovery(repo, { discard });
   assert.equal(explicit.items.every((item) => item.resolution === "discard"), true);
   const raced = await legacyRecovery(repo, { discard, apply: true, approve: explicit.digest, runGit: async (cwd, args, settings) => {
-    if (args[0] === "update-ref" && args[2] === invalid) git(repo, "update-ref", invalid, tip);
+    if (args[0] === "update-ref" && args.at(-2) === invalid) git(repo, "update-ref", invalid, tip);
     return runGitProcess(cwd, args, settings);
   } });
   assert.equal(raced.action, "partial");
@@ -83,6 +97,17 @@ try {
   assert.equal((await legacyRecovery(repo, { discard: [invalid], approve: finalPreview.digest, apply: true })).ok, true);
   const empty = await legacyRecovery(repo);
   assert.equal((await legacyRecovery(repo, { approve: empty.digest, apply: true })).ok, true, "fresh retry with removed refs is harmless");
+  git(repo, "branch", "-m", "main", "topic");
+  const alias = "refs/roborepo/abandoned/symbolic";
+  git(repo, "symbolic-ref", alias, "refs/heads/topic");
+  const noBase = await legacyRecovery(repo);
+  assert.equal(noBase.items[0].class, "unknown");
+  assert.deepEqual(noBase.proposed, [], "no base means no automatic deletion");
+  const approvedAlias = await legacyRecovery(repo, { discard: [alias] });
+  const removedAlias = await legacyRecovery(repo, { discard: [alias], apply: true, approve: approvedAlias.digest });
+  assert.equal(removedAlias.ok, true, JSON.stringify(removedAlias));
+  assert.equal(hasRef(repo, alias), false);
+  assert.equal(git(repo, "rev-parse", "refs/heads/topic"), reviewedBase, "discard of the alias preserves its target");
   assert.equal(await legacyRecoveryCount(repo), 0);
   console.log("legacy recovery: reachable/squash proofs, layer protection, exact approval, concurrent ref protection, detached restore passed");
 } finally {

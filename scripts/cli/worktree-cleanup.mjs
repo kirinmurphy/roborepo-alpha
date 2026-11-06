@@ -245,7 +245,7 @@ export async function worktreeDiscardCommand(args) {
   const options = parseDiscardArgs(args);
   const main = mainCheckout(process.cwd());
   if (!main) throw new Error("a non-bare Git checkout is required");
-  const selector = options.plan ? findPlanWorktree(main, options.plan) : options.selector;
+  const selector = options.plan ? findPlanWorktree(main, options.plan, { completed: true }) : options.selector;
   if (!selector) throw new Error("a worktree selector or --plan is required");
   if (options.plan && options.scope === "all") throw new Error("--plan cannot authorize all scope");
   if (!options.apply && !options.plan && !options.scope) throw new Error("preview requires --scope leftovers|all");

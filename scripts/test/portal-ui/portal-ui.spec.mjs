@@ -1286,6 +1286,8 @@ test.describe("repository-first portal Home", () => {
   test("worktree deletion waits for a complete preview and refreshes blocked detached targets", async ({ page }) => {
     let release;
     const held = new Promise((resolve) => { release = resolve; });
+    let releaseRemoval;
+    const heldRemoval = new Promise((resolve) => { releaseRemoval = resolve; });
     const previews = [];
     const removals = [];
     await page.route("**/api/repositories/*/worktrees/remove-preview", async (route) => {
@@ -1293,13 +1295,16 @@ test.describe("repository-first portal Home", () => {
       if (previews.length === 1) {
         await held;
         await route.fulfill({ json: { action: "preview", eligible: false, blockers: [{ path: "nested-repo", reason: "nested repo" }] } });
+      } else if (previews.length === 2) {
+        await route.fulfill({ status: 503, json: { error: "Preview temporarily unavailable" } });
       } else await route.fulfill({ json: {
-        action: "preview", eligible: true, receipt: "detached-receipt", commits: { landed: false, unmerged: 1, subjects: ["Detached local work"] },
+        action: "preview", eligible: true, receipt: `detached-receipt-${previews.length}`, commits: { landed: false, unmerged: 1, subjects: ["Detached local work"] },
         groups: { tracked: [], untracked: [], ignored: [], disposable: [] }, blockers: [], warnings: [],
       } });
     });
     await page.route("**/api/repositories/*/worktrees/remove", async (route) => {
       removals.push(route.request().postDataJSON());
+      if (removals.length === 1) await heldRemoval;
       await route.fulfill({ json: { action: "removed" } });
     });
     await patchRoboRepo(page, (repository) => {
@@ -1322,12 +1327,31 @@ test.describe("repository-first portal Home", () => {
     await expect(confirm).toBeDisabled();
     expect(removals).toEqual([]);
     await dialog.getByRole("button", { name: "Refresh preview" }).click();
+    await expect(dialog).toContainText("Preview temporarily unavailable");
+    await expect(confirm).toBeDisabled();
+    await expect(dialog.getByRole("button", { name: "Refresh preview" })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Refresh preview" }).click();
     await expect(confirm).toBeEnabled();
     await expect(dialog).toContainText("Detached local work");
     await confirm.click();
+    await expect.poll(() => removals.length).toBe(1);
+    await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
-    expect(previews).toEqual([{ branch: "detached-tree" }, { branch: "detached-tree" }]);
-    expect(removals).toEqual([{ branch: "detached-tree", receipt: "detached-receipt" }]);
+    await card.getByRole("button", { name: /Worktree details/ }).click();
+    await card.getByRole("button", { name: "Delete Worktree" }).click();
+    await expect(confirm).toBeEnabled();
+    const homeRefresh = page.waitForRequest((request) => new URL(request.url()).pathname === "/api/home");
+    releaseRemoval();
+    await homeRefresh;
+    await expect(dialog).toBeVisible();
+    await expect(confirm).toBeEnabled();
+    await confirm.click();
+    await expect(dialog).toBeHidden();
+    expect(previews).toEqual(Array.from({ length: 4 }, () => ({ branch: "detached-tree" })));
+    expect(removals).toEqual([
+      { branch: "detached-tree", receipt: "detached-receipt-3" },
+      { branch: "detached-tree", receipt: "detached-receipt-4" },
+    ]);
     await page.unrouteAll({ behavior: "ignoreErrors" });
   });
 

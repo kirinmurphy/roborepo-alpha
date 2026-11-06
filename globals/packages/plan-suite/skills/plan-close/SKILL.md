@@ -287,8 +287,10 @@ Skip this step for an archived or refused plan.
 
 ### 10. Remove the closed worktree
 
-After step 9, when the plan was moved to `completed/`, run the repository's canonical worktree
-cleanup command scoped to this plan with its apply flag:
+If step 9 reports a server as `still-running` or `failed`, keep the worktree and ask the user to
+stop the server before retrying cleanup. Do not force removal while the server may still write.
+Once the servers have stopped and the plan is in `completed/`, run the repository's canonical
+worktree cleanup command scoped to this plan with its apply flag:
 
 ```sh
 roborepo git worktrees cleanup --plan <id> --apply --json

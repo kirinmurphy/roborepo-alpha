@@ -50,6 +50,8 @@ try {
   write("build/tracked", "changed\n");
   assert.ok((await inventoryWorktree(cwd)).entries.some((entry) => entry.path === "build/tracked" && entry.layer === "tracked"));
   assert.equal((await guard()).ok, false, "tracked descendants prevent artifact exemption");
+  git("rm", "--cached", "build/tracked");
+  assert.ok((await inventoryWorktree(cwd)).entries.some((entry) => entry.path === "build/tracked"), "HEAD-tracked descendants remain visible after staged removal");
   fixture("nested-git");
   write(".venv/child/.git", "gitdir: /nonexistent\n");
   assert.equal((await guard()).ok, false, "nested Git metadata prevents disposable classification");

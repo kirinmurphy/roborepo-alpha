@@ -8,18 +8,27 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
   const slot = (name) => dialog.querySelector(`[data-slot=${name}]`);
   const confirm = slot("confirm");
   const refresh = slot("refresh");
+  const confirmLabel = [...confirm.childNodes];
+  const refreshLabel = [...refresh.childNodes];
   let target = null;
   wireClose(dialog);
 
-  async function preview() {
-    const openingTarget = target;
-    target.receipt = null;
+  const isCurrent = (openingTarget) => dialog.open && target === openingTarget;
+
+  async function preview(openingTarget) {
+    openingTarget.receipt = null;
     confirm.disabled = true;
     refresh.hidden = true;
     slot("status").textContent = "Checking everything this deletion would remove…";
-    const result = await api.previewWorktreeRemoval(target);
-    if (target !== openingTarget) return;
-    target.receipt = result.eligible ? result.receipt : null;
+    let result;
+    try {
+      result = await api.previewWorktreeRemoval(openingTarget);
+    } catch (error) {
+      if (isCurrent(openingTarget)) refresh.hidden = false;
+      throw error;
+    }
+    if (!isCurrent(openingTarget)) return;
+    openingTarget.receipt = result.eligible ? result.receipt : null;
     const commits = result.commits;
     slot("status").textContent = commits?.landed
       ? "Its committed work is already merged."
@@ -41,32 +50,36 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       slot("running").textContent = `Running servers will be stopped before deletion: ${result.servers.map((server) => `pid ${server.pid}${server.ports?.length ? ` (ports ${server.ports.join(", ")})` : ""}`).join("; ")}.`;
     }
     const blockers = (result.blockers || []).map((entry) => typeof entry === "string" ? entry : [entry.path, entry.reason].filter(Boolean).join(": "));
-    showError(dialog, blockers.join("\n") || (!target.receipt ? result.reason || "The worktree cannot be deleted. Refresh the preview after resolving its blockers." : null));
-    confirm.disabled = !target.receipt;
-    refresh.hidden = Boolean(target.receipt);
+    showError(dialog, blockers.join("\n") || (!openingTarget.receipt ? result.reason || "The worktree cannot be deleted. Refresh the preview after resolving its blockers." : null));
+    confirm.disabled = !openingTarget.receipt;
+    refresh.hidden = Boolean(openingTarget.receipt);
   }
 
   refresh.addEventListener("click", async () => {
-    await run(dialog, refresh, "Checking…", preview);
-    confirm.disabled = !target?.receipt;
+    const openingTarget = target;
+    await run(dialog, refresh, "Checking…", () => preview(openingTarget), () => isCurrent(openingTarget));
+    if (isCurrent(openingTarget)) confirm.disabled = !openingTarget.receipt;
   });
   confirm.addEventListener("click", async () => {
-    if (!target?.receipt) return;
+    const openingTarget = target;
+    if (!openingTarget?.receipt) return;
     await run(dialog, confirm, "Deleting…", async () => {
-      const request = { ...target };
-      target.receipt = null;
-      refresh.hidden = false;
+      const request = { ...openingTarget };
+      openingTarget.receipt = null;
       const result = await api.removeWorktree(request);
       if (result.action !== "removed") {
-        refresh.hidden = false;
+        if (!isCurrent(openingTarget)) return;
         const differences = result.differences || {};
         const detail = Object.entries(differences).map(([kind, paths]) => `${kind}: ${Array.isArray(paths) ? paths.join(", ") : String(paths)}`).join("\n");
         throw new Error([result.reason || "The worktree was kept.", detail, result.retryCommand, "Refresh the preview and review the current state before confirming again."].filter(Boolean).join("\n"));
       }
-      dialog.close();
+      if (isCurrent(openingTarget)) dialog.close();
       onRemoved();
-    });
-    confirm.disabled = !target?.receipt;
+    }, () => isCurrent(openingTarget));
+    if (isCurrent(openingTarget)) {
+      refresh.hidden = false;
+      confirm.disabled = !openingTarget.receipt;
+    }
   });
   return {
     open({ repositoryId, checkout, plan = null }) {
@@ -74,6 +87,11 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       const selector = branch || checkout.worktreeName;
       if (!repositoryId || !selector) return;
       target = { repositoryId, branch: selector, receipt: null };
+      for (const button of dialog.querySelectorAll("button")) button.disabled = false;
+      confirm.replaceChildren(...confirmLabel);
+      refresh.replaceChildren(...refreshLabel);
+      confirm.removeAttribute("aria-busy");
+      refresh.removeAttribute("aria-busy");
       confirm.disabled = true;
       refresh.hidden = true;
       fill(dialog, {
@@ -93,10 +111,9 @@ export function createWorktreeRemoveDialog({ onRemoved }) {
       showError(dialog, null);
       dialog.showModal();
       const openingTarget = target;
-      preview().catch((error) => {
-        if (target !== openingTarget) return;
+      preview(openingTarget).catch((error) => {
+        if (!isCurrent(openingTarget)) return;
         showError(dialog, error.message);
-        refresh.hidden = false;
       });
     },
   };
@@ -171,7 +188,7 @@ function wireClose(dialog) {
 
 // Disables the dialog's buttons while a request runs, and shows its failure in the dialog. The button
 // that started it shows a spinner and a busy label, since removing a worktree can take seconds.
-async function run(dialog, busyButton, busyLabel, action) {
+async function run(dialog, busyButton, busyLabel, action, isCurrent = () => true) {
   const buttons = [...dialog.querySelectorAll("button")];
   for (const button of buttons) button.disabled = true;
   const label = [...busyButton.childNodes];
@@ -184,12 +201,14 @@ async function run(dialog, busyButton, busyLabel, action) {
   try {
     await action();
   } catch (error) {
-    showError(dialog, error.message || String(error));
+    if (isCurrent()) showError(dialog, error.message || String(error));
   } finally {
-    // The action may have relabeled the button (the cleanup dialog's "Done"); keep that label.
-    if (busyButton.firstChild === spinner) busyButton.replaceChildren(...label);
-    busyButton.removeAttribute("aria-busy");
-    for (const button of buttons) button.disabled = false;
+    if (isCurrent()) {
+      // The action may have relabeled the button (the cleanup dialog's "Done"); keep that label.
+      if (busyButton.firstChild === spinner) busyButton.replaceChildren(...label);
+      busyButton.removeAttribute("aria-busy");
+      for (const button of buttons) button.disabled = false;
+    }
   }
 }
 

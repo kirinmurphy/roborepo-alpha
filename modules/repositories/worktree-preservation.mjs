@@ -28,7 +28,7 @@ async function inspectPreservation(cwd, temporary, { branch, base = null, record
       return executeGit(directory, args, { ...options, plumbing: { ...plumbing, ...options.plumbing }, timeoutMs: Math.min(10000, remaining) });
     };
     const git = (args, options) => runGit(cwd, args, options);
-    inventory = await inventoryWorktree(cwd, { git });
+    inventory = await inventoryWorktree(cwd, { git, deadline });
     if (!branch || inventory.branch !== `refs/heads/${branch}`) throw new Error("worktree branch changed or detached");
     if (!base) {
       const remote = await git(["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
@@ -62,20 +62,22 @@ async function inspectPreservation(cwd, temporary, { branch, base = null, record
         if (before.get(file)?.oid !== local.get(file)?.oid || before.get(file)?.mode !== local.get(file)?.mode) remainingPaths.push(file);
       }
     }
-    remainingPaths = [...new Set(remainingPaths)].sort();
-    const hasLocalContent = !sameTree(baseline, inventory.index) || !sameTree(baseline, filesystem) || inventory.entries.some((entry) => entry.mode === "directory");
+    const emptyDirectories = inventory.entries.filter((entry) => entry.mode === "directory").map((entry) => entry.path);
+    remainingPaths = [...new Set([...remainingPaths, ...emptyDirectories])].sort();
+    const hasLocalContent = remainingPaths.length > 0;
     if (!landing.landed) {
       // Committed differences are remaining work too; local paths alone omit an unlanded branch.
       const committed = await git(["diff", "--name-only", "-z", baseCommit, inventory.tip], { maxBuffer: GIT_MAX_BINARY_BUFFER });
       if (committed.ok) remainingPaths = [...new Set([...remainingPaths, ...committed.stdout.split("\0").filter(Boolean)])].sort();
       return result(landing.reason === "not absorbed" || landing.reason === "no own work" ? "remaining" : "unknown", landing.reason, { hasLocalContent });
     }
+    if (emptyDirectories.length) return result("remaining", "empty directories have no retained Git representation", { hasLocalContent });
     if (!hasLocalContent) return result("preserved", null, { evidenceCommit: landing.absorbingCommit, hasLocalContent: false });
     const candidates = required(await git(["rev-list", "--first-parent", "--reverse", `${landing.fork}..${baseCommit}`], { maxBuffer: GIT_MAX_BINARY_BUFFER })).trim().split("\n").filter(Boolean);
     if (candidates.length > FIRST_PARENT_SCAN_LIMIT) throw new Error("scan limit exceeded");
     const proof = await assessLayers({ baseline, index: inventory.index, filesystem, tip: inventory.tip, candidates, landing, git, temporary });
     if (proof.state === "preserved") {
-      const fresh = await inventoryWorktree(cwd, { git });
+      const fresh = await inventoryWorktree(cwd, { git, deadline });
       if (fresh.fingerprint !== inventory.fingerprint || required(await git(["rev-parse", base])).trim() !== baseCommit) throw new Error("state changed during assessment");
       return result("preserved", null, { ...proof, hasLocalContent: true, remainingPaths: [] });
     }

@@ -257,7 +257,7 @@ See [worktree states and cleanup](repositories.md#worktree-states-and-cleanup) f
 | --- | --- |
 | `roborepo git worktrees cleanup --remove <branch-or-name> --confirm --apply [--json]` | Remove only proven-preserved work, or retry recorded branch retirement |
 | `roborepo git worktrees discard <branch-or-name> --scope leftovers\|all [--base <branch>] [--json]` | Preview complete loss and issue a one-use receipt |
-| `roborepo git worktrees discard --plan <id> [--base <branch>] [--json]` | Preview local leftovers; committed work must be landed |
+| `roborepo git worktrees discard --plan <id> [--base <branch>] [--json]` | Preview leftovers for a completed plan whose committed work is landed |
 | `roborepo git worktrees discard <branch-or-name> --receipt <receipt> --apply [--json]` | Apply the reviewed receipt; also accepts `--plan <id>` instead of the selector |
 | `roborepo git worktrees legacy-recovery [--discard <ref>]... [--json]` | Inventory legacy refs and propose resolutions |
 | `roborepo git worktrees legacy-recovery [--discard <ref>]... --approve <digest> --apply [--json]` | Apply the exact reviewed migration inventory |

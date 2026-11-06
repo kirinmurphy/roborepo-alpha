@@ -8,7 +8,7 @@ export const SNAPSHOT_PREFIX = "refs/roborepo/worktree-archives/";
 const MODES = new Set(["100644", "100755", "120000"]);
 
 // Raw preservation inventories bypass add/checkout, filters, and the user's index.
-export async function inventoryWorktree(cwd, { git = (args, options) => runGitProcess(cwd, args, options), pruneDisposable = true } = {}) {
+export async function inventoryWorktree(cwd, { git = (args, options) => runGitProcess(cwd, args, options), pruneDisposable = true, deadline = Infinity } = {}) {
   const read = async (args) => required(await git(args, args[0] === "ls-files" ? { maxBuffer: GIT_MAX_BINARY_BUFFER } : {}));
   const config = await read(["config", "--null", "--list"]);
   for (const record of config.split("\0")) {
@@ -36,9 +36,10 @@ export async function inventoryWorktree(cwd, { git = (args, options) => runGitPr
   const tracked = new Set(index.map((entry) => entry.path));
   const untracked = new Set((await read(["ls-files", "--others", "--exclude-standard", "-z"])).split("\0").filter(Boolean));
   const ignored = new Set((await read(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"])).split("\0").filter(Boolean));
-  const disposable = new Set(pruneDisposable ? (await discoverWorktreeArtifacts(cwd, { git })).disposable.map((entry) => entry.path) : []);
+  const disposable = new Set(pruneDisposable ? (await discoverWorktreeArtifacts(cwd, { git, deadline })).disposable.map((entry) => entry.path) : []);
   const entries = [];
   const walk = (relative) => {
+    if (Date.now() >= deadline) throw new Error(`inventory time limit exceeded: ${relative}`);
     if (relative === ".git") return;
     if (relative.split("/").some((part) => part.toLowerCase() === ".git")) throw new Error(`nested repository or administrative path: ${relative}`);
     const absolute = path.join(cwd, relative);
