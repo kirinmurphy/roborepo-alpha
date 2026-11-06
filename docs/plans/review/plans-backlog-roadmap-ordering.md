@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Finish the review of bb7c9ae1, push it when the user asks, confirm CI is green, then get the user's approval.
+next_action: The user pushes bb7c9ae1 and clears the untracked transcripts folder; confirm CI is green, then get the user's approval.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -653,6 +653,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - At f16f87d1: `plan-lifecycle-transitions-check` and `docs-reference-check` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 96 of 96.
 - Review of the changes since d8813c34, Validator pass 2 at f16f87d1 (fresh-context subagent): the last finding above, `fix`.
 - At bb7c9ae1: `plan-lifecycle-transitions-check` and `docs-reference-check` passed.
+- Review of the changes since d8813c34, Validator pass 3 at bb7c9ae1 (fresh-context subagent): clean, no `fix` or `escalate`. It ran the retry advice through `promote` and `close` with unstaged, staged, and mixed edits after a failed commit and a failed undo, 24 runs on throwaway fixtures. CI on these commits waits for a push.
 
 ### Result
 
