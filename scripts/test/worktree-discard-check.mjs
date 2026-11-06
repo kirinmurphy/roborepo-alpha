@@ -206,6 +206,9 @@ try {
   assert.equal((await preview(master)).target.baseRef, "refs/heads/master");
   git(master.mainPath, "branch", "-m", "master", "trunk");
   assert.equal((await preview(master)).target.baseRef, "refs/heads/trunk");
+  git(master.work, "branch", "-m", "main");
+  master.worktree = linkedWorktrees(path.join(master.mainPath, ".git"))[0];
+  assert.equal((await preview(master)).target.baseRef, "refs/heads/trunk", "implicit all-scope base falls back when the default is the target");
   git(master.mainPath, "checkout", "--detach", "-q");
   assert.equal((await preview(master)).target.baseRef, "HEAD");
   const logState = path.join(root, "logs");

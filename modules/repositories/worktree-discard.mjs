@@ -146,18 +146,7 @@ async function assessDiscard({ mainPath, repositoryId, worktree, scope = "all", 
   const guard = await checkWorktreeRemoval({ worktree: fresh, kind: "confirmed", consent: true, mainPath, currentPath, activePlan: activePlans().has(fresh.name) });
   if (!guard.ok) throw new Error(guard.reason);
   const inventory = await inventoryDiscard(fresh.path, { runGit });
-  base ||= (await defaultLandingBase((args) => runGit(mainPath, args))) || (scope === "all" ? "HEAD" : null);
-  if (!base) throw new Error("base unavailable");
-  const resolvedBase = await runGit(mainPath, ["rev-parse", "--symbolic-full-name", "--verify", "--end-of-options", base]);
-  base = resolvedBase.stdout.trim();
-  const targetRef = fresh.branch ? `refs/heads/${fresh.branch}` : null;
-  const retained = /^refs\/(heads|remotes)\//.test(base) || (scope === "all" && base === "HEAD");
-  if (!resolvedBase.ok || !retained || base === targetRef) {
-    throw new Error("base must be a retained branch distinct from the worktree branch");
-  }
-  const baseState = await runGit(mainPath, ["rev-parse", "--verify", `${base}^{commit}`]);
-  if (!baseState.ok) throw new Error("base unavailable");
-  const baseCommit = baseState.stdout.trim();
+  const { baseRef, baseCommit } = await resolveDiscardBase(mainPath, fresh.branch, base, scope, runGit);
   const reachable = scope === "leftovers" && fresh.branch
     && (await runGit(mainPath, ["merge-base", "--is-ancestor", inventory.tip, baseCommit])).ok;
   const landing = reachable ? { landed: true }
@@ -169,7 +158,25 @@ async function assessDiscard({ mainPath, repositoryId, worktree, scope = "all", 
   if (!log.ok) throw new Error("unmerged commit inventory unavailable");
   const subjects = log.stdout.split("\0").slice(0, -1).map((subject) => subject.trim() || "(no commit subject)");
   const stat = fs.lstatSync(fresh.path);
-  return { action: "preview", eligible: true, scope, target: { repositoryId, repositoryPath: mainPath, path: fresh.path, name: fresh.name, branch: fresh.branch, tip: inventory.tip, baseRef: base, baseCommit, device: stat.dev, inode: stat.ino }, commits: { landed: landing.landed, unmerged: subjects.length, subjects }, groups: inventory.groups, servers, warnings: guard.warning ? [guard.warning] : [], blockers: [], inventory };
+  return { action: "preview", eligible: true, scope, target: { repositoryId, repositoryPath: mainPath, path: fresh.path, name: fresh.name, branch: fresh.branch, tip: inventory.tip, baseRef, baseCommit, device: stat.dev, inode: stat.ino }, commits: { landed: landing.landed, unmerged: subjects.length, subjects }, groups: inventory.groups, servers, warnings: guard.warning ? [guard.warning] : [], blockers: [], inventory };
+}
+
+async function resolveDiscardBase(mainPath, branch, base, scope, runGit) {
+  const git = (args) => runGit(mainPath, args);
+  const candidates = base ? [base] : [await defaultLandingBase(git)];
+  if (!base && scope === "all") candidates.push("HEAD");
+  const targetRef = branch ? `refs/heads/${branch}` : null;
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    const resolved = await git(["rev-parse", "--symbolic-full-name", "--verify", "--end-of-options", candidate]);
+    if (!resolved.ok) continue;
+    const baseRef = resolved.stdout.trim();
+    const retained = /^refs\/(heads|remotes)\//.test(baseRef) || (scope === "all" && baseRef === "HEAD");
+    if (!retained || baseRef === targetRef) continue;
+    const commit = await git(["rev-parse", "--verify", `${baseRef}^{commit}`]);
+    if (commit.ok) return { baseRef, baseCommit: commit.stdout.trim() };
+  }
+  throw new Error("base must be a retained branch distinct from the worktree branch");
 }
 
 function compareAssessment(record, fresh) {
