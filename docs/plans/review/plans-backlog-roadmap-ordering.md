@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Push when the user asks, confirm the PR's CI is green, then run /plan-review.
+next_action: Push main and this branch, open the follow-up PR, and confirm its CI is green; then /plan-review records the Result and asks for approval.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -636,6 +636,9 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Post-merge Validator pass 4 at c277ce00 (fresh-context subagent): the last 3 findings above, all `fix`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit passed 94 of 94.
 - Post-merge Validator pass 5 at 365b814c (fresh-context subagent): the last finding above, `fix`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit: 93 of 94, the one failure being the intermittent breadcrumb test.
 - Post-merge Validator pass 6 at ceb836ad (fresh-context subagent): the last finding above, `fix`.
+- Post-merge Validator pass 7 at d2ea0106 (fresh-context subagent): clean, no `fix` or `escalate`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit passed 94 of 94, and the intermittent breadcrumb test failed again at 365b814c between these runs.
+- The user's manual confirmation predates the archive failure fixes, which only change failure paths; those are covered by `plans-backlog.spec.mjs` and `plan-lifecycle-transitions-check.mjs`.
+- Full gate: waiting on CI for this branch, which needs the user's push.
 
 ### Result
 
