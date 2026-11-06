@@ -301,7 +301,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(prioritize).not.toHaveCSS("background-color", resting);
   });
 
-  test("other lifecycles keep the larger description, with no hover expansion", async ({ page }) => {
+  test("other lifecycles keep the larger description", async ({ page }) => {
     await page.goto(`/plans?lifecycle=active&repo=${await repoKey(page, repoName)}`);
     const card = page.locator("plan-card", { hasText: "Working plan" });
     await expect(card.locator(".description-line")).toHaveCSS("font-size", "17px");

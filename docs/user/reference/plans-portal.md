@@ -467,7 +467,9 @@ The Plans page uses the normalized package catalog state. It does not inspect sk
 - The browser never sends file paths; the server reads only plans it discovered itself.
 - Repository sources scope repository discovery; their paths appear only in the Manage repositories
   dialog.
-- Plan records and `/api/plans` responses, including scan errors, do not expose absolute paths.
+- Plan records and `/api/plans` responses, including scan errors, do not expose absolute paths. The
+  one exception is `/api/plans/document`, which returns the opened plan's path for the drawer's copy
+  button.
 - Portable prompts requested through the API use repository name, relative path, metadata,
   warnings, and bounded excerpts; the portal's Copy menus offer repository-aware prompts only.
 - The browser does not execute document scripts, and writes only the changes described in

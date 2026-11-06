@@ -132,7 +132,7 @@ assert.deepEqual(orderedIds(dropBlock(draft, "ordered", 0, 2)), ["X", "A", "B", 
 assert.equal(isDraftDirty(dropBlock(draft, "ordered", 0, 1)), false, "dropping a block where it sits is no change");
 assert.deepEqual(orderedIds(dropBlock(draft, "needs", 0, 1)), ["A", "B", "C", "N", "X"]);
 
-// Prerequisites: scoped to the repo, completed ones gone, and a position only for another namespace.
+// Prerequisites: scoped to the repo, completed ones gone, and the lifecycle as the status throughout.
 const repository = { id: "hash", repositoryId: "r" };
 const planRecord = (id, namespace, lifecycle, dependencies = [], blockers = []) => ({
   key: `k-${id}`,
