@@ -67,7 +67,7 @@ Real data for fixtures: this repo has 49 Backlog plans across 14 namespaces, all
 - No global ordering of plans across repositories or namespaces. Next up lists at most one plan per namespace. A pin lifts a whole namespace on the repo screen and in Next up; it ranks no plan against another namespace's.
 - No separate Roadmap page, hierarchy map, or extra grouping metadata.
 - No automatic rewriting of H1s, filename ordinals, or forced `Namespace Part ###` titles.
-- No footer namespace badge or badge-click filter interaction. Only a Next up card's badge and a `Waiting on` line's badge outside the drawer are clickable, and each opens that namespace.
+- No footer namespace badge or badge-click filter interaction. Only a Next up card's badge and a `Waiting on` line's badge outside the drawer are clickable, and each opens that namespace when it has Backlog plans.
 - No changes to **any** non-Backlog lifecycle state or its UI presentation, including Ready, Active, Review, Completed, Archived, and Unclassified, except that priority disappears: Ready loses its dropdown and filter, Home loses its chip, and every view drops the priority sort key so it falls through to recency and then title.
 - No general live refresh; that remains [[plans-portal-live-refresh-and-static-preflight]]'s decision.
 - No wiring of validation into other repositories' CI. `roborepo plans validate` is the check they can adopt.
@@ -200,7 +200,7 @@ Reviewing Backlog on real repos showed that a repo's plans can form one chain ac
 | Surface | How the namespace appears |
 | --- | --- |
 | Next up card | Badge beside the repo badge; a link to the namespace |
-| `Waiting on` list | Badge only on a line from another namespace, a link to that namespace outside the drawer and plain text in it; the plan's title opens the plan |
+| `Waiting on` list | Badge only on a line from another namespace, a link to that namespace when it has Backlog plans and the line is outside the drawer, otherwise plain text; the plan's title opens the plan |
 | Details card and Ordering row | Not shown; the title is plain and the breadcrumb names the namespace |
 | Breadcrumb and namespace rows | Capitalized label, unchanged |
 | Any tab other than Backlog | Not shown |
@@ -588,6 +588,11 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `archiveBacklogPlan` calls `primaryCheckout` outside its error handling, and that error's `details` carry raw git stderr to the browser. Traced, not run. — fixed (f176988a)
 - [x] Plan and addendum text still described `Waiting on N`, `Needs prioritization (1)`, and clickable drawer badges, and omitted Ordering's drawn prerequisites and its opening mode. — corrected in this record
 - [x] A `git add` or `git commit` failure after the rename leaves the move staged, and the browser says only that the plan could not be archived; a retry is then refused. Reproduced with a failing pre-commit hook. — decided by the user: explain the staged state; fixed (ced28146)
+- [ ] The archive dialog shows only the error's message, so `MOVE_NOT_COMMITTED` hides how to finish or undo the move, and the page keeps listing the moved plan: `portal/plans/archive-dialog.js`, `portal/plans/backlog.js`.
+- [ ] Rerunning a transition after `MOVE_NOT_COMMITTED` can commit half the move: `transitionPlan` treats the plan as already at its destination. Reproduced with `plans promote` on a throwaway fixture.
+- [ ] In a bare-repo layout, `assertRunningInPrimary` sends an absolute path to the browser through `archiveBacklogPlan`. Reproduced at `transitionPlan`; the route is traced, not run.
+- [ ] The commit-failure tests do not assert that the move is staged.
+- [x] The plan's table and non-goal omit that a `Waiting on` badge links only a namespace with Backlog plans. — corrected in this record
 
 ### Verification
 
@@ -617,11 +622,12 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Post-merge review: PR 56 merged without this review, as b6378eb7. The user asked for the review afterward and chose to record it and land its fixes through this branch and a second pull request.
 - CI on e5864f9c, whose tree matches b6378eb7: `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed. CI on main at 55611a89 passed.
 - At 90086c00, whose implementation matches b6378eb7: `backlog-model-check`, `backlog-order-check`, `plans-portal-state-check`, `docs-reference-check`, and `plan-tree-naming-check` passed; `roborepo plans validate rxv53v6z` reported 0 blocking findings.
-- Intermittent, unexplained: `plans-backlog.spec.mjs` "the breadcrumb underlines its links and keeps one height at every level" failed in 2 of 10 runs of the `plans-backlog plans-status` pair, and passed 3 of 3 alone. The captured failure had `tops 155.75,181.25,181.25`, so something 25.5px tall appeared above the breadcrumb after the first screen. It was not identified, and it did not recur in the last 6 runs. A real layout jump is not ruled out.
+- Intermittent, unexplained: `plans-backlog.spec.mjs` "the breadcrumb underlines its links and keeps one height at every level" failed in 2 of 10 runs of the `plans-backlog plans-status` pair, and passed 3 of 3 alone. The captured failure had `tops 155.75,181.25,181.25`, so something 25.5px tall appeared above the breadcrumb after the first screen. It recurred at 407711cc, and a probe caught it again: the tabs sat 25.5px lower and the `Viewing` label 12.75px lower than normal, which fits the repo selector's dropdown growing by one line in the header, outside Backlog. That is inferred from those measurements; why it wraps intermittently was not found, and the user's smoke test saw no problem.
 - Post-merge Validator pass 1 at b6378eb7 (fresh-context subagent): 5 `fix` and 2 `escalate` findings, all listed above; it did not run the portal UI suite.
 - Post-merge Validator pass 2 at d352757c (fresh-context subagent): the last 5 findings above, 4 `fix` and 1 `escalate`.
 - At d352757c: `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 94 of 94.
 - Manual: the three `## Not tested` entries were confirmed by the user on 2026-11-05: "all UI smoke testing has been completed and all behaviors meet expectations".
+- Post-merge Validator pass 3 at 407711cc (fresh-context subagent): the last 5 findings above, all `fix`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit: 93 of 94, the one failure being the intermittent breadcrumb test above.
 
 ### Result
 
