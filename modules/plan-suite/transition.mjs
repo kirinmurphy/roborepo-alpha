@@ -56,6 +56,11 @@ export async function transitionPlan(options) {
   const base0 = git(primary, ["rev-parse", base]).stdout;
 
   if (!atDestination && !transition.from.includes(from)) refuseSource(record, transition, from);
+  if (!git(primary, ["ls-files", "--error-unmatch", "--", fromPath]).ok) {
+    throw domainError("INVALID_CHANGE", `${fromPath} is not committed, so it cannot be moved.`, {
+      resolution: "Commit the plan on the base branch first.",
+    });
+  }
   // An earlier run's commit failed after its rename, so the plan only reads as being here. Recording it
   // as done would be false, and committing here would land only half of that move.
   if (atDestination && !git(primary, ["cat-file", "-e", `HEAD:${fromPath}`]).ok) {
@@ -68,11 +73,6 @@ export async function transitionPlan(options) {
   const toPath = atDestination ? fromPath : path.relative(primary,
     lifecycleMoveDestination(fs.realpathSync(primary), fs.realpathSync(record.absolutePath), transition.to).destination).split(path.sep).join("/");
   const paths = atDestination ? [fromPath] : [fromPath, toPath];
-  if (!git(primary, ["ls-files", "--error-unmatch", "--", fromPath]).ok) {
-    throw domainError("INVALID_CHANGE", `${fromPath} is not committed, so it cannot be moved.`, {
-      resolution: "Commit the plan on the base branch first.",
-    });
-  }
   const dirty = dirtyPaths(primary, paths);
   if (dirty.length && !rules.carriesEdits) {
     throw domainError("INVALID_CHANGE", "The plan has uncommitted changes in the primary checkout.", {

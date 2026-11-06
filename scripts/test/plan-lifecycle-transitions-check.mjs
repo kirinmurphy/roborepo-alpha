@@ -532,6 +532,13 @@ try {
     git(root, "reset", "--quiet", "--hard");
     assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged promote restores cleanly");
 
+    // An untracked plan had no move to fail, so it gets the plain refusal.
+    fs.mkdirSync(path.join(root, "docs/plans/ready"), { recursive: true });
+    fs.writeFileSync(path.join(root, "docs/plans/ready/test-untracked.md"), planDoc({ id: "archuntr" }));
+    const untracked = refused(root, plans(root, "promote", "archuntr"), "promote of an untracked plan", /is not committed, so it cannot be moved/);
+    assert.equal(untracked.code, "INVALID_CHANGE");
+    fs.rmSync(path.join(root, "docs/plans/ready/test-untracked.md"));
+
     // A dependent bound to a worktree keeps its reference, and the result names it; the clean one clears.
     commit(root, "Bind a dependent", {
       [backlog("arch-dirty")]: linkedDoc("archdirt", "depends_on: [archbusy]\nblocked_by: []\nrelated: []\nworktree: arch-bound"),
