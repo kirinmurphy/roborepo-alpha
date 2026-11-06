@@ -176,37 +176,33 @@ This was added after telemetry showed uncapped Codex shell output was the domina
 token cost (~22.8M tok of shell results vs ~49K on Claude, where this minimization
 already ran).
 
-#### Real per-command ask — PreToolUse (shell tools)
+#### Command permissions — PreToolUse and PermissionRequest (shell tools)
 
-`globals/harnesses/codex/hooks/permission-check.mjs` re-implements the manifest's command
-matching at runtime and emits a genuine `permissionDecision: "ask"` for any shell
-command that resolves to the `ask` bucket — closing the gap `renderCodexRules`
-otherwise leaves (a `prefix_rule` can only be `forbidden`/`allow`; an ask-bucket
-command gets no rule at all there). This was previously assumed impossible on
-Codex; it is not. Confirmed directly against the shipped Codex 0.140 binary
-(`strings` on the compiled CLI): the wire enum `PreToolUsePermissionDecisionWire`
-— the one `hookSpecificOutput.permissionDecision` actually serializes to — has
-three values, `allow`, `deny`, `ask`, not two. (A separate, older
-`PreToolUseDecisionWire` enum with only `approve`/`block` also exists in the
-binary; it is not the one hooks use.) There is also a distinct `PermissionRequest`
-hook event in the wire schema, suggesting Codex may route an `ask` decision
-through its own approval-prompt UI rather than a bare stdin block — worth
-watching for behavior changes across Codex versions, since this was reverse-
-engineered from the binary, not from published documentation.
+`globals/harnesses/codex/hooks/permission-check.mjs` combines native command approval with the
+branch guard. It accepts desktop `Bash`/`command` and `exec_command`/`cmd` payloads. The manifest
+and personal command overrides supply its command buckets. Native rules render the same sources
+as `allow`, `prompt`, or `forbidden`; a missing manifest produces a hook denial.
 
-The hook loads `manifests/inventory/agent-permissions.json` plus the personal
-override file (`~/.roborepo/command-overrides.json`) directly — the same two
-sources `permissions-render.mjs` renders from — so a command's classification is
-identical on both harnesses without a second config to maintain. Matching is
-literal-prefix on whitespace-tokenized command text, mirroring Claude's
-`Bash(a b:*)` semantics. An unmatched command emits nothing and falls through to
-`approval_policy` and any other `PreToolUse` hook unchanged — this hook only
-adds a decision for the subset it can confidently classify, never removes one.
+| Event | Response |
+| --- | --- |
+| `PreToolUse` | Emits allow/deny for classified commands; emits nothing for ordinary ask entries |
+| `PermissionRequest` | Approves only a verified generic push, denies classified forbidden requests, otherwise defers |
 
-`generated/codex/rules/default.rules`' deny/allow entries stay in place alongside
-this hook, deliberately: the rules are a sandbox-level guarantee that survives
-even if a hook fails to load or errors, while the hook adds the ask tier
-`prefix_rule` cannot express. Neither replaces the other.
+The generic `git push` ask rule delegates to the sibling `protected-branch-push.mjs` process using
+the original payload. Only explicit allow/deny results are accepted; missing, failed, timed-out,
+or inconclusive results deny that matched push. Chained non-push commands cannot inherit approval.
+Other matching ask rules preserve confirmation, and any matching deny wins over allow or ask.
+
+Hook matching uses whitespace-tokenized prefixes; native rules additionally parse supported shell
+chains. Neither is a general shell interpreter. A routine allow from `PreToolUse` does not cause
+this hook to approve filesystem or network escalation at `PermissionRequest`.
+
+Codex does not support `PreToolUse.permissionDecision = "ask"`: it reports an error and continues.
+The integration therefore uses native `prompt` rules and the documented approval-event response
+shape. The new event handler needs native hook trust after installation. See
+[Codex hooks](https://learn.chatgpt.com/docs/hooks) for the protocol and
+[Permissions on Codex](../user/reference/codex-hooks.md#permissions-on-codex) for reviewer settings
+and the outstanding live desktop verification limits.
 
 #### Available events
 
@@ -286,13 +282,10 @@ and `go-online` behaviors, and from whether anything is `ask`), the generated sh
 prefix rules in `generated/codex/rules/default.rules`, and Claude
 `permissions.allow` / `permissions.deny` / `permissions.ask` in `generated/claude/settings.json`.
 
-A `deny`/`allow` behavior or arbitrary command maps straight to Codex
-`prefix_rule(... decision="forbidden"|"allow")` and Claude's deny/allow arrays. An
-`ask`-bucket entry gets no `prefix_rule` (that mechanism is binary) — instead
-`globals/harnesses/codex/hooks/permission-check.mjs` (below) supplies a real per-command
-`ask` decision at runtime, and `approval_policy` is set to `on-request` as a
-fallback for anything the hook doesn't classify. On Claude the same entry lands
-directly in `permissions.ask`.
+Command behaviors and arbitrary entries map to Codex `forbidden`, `allow`, and `prompt` rules,
+and Claude's `deny`, `allow`, and `ask` arrays. An ask entry also selects Codex's `on-request`
+approval policy. The renderer preserves the user-owned `approvals_reviewer` setting.
+The verified push exception uses the approval-event hook described above.
 
 `~/.codex/rules` is installed as a **managed copy** (`manifests/platform/manifest.tsv`,
 `kind = managed_copy`), NOT a symlink — a live file that starts as a copy of

@@ -67,15 +67,17 @@ gitOk(work, "remote", "set-head", "origin", "trunk");
 gitOk(work, "branch", "-q", "--set-upstream-to=origin/main");
 gitOk(work, "switch", "-q", "-c", "feat");
 
-function decide(command, { cwd = work, toolName = "Bash", env = {}, hookPath = hook, key = "command" } = {}) {
+function decide(command, { cwd = work, toolName = "Bash", env = {}, hookPath = hook, key = "command", event = "PreToolUse" } = {}) {
   const result = spawnSync(process.execPath, [hookPath], {
-    input: JSON.stringify({ cwd, tool_name: toolName, tool_input: { [key]: command } }),
+    input: JSON.stringify({ cwd, hook_event_name: event, tool_name: toolName, tool_input: { [key]: command } }),
     encoding: "utf8",
     env: { ...gitEnv, ROBOREPO_GIT_HOOKS_DIR: gitHooks, ...env },
   });
   assert.equal(result.status, 0, `hook exited ${result.status}: ${result.stderr}`);
   if (!result.stdout.trim()) return "defer";
-  return JSON.parse(result.stdout).hookSpecificOutput.permissionDecision;
+  const output = JSON.parse(result.stdout).hookSpecificOutput;
+  assert.equal(output.hookEventName, event);
+  return event === "PermissionRequest" ? output.decision.behavior : output.permissionDecision;
 }
 
 const cases = [
@@ -167,6 +169,57 @@ assert.equal(decide("git push --no-verify origin feat", { hookPath: installedCla
 for (const [command, expected] of [["git push origin feat", "allow"], ["git push origin main", "deny"], ["gh pr view 12", "defer"]]) {
   assert.equal(decide(command, { toolName: "exec_command", hookPath: codexHook, key: "cmd" }), expected, `Codex cmd: ${command}`);
 }
+// Native approval requests use the branch guard to approve only verified generic pushes. Chaining another command or losing the backstop must never inherit an allow.
+const permissionHook = path.join(codexHooks, "permission-check.mjs");
+for (const event of ["PreToolUse", "PermissionRequest"]) {
+  for (const [toolName, key] of [["Bash", "command"], ["exec_command", "cmd"]]) {
+    const options = { event, toolName, key, hookPath: permissionHook, env: { REPO_ROOT: repoRoot, ROBOREPO_STATE_ROOT: path.join(tmp, "permission-state") } };
+    for (const [command, expected] of [
+      ["git push origin feat", "allow"],
+      ["git push origin main", "deny"],
+      ["git push origin feat --no-verify", "deny"],
+      ["git push --all origin", "deny"],
+      ["git push origin feat && touch chained.txt", "deny"],
+    ]) assert.equal(decide(command, options), expected, `command permissions ${toolName}: ${command}`);
+    assert.equal(decide("git push origin feat", { ...options, env: { ...options.env, ROBOREPO_GIT_HOOKS_DIR: path.join(tmp, "missing") } }), "deny", "command permissions deny without the push backstop");
+  }
+}
+const overrideState = path.join(tmp, "push-override-state");
+fs.mkdirSync(overrideState);
+for (const [tokens, bucket] of [
+  [["git", "push"], "ask"],
+  [["git", "push", "origin", "feat"], "ask"],
+  [["git"], "ask"],
+  [["git"], "deny"],
+]) {
+  fs.writeFileSync(path.join(overrideState, "command-overrides.json"), JSON.stringify({
+    commands: { [tokens.join(" ")]: { tokens, bucket } },
+  }));
+  assert.equal(decide("git push origin feat", {
+    hookPath: permissionHook, event: "PermissionRequest",
+    env: { REPO_ROOT: repoRoot, ROBOREPO_STATE_ROOT: overrideState },
+  }), bucket === "deny" ? "deny" : "defer", "personal restrictions survive push approval");
+}
+
+fs.writeFileSync(path.join(overrideState, "command-overrides.json"), JSON.stringify({ commands: {} }));
+for (const command of ['git push origin "feat"', "git push origin feat && git push origin special"]) {
+  assert.equal(decide(command, {
+    hookPath: permissionHook, event: "PermissionRequest",
+    env: { REPO_ROOT: repoRoot, ROBOREPO_STATE_ROOT: overrideState },
+  }), "defer", "only literal single pushes may receive automatic approval");
+}
+for (const bucket of ["ask", "deny"]) {
+  const tokens = ["git", "push", "origin", "special"];
+  fs.writeFileSync(path.join(overrideState, "command-overrides.json"), JSON.stringify({
+    commands: { [tokens.join(" ")]: { tokens, bucket } },
+  }));
+  assert.equal(decide("git push origin feat && git push origin special", {
+    hookPath: permissionHook, event: "PermissionRequest",
+    env: { REPO_ROOT: repoRoot, ROBOREPO_STATE_ROOT: overrideState },
+  }), "defer", "a later push must retain its native personal restriction");
+}
+
+console.log("push approval checks passed: both hook events, shell payloads, protected/force denials, and personal overrides");
 assert.equal(decide("git push origin release", { env: { ROBOREPO_PROTECTED_BRANCHES: "release, prod" } }), "deny", "extra protected names");
 assert.equal(decide("git push origin main", { toolName: "exec_command" }), "deny", "Codex shell tool");
 assert.equal(decide("git push origin main", { toolName: "Read" }), "defer", "non-shell tool");
