@@ -3,7 +3,7 @@ id: w7vls1yk
 next_action: Create the bot account and classic token (Phase 2), then run the checks that need them, including the Codex sandbox checks
 blocked_by: []
 depends_on: []
-related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n"]
+related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z"]
 reviewed_commit:
 worktree:
 ---
@@ -23,7 +23,8 @@ for plan-lifecycle commits pushed straight to `main`.
 
 The identity also has to work inside Codex's sandbox, where agents cannot reach GitHub today.
 With the identity on, Claude and Codex both push feature branches and open pull requests without a
-prompt, and Codex does so without leaving its sandbox.
+prompt, and Codex does so without leaving its sandbox. Until then, plan delivery (`i5mnkm7z`) under
+Codex stops at the push and reports the command for the user to run.
 
 **Recommendation:** a bot user with a classic personal access token, stored by `gh` in the OS
 keychain. Agent shells reach it through a non-secret `GH_CONFIG_DIR` setting. A fine-grained token
@@ -65,6 +66,10 @@ rulesets on the default branch. Checked with `gh ruleset view` on 2026-10-30:
 | --- | --- | --- |
 | `protect-main` | `deletion`, `non_fast_forward` | None. "This ruleset cannot be bypassed" |
 | `no-push-to-main` | `pull_request` with `required_approving_review_count: 0`, `require_last_push_approval: false` | Repository admin role, mode `always` |
+
+Since that check, `vzgsx5vz` adds three required status checks to `no-push-to-main`:
+`check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`. Reread the ruleset before
+changing it, and keep those checks.
 
 The user is the admin and needs the bypass to push plan-lifecycle commits directly. Agents run
 with the user's credentials: `gh auth status` shows the user's OAuth token, with `repo` and

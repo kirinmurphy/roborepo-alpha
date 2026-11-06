@@ -3,7 +3,7 @@ id: d9ywaa8d
 next_action: Decide the open questions on merge readiness and conflicted merges, then add a failing fixture where a clean merge of base after approval reports stale today
 blocked_by: []
 depends_on: []
-related: ["f0jwe76j", "q6lj4w96"]
+related: ["f0jwe76j", "q6lj4w96", "vzgsx5vz", "i5mnkm7z"]
 reviewed_commit:
 worktree:
 ---
@@ -162,6 +162,11 @@ cover it, and the agent needs no human for either:
 1. a gate run on the current tip, recorded under `### Verification`, or
 2. green CI on the pull request at the current head. `.github/workflows/ci.yml` runs `npm run check`
    on `pull_request`, and agents may read `gh pr checks` under the protected-branch push guard (kirinmurphy/roborepo-alpha#48).
+
+Since `i5mnkm7z`, `/plan-review` already pushes the base merge and watches CI at the new head, so the
+second kind of evidence normally exists by this point. This repo also requires those checks before
+merge (`vzgsx5vz`), though other repos using the suite may not. `mergeReadiness` separately requires
+the branch tip to be pushed.
 
 How `mergeReadiness` and `/plan-close` require this is an open question below.
 

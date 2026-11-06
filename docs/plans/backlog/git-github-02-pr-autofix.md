@@ -3,7 +3,7 @@ id: f0jwe76j
 next_action: After GitHub Integration Part 01 (w7vls1yk) lands, confirm Claude desktop Auto-fix reads and resolves review threads as the bot, then verify the Codex and Gemini headless behaviors in Phase 1
 blocked_by: []
 depends_on: ["w7vls1yk"]
-related: ["developer-runtime-remote-branch-status", "plan-session-launching-milestone-1", "permva27"]
+related: ["developer-runtime-remote-branch-status", "plan-session-launching-milestone-1", "permva27", "vzgsx5vz", "i5mnkm7z"]
 reviewed_commit:
 worktree:
 ---
@@ -45,7 +45,11 @@ decides when an agent runs.
 
 ## Non-goals
 
-- Merging, approving, closing, or marking PRs ready. Agents never merge.
+- Merging, approving, closing, or marking PRs ready from this skill. Agents never merge, and
+  plan-suite delivery alone marks a plan's pull request ready.
+- Fixing CI during a plan run. `/plan-execute` and `/plan-review` already watch CI and fix failures
+  through `plan-execute/references/pr-delivery.md` (`i5mnkm7z`). This skill serves pull requests
+  outside that flow, and review threads and conflicts inside it.
 - A background poller, scheduler, or webhook listener in roborepo or Runtime.
 - Turning on vendor features (GitHub Apps, cloud environments, Actions workflows) for the user.
 - The agent identity, the token, and the `gh api` permission change. Part 01 owns them.
@@ -62,8 +66,8 @@ lifts the `gh api` denial. This plan assumes both and changes neither.
 | --- | --- |
 | Push hook (PreToolUse, Claude and Codex) | Approves `git push` only to a non-protected branch it can verify; denies force pushes |
 | Git `pre-push` backstop | Installed for agent shells through a `core.hooksPath` override; refuses protected destinations and non-fast-forward updates |
-| GitHub ruleset | Agent pushes to `main` are rejected because the bot is not on the bypass list; merging the bot's PR needs someone else's approval of the last push |
-| `gh` allow | `gh pr view`, `pr list`, `pr status`, `pr checks`, `pr diff`, `run list`, `run view`, `repo view`, `pr create`, and `gh api` under the agent identity |
+| GitHub ruleset | Agent pushes to `main` are rejected because the bot is not on the bypass list; merging the bot's PR needs someone else's approval of the last push and the three required checks passing |
+| `gh` allow | `gh pr view`, `pr list`, `pr status`, `pr checks`, `pr diff`, `pr edit`, `pr ready`, `run list`, `run view`, `run rerun`, `repo view`, `pr create`, and `gh api` under the agent identity |
 | `gh` deny | `gh pr merge`, `gh auth token`, repo edit/delete/rename, `secret`, `variable`, `release`, `workflow run`; `gh api` too when the identity is off |
 
 Source: `manifests/inventory/agent-permissions.json`, and the Part 01 design for the `gh api` row.

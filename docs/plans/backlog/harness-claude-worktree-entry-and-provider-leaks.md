@@ -1,9 +1,9 @@
 ---
 id: 46qth5z8
-next_action: In a fresh Claude desktop session, confirm the app honors a PreToolUse deny for its own change_directory tool before writing the worktree-entry hook.
+next_action: Check recent transcripts for agents still entering worktrees with change_directory, then refine the provider leak fixes with /plan-promote.
 blocked_by: []
 depends_on: []
-related: ["4zyo2woj", "wjlt1zvf", "7k3m9qd", "harness-capability-derived-resource-targeting", "uvzskd7z"]
+related: ["4zyo2woj", "wjlt1zvf", "7k3m9qd", "harness-capability-derived-resource-targeting", "uvzskd7z", "vzgsx5vz"]
 reviewed_commit: d155e9ae78ac09dbe910aff211838f18d0e0b626
 worktree:
 ---
@@ -18,11 +18,11 @@ under the worktree folder, including the turns that ran in the main checkout. A 
 from that sidebar folder then begins inside the worktree. Entering the same worktree with Claude's
 `EnterWorktree` tool keeps the session filed under the repository.
 
-This plan adds a core `PreToolUse` hook that refuses `change_directory` into a linked worktree of the
-session's own repository and tells the agent to call `EnterWorktree` instead. The hook is the whole
-mechanism: its refusal reason reaches the agent as the tool result, so no rule fragment is added.
+Clear agent friction (`vzgsx5vz`) corrects the rule that told agents to use `change_directory`, which
+is expected to stop the misfiling. This plan checks that it did, and keeps a core `PreToolUse` hook
+as a fallback design if agents still use `change_directory`.
 
-It also moves three harness-specific details out of platform code and behind provider data, as
+Its main work moves three harness-specific details out of platform code and behind provider data, as
 `docs/internal/harness-provider-interface.md` requires: Claude's hook sources in the system tree,
 the hardcoded `.claude/worktrees` folder, and Runtime's hardcoded agent process names.
 
@@ -52,7 +52,9 @@ flowchart LR
 
 `globals/packages/plan-suite/skills/plan-execute/SKILL.md` ("Enter the Worktree") tells the agent to
 make the worktree the session's working directory by "the environment's standard mechanism". In the
-desktop app an agent may pick either tool.
+desktop app an agent may pick either tool. The rule in
+`globals/system/rules/claude/90-claude-specific.md` now names `EnterWorktree`; before `vzgsx5vz` it
+named `change_directory`, starting on October 30, after the evidence below.
 
 ### Evidence
 
@@ -101,18 +103,17 @@ manifests and their readers use `app`.
 
 ## Goals
 
-- An agent in a Claude desktop session cannot enter a linked worktree of its own repository with
-  `change_directory`, and is told to use `EnterWorktree({ path })`.
-- The hook needs no companion rule, skill text, or user setting.
+- Evidence shows whether agents in Claude desktop sessions still enter linked worktrees with
+  `change_directory` now that the rule names `EnterWorktree({ path })`.
 - The three leaks above are resolved by reading provider data, so a new provider gets correct
   behavior by declaring it.
 
 ## Non-goals
 
-- A rule fragment or plan-execute wording for the hook. The deny reason teaches the agent on the
-  first refused call, while a rule would cost context in every Claude session.
-  `globals/system/rules/claude/90-claude-specific.md` already tells agents to treat a hook block as
-  a redirect.
+- Building the worktree-entry hook, unless the transcript check finds agents still using
+  `change_directory`. That needs the user's decision first.
+- Changing the worktree rule or plan-execute's wording. `vzgsx5vz` owns the rule, and plan-execute's
+  tool-neutral text stays.
 - Re-filing existing sidebar sessions. No tool changes a session's project folder after it starts.
 - Codex or Gemini equivalents of the hook. Neither has a tool that re-files a session.
 - A user-configurable worktree-entry behavior. Re-filing a session under a worktree is never wanted,
@@ -124,7 +125,14 @@ manifests and their readers use `app`.
 
 ## Proposed design
 
-### Worktree-entry hook
+### Worktree-entry hook (fallback, not built by default)
+
+Build this only if the transcript check shows agents still using `change_directory` and the user
+agrees. First confirm the app honors a deny: in a fresh Claude desktop session, add a temporary hook
+to a gitignored `.claude/settings.local.json` that denies `mcp__ccd_directory__change_directory`, and
+call it with the session's own folder as the target, so a missed deny moves nothing. Then add
+`scripts/test/worktree-entry-hook-check.mjs`, and wire the hook into both
+`globals/harnesses/claude/hooks-claude.json` and `generated/claude/settings.json`.
 
 `globals/harnesses/claude/hooks/worktree-entry.mjs`, wired in
 `globals/harnesses/claude/hooks-claude.json` with matcher `mcp__ccd_directory__change_directory`.
@@ -154,31 +162,15 @@ Rules it follows, matching `globals/harnesses/claude/hooks/repo-write-scope.mjs`
 
 ## Implementation plan
 
-### Phase 1: confirm the deny path
+### Phase 1: check the rule change worked
 
-- [ ] In a fresh Claude desktop session, install a temporary hook in a gitignored
-      `.claude/settings.local.json` that logs input and denies
-      `mcp__ccd_directory__change_directory`. Call `change_directory` with the session's own folder
-      as the target, so a missed deny moves nothing. Record whether the call was refused and whether
-      the agent saw the reason. Restore the settings file.
-- [ ] If Claude ignores the deny, stop Phase 2 and revise the mechanism. Phase 3 does not depend on
-      this result.
+- [ ] Search Claude transcripts from sessions started after `vzgsx5vz` landed for
+      `mcp__ccd_directory__change_directory` calls into linked worktrees and for `EnterWorktree`
+      calls. Record the counts in the Decision Log.
+- [ ] If agents still use `change_directory`, ask the user whether to build the fallback hook. Phase 2
+      does not depend on this result.
 
-### Phase 2: worktree-entry hook
-
-- [ ] Add `scripts/test/worktree-entry-hook-check.mjs` running the hook as a subprocess against temp
-      repositories. Cases: linked worktree of the same repository is denied with the
-      `EnterWorktree` reason; main checkout, non-git folder, and another repository's worktree pass;
-      malformed stdin and an unreadable `.git` file pass. Register it in
-      `scripts/test/check-groups.json`.
-- [ ] Write `globals/harnesses/claude/hooks/worktree-entry.mjs`.
-- [ ] Add the `PreToolUse` entry to both `globals/harnesses/claude/hooks-claude.json` and
-      `generated/claude/settings.json`; the renderer preserves core entries but does not produce
-      them. Add the entry to `scripts/test/core-hook-wiring-check.mjs`'s expectations.
-- [ ] Confirm the clean-machine permissions sandbox installs the script under
-      `~/.claude/hooks/provider/`.
-
-### Phase 3: provider leaks
+### Phase 2: provider leaks
 
 - [ ] Claude hook sources: move the files and repoint `manifest.tsv`, plus the source paths in
       `scripts/test/core-hook-wiring-check.mjs` and `scripts/test/test-install-collisions.sh`. Run
@@ -197,10 +189,7 @@ Rules it follows, matching `globals/harnesses/claude/hooks/repo-write-scope.mjs`
 
 ## Validation
 
-- `node scripts/test/worktree-entry-hook-check.mjs` passes every case in Phase 2.
-- In a live Claude desktop session started in the main checkout, `change_directory` into a linked
-  worktree is refused with the `EnterWorktree` reason. The agent then calls `EnterWorktree`, and
-  `list_sessions` still reports the main checkout as the session's `cwd`.
+- The Decision Log records the transcript counts from Phase 1.
 - `node scripts/test/core-hook-wiring-check.mjs` and `node scripts/test/worktree-lifecycle-check.mjs`
   pass, and the new provenance test passes.
 - `scripts/cli/worktree-policy.mjs` no longer contains `/.claude/worktrees/`, and
@@ -213,18 +202,16 @@ Rules it follows, matching `globals/harnesses/claude/hooks/repo-write-scope.mjs`
 
 | Doc | Update |
 | --- | --- |
-| `docs/user/reference/claude-hooks.md` | Add a `PreToolUse` row for the worktree-entry hook, installed always |
-| `docs/internal/hooks-internals.md` | Point the Claude system hook location at `globals/harnesses/claude/hooks/`; describe the worktree-entry protocol |
+| `docs/internal/hooks-internals.md` | Point the Claude system hook location at `globals/harnesses/claude/hooks/` |
 | `docs/internal/harness-anatomy.md`, `docs/internal/skill-reference-observation.md` | Update the Claude system hook source paths |
 | `docs/internal/harness-provider-interface.md` | Correct the extension key to `app`; document `agentWorktreeDirs` and the use of `detection.executables` for process labels |
-| `globals/packages/plan-suite/skills/plan-execute/SKILL.md` | None. Its tool-neutral "Enter the Worktree" wording stays; the hook steers Claude |
+| `globals/packages/plan-suite/skills/plan-execute/SKILL.md` | None. Its tool-neutral "Enter the Worktree" wording stays; the Claude rule steers the choice |
 
 ## Risks
 
 | Risk | Mitigation |
 | --- | --- |
-| The app ignores `deny` for its own tools | Phase 1 tests this before any hook code is written |
-| A legitimate move into a worktree is refused | The hook refuses only same-repository linked worktrees, where `EnterWorktree` is accepted. Its reason names that call with the exact path |
+| The rule alone does not change which tool agents pick | Phase 1 measures it, and the fallback hook design stays in this plan |
 | Moving Claude hook sources orphans old install copies | Keep destinations unchanged, so no installed path moves |
 
 ## Decision Log
@@ -236,6 +223,9 @@ Rules it follows, matching `globals/harnesses/claude/hooks/repo-write-scope.mjs`
   Codex work, including the hooks-file branch, Codex hook sources, and the headless deep-read CLI
   list, moved to `4zyo2woj`, which also absorbed the Codex credential-read guard. The process-name
   leak is provider-neutral and stays here because this plan has no research gate.
+- November 6: `vzgsx5vz` takes the rule correction, and the hook became a fallback. The plan's earlier
+  objection to a rule was its context cost, which no longer applies: the rule already exists and only
+  its text changes.
 
 ## Open questions
 

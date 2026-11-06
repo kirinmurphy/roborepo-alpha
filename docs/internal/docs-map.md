@@ -36,7 +36,7 @@ doc of record first; supporting docs should add context, not redefine the behavi
 | Claude hooks | [Claude Hooks](../user/reference/claude-hooks.md) | [Hooks Internals](hooks-internals.md), [Harness Anatomy and Parity](harness-anatomy.md#hooks) |
 | Codex hooks | [Codex Hooks](../user/reference/codex-hooks.md) | [Hooks Internals](hooks-internals.md), [Harness Anatomy and Parity](harness-anatomy.md#hooks) |
 | Feature verification and browser evidence | [roborepo CLI Commands](../user/reference/roborepo-cli.md#browser-evidence) | [roborepo CLI Internals](cli-internals.md#browser-commands), [Config Control Panel](../user/reference/config-control-panel.md) |
-| Plans portal and workflows | [Plans Portal Reference](../user/reference/plans-portal.md) | [Plan Suite Walkthrough](../user/guides/plan/lifecycle/plan-suite.md) |
+| Plans portal and workflows | [Plans Portal Reference](../user/reference/plans-portal.md) | [Plan Suite Walkthrough](../user/guides/plan/lifecycle/plan-suite.md), [Plan Suite Deferred Topics](plan-suite-deferred-topics.md) |
 | Telemetry and the telemetry portal | [Telemetry Service Reference](../user/reference/telemetry.md) | [Telemetry Walkthrough](../user/guides/telemetry.md) |
 | Inventory manifests | [Inventory Manifest README](../../manifests/inventory/README.md) | [Config-Code Separation](../architecture/config-code-separation.md) |
 | NPM release workflow | [NPM Release Workflow](npm-release.md) | [Testing RoboRepo](testing.md) |
