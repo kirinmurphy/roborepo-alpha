@@ -113,6 +113,7 @@ place while preserving commands, handler positions, and unrelated hooks.
 | SessionStart | Caveman mode | Turns on terse output; say "stop caveman" or "normal mode" to turn it off | `caveman` |
 | PreToolUse (shell) | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and any force push, backed by a git `pre-push` hook. Denies every push it cannot verify (`--no-verify`, `--all`, a `$VARIABLE`, an unrecorded remote default branch), where Claude would ask. See [Protected Branches](claude-hooks.md#protected-branches) | core (`hooks` bundle) |
 | PreToolUse (shell) | Command permissions | Applies your permission settings' `allow`, `ask`, and `deny` buckets to shell commands by their leading words. An `allow` covers a single command only: a command with `;`, `&&`, `\|`, a redirection, or `$(...)` keeps Codex's own approval (see below) | core (`hooks` bundle) |
+| PermissionRequest (shell) | Verified push approval | Approves the generic push request only after the branch guard verifies it; leaves other confirmations to Codex | core (`hooks` bundle) |
 | PreToolUse (shell) | Output minimizer | Appends `2>&1 \| tail -n 120` to noisy build, lint, and typecheck commands, forces `tsc --pretty false`, and denies `--watch`, `--verbose`, and `--debug`. Leaves chained, piped, or redirected commands unchanged, since a rewrite also approves the command | core (`hooks` bundle) |
 | PostToolUse | Skill reference observer | Tells Codex which skill reference files it just read, for the skills-loaded line. Codex does not yet deliver this event after shell reads, so Codex reads are under-counted | `skill-visibility` |
 | SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |
@@ -126,21 +127,33 @@ Codex through command rules and hooks:
 
 | Bucket | How Codex enforces it |
 | --- | --- |
-| `allow` / `deny` | A command rule in `~/.codex/rules/default.rules`. These hold even if a hook fails to load |
-| `ask` | The command permissions hook denies the command and tells you to run it manually. A generic `git push` uses the dedicated push guard's verified decision instead |
+| `allow` | Native `allow` command rule; ordinary commands retain their existing access |
+| `deny` | Native `forbidden` command rule plus matching hook denials |
+| `ask` | Native `prompt` command rule; the permission hook defers to Codex's approval flow |
 
-A command no rule or hook classifies falls through to Codex's `approval_policy`.
+A single generic feature-branch push is the exception to confirmation: the approval hook delegates to
+the protected-branch guard. Protected branches, force pushes, and unverified push targets remain
+blocked. A matching personal ask rule keeps the confirmation, including
+a rule for the exact `git push` prefix. Chained pushes defer to native approval so later commands retain
+their own restrictions. If the guard is missing or inconclusive for a matched generic push,
+the permission hook denies it.
 
-Codex has been seen running a command whose hook result was `ask` without prompting. RoboRepo
-therefore denies commands in that bucket: for example, `rm scratch.txt` must be run manually.
-A normal feature-branch push can still run without a prompt after the dedicated guard verifies it.
-If that guard is missing or inconclusive, the permission hook denies the push. A more specific
-personal `ask` override also remains denied. Claude keeps its native `ask` behavior.
+Human versus automatic review is a separate [Codex setting](https://learn.chatgpt.com/docs/sandboxing).
+With `approvals_reviewer = "user"`, native approval requests go to the person; with `auto_review`,
+eligible requests go to the reviewer agent. RoboRepo preserves this setting. An unmatched command
+falls through to Codex's own approval policy; `on-request` does not mean every command prompts.
 
-This is a temporary blocking fallback, not an approve-and-continue workflow. Codex's
-[native rules](https://learn.chatgpt.com/docs/agent-configuration/rules) support a `prompt`
-decision, but RoboRepo's native approval integration is unfinished. Human versus automatic review
-is a separate Codex setting; a native approval request does not always mean a human sees a dialog.
+**Verification limit:** the native rules and hook responses are covered separately. Actual desktop
+Approve/Cancel, execution inside versus outside the workspace, and automatic-review behavior still
+need end-to-end verification. Policy-engine acceptance alone does not prove a prompt appeared.
+Complex shell expressions can fall outside native prefix matching; these are command-prefix
+controls, not a guarantee that every possible way to perform the same action is intercepted.
+See [native rule matching](https://learn.chatgpt.com/docs/agent-configuration/rules).
+
+After installing updated rules, restart Codex and review the new **Verified push approval** hook
+through Codex's hook review flow. Until that hook is trusted, matching pushes can still enter the
+normal approval flow. Do not use this unverified integration as evidence that desktop confirmation
+is complete.
 
 `~/.codex/rules/` and `~/.codex/config.toml` are live files that Codex itself can change — for
 example, approving "always allow this command" in a session appends a rule. Once they differ from

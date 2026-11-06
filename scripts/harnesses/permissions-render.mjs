@@ -42,8 +42,8 @@ function quoteToml(value) {
   return JSON.stringify(String(value));
 }
 
-// Codex has no per-command "ask" tier (see renderCodexRules below) — approval_policy is the
-// session-wide fallback for anything without an explicit forbidden/allow rule.
+// Native prompt rules require an approval-capable session policy. The reviewer remains a
+// user-owned setting; this renderer must not select human or automatic review.
 function codexApprovalPolicy(behaviors, arbitraryCommands) {
   return behaviors.some((b) => b.bucket === "ask") || arbitraryCommands.some((c) => c.bucket === "ask")
     ? "on-request"
@@ -219,21 +219,19 @@ function renderCodexRule(pattern, decision) {
   return `prefix_rule(pattern=${formattedPattern}, decision=${JSON.stringify(decision)})`;
 }
 
-// Codex's prefix_rule decision is binary (forbidden/allow) — there is no per-command "ask" tier.
-// A behavior/command resolved to "ask" gets NO rule at all: omitting a rule falls through to
-// approval_policy, Codex's actual equivalent of "always prompt."
+// Command buckets map to native rules. Omitting an ask rule would let in-workspace commands
+// fall through without an explicit approval requirement.
 export function renderCodexRules(manifest, overrides = {}) {
   const behaviors = resolveBehaviors(manifest, overrides.behaviors);
   const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
   const lines = [];
   for (const b of behaviors) {
-    if (b.kind !== "commands" || b.bucket === "ask") continue;
-    const decision = b.bucket === "deny" ? "forbidden" : "allow";
+    if (b.kind !== "commands") continue;
+    const decision = b.bucket === "deny" ? "forbidden" : b.bucket === "ask" ? "prompt" : "allow";
     for (const pattern of b.commands ?? []) lines.push(renderCodexRule(pattern, decision));
   }
   for (const c of arbitraryCommands) {
-    if (c.bucket === "ask") continue;
-    lines.push(renderCodexRule(c.tokens, c.bucket === "deny" ? "forbidden" : "allow"));
+    lines.push(renderCodexRule(c.tokens, c.bucket === "deny" ? "forbidden" : c.bucket === "ask" ? "prompt" : "allow"));
   }
   return `${lines.join("\n")}\n`;
 }
@@ -253,7 +251,7 @@ function scopedToolToClaude(tool, scopePath) {
 }
 
 // Claude has a real 3-state permissions model (allow/deny/ask), so every resolved behavior and
-// arbitrary command maps directly with no fallback/approximation needed — unlike the Codex side.
+// arbitrary command maps directly to its native permission bucket.
 export function claudePermissions(manifest, overrides = {}, { home: _home = os.homedir() } = {}) {
   const behaviors = resolveBehaviors(manifest, overrides.behaviors);
   const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
