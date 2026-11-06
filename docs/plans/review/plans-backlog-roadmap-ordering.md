@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: The user pushes bb7c9ae1 and clears the untracked transcripts folder; confirm CI is green, then get the user's approval.
+next_action: Confirm CI is green on the pushed tip of PR 59, then get the user's approval.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -648,12 +648,13 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - CI on d8813c34 (PR 59): `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed.
 - CI on b6eb206a (PR 59): `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed. CI on base at da88e4f3 passed.
 - At b6eb206a: `backlog-model-check`, `backlog-order-check`, `plan-lifecycle-transitions-check`, `docs-reference-check`, and `plan-tree-naming-check` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 96 of 96; `roborepo plans validate rxv53v6z` reported 0 findings.
-- Review of the changes since d8813c34, Validator pass 1 at b6eb206a (fresh-context subagent): the last 5 findings above, 4 `fix` and 1 `escalate`. It also reported 2 the user set aside on 2026-11-06 as not tied to this plan. The merge of `main` at e3658b0b touches only Codex hook and permission files, and its remerge diff is empty.
+- Review of the changes since d8813c34, Validator pass 1 at b6eb206a (fresh-context subagent): the last 5 findings above, 4 `fix` and 1 `escalate`. The merge of `main` at e3658b0b touches only Codex hook and permission files, and its remerge diff is empty.
 - Changes reviewed since d8813c34: the undo of a move whose edits can't be written or staged, the archive control's hold until a newer snapshot arrives, the banner's wording, and their tests. `main` at da88e4f3 is already in the branch.
 - At f16f87d1: `plan-lifecycle-transitions-check` and `docs-reference-check` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 96 of 96.
 - Review of the changes since d8813c34, Validator pass 2 at f16f87d1 (fresh-context subagent): the last finding above, `fix`.
 - At bb7c9ae1: `plan-lifecycle-transitions-check` and `docs-reference-check` passed.
-- Review of the changes since d8813c34, Validator pass 3 at bb7c9ae1 (fresh-context subagent): clean, no `fix` or `escalate`. It ran the retry advice through `promote` and `close` with unstaged, staged, and mixed edits after a failed commit and a failed undo, 24 runs on throwaway fixtures. CI on these commits waits for a push.
+- Review of the changes since d8813c34, Validator pass 3 at bb7c9ae1 (fresh-context subagent): clean, no `fix` or `escalate`. It ran the retry advice through `promote` and `close` with unstaged, staged, and mixed edits after a failed commit and a failed undo, 24 runs on throwaway fixtures.
+- After merging `main` at 9182dda7, which brings only plan-suite rule, skill, and docs text: `plan-suite-skills-check`, `docs-reference-check`, and `plan-lifecycle-transitions-check` passed; `roborepo plans validate rxv53v6z` reported 0 findings.
 
 ### Result
 
