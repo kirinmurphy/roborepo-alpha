@@ -1,7 +1,7 @@
 ---
 id: 9xzkn4vz
 priority: none
-next_action: Run npm run check in the external terminal and provide its result; then resume /plan-execute for completion and submission.
+next_action: Run /plan-review on the submitted implementation.
 blocked_by: []
 depends_on: []
 related: ["4xc0gjuw", "a7bslb00", "z3j2x3x1", "b2sgiejd", "l1mz96d9", "0jped168"]
@@ -366,7 +366,8 @@ records. `worktree-snapshot.mjs` keeps inventory, listing, reading, and restore,
       Move the snapshot writer into a test fixture helper under `scripts/test/`.
 - [x] Register both stores, add the shared log lock and compaction to `appendRemoval`, and prune
       transaction records through the file-set measurement.
-- [ ] Complete required verification after host restrictions are lifted; documentation and focused regression tests are implemented.
+- [x] Complete required verification in the external terminal: nine native suites, focused
+      browser tests, and the full regression gate passed.
 
 ## Validation
 
@@ -495,15 +496,12 @@ Decided during promotion, each reversible by refining this plan before implement
 
 ## Open Questions
 
-- Full parity verification remains unresolved: the earlier `npm run check` failed in this
-  restricted session. The user has now confirmed all nine targeted native suites and all
-  16 worktree browser tests pass in the external terminal. Run the full parity gate there;
-  its result still blocks the final verification objective and submission for review.
+None. The external terminal completed the full regression gate after the targeted checks passed.
 
 ## Not tested
 
-None remaining from targeted verification. The user supplied successful external-terminal
-results for the native and browser checks below; full parity remains an open verification task.
+None. The user supplied successful external-terminal results for the native, browser, and full
+regression checks below.
 
 ## Decision Log
 
@@ -625,5 +623,11 @@ results for the native and browser checks below; full parity remains an open ver
   recreated-checkout refusal, legacy artifact restore, and concurrent log assertions.
 - `npm run test:portal-ui -- --grep worktree`: 16 passed in 13.1 seconds. The temporary
   portal started successfully; the reported ephemeral URL is not a persistent demo link.
-- These external results supersede the earlier targeted EPERM failures. The full
-  `npm run check` result remains pending; the plan stays active until it is resolved.
+- These external results supersede the earlier targeted EPERM failures.
+
+### Full regression verification supplied by the user — 2026-11-06
+
+- `env -u ROBOREPO_ASSUME_INTERACTIVE npm run check </dev/null` completed in the external
+  terminal. The supplied output ends with `165 passed (2.0m)` and `CI checks passed`.
+- The run resolves the remaining verification objective. The last independent validation pass
+  found no new issues, and only plan evidence has changed since that pass.
