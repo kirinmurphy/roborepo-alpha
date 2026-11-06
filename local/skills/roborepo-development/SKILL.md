@@ -133,8 +133,10 @@ Everything else (the two symlink levels, the layer table) lives in
 - **Full CI parity is expensive.** `npm run check` is the full local CI parity gate: main suite,
   install-collisions, package install, and Docker clean-machine checks when Docker is available.
   Do not use it as the default cleanup loop for ordinary review or CodeRabbit feedback. Prefer
-  targeted checks plus `bash scripts/doctor.sh --quiet`; reserve `npm run check` for pre-push,
-  release, or changes to CI/workflow/test orchestration itself.
+  targeted checks plus `bash scripts/doctor.sh --quiet`; run `npm run check` locally only for
+  changes to CI/workflow/test orchestration itself, or a release. Pushes rely on the pre-push check
+  (`scripts/test/pre-push-check.sh`: doctor, docs references, `git diff --check`) and on CI, which
+  runs the full gate on both legs; read the CI result instead of reproducing it.
 - **Docker test sandboxes:** use them for machine-shape behavior: clean `HOME`, clean `PATH`,
   package-mode install/uninstall, fake harness discovery, and generated config projection. Use one
   disposable image, one fresh container per scenario, one package install per scenario, and many

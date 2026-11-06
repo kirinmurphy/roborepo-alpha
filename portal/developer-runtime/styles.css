@@ -261,7 +261,7 @@ main {
   padding: 10px 16px 4px;
   font-size: var(--text-xs);
   font-weight: 600;
-  color: var(--dim);
+  color: var(--ink);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   border-top: 1px solid var(--line);
@@ -504,16 +504,9 @@ main {
   gap: 7px;
 }
 .repository-root-menu,
-.repository-root-menu .action-menu,
-.worktree-row-menu,
-.worktree-row-menu .action-menu {
+.repository-root-menu .action-menu {
   display: inline-flex;
   align-items: center;
-}
-/* One width for every row's ⋮ cell, so the menus line up down the card. */
-.worktree-row-menu {
-  justify-content: center;
-  width: var(--checkout-control-height);
 }
 /* Reuses the Compose port rows' status pill, sized down to sit beside the port link. */
 .repository-root-actions .port-health-badge {
@@ -699,7 +692,7 @@ main {
   margin: 4px -10px 0;
   padding: 4px 10px;
   background: var(--wash-heading);
-  color: var(--dim);
+  color: var(--ink);
   font-size: var(--text-2xs);
   font-weight: 600;
   letter-spacing: 0.06em;

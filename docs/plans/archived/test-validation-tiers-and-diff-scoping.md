@@ -191,4 +191,4 @@ applicable plan/document validation gate.
 
 ## Archived
 
-2026-10-31: Superseded by "Keep Main Green and Let CI Run the Full Gate" (ja44k85c, docs/plans/ready/test-ci-as-background-gate.md), which makes CI the full gate and replaces this plan's fast local check and agent guidance. The remaining value, CI time savings (docs- or plans-only diffs skipping CI legs, and timing for each stage), is deferred: write a smaller CI-speed plan only if measurements after ja44k85c lands show CI time matters.
+2026-10-31: Superseded by "Keep Main Green and Let CI Run the Full Gate" (ja44k85c, docs/plans/completed/test-ci-as-background-gate.md), which makes CI the full gate and replaces this plan's fast local check and agent guidance. The remaining value, CI time savings (docs- or plans-only diffs skipping CI legs, and timing for each stage), is deferred: write a smaller CI-speed plan only if measurements after ja44k85c lands show CI time matters.

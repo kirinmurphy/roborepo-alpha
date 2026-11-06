@@ -1,6 +1,6 @@
 ---
 name: plan-execute
-description: Use when starting, resuming, or fixing the implementation of a prepared repository plan. Accepts a plan in ready, active, or review. From ready it will create or safely reuse an isolated worktree and commit the start transition; in active it resumes in the recorded worktree; in review it fixes only the findings review sent back. It implements every in-scope unblocked objective without milestone check-ins, logs autonomous decisions, queues blocked questions for the end, then runs a validation loop in which a fresh-context validator checks the work and the agent fixes what it finds until a pass is clean, and moves the plan to review only after a clean pass and a passing completion preflight. Safe to rerun across sessions. Do not use for preparing a backlog plan (plan-promote), the human review or approval (plan-review), post-merge closure (plan-close), archiving (plan-archive), or implementation without an existing plan.
+description: Use when starting, resuming, or fixing the implementation of a prepared repository plan. Accepts a plan in ready, active, or review. From ready it will create or safely reuse an isolated worktree and commit the start transition; in active it resumes in the recorded worktree; in review it fixes only the findings review sent back. It implements every in-scope unblocked objective without milestone check-ins, logs autonomous decisions, queues blocked questions for the end, then runs a validation loop in which a fresh-context validator checks the work and the agent fixes what it finds until a pass is clean or the eight-pass cap is reached, and moves the plan to review once that loop has ended and the completion preflight passes. Safe to rerun across sessions. Do not use for preparing a backlog plan (plan-promote), the human review or approval (plan-review), post-merge closure (plan-close), archiving (plan-archive), or implementation without an existing plan.
 ---
 
 # Plan Execute
@@ -240,14 +240,16 @@ the loop is done:
 
 - The Validator runs with fresh context, as a subagent where the environment has one, and is given
   the plan, the diff, and the gate output, never the implementer's account of the work.
-- The Validator only reports. This session fixes every finding classed `fix`, code included, and
-  each later pass validates the revised work.
+- The Validator only reports. This session fixes every finding classed `fix`, code included, without
+  asking the user, and each later pass validates the revised work.
 - A finding is classed by consequence, not size: `fix` when the right fix is clear and stays within
   the plan's requirements; `escalate`, as an Open Questions entry, when it chooses between real
-  alternatives, changes requirements or a contract, or lands outside the plan; `base` when the base
-  branch fails the same check, which is recorded and never blocks.
-- **Never run the submit transition until a pass reports no `fix` findings.** At the five-pass cap,
-  stop, leave the remaining findings open, and report them.
+  alternatives, each with a compelling argument for it, changes requirements or a contract, or lands
+  outside the plan; `base` when the base branch fails the same check, which is recorded and never
+  blocks.
+- **Never run the submit transition until the loop has ended:** a pass reports no `fix` findings, or
+  the eight-pass cap is reached. The cap limits passes only: the last pass's findings are fixed like
+  any other's, and the run continues, recording that those fixes were not revalidated.
 
 ## Implementation Completion
 
@@ -262,15 +264,28 @@ human accepted it.
    uncommitted changes, the feature branch has a commit of its own, and the plan passes the review
    validator apart from unconfirmed Not tested entries.
 3. **Incomplete, blocked, or not yet validated:** the plan stays in `active/`. This includes a
-   Validation Loop that stopped at its cap or left `escalate` findings open; their unchecked
-   findings fail the preflight. Record the remaining tasks, findings, or blockers, set an actionable
-   `next_action`, and commit the plan in the worktree. A later `/plan-execute` resumes from there.
+   Validation Loop that left `escalate` findings open; their unchecked findings fail the preflight.
+   Record the remaining tasks, findings, or blockers, set an actionable `next_action`, and commit the plan in the worktree. A later `/plan-execute` resumes from there.
 4. **Complete:** from the primary checkout, run the repository's canonical submit transition
    command for `<plan>`. It reruns the preflight and commits the plan-only move from `active/` to
-   `review/` on the base branch. Do not push. Report that the plan awaits `/plan-review`.
+   `review/` on the base branch. Do not push the base branch. Then push the feature branch (below)
+   and report that the plan awaits `/plan-review`.
 
 Genuinely unverified manual checks stay under `## Not tested`; they do not block completion, and
 they are resolved before `/plan-close`.
+
+### Push the feature branch
+
+Work ready for review is pushed so CI runs the full gate before `/plan-review` starts. Push only
+after the submit transition succeeds, or after Review Findings commits its fixes:
+
+1. Re-read the worktree's branch and Git status. Push only the plan's feature branch, never the base
+   branch or any other protected branch; the start and submit commits on the base branch stay local.
+2. From the worktree, run `git push -u <remote> <branch>`, where `<remote>` is the branch's upstream
+   remote, or the repository's only remote when none is set. Never force-push.
+3. With no remote, or when the push is refused (a permission prompt declined, a hook, a rejected
+   non-fast-forward), do not retry, rebase, or work around it. The plan's lifecycle stands; report
+   the exact command under Needs you and whether the session's permissions or the remote refused it.
 
 ## Review Findings
 
@@ -290,7 +305,8 @@ A plan in `review/` returns here only to fix what review recorded.
    Leave it unchecked, record why in Open Questions, and tell the user it needs `/plan-review`,
    which decides on the scope change.
 5. Commit the fixes and the plan update in the worktree. The plan stays in `review/`; never run a
-   lifecycle transition in this mode. Report that `/plan-review` should run again.
+   lifecycle transition in this mode. Push the feature branch (see Push the feature branch), then
+   report that `/plan-review` should run again.
 
 ## Not Tested
 
@@ -331,24 +347,18 @@ trivial:
    - then repository conventions;
    - then installed skill guidance;
    - then general industry convention.
-4. Decide autonomously only when **all** of these hold:
-   - one option is clearly the best;
-   - choosing it has only trivial consequences;
-   - its effects stay inside this feature.
-
-   Reversibility alone is not enough: a cheap-to-reverse choice with no clear winner is still
-   blocked.
-5. Otherwise, block the decision. Any of these is enough:
-   - no option is clearly best;
-   - the tradeoffs between options are considerable;
-   - the tradeoffs reach beyond this feature;
-   - the best option still carries consequences that are not trivial.
+4. Decide autonomously when one option is clearly the best and no alternative has a compelling
+   argument for it. A clear win needs no approval, however large the change, unless step 6 applies.
+5. Otherwise, block the decision: two or more options each have a compelling argument, so a
+   reasonable person could choose either. Reversibility alone does not settle it: a cheap-to-reverse
+   choice with no clear winner is still blocked.
 6. Always block, never decide, when the decision:
    - is destructive or difficult to reverse;
    - materially changes product scope or behavior;
    - changes a public API or persistent schema;
    - affects security, privacy, permissions, migration, or compatibility;
-   - pushes, merges, publishes, spends money, or affects an external system.
+   - pushes, merges, publishes, spends money, or affects an external system. The feature-branch
+     push in Push the feature branch is a fixed step of this skill, not a decision.
 7. A blocked decision becomes an Open Questions entry; see Blocker Policy.
 
 ### Decision Log
@@ -408,7 +418,8 @@ A run is complete when:
 
 - every in-scope, unblocked objective has been implemented;
 - acceptance criteria have been evaluated;
-- the Validation Loop ended on a pass with no `fix` findings, or stopped at its cap and says so;
+- the Validation Loop ended on a pass with no `fix` findings, or at its cap with the last pass's
+  findings fixed, and says so;
 - targeted verification has passed or failures are explained;
 - required broader verification has been run when practical;
 - autonomous decisions are in the Decision Log;
@@ -423,7 +434,7 @@ A run is complete when:
   link is recorded when one exists;
 - completed implementation changes are committed in the target worktree, or the final report
   explicitly says that no implementation commit was needed;
-- the plan was moved to `review/` if and only if the Validation Loop ended clean and the completion
+- the plan was moved to `review/` if and only if the Validation Loop ended and the completion
   preflight passed.
 
 Completion does not authorize:
@@ -431,7 +442,8 @@ Completion does not authorize:
 - unrelated refactoring;
 - infinite retries around external blockers;
 - guessing through consequential product decisions;
-- pushing, merging, publishing, or deleting worktrees without explicit permission or repository policy;
+- pushing anything but the plan's feature branch at review handoff, or merging, publishing, or
+  deleting worktrees, without explicit permission or repository policy;
 - any commit on the base branch other than the start and submit transitions;
 - leaving completed implementation changes uncommitted in the target worktree.
 

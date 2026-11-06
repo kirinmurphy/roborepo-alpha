@@ -35,13 +35,10 @@ not lifecycle stages, and neither is a human's approval.
 
 ## What The Portal Writes
 
-The portal offers priority edits only for backlog and ready plans.
-It rewrites that frontmatter line after checking that the file has not changed since
-the page loaded it. The plan suite's commands move plans between lifecycle folders, each with one
-commit in the main checkout. Which repositories Plans reads is RoboRepo state, not a property of
-any repository.
-
-Starting or reopening a plan clears its priority to `none`.
+The portal writes one file: `plans-order.json` under `docs/plans/`, when you press **Save** in Backlog's
+Prioritize mode. See [Backlog](#backlog). It never writes a plan file. The plan suite's commands move
+plans between lifecycle folders, each with one commit in the main checkout. Which repositories Plans
+reads is RoboRepo state, not a property of any repository.
 
 ## Which Repositories Plans Reads
 
@@ -66,13 +63,13 @@ worktree's copy is often still in `active/`. Plans shows the plan under Review, 
 from the worktree, and lists the main copy's path as **primary copy** in the drawer. The next base
 synchronization brings the rename into the worktree.
 
-| Plan | Plans page shows | Priority edits write to | Finding |
-| --- | --- | --- | --- |
-| Backlog, ready, completed, or archived | Main copy | Main checkout for backlog and ready; no priority control for completed or archived | None |
-| Active or review, no `worktree` | Main copy | No priority control | None |
-| Active or review, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | No priority control | **Edited outside worktree** when the main copy holds a version the worktree never had |
-| Active or review, its worktree or the worktree's copy is not usable | Main copy | No priority control | **Worktree copy unavailable**, with the reason |
-| Only in a worktree | Worktree copy, labeled with the worktree name | That worktree | None |
+| Plan | Plans page shows | Finding |
+| --- | --- | --- |
+| Backlog, ready, completed, or archived | Main copy | None |
+| Active or review, no `worktree` | Main copy | None |
+| Active or review, its worktree holds a usable copy | Worktree copy, **From worktree `<name>`** in the drawer | **Edited outside worktree** when the main copy holds a version the worktree never had |
+| Active or review, its worktree or the worktree's copy is not usable | Main copy | **Worktree copy unavailable**, with the reason |
+| Only in a worktree | Worktree copy, labeled with the worktree name | None |
 
 A copy in any other worktree is never shown and never produces a finding; those worktrees usually
 hold an older copy of main.
@@ -122,16 +119,113 @@ The page shows one call to action at a time:
 The repo selector (labeled **Viewing**), in its own row in the pinned portal header, narrows Plans to one repo; the choice is the
 URL's `?repo=` parameter and carries over to Tokens and Agents. Scoped, the header count and
 the onboarding steps above describe that repository alone, and a repository Plans has never read
-shows as not scanned. Search, priority, and the other filters stay as they are when the scope
+shows as not scanned. Search and the other filters stay as they are when the scope
 changes. A link that names a repository RoboRepo no longer lists shows **Repo unavailable**
 instead of any plans, with an action to show all repos.
 
-**Filters** opens a popup (search, priority, blocked, structure, plan freshness, health). Changes are drafted there and
+**Filters** opens a popup (search, blocked, structure, plan freshness, health). Changes are drafted there and
 applied by **Update**, which stays disabled until something differs from the filters in effect; **Cancel**,
 the close button, Esc, and the backdrop discard the draft.
 
-Priority filtering applies only to backlog and ready plans. Other views hide the priority control
-and filter pill and ignore its saved value; returning to backlog or ready restores it.
+### Backlog
+
+Backlog answers "what do I build next?" one namespace at a time. Every other lifecycle tab keeps its
+flat list of cards across all selected repos.
+
+| You have selected | You see |
+| --- | --- |
+| **All repos** | Repos with Backlog plans, each with its ready, unprioritized, and total plan counts. A plan is ready when it is prioritized, has no blocker, and every prerequisite is completed |
+| A repo | **Next up**, then **All Plans**: its namespaces with Backlog plans, pinned ones first, each with the same counts; **No namespace** last, when any plan lands there |
+| A repo and namespace | **Details**: prioritized cards, under a banner counting plans that need prioritization. **Prioritize**: **Needs prioritization**, then **Prioritized** |
+| A repo and **No namespace** | Each file's exact name, its findings, and **Copy Repair Prompt** |
+
+The namespace is the URL's `?namespace=` parameter, so reload and back/forward keep your place.
+Backlog descriptions show 190 characters. Resting the pointer on a plan's title and description for a second reads on to twice that, over the page, without moving what follows.
+
+Filters narrow the directory counts and the Details cards. Prioritize always shows the whole namespace
+and hides Filters, because moving a row among hidden rows has no defined result.
+
+A plan's namespace is the longest approved `<namespace>-` prefix of its filename. It is derived on
+every read and never stored. On a repo's screen the breadcrumb's repo name switches to another repo with Backlog plans. Inside a namespace the breadcrumb names it and switches to another one, a Next up
+card shows it as a badge, and **Waiting on** does for a prerequisite in another namespace; the H1 is untouched. Approved means the keys of `docs/plans/plans-config.json` plus the universal
+namespaces. A repo with no config shows one **No namespace** row with its plans as ordinary cards and
+a warning pointing to the `/plan-suite-init` skill, since it never adopted the convention. A malformed config is
+reported as an error and every plan shows under **No namespace** until it is fixed.
+
+**Next up** shows the same cards as Details, at most one per namespace: its highest-ranked plan with no
+blocker and with every unfinished prerequisite already in Ready, Active, or Review. An unranked plan never
+appears, so a repo with nothing ranked shows no Next up. Namespaces stay in directory order, so pinned
+ones lead. Filters narrow it, and a card's namespace badge opens that namespace.
+
+**Waiting on** lists a Backlog plan's unfinished prerequisites in Details and the drawer, each with its lifecycle
+and a link that opens it. A prerequisite in another namespace also shows that namespace's badge. Outside the
+drawer, the badge opens that namespace, as the namespace filter does, when the namespace has plans in Backlog.
+Prioritize lists only the prerequisites its tree does not draw. Prerequisites never affect another namespace's order.
+
+**Details and Prioritize** show prioritized plans in the same order. Details is always flat cards, and its banner's
+**Prioritize Now** opens Prioritize. A namespace with only new plans opens in Prioritize directly. Prioritize shows compact rows and groups linked plans, and Save returns to
+Details:
+
+- Plans connected by direct `depends_on` edges, both ends in this namespace's Backlog, form one block
+  that moves as a unit. A join or fork is one block too; listing `B` before `C` claims nothing about
+  `B` and `C`. A prerequisite in another lifecycle or namespace connects nothing, so once a shared
+  prerequisite leaves Backlog its dependents become separate rows that keep their positions.
+- A block is drawn as a tree. A link already implied through another prerequisite is dropped, so if `E`
+  needs `A` and `C`, and `C` needs `A`, then `E` sits under `C`. A plan with several real prerequisites nests
+  under the last to finish and names the others under **Also needs**.
+- **Prioritized** controls, right side, in order: **Move to top**, **Move up**, **Move down**, **Move to
+  bottom**, **Return to unprioritized**, drag handle. Dropping a row on the **Return to unprioritized** zone
+  below the list does the same as the control: the row goes to the top of **Needs prioritization**, and Save
+  takes it out of the order.
+- **Needs prioritization** controls: **Move down** (to the top of Prioritized), **Move to bottom**, **Archive**, drag
+  handle.
+- A namespace with a dependency cycle or a missing prerequisite shows why and locks its controls.
+
+**Archive**, the trash icon beside each unprioritized plan's modified time, retires that one plan without
+waiting for Save, even when it sits in a linked block. It asks for a reason, then asks once more, and
+commits the move to the repo's base branch, leaving the push to you. The base branch is the remote's
+default, or else `main` or `master`, and it must be checked out in the primary checkout. It stays disabled while a draft has unsaved changes. Plans that depended on the
+archived plan stop depending on it, as described under the `archive` transition.
+
+Moves stay in a draft. **Save** writes the namespace's whole order at once; **Cancel** discards the
+draft at once. Leaving a dirty draft by any route (the mode toggle, a lifecycle tab, the repo
+selector, a header link, back or forward) first shows "Your prioritization changes have not been
+saved." with **Save and Continue**, **Discard Changes**, or **Keep Editing**. Closing or reloading the tab raises the browser's
+own prompt. If the namespace changes underneath a draft (another tab, an edited `depends_on`, a
+config edit), **Refresh** or **Save** marks it stale: nothing is overwritten, and you discard it and
+start from the current order.
+
+**The order file.** `plans-order.json`, under `docs/plans/`, holds one array of plan ids per namespace, in the
+main checkout, left uncommitted like any other edit there. A missing file means every plan is
+unprioritized. Priority is never compared across namespaces or repos.
+
+```json
+{ "schemaVersion": 1, "namespaces": { "portal": ["h3j4k5m6", "a1b2c3d4"] } }
+```
+
+The order you see is calculated on every read, and a read never writes:
+
+| Change | What you see | The file |
+| --- | --- | --- |
+| A new independent plan | Needs prioritization | Unchanged |
+| A plan connected to a ranked plan, by a new plan or a new `depends_on` | Its whole group is ranked at the earliest ranked member; Prioritize says what moved | Written at the next Save or `order place` |
+| A removed `depends_on` | The plans keep their positions | Unchanged |
+| A plan leaves Backlog | Ignored; the others keep their relative order | Pruned at the next write |
+| The file names an unknown plan | Excluded, with a finding | Preserved |
+| The file has a namespace that is no longer approved | Excluded, with a finding | Preserved |
+| A pin names a namespace no longer approved | Ignored | Pruned at the next write |
+| The file cannot be parsed | Every plan unprioritized, with a finding; Save and pinning refuse | Never overwritten |
+
+A plan with no `id`, or a duplicate one, stays in Needs prioritization with no controls.
+
+### Pinning a namespace
+
+The pin on a namespace's row lifts it above the others on the repo screen, and lifts its plan the same
+way in **Next up** and in the breadcrumb's namespace menu. Pinned namespaces appear in the order they
+were pinned, then the rest alphabetically. A pin takes effect at once, with no Save, and is stored as
+a `pinned` list in `plans-order.json`. It changes the order between namespaces only, so each
+namespace's own plans keep their order. A pin stays while its namespace has nothing in Backlog, so it
+still applies when the next plan arrives.
 
 ### Limits
 
@@ -155,7 +249,6 @@ key:
 Supported managed fields:
 
 - `id`
-- `priority`
 - `next_action`
 - `blocked_by`
 - `depends_on`
@@ -163,8 +256,9 @@ Supported managed fields:
 - `reviewed_commit`
 - `worktree`
 
-Unsupported syntax produces warnings rather than guessed behavior. Duplicate keys, invalid IDs,
-invalid priority values, and non-array relationship fields are warnings.
+Unsupported syntax produces warnings rather than guessed behavior. Duplicate keys, invalid IDs, and
+non-array relationship fields are warnings. Any other key, such as a leftover `priority` line, is
+ignored.
 
 The Markdown parser extracts:
 
@@ -210,7 +304,6 @@ A complete structure requires:
 
 - H1 title
 - frontmatter `id`
-- frontmatter `priority`
 - Summary section
 - Goals or desired outcome section
 - Current state or Context section
@@ -243,8 +336,8 @@ move dialog. The plan suite's commands move plans, each through one `roborepo pl
 
 | Move | Transition | Run by | Refused unless |
 | --- | --- | --- | --- |
-| backlog → ready | `promote` | `/plan-promote` | the plan has no findings against the Ready requirements |
-| ready → active | `start` | `/plan-execute` | a linked worktree has the given name, and the plan meets the Active requirements |
+| backlog → ready | `promote` | `/plan-promote` | the plan has no findings against the Ready requirements, its filename passes the naming rules, and `plans-config.json` can be read |
+| ready → active | `start` | `/plan-execute` | a linked worktree has the given name, the plan meets the Active requirements, its filename passes the naming rules, and `plans-config.json` can be read |
 | active → review | `submit` | `/plan-execute` or `/plan-review` | the completion preflight passes |
 | review → active | `reopen` | `/plan-review` | (none beyond the common checks) |
 | review → completed | `close` | `/plan-close` | the worktree copy is integrated, the approval is fresh, the branch landed, and the plan has no findings against the Completed requirements |
@@ -253,7 +346,13 @@ move dialog. The plan suite's commands move plans, each through one `roborepo pl
 Every transition runs in the main checkout on the base branch, refuses when the plan's own path has
 uncommitted changes it did not make, commits only the plan's old and new paths, and approves the
 result only after six checks read fresh from Git. Other work in the main checkout is never
-committed. A refusal changes nothing; repeating a move that already happened commits nothing. The
+committed.
+
+`archive` also removes the plan from the `depends_on` and `blocked_by` lists of unfinished plans, in the
+same commit, so nothing keeps waiting on it. It does not rewire a chain: archiving B in A → B → C leaves C
+with no link to A. It refuses when one of those plans has uncommitted changes, and leaves a plan bound to a
+worktree alone, reporting it, because that worktree owns the plan's copy. `related` entries stay, as do the
+archived plan's own lists and those of completed and archived plans, which are history. A refusal changes nothing; repeating a move that already happened commits nothing. The
 page can still show validation findings for a plan that needs repair.
 
 ## Git Metadata
@@ -307,15 +406,15 @@ When enabled:
   | active | Continue, Review, Archive |
   | review | Review, Fix findings, Close, Archive |
 
-- backlog cards with unfinished `depends_on` entries show the Copy menu followed by **depends on** and linked
-  plan IDs instead of Promote; their card and popup menus omit Promote. IDs resolve within the
-  same repository, and missing dependencies remain plain text. Dependencies in the `completed`
-  lifecycle are omitted; when all dependencies are completed, Promote returns to the card and
+- backlog cards with unfinished `depends_on` entries show the Copy menu followed by **Waiting on**
+  and that list instead of Promote; their card and popup menus omit Promote. IDs resolve within the
+  same repo, each prerequisite's title links to it, and a missing one shows its ID and `not found`
+  with no link. Dependencies in the `completed` lifecycle are omitted; when all dependencies are completed, Promote returns to the card and
   popup menus. The frontmatter retains the dependency history. Other backlog cards lead with
   Promote, and ready cards lead with Start. Unblocked review plans lead with Close
   when approved, or Review otherwise. Active plans keep their commands in the Copy menu until
   execution moves them to review. Close still verifies that the PR merged before completing a plan
-- priority, modified time, and document warnings sit in a compact, right-aligned column on wide
+- modified time and document warnings sit in a compact, right-aligned column on wide
   cards and a row below the description on smaller screens. Modified time uses a clock icon and
   a short age such as **2 hrs**; its tooltip gives the exact date. The bottom row keeps the primary
   action and Copy menu at the left, with blockers, open review findings, and task progress at the right
@@ -331,24 +430,25 @@ When enabled:
 
 Suite skills run these commands rather than re-deriving the rules they implement. Every
 lifecycle transition (`promote`, `start`, `submit`, `reopen`, `close`, `archive`) runs from the
-primary checkout, commits only the plan's paths on the base branch, never pushes, and exits 1 when
+primary checkout, commits only the plan's paths (for `archive`, also the dependents it clears) on the base branch, never pushes, and exits 1 when
 it refuses or a post-commit check fails:
 
 | Command | What it does |
 | --- | --- |
-| `roborepo plans validate [<plan>] [--json]` | Reports the deterministic findings the Plans page shows, for one plan (by id or path) or every plan in the current repo. From the main checkout, an Active or Review plan is validated from its worktree's copy, as the page shows it, and the output names that copy. From a linked worktree, it validates that worktree's own copies. Exits 1 when a blocking finding remains. |
+| `roborepo plans validate [<plan>] [--json]` | Reports the deterministic findings the Plans page shows, for one plan (by id or path) or every plan in the current repo. From the main checkout, an Active or Review plan is validated from its worktree's copy, as the page shows it, and the output names that copy. From a linked worktree, it validates that worktree's own copies. Also reports problems with `plans-config.json` and `plans-order.json`, which belong to no one plan (`repositoryFindings` in `--json`). Exits 1 when a blocking finding remains, and a file that cannot be read is blocking even when validating one healthy plan. |
 | `roborepo plans promote <plan> [--base <branch>] [--json]` | Moves a backlog plan to `ready/` with its pending edits, or commits refinements to a ready plan in place. Refuses, with the findings and a repair prompt, a plan that does not meet the Ready requirements. |
 | `roborepo plans start <plan> --worktree <name> [--base <branch>] [--json]` | Records the worktree in the plan, moves a ready plan to `active/`, and validates the transition. On an active plan it records a replacement worktree in place. |
 | `roborepo plans submit <plan> [--base <branch>] [--json]` | Runs the completion preflight and, when it passes, moves an active plan to `review/`. |
 | `roborepo plans reopen <plan> [--base <branch>] [--json]` | Moves a review plan back to `active/` after a requirements change. |
 | `roborepo plans close <plan> [--base <branch>] [--json]` | Checks that the worktree copy is integrated, the approval is fresh, and the branch landed (including squash and rebase merges), then moves a review plan with its closing edits to `completed/`. |
-| `roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]` | Records the reason under `## Archived`, clears `next_action`, carries an unintegrated worktree copy once, refuses conflicting copies, and moves the plan to `archived/`. Never removes a worktree or branch. |
+| `roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]` | Records the reason under `## Archived`, clears `next_action`, carries an unintegrated worktree copy once, refuses conflicting copies, clears the plan from unfinished plans' `depends_on` and `blocked_by`, and moves the plan to `archived/`. Never removes a worktree or branch. |
 | `roborepo plans preflight <plan> [--base <branch>] [--json]` | Reports whether implementation is complete: no task outside `## Not tested` open, no blockers, a clean worktree, a branch with its own commits, and no Review findings apart from Not tested. Exits 1 when a check fails. |
 | `roborepo plans landed <plan> [--base <branch>] [--json]` | Reports whether the plan's branch landed on the base branch, including squash and rebase merges, and the commit that absorbed it. Verifies an absorbing commit recorded in the plan's `## Verification` (`- Absorbing commit: <full commit id>`) before scanning base history, and says whether it reused that evidence. Read-only. Exits 1 unless landed. |
 | `roborepo plans approval <plan> [--base <branch>] [--json]` | Reports the recorded approval as `fresh`, `stale` (with the changed paths), `missing`, `not-approved`, `invalid`, or `unavailable` (the plan's worktree is gone or detached, so its branch cannot be resolved). The text output counts base changes since the review; `--json` lists them. Exits 1 unless fresh. |
 | `roborepo plans sync-base [--continue] [--base <branch>] [--json]` | From a plan's linked worktree, merges the base branch into its branch; does nothing when up to date. Pauses on conflicts and exits 1; `--continue` refuses while conflicts or markers remain, then commits the merge. Refuses a dirty worktree or a base behind its upstream. Never merges into the base branch. |
 | `roborepo plans stop-servers <plan> [--dry-run] [--json]` | Sends `SIGTERM` to the processes listening on a port from inside the plan's linked worktree, then reports each as `stopped`, `still-running`, `gone`, `changed` (PID reused), or `failed`. A plan without a worktree stops nothing. Exits 1 when a server survives or cannot be signalled. macOS only, like Runtime discovery. |
-| `roborepo plans repair <root> [--dry-run]` | Scaffolds frontmatter (a fresh opaque `id`, `priority: none`, and a placeholder `next_action`) for plan docs missing it in every repo under `<root>`, so the portal can read and edit them. `--dry-run` lists them without writing. Exits 1 when a repo cannot be read. |
+| `roborepo plans order place <plan> [--top\|--bottom] [--json]` | Records a Backlog plan's position in its namespace's order. A plan connected to a ranked plan but not yet in the file joins its group, and any flag is ignored. `--top` or `--bottom` otherwise moves the plan with its group. With neither, a plan that is not ranked stays in Needs prioritization and nothing is written. Lists automatic moves. Exits 1, writing nothing, when the plan is outside Backlog, has no approved namespace, or has a missing or duplicate `id`; when its namespace's dependency graph needs repair; or when `plans-config.json` or the order file cannot be read. |
+| `roborepo plans repair <root> [--dry-run]` | Scaffolds frontmatter (a fresh opaque `id` and a placeholder `next_action`) for plan docs missing it in every repo under `<root>`, so the portal can read them. `--dry-run` lists them without writing. Exits 1 when a repo cannot be read. |
 | `roborepo package status <id> [--json]` | Prints one package's `available`, `enabled`, and live `status`, so a suite skill can tell a disabled helper skill from a drifted one. |
 
 ## Not Tested Entries
@@ -379,8 +479,7 @@ After verified landing, committed evidence-only recovery can select the primary 
 `authority.source: primary` and reason `verified-landed-recovery`. Result and Approval remain
 separate records. The shared verifier checks repository/worktree identity, integrated precursor
 blobs, exact implementation, and historical absorption. Conflicting records or missing/detached
-worktrees do not qualify. Priority edits still target the assigned worktree; primary recovery
-selection supplies evidence only.
+worktrees do not qualify. Primary recovery selection supplies evidence only.
 
 `roborepo plans merge-readiness <plan> --json` reports pre-merge readiness with repair instructions.
 After durable closure, cleanup uses the shared preservation assessment. Remaining or uncertain

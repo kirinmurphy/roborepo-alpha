@@ -16,6 +16,8 @@ test command/suite. For package and user-content journeys, see
 
 | Layer | Command | Covers | Notes |
 | --- | --- | --- | --- |
+| Full CI parity gate | `npm run check` | `scripts/test/ci.sh`: everything below that CI runs, on both legs | CI runs it on every pull request and every push to main. Run it locally only for CI, workflow, or test-orchestration changes, a release, or on request. |
+| Pre-push check | `bash scripts/test/pre-push-check.sh <remote> [<url>]` with git's ref lines on stdin | doctor, docs references, `git diff --check` over the pushed commits | Runs from the repository `pre-push` hook. Stays under 10 seconds. |
 | Repo health | `bash scripts/doctor.sh --quiet` | generated-file drift, manifest data, links, script health | `roborepo doctor --installed` adds live installed-path checks. |
 | Main smoke suite | `npm test` | fast repository behavior and simulated package mode | Alias for `scripts/test/test-cli.sh --quiet`. |
 | Install/uninstall collisions | `bash scripts/test/test-install-collisions.sh` | conflict policy, managed-copy reclaim, uninstall cleanliness against real fixture homes | Not covered by `npm test`. The only layer that proves uninstall leaves no remnants. |
@@ -29,7 +31,7 @@ test command/suite. For package and user-content journeys, see
 
 ## Required Cleanup Gate
 
-Before pushing or closing any merge-from-main, generated-file, harness/provider, package/test, or
+Before handing off or closing any merge-from-main, generated-file, harness/provider, package/test, or
 CI/workflow change, run:
 
 ```sh
@@ -41,6 +43,41 @@ git diff --check
 the repo manifests and registry, then checks generated permissions/rules, command catalog shape,
 orphaned tests, shell syntax, and related repository invariants. Do not substitute a narrower render
 or targeted test check when the touched surface is harness/provider/test/CI plumbing.
+
+## Pre-push Check and CI
+
+CI is the full gate. A push runs the fast pre-push check, which refuses the push on failure and
+names each failed check; CI then runs `npm run check` on Linux and macOS. Agents and the user keep
+working while CI runs and read its result when it lands, rather than reproducing it locally.
+
+The pre-push check catches the mistakes that have turned main red: skill structure limits and
+generated-output drift (doctor), broken doc links, and whitespace errors or conflict markers in the
+pushed commits. Doctor and the docs check read the working tree, not the pushed commits, so a dirty
+tree can make them disagree with what is pushed; CI covers that gap. The check skips doctor's Node
+release lookup (`ROBOREPO_SKIP_NODE_RELEASE_CHECK=1`) and makes no network calls beyond the push's
+own remote, which it asks for its default branch only when `<remote>/HEAD` is not recorded. It does
+not run the plan validator: CI does not
+validate plans, and the lifecycle transition commands already validate each plan they move.
+
+The hook is per clone. `./scripts/install/main.sh` turns it on in a dev clone by setting
+`core.hooksPath` to `scripts/git-hooks`, and `--dry-run` only reports that it would. It leaves a
+value that is already set alone, and does nothing in package mode. Linked worktrees share the
+clone's config, so this covers the primary checkout and every worktree. Git reads one hooks
+directory, so the installer warns about what stops running: the hooks in `.git/hooks`, or a
+`core.hooksPath` from global or system config.
+
+A clone that has not run the installer skips the check until this runs:
+
+```sh
+git config core.hooksPath scripts/git-hooks
+```
+
+Agent pushes reach the hook through RoboRepo's agent `pre-push`, which chains to it (see
+`docs/internal/hooks-internals.md`).
+
+Portal UI specs retry once on CI (`retries` in `scripts/test/portal-ui/playwright.config.mjs`). The
+`list` reporter marks a test that passed on retry as flaky; that marker is the only signal of a new
+flake, so read it when a CI run passes with retries.
 
 ## Publish Matrix
 

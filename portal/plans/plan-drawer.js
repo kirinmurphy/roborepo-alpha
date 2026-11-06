@@ -3,10 +3,8 @@
 // owns filling and opening it, so the two pages cannot drift.
 //
 // The page supplies what only it knows: the plan list blockers resolve against, the plan-suite
-// package state, which plans' worktrees have merged, and how to surface copies/errors. Priority
-// edits are the page's call too — on Plans the drawer's <plan-status> dispatches `plan-change` into
-// the page's mutation orchestrator; a page without one passes `readonly` and the status renders as
-// plain chips.
+// package state, which plans' worktrees have merged, and how to surface copies/errors. A page with
+// no blockers popover passes `readonly` and the status's blocked badge renders as a static label.
 
 import { portalCopyText, portalWireBackdropClose } from "/portal/shared/api.js";
 import { createSkillDetailModal } from "/portal/shared/skill-detail-modal.js";
@@ -24,7 +22,6 @@ export function createPlanDrawer(deps) {
   const statusMount = document.getElementById("drawer-status-mount");
   const skillModal = createSkillDetailModal(document.getElementById("skill-modal"));
   const toast = createOutcomeToast(document.getElementById("toast"));
-  let openKey = null;
   // Bumped by every open() and every close, so a fetch that resolves after the user closed the
   // drawer or picked another plan is dropped instead of reopening it or replacing the newer plan.
   let openRequest = 0;
@@ -33,7 +30,7 @@ export function createPlanDrawer(deps) {
   portalWireBackdropClose(dialog, () => dialog.close());
   // Fires however the dialog closes (button, backdrop, Escape, or a programmatic close()) — one
   // place to clear which plan the drawer was showing.
-  dialog.addEventListener("close", () => { openKey = null; openRequest += 1; });
+  dialog.addEventListener("close", () => { openRequest += 1; });
 
   async function copyText(text) {
     await portalCopyText(text, () => toast.show({ message: "copied" }));
@@ -58,7 +55,6 @@ export function createPlanDrawer(deps) {
   }
 
   function render(doc) {
-    openKey = doc.plan.key;
     const content = tmpl.drawerContent(doc, {
       plans: deps.getPlans(),
       onCopyPath: copyText,
@@ -71,7 +67,7 @@ export function createPlanDrawer(deps) {
     });
     document.getElementById("drawer-title").textContent = content.title;
     document.getElementById("drawer-path").textContent = content.path;
-    document.getElementById("drawer-path-copy").copySource = () => doc.plan.plan.relativePath;
+    document.getElementById("drawer-path-copy").copySource = () => doc.absolutePath;
     const docEl = document.getElementById("drawer-doc");
     docEl.innerHTML = content.html;
     // Plan bodies routinely carry architecture diagrams; render them rather than showing the source.
@@ -124,12 +120,9 @@ export function createPlanDrawer(deps) {
     render,
     copyText,
     copyPrompt,
-    toast,
     skillModal,
-    close: () => dialog.close(),
     get isOpen() { return dialog.open; },
-    get openKey() { return openKey; },
-    // The drawer's mounted <plan-status>, for a page re-setting its record after a mutation.
+    // The drawer's mounted <plan-status>, for a page updating its merged state while open.
     get statusElement() { return statusMount.querySelector("plan-status"); },
     statusMount,
   };

@@ -6,16 +6,18 @@ import { gitDriftWarnings } from "/portal/developer-runtime/templates.js";
 // and copies (and titles) the full path.
 const WORKTREE_PATH_MAX_LENGTH = 50;
 
-// The worktree behind a matched plan row: the identity its branch label and copy control used to
-// show, each value with its own copy action, plus the Git facts worth a glance. The full checkout
-// tooltip stays on Runtime and on unmatched worktree rows. Stop Server and Delete Worktree sit at the
-// foot of the panel, so neither is ever the row's most prominent action.
+// Every worktree row's dropdown: the branch and path, each with its own copy action, the plan file
+// when a plan claims the worktree (`plan` is null otherwise), and the Git facts worth a glance. A
+// matched plan row has no other identity for the worktree; an unclaimed worktree row also keeps its
+// branch label and checkout tooltip. Stop Server and Delete Worktree sit at the foot of the panel, so
+// neither is ever the row's most prominent action.
 export function worktreeDetailsButton(plan, checkout, { mainCheckouts = [], onStopServers = null, onDelete = null } = {}) {
   const button = document.createElement("portal-menu-button");
   button.setAttribute("icon", "tree");
   // The same size as the icons inside its panel.
   button.setAttribute("icon-size", "md");
-  button.setAttribute("aria-label", `Worktree details for ${plan.title}`);
+  const subject = plan?.title || checkout.git?.branch || checkout.worktreeName || "worktree";
+  button.setAttribute("aria-label", `Worktree details for ${subject}`);
   button.title = "Worktree details";
   const closing = (action) => action && (() => {
     button.close();
@@ -69,7 +71,7 @@ function identityRows(plan, checkout, mainCheckouts) {
   // The plan file inside this worktree while the plan is worked on there; once the branch has merged,
   // the worktree's copy is left behind, so the main checkout's copy is the one to open.
   const planRoot = checkout.worktreeState === "landed" ? mainCheckoutRoot(mainCheckouts, checkout.mergedInto) : path;
-  const planPath = planRoot && plan.relativePath ? joinPath(planRoot, plan.relativePath) : null;
+  const planPath = planRoot && plan?.relativePath ? joinPath(planRoot, plan.relativePath) : null;
   if (planPath) rows.push({ icon: "plans", value: portalMiddleEllipsis(planPath, WORKTREE_PATH_MAX_LENGTH), title: planPath, copy: planPath, label: "Copy plan path" });
   return rows;
 }

@@ -9,6 +9,8 @@ Discovery is split across provider boundaries:
 
 - `capabilities.mjs` reports aggregate platform support plus per-provider states.
 - `listeners.mjs` owns macOS listener and working-directory collection.
+- `process-state-root.mjs` reads each listener's `ROBOREPO_STATE_ROOT` so the portal's scan can leave
+  out test servers. Scans that pass no `stateRoot`, including worktree cleanup, keep them.
 - `origin.mjs` owns loopback-compatible origin candidates and hostname preference ordering.
 - `http-probe.mjs` is the public HTTP probe boundary; `probe.mjs` remains the bounded probe
   implementation.

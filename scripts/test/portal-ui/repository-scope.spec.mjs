@@ -25,10 +25,10 @@ test.beforeAll(() => {
     const repo = path.join(fixtureRoot, name);
     fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
     fs.mkdirSync(path.join(repo, "docs", "plans", "active"), { recursive: true });
-    for (const priority of ["high", "low"]) {
-      fs.writeFileSync(path.join(repo, "docs", "plans", "active", `${priority}.md`), [
-        "---", `id: ${name}-${priority}`, `priority: ${priority}`, "next_action: Check the scope", "---", "",
-        `# ${title} ${priority} plan`, "", "## Summary", "", "Scope fixture.", "",
+    for (const level of ["high", "low"]) {
+      fs.writeFileSync(path.join(repo, "docs", "plans", "active", `${level}.md`), [
+        "---", `id: ${name}-${level}`, "next_action: Check the scope", "---", "",
+        `# ${title} ${level} plan`, "", "## Summary", "", "Scope fixture.", "",
       ].join("\n"));
     }
   }
@@ -123,6 +123,51 @@ test("the scope travels between Plans, Tokens, and Agents and drops for Runtime,
   await expect(selector(page)).toHaveCount(0);
 });
 
+test("a plan's repo badge applies that repo's filter, and is inert once any repo filter is set", async ({ page }) => {
+  await page.goto("/plans");
+  const betaCard = page.locator("plan-card", { hasText: "Beta high plan" });
+  const badge = betaCard.locator(".repo-badge");
+  await expect(badge).toHaveAttribute("href", `/plans?repo=${BETA}`);
+  // Hovering the badge takes the hover away from the card's open-the-plan area around it.
+  const title = betaCard.locator(".title-link");
+  await betaCard.locator(".description-line").hover();
+  await expect(title).toHaveCSS("text-decoration-line", "underline");
+  await badge.hover();
+  await expect(title).toHaveCSS("text-decoration-line", "none");
+  await expect(badge).toHaveCSS("text-decoration-line", "none");
+  await expect(badge).toHaveCSS("cursor", "pointer");
+  // Filtering from a scrolled board starts the filtered board at the top.
+  await page.setViewportSize({ width: 1200, height: 300 });
+  await badge.scrollIntoViewIfNeeded();
+  await page.evaluate(() => window.scrollBy(0, 200));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await badge.click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page).toHaveURL(new RegExp(`/plans\\?repo=${BETA}$`));
+  await expect(selector(page)).toHaveAccessibleName(`Repo: ${BETA}`);
+  await expect(page.getByText("Alpha high plan")).toHaveCount(0);
+  // The badge does not open the plan drawer.
+  await expect(page.locator("dialog#drawer[open]")).toHaveCount(0);
+
+  const scopedBadge = page.locator("plan-card", { hasText: "Beta high plan" }).locator(".repo-badge");
+  await expect(scopedBadge).toHaveAttribute("aria-disabled", "true");
+  await expect(scopedBadge).not.toHaveAttribute("href", /.*/);
+  // Inert, it still takes the hover away from the card, shows no click affordance, and does nothing.
+  const scopedCard = page.locator("plan-card", { hasText: "Beta high plan" });
+  const scopedTitle = scopedCard.locator(".title-link");
+  await scopedCard.locator(".description-line").hover();
+  await expect(scopedTitle).toHaveCSS("text-decoration-line", "underline");
+  await scopedBadge.hover();
+  await expect(scopedTitle).toHaveCSS("text-decoration-line", "none");
+  await expect(scopedBadge).toHaveCSS("cursor", "default");
+  await scopedBadge.click();
+  await expect(page.locator("dialog#drawer[open]")).toHaveCount(0);
+
+  await page.goBack();
+  expect(scopeParam(page)).toBe(null);
+  await expect(page.locator("plan-card", { hasText: "Alpha high plan" }).locator(".repo-badge")).toHaveAttribute("href", `/plans?repo=${ALPHA}`);
+});
+
 test("changing the scope keeps Plans filters, and back, forward, and deep links restore it", async ({ page }) => {
   await page.goto(`/plans?repo=${ALPHA}`);
   await expect(page.getByText("Alpha high plan")).toBeVisible();
@@ -132,8 +177,13 @@ test("changing the scope keeps Plans filters, and back, forward, and deep links 
   await page.locator("#filters-update").click();
   await expect(page.getByText("Alpha low plan")).toHaveCount(0);
 
+  // Choosing a repo from a scrolled page starts the scoped page at the top.
+  await page.setViewportSize({ width: 1200, height: 300 });
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   await chooseScope(page, BETA);
   await expect(page).toHaveURL(new RegExp(`/plans\\?repo=${BETA}$`));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByText("Beta high plan")).toBeVisible();
   await expect(page.getByText("Beta low plan")).toHaveCount(0);
   await expect(page.getByText("Alpha high plan")).toHaveCount(0);

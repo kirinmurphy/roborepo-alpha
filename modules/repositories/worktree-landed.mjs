@@ -1,6 +1,6 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { withTemporaryStorage } from "./temporary-storage.mjs";
 import { inspectRawAttributes } from "./worktree-snapshot.mjs";
 import { GIT_MAX_BINARY_BUFFER, runGitProcess } from "./git-exec.mjs";
 
@@ -14,7 +14,7 @@ const GIT_TIMEOUT_MS = 10000;
 // result to trust: when it is still a first-parent base commit after the fork and still absorbs the
 // branch's current tip, that one merge check replaces the scan (`reused: true`). Otherwise the full
 // scan runs as if nothing had been recorded.
-async function inspectLanding(cwd, branch, { base = null, recorded = null, scanLimit = FIRST_PARENT_SCAN_LIMIT, runGit = runGitProcess } = {}) {
+async function inspectLanding(cwd, branch, temporary, { base = null, recorded = null, scanLimit = FIRST_PARENT_SCAN_LIMIT, runGit = runGitProcess } = {}) {
   const git = (args, options = {}) => runGit(cwd, args, { timeoutMs: GIT_TIMEOUT_MS, ...options });
   const baseRef = base || await defaultBase(git);
   if (!baseRef) return verdict("base unavailable");
@@ -40,20 +40,25 @@ async function inspectLanding(cwd, branch, { base = null, recorded = null, scanL
   const candidatesResult = await git(["rev-list", "--first-parent", "--reverse", `${fork}..${baseRef}`], { maxBuffer: GIT_MAX_BINARY_BUFFER });
   if (!candidatesResult.ok) return verdict("history unavailable", { base: baseRef, tip, fork, start, ownWork });
   const candidates = lines(candidatesResult.stdout);
+  let scanError = null;
   const inspectAttributes = async (source) => {
     const files = await git(["ls-tree", "-r", "--name-only", "-z", source], { maxBuffer: GIT_MAX_BINARY_BUFFER });
-    if (!files.ok) return false;
-    try { await inspectRawAttributes(git, files.stdout.split("\0").filter(Boolean), source, { absorption: true }); return true; }
-    catch { return false; }
+    if (!files.ok) { scanError = files.stderr || files.error || "attribute file list unavailable"; return false; }
+    try { await inspectRawAttributes(git, files.stdout.split("\0").filter(Boolean), source, { absorption: true, indexFile: path.join(temporary, "attributes-index") }); return true; }
+    catch (error) { scanError = error.message; return false; }
   };
-  if (!await inspectAttributes(tip)) return verdict("scan unavailable", { base: baseRef, tip, fork, start, ownWork });
+  if (!await inspectAttributes(tip)) return verdict("scan unavailable", { base: baseRef, tip, fork, start, ownWork, error: scanError });
   const absorbs = async (commit) => {
     if (!await inspectAttributes(commit)) return null;
     const [merged, tree] = await Promise.all([
       git(["merge-tree", "--write-tree", commit, tip], { maxBuffer: GIT_MAX_BINARY_BUFFER }),
       git(["rev-parse", `${commit}^{tree}`]),
     ]);
-    if (!tree.ok || (!merged.ok && merged.code !== 1)) return null;
+    if (!tree.ok || (!merged.ok && merged.code !== 1)) {
+      const failed = !tree.ok ? tree : merged;
+      scanError = failed.stderr || failed.error || "merge tree unavailable";
+      return null;
+    }
     return merged.ok && lines(merged.stdout)[0] === tree.stdout.trim();
   };
   const landed = (commit, reused) => verdict("landed", { landed: true, absorbingCommit: commit, reused, base: baseRef, tip, fork, start, ownWork });
@@ -61,7 +66,7 @@ async function inspectLanding(cwd, branch, { base = null, recorded = null, scanL
   if (candidates.length > scanLimit) return verdict("scan limit exceeded", { base: baseRef, tip, fork, start, ownWork });
   for (const commit of candidates) {
     const absorbed = await absorbs(commit);
-    if (absorbed === null) return verdict("scan unavailable", { base: baseRef, tip, fork, start, ownWork });
+    if (absorbed === null) return verdict("scan unavailable", { base: baseRef, tip, fork, start, ownWork, error: scanError });
     if (absorbed) return landed(commit, false);
   }
   return verdict("not absorbed", { base: baseRef, tip, fork, start, ownWork });
@@ -85,8 +90,7 @@ function lines(output) {
 }
 
 export async function inspectBranchLanding(cwd, branch, options = {}) {
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-landing-"));
-  try {
+  return withTemporaryStorage("landing", async (temporary) => {
     const execute = options.runGit || runGitProcess;
     const deadline = Date.now() + 30000;
     const config = await execute(cwd, ["config", "--null", "--list"]);
@@ -99,6 +103,6 @@ export async function inspectBranchLanding(cwd, branch, options = {}) {
       if (remaining <= 0) return Promise.resolve({ ok: false, stdout: "", code: null, error: "assessment time limit exceeded" });
       return execute(directory, args, { ...settings, timeoutMs: Math.min(GIT_TIMEOUT_MS, remaining), plumbing: { ...settings.plumbing, objectDirectory: path.join(temporary, "objects"), alternateObjects: path.join(objects.stdout.trim(), "objects") } });
     };
-    return await inspectLanding(cwd, branch, { ...options, runGit });
-  } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
+    return await inspectLanding(cwd, branch, temporary, { ...options, runGit });
+  });
 }

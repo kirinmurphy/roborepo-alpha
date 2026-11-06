@@ -41,6 +41,8 @@ On macOS, RoboRepo:
 - normalizes SSH/HTTPS Git remotes into `git:<host>/<owner>/<repo>`
 - falls back to `path:<realpath>` or low-confidence `process:<cwd>:<command>`
 - probes only loopback-compatible origins and excludes non-HTTP listeners from the default snapshot
+- leaves out listeners started with a different `ROBOREPO_STATE_ROOT`, such as a hermetic test
+  portal, and names each one in a warning on the Runtime page so a leftover can be stopped
 
 HTTP probes are bounded to 8 active instance probes at a time. Each instance still tries its
 compatible host candidates in order so hostname preference remains deterministic while large local

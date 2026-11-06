@@ -1,6 +1,5 @@
 ---
 id: e97a44qa
-priority: medium
 next_action: Run /plan-promote to answer the two open questions (overwriting a user-edited matcher, and the readiness state for a stale matcher) and refine the checklist.
 blocked_by: []
 depends_on:

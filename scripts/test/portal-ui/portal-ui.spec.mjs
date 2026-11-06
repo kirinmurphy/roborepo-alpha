@@ -3,6 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
+import { backlogUrlFor } from "./helpers.mjs";
 import { codexHookGuidance } from "../../harnesses/codex/hook-guidance.mjs";
 import { buildBehaviorView } from "../../cli/config.mjs";
 
@@ -102,6 +103,212 @@ test.describe("Agents page", () => {
     }));
     expect(warningButtonGrid.column).toBe("2");
     expect(warningButtonGrid.row).toBe("1");
+  });
+
+  test("required packages are a reference in the package's popup, not page rows; recommended ones are switchable rows", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const byId = new Map(snapshot.packages.map((pkg) => [pkg.id, pkg]));
+    const planSuite = byId.get("plan-suite");
+    const sessionClose = byId.get("session-close");
+    const dependency = byId.get("technical-writing");
+    const companion = byId.get("tighten");
+    const chained = byId.get("code-style");
+    expect(planSuite && sessionClose && dependency && companion && chained, "fixture packages exist").toBeTruthy();
+    // The edges a dependency-only package would add: one dependency shared by two rows, a chain
+    // past it (session-close -> technical-writing -> code-style), and one recommendation that is off.
+    planSuite.requires = ["technical-writing"];
+    sessionClose.requires = ["technical-writing"];
+    dependency.requires = ["code-style"];
+    sessionClose.recommends = ["tighten"];
+    Object.assign(dependency, {
+      selectable: false, selection: "required", enabled: true,
+      presentation: { ...dependency.presentation, visibility: "dependency" },
+    });
+    Object.assign(companion, { enabled: false, selection: "off" });
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+
+    await page.goto("/agents");
+    const section = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Development Workflows" }) });
+    // The dependency-only package has no row anywhere on the page.
+    await expect(page.locator("config-item").filter({ has: page.getByText(dependency.label, { exact: true }) })).toHaveCount(0);
+    await expect(page.getByText("Required dependencies")).toHaveCount(0);
+
+    const recommendedRow = section.locator("[data-slot=recommended-group] config-item");
+    await expect(recommendedRow).toHaveCount(1);
+    await expect(recommendedRow.locator("[data-slot=relation]")).toHaveText(`recommended by ${sessionClose.label}`);
+    await expect(recommendedRow.locator("config-toggle")).toHaveCount(1);
+
+    // A package's popup lists what it requires; each name opens that package's source, and Back
+    // returns to the package that requires it.
+    const modal = page.locator("dialog#config-modal");
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await expect(modal.locator("#modal-requires")).toBeVisible();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    // A required package's popup keeps its own requirement, so each link of the chain is reachable.
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
+    await modal.locator(".modal-requires-item").click();
+    await expect(modal.locator("#modal-path")).toContainText("code-style/SKILL.md");
+    await expect(modal.locator("#modal-requires")).toBeHidden();
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator("#modal-close").click();
+
+    // The contents view of a package with several skills lists them too.
+    await section.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }).click();
+    await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
+    await modal.locator("#modal-close").click();
+
+    // A multi-skill required target keeps Back through its contents and nested source views.
+    sessionClose.requires = ["plan-suite"];
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.reload();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await modal.locator(".modal-requires-item", { hasText: planSuite.label }).click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await expect(modal.locator("#modal-back")).toBeVisible();
+    await modal.locator(".package-contents-entry", { hasText: "/plan-execute" }).click();
+    await expect(modal.locator("#modal-path")).toContainText("plan-execute/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await modal.locator("#modal-close").click();
+
+    // A required package with no source to open is listed as plain text, not a button.
+    const readOnly = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle")
+      .items.find((item) => item.id === "session-close");
+    readOnly.requires = [{ id: "mcp-only", label: "MCP Only", active: true, inspect: null, contextCost: null, builtIn: true }];
+    await page.reload();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await expect(modal.locator("span.modal-requires-item")).toHaveText("MCP Only");
+    await expect(modal.locator("button.modal-requires-item")).toHaveCount(0);
+    await modal.locator("#modal-close").click();
+
+    // A package with no requirements shows no Requires line.
+    await page.locator(".item-label", { hasText: companion.label }).first().click();
+    await expect(modal.locator("#modal-requires")).toBeHidden();
+    await modal.locator("#modal-close").click();
+  });
+
+  test("a package with only requirements opens its dependency references", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const parent = snapshot.packages.find((pkg) => pkg.id === "session-close");
+    const dependency = snapshot.packages.find((pkg) => pkg.id === "technical-writing");
+    Object.assign(parent, { requires: [dependency.id], resources: [], components: [], skillIds: [] });
+    Object.assign(dependency, { selectable: false, presentation: { ...dependency.presentation, visibility: "dependency" } });
+    snapshot.tools = snapshot.tools.filter((tool) => tool.packageId !== parent.id);
+    snapshot.behaviorView = buildBehaviorView(snapshot);
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.getByText(parent.label, { exact: true }) });
+    await row.locator(".item-label").click();
+    const modal = page.locator("dialog#config-modal");
+    await expect(modal.locator("#modal-title")).toHaveText(parent.label);
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(0);
+    await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
+    await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
+    await modal.locator("#modal-back").click();
+    await expect(modal.locator("#modal-title")).toHaveText(parent.label);
+    await expect(modal.locator(".modal-requires-item")).toHaveText([dependency.label]);
+  });
+
+  test("a group switch counts only rows it can act on, and hides when none are left", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const section = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle");
+    expect(section?.items.length, "fixture needs the Development Workflows rows").toBeGreaterThanOrEqual(2);
+    section.bulkToggle = true;
+    const [first, ...rest] = section.items;
+    Object.assign(first, { active: true, selection: "selected" });
+    for (const item of rest) Object.assign(item, { active: true, selection: "required" });
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.goto("/agents");
+    const panel = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: section.category }) });
+    await expect(panel.locator("[data-slot=bulk-label]")).toHaveText("Deselect All");
+
+    // Every row on only through another selection: nothing for the switch to do.
+    Object.assign(first, { selection: "required" });
+    await page.reload();
+    await expect(panel.locator("[data-slot=bulk]")).toBeHidden();
+  });
+
+  test("enabling a package with recommendations asks which to enable too, and enables nothing by itself", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const shown = snapshot.behaviorView.flatMap((section) => section.items || []);
+    const [target, second] = shown.filter((item) => item.toggle === "package" && !item.active && item.id !== "telemetry" && item.id !== "tighten");
+    expect(target && second, "fixture needs two disabled package rows").toBeTruthy();
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    const posts = [];
+    await page.route("**/api/config/packages", (route) => {
+      posts.push(route.request().postDataJSON());
+      const { id } = route.request().postDataJSON();
+      route.fulfill({ json: {
+        ok: true, message: `enabled: ${id}`, outcomes: [], changedPackageIds: [id], config: snapshot,
+        recommendations: id === "tighten" ? [] : [{ id: "tighten", label: "Tighten", description: "Harden code against project patterns." }],
+      } });
+    });
+
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: target.label }) }).first();
+    await row.getByRole("checkbox").dispatchEvent("click");
+    const dialog = page.locator("dialog#recommendations-modal");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(".recommendation-label")).toHaveText("Tighten");
+    await dialog.getByRole("button", { name: "Continue without" }).click();
+    await expect(dialog).not.toBeVisible();
+    expect(posts).toEqual([{ id: target.id, enabled: true }]);
+
+    // Enable selected turns on exactly the checked recommendations, each as its own toggle.
+    const secondRow = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: second.label }) }).first();
+    await secondRow.getByRole("checkbox").dispatchEvent("click");
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect.poll(() => posts.length).toBe(3);
+    expect(posts.slice(1)).toEqual([{ id: second.id, enabled: true }, { id: "tighten", enabled: true }]);
+    await expect(dialog).not.toBeVisible();
+  });
+
+  test("selected recommendations finish their nested prompts in order", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const rows = snapshot.behaviorView.flatMap((section) => section.items || [])
+      .filter((item) => item.toggle === "package" && !item.active && item.id !== "telemetry");
+    const [parent, first, second, firstChild, secondChild] = rows;
+    expect(secondChild, "fixture needs five disabled packages").toBeTruthy();
+    const offers = new Map([[parent.id, [first, second]], [first.id, [firstChild]], [second.id, [secondChild]]]);
+    const posts = [];
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.route("**/api/config/packages", (route) => {
+      const change = route.request().postDataJSON();
+      posts.push(change);
+      route.fulfill({ json: {
+        ok: true, message: `enabled: ${change.id}`, outcomes: [], changedPackageIds: [change.id], config: snapshot,
+        recommendations: offers.get(change.id) || [],
+      } });
+    });
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: parent.label }) }).first();
+    await row.getByRole("checkbox").dispatchEvent("click");
+    const dialog = page.locator("dialog#recommendations-modal");
+    await expect(dialog.locator(".recommendation-label")).toHaveText([first.label, second.label]);
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect(dialog.locator(".recommendation-label")).toHaveText([firstChild.label]);
+    expect(posts.map((change) => change.id)).toEqual([parent.id, first.id]);
+    await dialog.getByRole("button", { name: "Continue without" }).click();
+    await expect(dialog.locator(".recommendation-label")).toHaveText([secondChild.label]);
+    expect(posts.map((change) => change.id)).toEqual([parent.id, first.id, second.id]);
+    await dialog.getByRole("button", { name: "Enable selected" }).click();
+    await expect.poll(() => posts.map((change) => change.id)).toEqual([parent.id, first.id, second.id, secondChild.id]);
+    await expect(dialog).not.toBeVisible();
   });
 
   test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {
@@ -921,9 +1128,9 @@ test.describe("repository-first portal Home", () => {
     await expect(card.locator(".repository-state-badge")).toHaveText("idle");
     // No port says nothing runs; the row does not spell out "idle".
     await expect(cardRows(card).getByText("idle", { exact: true })).toHaveCount(0);
-    // Only a worktree no plan claims has a ⋮ cell; a plan's row keeps its actions in its dropdown.
-    await expect(planRowOf(card, "Idle Story").locator(".worktree-row-menu")).toBeHidden();
-    await expect(checkoutRow(card, "feature/stale").locator(".worktree-row-menu")).toBeVisible();
+    // Every worktree row keeps its actions in a worktree dropdown, whether or not a plan claims it.
+    await expect(planRowOf(card, "Idle Story").getByRole("button", { name: "Worktree details for Idle Story" })).toBeVisible();
+    await expect(checkoutRow(card, "feature/stale").getByRole("button", { name: "Worktree details for feature/stale" })).toBeVisible();
     await expect(checkoutRow(card, "feature/stale").getByText("stale", { exact: true })).toBeVisible();
     const merged = checkoutRow(card, "feature/landed").getByText("merged", { exact: true });
     await expect(merged).toBeVisible();
@@ -939,7 +1146,7 @@ test.describe("repository-first portal Home", () => {
     await expect(checkoutRow(card, "feature/stale").locator(".git-drift")).toBeVisible();
     await expect(checkoutRow(card, "feature/landed").locator(".git-drift")).toBeHidden();
 
-    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/running" }).click();
     await expect(card.getByRole("button", { name: "Stop Server" }).locator('portal-icon[name="stop"]')).toHaveCount(1);
     await expect(card.getByRole("button", { name: "Delete Worktree" }).locator('portal-icon[name="trash"]')).toHaveCount(1);
     // A successful stop re-reads the overview and rebuilds the card with every menu closed. Mark the
@@ -950,14 +1157,14 @@ test.describe("repository-first portal Home", () => {
     await expect(page.locator(".repository-card[data-before-stop]")).toHaveCount(0);
 
     const dialog = page.getByRole("dialog", { name: "Delete worktree" });
-    await card.getByRole("button", { name: "Actions for feature/running" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/running" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText("Something is running in this worktree.");
     // A running worktree's deletion is not routine: the confirmation turns red.
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
     await dialog.getByRole("button", { name: "Cancel" }).click();
 
-    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/stale" }).click();
     await expect(card.getByRole("button", { name: "Stop Server" })).toHaveCount(0);
     await expect(card.getByRole("button", { name: "Delete Worktree" })).toHaveClass(/menu-item-danger/);
     await card.getByRole("button", { name: "Delete Worktree" }).click();
@@ -976,14 +1183,14 @@ test.describe("repository-first portal Home", () => {
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     await expect(dialog).toBeHidden();
-    await card.getByRole("button", { name: "Actions for feature/landed" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/landed" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText("Its changes are already merged into main, so no committed work is lost.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "cta");
     await dialog.getByRole("button", { name: "Cancel" }).click();
     expect(removals).toEqual([]);
 
-    await card.getByRole("button", { name: "Actions for feature/guarded" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/guarded" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog.getByRole("alert")).toContainText("These changes and files cannot be retrieved after deletion.");
     await expect(dialog.locator("[data-slot=confirm]")).toHaveAttribute("data-btn", "danger");
@@ -997,7 +1204,7 @@ test.describe("repository-first portal Home", () => {
     await expect.poll(() => removals).toEqual([{ branch: "feature/guarded", discardChanges: true }]);
     await expect(dialog).toBeHidden();
 
-    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/stale" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     await expect(dialog).toContainText("Stop editors and agents writing here first");
     await dialog.getByRole("button", { name: "Archive and remove", exact: true }).click();
@@ -1010,7 +1217,7 @@ test.describe("repository-first portal Home", () => {
     removal = { action: "kept", reason: "uncommitted or untracked changes", requiresDiscardConfirmation: true };
     let release;
     removalHeld = new Promise((resolve) => { release = resolve; });
-    await card.getByRole("button", { name: "Actions for feature/stale" }).click();
+    await card.getByRole("button", { name: "Worktree details for feature/stale" }).click();
     await card.getByRole("button", { name: "Delete Worktree" }).click();
     const confirm = dialog.locator("[data-slot=confirm]");
     await confirm.click();
@@ -1185,10 +1392,17 @@ test.describe("repository-first portal Home", () => {
       await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
     }
 
-    // An unclaimed worktree is the same checkout row as before: branch label with its tooltip, copy
-    // control, port, and Links.
+    // An unclaimed worktree keeps its branch label with its tooltip, port, and Links; the worktree
+    // dropdown stands in for its copy control, copying the branch and path but no plan file.
     await expect(loose.locator("[data-slot=root-info]")).toBeVisible();
-    await expect(loose.locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(1);
+    await expect(loose.locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(0);
+    await loose.getByRole("button", { name: "Worktree details for feature/loose" }).click();
+    const loosePanel = card.locator(".worktree-details");
+    for (const name of ["Copy branch name", "Copy worktree path", "Delete Worktree"]) {
+      await expect(loosePanel.getByRole("button", { name })).toBeVisible();
+    }
+    await expect(loosePanel.getByRole("button", { name: "Copy plan path" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
     await expect(loose.getByRole("link", { name: ":5174" })).toBeVisible();
     await expect(loose.getByRole("button", { name: "Links" })).toBeVisible();
 
@@ -1289,14 +1503,12 @@ test.describe("repository-first portal Home", () => {
     await page.route("**/api/plans/prompt", (route) => route.fulfill({ json: { prompt: `prompt for ${route.request().postDataJSON().action}` } }));
   }
 
-  test("a worktree plan row shows its next action beside the details toggle and copies its prompt", async ({ page }) => {
+  test("a worktree plan row shows its next action beside its completion and copies its prompt", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await planFixture(page);
     await routeNextAction(page, { lifecycle: "review" });
     await page.goto("/");
     const identity = roboRepoCard(page).locator(".plan-identity").filter({ hasText: "Plan A" });
-    // The worktree toggle follows the title, ahead of the completion; the action closes the line.
-    await expect(identity.getByRole("button", { name: "Worktree details for Plan A" })).toBeVisible();
     await expect(identity.getByRole("progressbar", { name: "Plan A completion" })).toBeVisible();
     const action = identity.getByRole("button", { name: "Review", exact: true });
     await expect(action).toHaveAttribute("title", "Copy the /plan-review prompt");
@@ -1336,13 +1548,25 @@ test.describe("repository-first portal Home", () => {
     const wide = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
     const centerY = (box) => box.y + box.height / 2;
     expect(Math.abs(centerY(wide[0]) - centerY(wide[3]))).toBeLessThan(2);
+    // The row's name stands 12px clear of what follows it, on plan and worktree rows alike.
+    expect(wide[2].x - (wide[0].x + wide[0].width)).toBeCloseTo(12, 0);
+    const looseRow = checkoutRow(card, "feature/loose");
+    const looseName = await looseRow.locator("[data-slot=root-info]").boundingBox();
+    const looseDrift = await looseRow.locator(".git-drift").boundingBox();
+    expect(looseDrift.x - (looseName.x + looseName.width)).toBeCloseTo(12, 0);
+    // The worktree dropdown is the row's rightmost control: port, Links, then the dropdown.
+    expect(wide[4].x + wide[4].width).toBeLessThanOrEqual(wide[5].x);
+    expect(wide[5].x + wide[5].width).toBeLessThanOrEqual(wide[1].x);
+    // A main checkout has no dropdown and reserves no space for one: its Links ends the row.
+    const mainLinks = await checkoutRow(card, "main branch").getByRole("button", { name: "Links", exact: true }).boundingBox();
+    expect(mainLinks.x + mainLinks.width).toBeCloseTo(wide[1].x + wide[1].width, 0);
     await page.screenshot({ path: testInfo.outputPath("plan-row-wide.png") });
     await page.setViewportSize({ width: 720, height: 800 });
     const narrow = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
     await page.screenshot({ path: testInfo.outputPath("plan-row-wrapped.png") });
-    expect(narrow[1].y).toBeGreaterThanOrEqual(narrow[0].y + narrow[0].height);
-    expect(Math.abs(centerY(narrow[1]) - centerY(narrow[2]))).toBeLessThan(2);
-    expect(Math.abs(centerY(narrow[1]) - centerY(narrow[3]))).toBeLessThan(2);
+    expect(narrow[2].y).toBeGreaterThanOrEqual(narrow[0].y + narrow[0].height);
+    expect(Math.abs(centerY(narrow[2]) - centerY(narrow[3]))).toBeLessThan(2);
+    expect(narrow[1].y - narrow[6].y).toBeCloseTo(wide[1].y - wide[6].y, 0);
     expect(narrow[4].y - narrow[6].y).toBeCloseTo(wide[4].y - wide[6].y, 0);
     expect(narrow[5].y - narrow[6].y).toBeCloseTo(wide[5].y - wide[6].y, 0);
     expect(narrow[0].height).toBe(wide[0].height);
@@ -1372,35 +1596,6 @@ test.describe("repository-first portal Home", () => {
     const row = roboRepoCard(page).locator(".repository-root", { has: page.locator(".plan-identity", { hasText: "Plan A" }) });
     await expect(row.locator(".plan-next-action")).toHaveText("Review");
     await expect(row.locator(".worktree-state-badge")).toHaveText("merged");
-  });
-
-  test("the copy dropdown confirms with green checks while keeping item labels", async ({ page }) => {
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-    await page.clock.install();
-    await planFixture(page);
-    await page.goto("/");
-    const menu = checkoutRow(roboRepoCard(page), "feature/loose").locator("portal-copy-menu");
-    await menu.getByRole("button", { name: "Copy", exact: true }).click();
-    const item = menu.getByRole("button", { name: "Copy branch name", exact: true });
-    await expect(item.locator('portal-icon[name="copy"]')).toBeVisible();
-    await item.click();
-    const copied = menu.getByRole("button", { name: "Copied", exact: true });
-    await expect(copied).toHaveText("Copy branch name");
-    await expect(copied.locator('portal-icon[name="check"]')).toBeVisible();
-    expect(await copied.evaluate((node) => {
-      const probe = document.createElement("span");
-      probe.style.color = "var(--ok)";
-      node.append(probe);
-      const matches = getComputedStyle(node).color === getComputedStyle(probe).color;
-      probe.remove();
-      return matches;
-    })).toBe(true);
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe("feature/loose");
-    await page.clock.fastForward(600);
-    await expect(menu.locator(".copy-menu-panel")).toHaveCount(0);
-    await expect(menu.getByRole("button", { name: "Copied", exact: true }).locator('portal-icon[name="check"]')).toBeVisible();
-    await page.clock.fastForward(5000);
-    await expect(menu.getByRole("button", { name: "Copy", exact: true }).locator('portal-icon[name="copy"]')).toBeVisible();
   });
 
   test("the worktree details dropdown copies each value in place and lists only non-default facts", async ({ page }) => {
@@ -1511,7 +1706,7 @@ test.describe("repository-first portal Home", () => {
       await page.goto("/");
       const card = roboRepoCard(page);
       await expect(cardRows(card)).toHaveText([/main branch/, /feature\/a/, /feature\/b/, /feature\/loose/], { useInnerText: true });
-      await expect(checkoutRow(card, "feature/a").locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(1);
+      await expect(checkoutRow(card, "feature/a").getByRole("button", { name: "Worktree details for feature/a" })).toBeVisible();
       await expect(card).not.toContainText("Plans has not scanned this repository");
     }
   });
@@ -1988,7 +2183,7 @@ test.describe("shared plan drawer", () => {
     fs.mkdirSync(path.join(planRoot, ".git"));
     fs.mkdirSync(path.join(planRoot, "docs", "plans", "active"), { recursive: true });
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "drawer-fixture.md"), [
-      "---", "id: drawerfx", "priority: high", "next_action: Check the drawer", "---", "",
+      "---", "id: drawerfx", "next_action: Check the drawer", "---", "",
       "# Drawer fixture plan", "", "## Summary", "", "Body text for the drawer.", "",
       "## Tasks", "", "- [x] First task", "- [ ] Second task", "",
     ].join("\n"));
@@ -2078,7 +2273,6 @@ test.describe("shared plan drawer", () => {
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("#drawer-tasks li")).toHaveCount(2);
     await expect(drawer.locator("plan-status option-dropdown")).toHaveCount(0);
-    await expect(drawer.getByText(`${record.plan.priority} priority`, { exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(drawer).not.toBeVisible();
   });
@@ -2107,7 +2301,7 @@ test.describe("Plans card commands", () => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
   let planRoot;
   const plan = (id, title, tasks) => [
-    "---", `id: ${id}`, "priority: high", "next_action: Do the next thing", "---", "",
+    "---", `id: ${id}`, "next_action: Do the next thing", "---", "",
     `# ${title}`, "", "## Summary", "", "Body.", "", "## Tasks", "", tasks, "",
   ].join("\n");
   test.beforeAll(() => {
@@ -2125,7 +2319,7 @@ test.describe("Plans card commands", () => {
   test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
   test.beforeEach(async ({ page }) => {
     await addRepositorySource(page, planRoot);
-    await page.route("**/api/plans", async (route) => {
+    await page.route(/\/api\/plans(\?|$)/, async (route) => {
       const data = await (await route.fetch()).json();
       data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
@@ -2143,8 +2337,8 @@ test.describe("Plans card commands", () => {
     ["Review", "Approved card plan", "Close", "plan-close", "review/card-approved.md"],
   ]) {
     test(`a ${tab.toLowerCase()} card's ${label} copies the /${command} prompt and moves nothing`, async ({ page }) => {
-      await page.goto("/plans");
-      await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
+      await page.goto(tab === "Backlog" ? await backlogUrlFor(page, title) : "/plans");
+      if (tab !== "Backlog") await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
       const card = page.locator("plan-card", { hasText: title });
       if (tab === "Active") {
         await expect(card.locator(".recommended-cta")).toHaveCount(0);
@@ -2168,11 +2362,6 @@ test.describe("Plans card commands", () => {
         const drawerPrompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
         await drawerAction.click();
         expect((await drawerPrompt).postDataJSON().action).toBe(command);
-        const documentStatus = drawer.getByRole("group", { name: "Document status", exact: true });
-        await documentStatus.getByRole("button", { name: "high", exact: true }).click();
-        await documentStatus.getByRole("option", { name: "low", exact: true }).click();
-        await expect(documentStatus.getByRole("button", { name: "low", exact: true })).toBeVisible();
-        await expect(drawerAction).toBeVisible();
       }
     });
   }
@@ -2184,7 +2373,6 @@ test.describe("Plans card commands", () => {
     await page.screenshot({ path: testInfo.outputPath("plans-layout.png") });
     const documentStatus = card.getByRole("group", { name: "Document status", exact: true });
     await expect(documentStatus.getByLabel(/^Modified /)).toContainText("now");
-    await expect(documentStatus.getByRole("button", { name: "high", exact: true })).toHaveCount(0);
     const [detailsBox, modifiedBox, warningsBox] = await Promise.all([
       card.getByRole("button", { name: /Findings card plan/ }).first().boundingBox(),
       documentStatus.getByLabel(/^Modified /).boundingBox(),
@@ -2261,7 +2449,7 @@ test.describe("Plans card commands", () => {
 
   test("copy menus show compact labels and separate the document filename", async ({ page }, testInfo) => {
     for (const lifecycle of ["backlog", "ready", "active", "review"]) {
-      await page.goto(`/plans?lifecycle=${lifecycle}`);
+      await page.goto(lifecycle === "backlog" ? await backlogUrlFor(page, "Backlog card plan") : `/plans?lifecycle=${lifecycle}`);
       const card = page.locator("plan-card").first();
       await card.getByRole("button", { name: "Plan actions", exact: true }).click();
       const menu = card.getByRole("group", { name: "Copy options", exact: true });
@@ -2323,7 +2511,7 @@ test.describe("Plans card commands", () => {
   });
 
   test("a structurally complete backlog card shows Promote without positive document badges", async ({ page }) => {
-    await page.route("**/api/plans", async (route) => {
+    await page.route(/\/api\/plans(\?|$)/, async (route) => {
       const data = await (await route.fetch()).json();
       data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       const record = data.plans.find((record) => record.plan.title === "Backlog card plan");
@@ -2331,7 +2519,7 @@ test.describe("Plans card commands", () => {
       record.plan.readiness = "ready";
       await route.fulfill({ json: data });
     });
-    await page.goto("/plans?lifecycle=backlog");
+    await page.goto(await backlogUrlFor(page, "Backlog card plan"));
     const card = page.locator("plan-card", { hasText: "Backlog card plan" });
     await expect(card.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
     await expect(card.getByRole("group", { name: "Document status", exact: true }).getByLabel(/^Modified /)).toContainText("now");

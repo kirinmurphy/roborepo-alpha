@@ -1,9 +1,9 @@
 import { portalFillSlots as fill, portalTpl as tpl } from "/portal/shared/api.js";
-import { mountActionMenu, mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
+import { mountRepositoryRow, repositoryPageUrl } from "/portal/shared/repository-components.js";
 import { matchedPlanIdentity, unmatchedPlanRow } from "./plan-rows.js";
 import { mountRepositoryShortcuts } from "./repository-shortcuts.js";
 import { worktreeCleanupNotice } from "./worktree-dialogs.js";
-import { isRunning } from "./worktree-details.js";
+import { worktreeDetailsButton } from "./worktree-details.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 
 const MOCK_NAMES = {
@@ -84,7 +84,7 @@ function cardRows(domains, actions) {
   const mainCheckouts = checkouts.filter((checkout) => !checkout.isWorktree);
   const consumed = new Set();
   const rows = checkouts.length
-    ? mainCheckouts.map((checkout) => checkoutRow(checkout, actions, { hookInstalled }))
+    ? mainCheckouts.map((checkout) => checkoutRow(checkout, actions, { hookInstalled, mainCheckouts }))
     : [noCheckoutRow()];
   for (const plan of domains.plans.data?.active || []) {
     const checkout = byRootId.get(plan.checkoutRootId);
@@ -93,22 +93,18 @@ function cardRows(domains, actions) {
       continue;
     }
     consumed.add(checkout);
-    const target = { repositoryId: actions.repositoryId, checkout, plan };
     const identity = matchedPlanIdentity(plan, checkout, {
-      mainCheckouts,
       nextAction: actions.nextPlanAction(plan),
       onOpenPlan: actions.onOpenPlan,
       onCopyPrompt: actions.onCopyPlanPrompt,
-      onStopServers: () => actions.onStopServers(target),
-      onDelete: () => actions.onRemoveWorktree(target),
     });
-    rows.push(checkoutRow(checkout, actions, { hookInstalled, identity }));
+    rows.push(checkoutRow(checkout, actions, { hookInstalled, identity, plan, mainCheckouts }));
   }
-  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions, { hookInstalled })));
+  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions, { hookInstalled, mainCheckouts })));
   return rows;
 }
 
-function checkoutRow(checkout, actions, { identity = null, hookInstalled = false } = {}) {
+function checkoutRow(checkout, actions, { identity = null, hookInstalled = false, plan = null, mainCheckouts = [] } = {}) {
   const row = buildRootSection({
     root: {
       rootId: checkout.rootId,
@@ -129,7 +125,7 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
     repository: { name: "Repo" },
     mode: "home",
     onMountLinks: actions.onMountLinks,
-    onMountWorktreeMenu: (slot) => mountWorktreeMenu(slot, checkout, actions),
+    onMountWorktreeDetails: (slot) => slot.append(worktreeDetails(checkout, actions, { plan, mainCheckouts })),
     identity,
   });
   // Home's row glyphs match the repo header's shortcut icons; Runtime keeps the shared default.
@@ -137,18 +133,13 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
   return row;
 }
 
-// A worktree no plan claims keeps its actions in a ⋮ menu at the end of its row: Stop Server while
-// something runs in it, and Delete Worktree, which stops it as well.
-function mountWorktreeMenu(slot, checkout, actions) {
-  const name = checkout.git?.branch || checkout.worktreeName || "worktree";
-  const target = { repositoryId: actions.repositoryId, checkout };
-  const menu = mountActionMenu(slot, [
-    { key: "stop-servers", label: "Stop Server", icon: "stop", hidden: !isRunning(checkout) },
-    { key: "delete", label: "Delete Worktree", icon: "trash", danger: true },
-  ], {
-    ariaLabel: `Actions for ${name}`,
-    onToggle: () => actions.onToggleMenu(menu),
-    onSelect: (key) => (key === "delete" ? actions.onRemoveWorktree(target) : actions.onStopServers(target)),
+// A worktree no plan claims gets the same dropdown as a plan's worktree, minus the plan file.
+function worktreeDetails(checkout, actions, { plan, mainCheckouts }) {
+  const target = { repositoryId: actions.repositoryId, checkout, plan };
+  return worktreeDetailsButton(plan, checkout, {
+    mainCheckouts,
+    onStopServers: () => actions.onStopServers(target),
+    onDelete: () => actions.onRemoveWorktree(target),
   });
 }
 

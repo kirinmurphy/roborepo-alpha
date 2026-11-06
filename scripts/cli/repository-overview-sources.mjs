@@ -112,6 +112,7 @@ function projectWorkspace(repository) {
       remainingPaths: root.remainingPaths || [],
       blockingPaths: root.blockingPaths || [],
       worktreeRunning: root.worktreeRunning ?? null,
+      worktreeLastActivityAt: root.worktreeLastActivityAt || null,
       mergedInto: root.mergedInto || null,
       unmergedCommits: root.unmergedCommits ?? null,
       projectRoot: root.projectRoot || null,

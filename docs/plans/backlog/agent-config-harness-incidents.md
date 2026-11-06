@@ -1,6 +1,5 @@
 ---
 id: 8ac41f2d
-priority: low
 next_action: Resolve the evidence-consent, automatic chat-candidate, and retention decisions before implementation begins
 blocked_by: []
 depends_on: []

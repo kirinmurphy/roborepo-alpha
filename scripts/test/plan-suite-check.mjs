@@ -10,7 +10,6 @@ import {
   buildPrompt,
   parseFrontmatter,
   readPlanDocument,
-  updatePlanPriority,
   writeFrontmatterField,
 } from "../../modules/plan-suite/index.mjs";
 import { walkRepositoryRoots } from "../../modules/repositories/index.mjs";
@@ -28,7 +27,6 @@ try {
   fs.writeFileSync(path.join(repo, ".git"), "gitdir: nowhere\n");
   fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "ready.md"), `---
 id: ready-plan
-priority: high
 next_action: Add the portal view
 blocked_by: []
 depends_on: []
@@ -76,7 +74,6 @@ Run targeted checks.
   // lifecycle findings for it. Lifecycle moves are covered by plan-lifecycle-transitions-check.mjs.
   fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "movable.md"), `---
 id: movable-plan
-priority: medium
 next_action: Move this plan around in tests.
 blocked_by: []
 depends_on: []
@@ -115,20 +112,19 @@ Verified manually by the test itself.
 N/A.
 `);
   fs.writeFileSync(path.join(repo, "docs", "plans", "root.md"), "# Root Plan\n");
-  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "no-priority.md"), `---
-id: no-priority-plan
+  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "no-worktree-key.md"), `---
+id: no-worktree-key-plan
 next_action: Add the portal view
 blocked_by: []
 depends_on: []
 related: []
 reviewed_commit:
 ---
-# No Priority Plan
+# No Worktree Key Plan
 
 ## Summary
 
-Plan with no priority frontmatter key at all (not just an empty value) — renders as "none" in
-the UI via buildPlanRecord's fallback, and must still be settable through the priority endpoint.
+Plan with no worktree frontmatter key at all, not just an empty value.
 
 ## Context
 
@@ -163,13 +159,15 @@ Run targeted checks.
   // `worktree` is optional: populated, empty, and absent all parse, and only a value associates.
   assert.equal(ready.plan.worktree, "ready-plan-tree");
   assert.equal(snapshot.plans.find((item) => item.plan.id === "movable-plan").plan.worktree, "");
-  assert.equal(snapshot.plans.find((item) => item.plan.id === "no-priority-plan").plan.worktree, "");
+  assert.equal(snapshot.plans.find((item) => item.plan.id === "no-worktree-key-plan").plan.worktree, "");
   assert.equal(ready.plan.validation.findings.some((item) => /frontmatter/i.test(item.code)), false);
   const root = snapshot.plans.find((item) => item.plan.relativePath.endsWith("root.md"));
   assert.equal(root.plan.lifecycle, "unclassified");
   assert.match(root.plan.validation.warnings.join("\n"), /unclassified/);
 
   const doc = readPlanDocument(snapshot, ready.key);
+  assert.ok(path.isAbsolute(doc.absolutePath), "the drawer's copy button gets the plan's absolute path");
+  assert.equal(doc.plan.absolutePath, undefined);
   assert.match(doc.html, /Ready Plan/);
   // The drawer renders through the shared markdown renderer (scripts/cli/markdown-render.mjs), not
   // the private mini-renderer it used to carry — so tables, mermaid diagrams, and task checkboxes
@@ -220,102 +218,21 @@ Run targeted checks.
 
   // --- writeFrontmatterField: patches one scalar key, preserves everything else -----------------
   const rewritten = writeFrontmatterField(
-    "---\nid: foo\npriority: low\nnext_action: do it\n---\n# Body\n\ntext\n",
-    "priority",
-    "high",
+    "---\nid: foo\nworktree: old\nnext_action: do it\n---\n# Body\n\ntext\n",
+    "worktree",
+    "new",
   );
-  assert.match(rewritten, /priority: high/);
-  assert.doesNotMatch(rewritten, /priority: low/);
+  assert.match(rewritten, /worktree: new/);
+  assert.doesNotMatch(rewritten, /worktree: old/);
   assert.match(rewritten, /id: foo/);
   assert.match(rewritten, /next_action: do it/);
   assert.match(rewritten, /# Body\n\ntext\n$/);
-  assert.throws(() => writeFrontmatterField("no frontmatter", "priority", "high"), /missing frontmatter/);
+  assert.throws(() => writeFrontmatterField("no frontmatter", "worktree", "new"), /missing frontmatter/);
 
-  // Missing key entirely (not just an empty value) must be appended, not throw — a plan with no
-  // `priority:` line renders the same "none" fallback as an empty one (buildPlanRecord's
-  // `parsed.frontmatter.priority || "none"`), so the writer must be able to turn either into a
-  // real on-disk value or the UI's "none" option would be unusable.
-  const appended = writeFrontmatterField("---\nid: foo\n---\nbody", "priority", "high");
-  assert.match(appended, /id: foo\npriority: high/);
+  // A missing key is appended rather than refused, so a plan that never named a worktree can get one.
+  const appended = writeFrontmatterField("---\nid: foo\n---\nbody", "worktree", "new");
+  assert.match(appended, /id: foo\nworktree: new/);
   assert.match(appended, /---\nbody$/);
-
-  // --- updatePlanPriority: mtime-checked read-modify-write against a real plan file --------------
-  const readySnapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
-  const readyRecord = readySnapshot.plans.find((item) => item.plan.id === "ready-plan");
-  assert.equal(readyRecord.plan.priority, "high");
-  assert.ok(Number.isFinite(readyRecord.mtimeMs), "expected mtimeMs on the public plan record");
-
-  const priorityResult = updatePlanPriority(readySnapshot, {
-    id: readyRecord.plan.id,
-    key: readyRecord.key,
-    priority: "low",
-    expectedPriority: readyRecord.plan.priority,
-    mtimeMs: readyRecord.mtimeMs,
-  });
-  assert.equal(priorityResult.change.property, "priority");
-  assert.equal(priorityResult.change.previousValue, "high");
-  assert.equal(priorityResult.change.newValue, "low");
-  assert.equal(priorityResult.record.plan.priority, "low", "priority returns a complete rebuilt record, not just {priority, mtimeMs}");
-  assert.equal(priorityResult.record.plan.id, "ready-plan");
-  assert.ok(Number.isFinite(priorityResult.record.mtimeMs));
-  const onDisk = fs.readFileSync(path.join(repo, "docs", "plans", "backlog", "ready.md"), "utf8");
-  assert.match(onDisk, /priority: low/);
-  assert.match(onDisk, /## Implementation plan/); // body untouched
-
-  assert.throws(
-    () => updatePlanPriority(readySnapshot, { id: readyRecord.plan.id, key: readyRecord.key, priority: "not-a-priority", expectedPriority: "low", mtimeMs: priorityResult.record.mtimeMs }),
-    /invalid priority/,
-  );
-
-  // Stale conflict: mtime (as if another process/editor touched the file since it was loaded).
-  assert.throws(() => {
-    try {
-      updatePlanPriority(readySnapshot, {
-        id: readyRecord.plan.id,
-        key: readyRecord.key,
-        priority: "high",
-        expectedPriority: "low",
-        mtimeMs: readyRecord.mtimeMs, // stale, already advanced above
-      });
-    } catch (err) {
-      assert.equal(err.code, "STALE_PLAN");
-      assert.equal(err.status, 409);
-      throw err;
-    }
-  }, /changed outside the portal/);
-
-  // Stale conflict: expectedPriority mismatch alone (mtime happens to still match current disk
-  // state — e.g. a concurrent request raced and won, then this one arrives with a now-wrong
-  // expectation but a fresh mtime it never actually read).
-  assert.throws(() => {
-    try {
-      updatePlanPriority(readySnapshot, {
-        id: readyRecord.plan.id,
-        key: readyRecord.key,
-        priority: "high",
-        expectedPriority: "medium", // wrong: current on-disk priority is "low"
-        mtimeMs: priorityResult.record.mtimeMs,
-      });
-    } catch (err) {
-      assert.equal(err.code, "STALE_PLAN");
-      throw err;
-    }
-  }, /changed outside the portal/);
-
-  // Regression: a plan with no `priority:` frontmatter key at all (displays as "none" via
-  // buildPlanRecord's `|| "none"` fallback) must still be settable, not throw "key not found".
-  const noPriorityRecord = readySnapshot.plans.find((item) => item.plan.id === "no-priority-plan");
-  assert.equal(noPriorityRecord.plan.priority, "none");
-  const noPriorityResult = updatePlanPriority(readySnapshot, {
-    id: noPriorityRecord.plan.id,
-    key: noPriorityRecord.key,
-    priority: "high",
-    expectedPriority: noPriorityRecord.plan.priority,
-    mtimeMs: noPriorityRecord.mtimeMs,
-  });
-  assert.equal(noPriorityResult.record.plan.priority, "high");
-  const noPriorityOnDisk = fs.readFileSync(path.join(repo, "docs", "plans", "backlog", "no-priority.md"), "utf8");
-  assert.match(noPriorityOnDisk, /priority: high/);
 
   const portalFacing = spawnSync(process.execPath, [
     "-e",
@@ -333,35 +250,6 @@ Run targeted checks.
   assert.equal(portalSnapshot.repositories[0].root, undefined);
   assert.equal(portalSnapshot.plans[0].absolutePath, undefined);
   assert.equal(portalSnapshot.plans[0].repository.root, undefined);
-
-  // CLI-boundary check: updatePlanPriority via scripts/cli/plans.mjs (not the domain module
-  // directly) must strip absolutePath/repository.root from the returned record, exactly like a full
-  // snapshot does — the doc's "public responses do not expose absolute paths" requirement applies at
-  // this boundary, not just to buildPlanSnapshot's output.
-  const noPriorityCliRecord = portalSnapshot.plans.find((item) => item.plan.id === "no-priority-plan");
-  const priorityCliCheck = spawnSync(process.execPath, [
-    "-e",
-    `import('./scripts/cli/plans.mjs').then(async (m) => {
-      const result = m.updatePlanPriority({
-        id: ${JSON.stringify(noPriorityCliRecord.plan.id)},
-        key: ${JSON.stringify(noPriorityCliRecord.key)},
-        priority: "low",
-        expectedPriority: ${JSON.stringify(noPriorityCliRecord.plan.priority)},
-        mtimeMs: ${noPriorityCliRecord.mtimeMs},
-      });
-      process.stdout.write(JSON.stringify(result));
-    })`,
-  ], {
-    cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".."),
-    env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot },
-    encoding: "utf8",
-  });
-  assert.equal(priorityCliCheck.status, 0, priorityCliCheck.stderr);
-  const priorityCliResult = JSON.parse(priorityCliCheck.stdout);
-  assert.equal(priorityCliResult.change.newValue, "low");
-  assert.equal(priorityCliResult.record.plan.priority, "low");
-  assert.equal(priorityCliResult.record.absolutePath, undefined, "CLI-layer priority result must not expose absolutePath");
-  assert.equal(priorityCliResult.record.repository.root, undefined, "CLI-layer priority result must not expose repository.root");
 
   // Regression: planSuitePackage.enabled must track the package's real live-enabled state
   // (buildPackageLiveState, same source config.mjs's readConfigSnapshot uses), not the raw
@@ -484,7 +372,6 @@ Run targeted checks.
   fs.writeFileSync(path.join(refsRepo, ".git"), "gitdir: nowhere\n");
   const refsPlan = (id, extra) => `---
 id: ${id}
-priority: high
 next_action: Do the thing
 ${extra}
 reviewed_commit:

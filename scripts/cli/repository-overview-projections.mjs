@@ -195,16 +195,22 @@ function unavailableEnvelope(message) {
 // not call stale or landed, or an Active or Review plan changed within the same window Runtime uses
 // to call a worktree stale. Work that has gone quiet that long falls back to idle.
 const IN_PROGRESS_WINDOW_MS = DEFAULT_WORKTREE_STALE_DAYS * 24 * 60 * 60 * 1000;
+// A landed worktree still on disk with fresh activity (a commit, a run, a session on its branch) is
+// usually wrap-up after the merge — closing the plan, cleanup — so it keeps the repo in progress for
+// a few days even with no plan open. Older landed worktrees are leftovers, not work.
+const RECENT_LANDED_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
 function hasWorkInProgress(runtime, plans, now = new Date()) {
+  const withinWindow = (value, windowMs) => {
+    const age = now.getTime() - Date.parse(value || "");
+    return Number.isFinite(age) && age <= windowMs;
+  };
   const openWorktree = (runtime?.checkouts || []).some((checkout) => checkout.isWorktree
     && checkout.checkoutState === "present"
-    && ["running", "idle"].includes(checkout.worktreeState));
+    && (["running", "idle"].includes(checkout.worktreeState)
+      || (checkout.worktreeState === "landed" && withinWindow(checkout.worktreeLastActivityAt, RECENT_LANDED_WINDOW_MS))));
   if (openWorktree) return true;
-  return (plans?.active || []).some((plan) => {
-    const age = now.getTime() - Date.parse(plan.changedAt || "");
-    return Number.isFinite(age) && age <= IN_PROGRESS_WINDOW_MS;
-  });
+  return (plans?.active || []).some((plan) => withinWindow(plan.changedAt, IN_PROGRESS_WINDOW_MS));
 }
 
 // Pinned first, then running, then in progress (nothing running, but open work), then idle/stale;

@@ -37,6 +37,7 @@ const EXEMPT = new Map([
   ["naming-inventory.mjs", "naming-surface inventory utility (rename-prep); run by hand, not a check"],
   ["test-cli.sh", "the suite runner itself"],
   ["ci.sh", "the CI runner itself"],
+  ["pre-push-check.sh", "the pre-push hook's runner (scripts/git-hooks/pre-push), not a suite entry point; pre-push-gate-check.mjs runs a copy of it"],
   ["run-checks.mjs", "the discover-and-run runner; the gate runs the check-groups.json groups it names through it"],
   ["telemetry-schemas-persistence-child.mjs", "child process spawned by telemetry-schemas-check.mjs"],
   ["telemetry-spool-bench.mjs", "micro-benchmark against the live spool; run by hand, not asserted"],

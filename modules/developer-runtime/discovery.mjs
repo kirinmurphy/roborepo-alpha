@@ -12,6 +12,7 @@ import { probeHttpCandidate } from "./http-probe.mjs";
 import { resolveProjectAlias } from "./settings.mjs";
 import { discoverDockerRecords } from "./docker.mjs";
 import { collectProcessMetrics } from "./process-metrics.mjs";
+import { collectProcessStateRoots } from "./process-state-root.mjs";
 import { resolveProvenance } from "./provenance.mjs";
 import { collectDockerStats } from "./docker-stats.mjs";
 import { collectDockerMounts } from "./docker-mounts.mjs";
@@ -47,6 +48,11 @@ export async function discoverInstances(options = {}) {
     // registry access) rather than read here, keeping discovery free of state I/O. Absent means
     // stacks classify as shared/unverified rather than being attributed to a wrong checkout.
     checkoutRootsByRepository = new Map(),
+    // The state root this scan reports for. Listeners started under a different one are test servers
+    // and are left out. Absent means no filtering: worktree cleanup scans without it on purpose, so
+    // a test server still counts as running before its checkout is removed.
+    stateRoot = null,
+    runStateRootCommand = defaultRunCommand,
   } = options;
   // One cache per scan, created here and dropped when this call returns. Because
   // refreshDeveloperRuntimeSnapshot invokes discoverInstances exactly once per refresh, "per-scan" and
@@ -62,10 +68,13 @@ export async function discoverInstances(options = {}) {
 
   const listenerProvider = await discoverListenerRecords({ platform, runCommand });
   warnings.push(...listenerProvider.warnings);
+  const records = stateRoot
+    ? await withoutForeignStateRoots(listenerProvider.records, stateRoot, { platform, runCommand: runStateRootCommand, warnings })
+    : listenerProvider.records;
   const pending = [];
   const instances = [];
 
-  for (const { listener, cwd } of listenerProvider.records) {
+  for (const { listener, cwd } of records) {
     const identity = withRepositoryFields(cwd
       ? resolveIdentity(cwd, listener.command, options)
       : {
@@ -171,6 +180,31 @@ export async function discoverInstances(options = {}) {
   attachHealth(instances, { previousHealth, context, now });
 
   return { capabilities, warnings, instances, composeProjectGit };
+}
+
+// A listener under another state root shares a cwd, and so a repository and checkout, with real
+// servers while serving none of their data. Left in, it can take the checkout's link and collapse a
+// real server into its duplicate ports, because the older process is listed first. Dropping it
+// before identity and probing also keeps it out of history and the repository registry. It stays
+// visible as a warning, because a leftover one is still a process the user may want to stop.
+//
+// Only an explicit different root counts. A process with no variable uses the default root or is not
+// RoboRepo, and a dev server started by a hermetic portal inherits that portal's root.
+async function withoutForeignStateRoots(records, stateRoot, { platform, runCommand, warnings }) {
+  const rootsByPid = await collectProcessStateRoots(records.map((record) => record.listener.pid), { platform, runCommand, warnings });
+  const expected = comparablePath(stateRoot);
+  const portsByForeignPid = new Map();
+  const kept = records.filter(({ listener }) => {
+    const root = rootsByPid.get(listener.pid);
+    if (!root || comparablePath(root) === expected) return true;
+    portsByForeignPid.set(listener.pid, [...(portsByForeignPid.get(listener.pid) || []), listener.port]);
+    return false;
+  });
+  for (const [pid, ports] of portsByForeignPid) {
+    const list = [...new Set(ports)].sort((a, b) => a - b).map((port) => `:${port}`).join(", ");
+    warnings.push(`Not showing ${list} (pid ${pid}): it runs under a separate state root, so it is treated as a test server. Stop it if it is left over.`);
+  }
+  return kept;
 }
 
 // Decide checkout ownership for a whole Compose project from its bind mounts. The working_dir

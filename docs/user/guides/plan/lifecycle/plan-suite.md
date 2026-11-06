@@ -93,11 +93,12 @@ installs all six.
 Every move between lifecycle folders is one commit in the repository's main checkout, on the base
 branch, made by a `roborepo plans` command that the suite commands run. The commit contains only
 the plan's old and new paths, so other work in the main checkout, staged or not, stays where it is.
+Archiving also clears the plan from the prerequisites of unfinished plans, in the same commit.
 Its message names the plan by its filename, for example
 `Submit plan plan-lifecycle-review-and-ship-workflow for review`, so `git log` reads without
 looking up ids. The suite commands' reports and questions name a plan by its title, with its id in
 parentheses once. A refused move changes nothing, running a move again after it succeeded commits nothing, and
-nothing is ever pushed.
+the base branch is never pushed.
 
 While a plan is `active` or in `review`, its worktree's copy is the plan: every progress note,
 finding, and approval is written there and reaches the base branch when you merge.
@@ -149,11 +150,12 @@ finding gets one of three classes, by consequence rather than size:
 | Class | When | What happens |
 | --- | --- | --- |
 | `fix` | The right fix is clear and stays within the plan's requirements and specified contracts, code included | The same run fixes it and checks it off with its commit |
-| `escalate` | The fix chooses between real alternatives, changes requirements or an unspecified contract, or lands outside the plan | It becomes an open question in the run's final batch |
+| `escalate` | The fix chooses between real alternatives, each with a compelling argument for it, changes requirements or an unspecified contract, or lands outside the plan | It becomes an open question in the run's final batch |
 | `base` | The base branch fails the same check | It is recorded as verification, and blocks nothing |
 
-The loop repeats until a pass finds nothing to fix, for at most five passes. The findings and the
-passes are recorded in the plan's `## Review` section. Then it runs the completion preflight
+The run never asks before fixing a `fix` finding. The loop repeats until a pass finds nothing to
+fix, for at most eight passes. The cap limits passes only: the last pass's findings are fixed like
+any other's, and the run records that those fixes were not revalidated. The findings and the passes are recorded in the plan's `## Review` section. Then it runs the completion preflight
 (`roborepo plans preflight`), which checks that:
 
 - no task outside `## Not tested` is unchecked;
@@ -162,9 +164,10 @@ passes are recorded in the plan's `## Review` section. Then it runs the completi
 - the feature branch has at least one commit of its own;
 - the plan passes the Review requirements, apart from unconfirmed `## Not tested` entries.
 
-If the loop ended clean and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
-which moves the plan to `review/`. That says the work is complete and checked, not that you
-accepted it. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
+If the loop has ended and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
+which moves the plan to `review/`, then pushes the plan's feature branch so CI starts before you
+review. That says the work is complete and checked, not that you accepted it. If the push is
+refused, the plan still moves and the report gives you the command to push it yourself. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
 `escalate` finding is an unchecked task, so it holds the plan in `active/` until you answer it.
 
 The first run in a repository asks you to confirm where worktrees go. Later runs reuse that answer.
@@ -190,7 +193,7 @@ A new review runs these steps:
 4. runs one validator pass over the merged result, with the same classes as `/plan-execute`, and
    records its findings in the plan's `## Review` section;
 5. fixes every `fix` finding in the same chat, code included, each in its own commit, and checks
-   again until a pass finds nothing to fix. A fixed finding reads
+   again until a pass finds nothing to fix, for at most eight passes. A fixed finding reads
    `- [x] … — fixed in review (<short commit>)`;
 6. records the Result as complete once findings and required manual checks are resolved, or pending
    while they remain open, then shows you a review packet: each acceptance criterion with its evidence, what changed, the
@@ -403,7 +406,6 @@ Recommended frontmatter:
 ```yaml
 ---
 id: stable-plan-id
-priority: high
 next_action: Implement the next concrete task
 blocked_by: []
 depends_on: []
@@ -431,7 +433,8 @@ Headings and checkboxes inside fenced code blocks are examples, not plan structu
 The Plans page supports:
 
 - search across title, ID, path, next action, blockers, repository name, and warnings
-- repository, lifecycle, priority, blocked, structure, plan freshness, and health filters
+- repository, lifecycle, blocked, structure, plan freshness, and health filters
+- Backlog as a directory of repos and namespaces, each namespace with its own explicit order
 - lifecycle tabs: Backlog, Ready, Active, and Review, with Completed, Archived, and Unclassified
   behind the ⋮ menu
 - document rendering with metadata, warnings, and task lists
@@ -480,8 +483,8 @@ A merged worktree shows a **merged** completion badge on its plan card and in th
 
 ## Current Limits
 
-- The portal offers priority edits only for backlog and ready plans. Starting or reopening a plan
-  clears its priority to `none`. All other plan edits happen in your editor or through the suite.
+- The portal writes one thing: a namespace's Backlog order, when you press **Save**. All other plan
+  edits happen in your editor or through the suite.
 - Manual refresh is the v1 update model.
 - No database, daemon, cloud sync, direct editor, automatic merge, or automatic LLM prioritization
   is included.

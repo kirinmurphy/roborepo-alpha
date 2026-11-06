@@ -489,6 +489,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
       root.remainingPaths = worktree.remainingPaths || [];
       root.blockingPaths = worktree.blockingPaths || [];
       root.worktreeRunning = worktree.running === true;
+      root.worktreeLastActivityAt = worktree.lastActivityAt || null;
       root.mergedInto = worktree.mergedInto || null;
       root.worktreeName = worktree.name;
       root.unmergedCommits = worktree.unmergedCommits;
@@ -506,6 +507,11 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
   // one place is what makes an idle repository pinnable at all.
   for (const [repositoryId, entry] of byRepository) {
     entry.pinned = pinnedRepositoryIds.has(repositoryId);
+    // Folder moves leave old clone observations behind. Filter only the display: keep
+    // unreadable locations, the last missing checkout, and worktrees with cleanup state.
+    if (entry.roots.some((root) => root.checkoutState === "present")) {
+      entry.roots = entry.roots.filter((root) => root.isWorktree || root.checkoutState !== "absent");
+    }
   }
 
   return sortRepositoriesForDisplay([...byRepository.values()]);

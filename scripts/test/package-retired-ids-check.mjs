@@ -6,7 +6,7 @@
 //
 // Runs the package steps `roborepo update` runs (scripts/install/main.sh: adopt-live, the selected
 // bundles, then reconcile) against a hermetic HOME, and pins the outcome: the retired IDs leave
-// both registry lists, their projections are removed, the renamed packages install, and a second
+// both registry lists and the applied record, their projections are removed, the renamed packages install, and a second
 // reconcile has nothing left to do.
 //
 // The six plan IDs differ from the others: `plan-suite` reuses their skill IDs. adopt-live finds
@@ -43,6 +43,9 @@ function roborepo(...args) {
 
 const registryPath = path.join(state, "enabled-packages.json");
 const readRegistry = () => JSON.parse(fs.readFileSync(registryPath, "utf8"));
+const appliedPath = path.join(state, "applied-packages.json");
+// A retired id that only the applied record still names: reconcile has no manifest to remove it with.
+const APPLIED_ONLY_RETIRED = "retired-applied-only";
 
 try {
   fs.mkdirSync(path.join(home, ".claude", "commands"), { recursive: true });
@@ -55,6 +58,7 @@ try {
   // six old plan packages), one explicitly disabled, next to a current package.
   fs.mkdirSync(state, { recursive: true });
   fs.writeFileSync(registryPath, `${JSON.stringify({ packages: ["plan-docs", "wrap-up", "plan-start", ...ENABLED_OLD_PLAN_PACKAGES, "session-close"], disabled: ["integration-check"] }, null, 2)}\n`);
+  fs.writeFileSync(appliedPath, `${JSON.stringify({ packages: ["plan-docs", "wrap-up", APPLIED_ONLY_RETIRED, "session-close"] }, null, 2)}\n`);
 
   // What the retired packages projected: a managed skill cache entry, the Claude skill view that
   // links to it, and a generated slash command naming its owner.
@@ -88,6 +92,12 @@ try {
     assert.match(reconcile.stderr, new RegExp(`remove stale package not in catalog: ${id}`), `${id} is named as removed`);
   }
   assert.ok(registry.packages.includes("session-close"), "a current package stays enabled");
+  const applied = JSON.parse(fs.readFileSync(appliedPath, "utf8")).packages;
+  for (const id of ["plan-docs", "wrap-up", APPLIED_ONLY_RETIRED]) {
+    assert.ok(!applied.includes(id), `${id} leaves the applied record`);
+  }
+  assert.match(reconcile.stderr, new RegExp(`remove stale package not in catalog: ${APPLIED_ONLY_RETIRED}`), "an id only the applied record names is named as removed");
+  assert.ok(applied.includes("session-close"), "a current applied package stays recorded");
   assert.ok(registry.packages.includes("plan-suite"), "adopt-live adopts plan-suite from the plan skills left in place");
 
   for (const id of PROJECTED) {

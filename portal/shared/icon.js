@@ -121,6 +121,31 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<circle cx="4" cy="3" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="4" cy="13" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="12" cy="6" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><path fill="none" stroke="currentColor" stroke-width="1.3" d="M4 4.6V11.4" /><path fill="none" stroke="currentColor" stroke-width="1.3" d="M4 8c0-2.5 2-3.5 4.5-3.8" />`,
   },
+  "arrow-up": {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M8 13V3M4 7l4-4 4 4" />`,
+  },
+  "arrow-down": {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M8 3v10M4 9l4 4 4-4" />`,
+  },
+  "arrow-to-top": {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M3 2.5h10M8 14V6M4.5 9.5 8 6l3.5 3.5" />`,
+  },
+  "arrow-to-bottom": {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M3 13.5h10M8 2v8M4.5 6.5 8 10l3.5-3.5" />`,
+  },
+  // Return: an arrow turning back on itself, for sending a plan back where it came from.
+  return: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" d="M5.5 2.5 2.5 5.5l3 3M2.5 5.5h7a3.5 3.5 0 0 1 0 7H6" />`,
+  },
+  grip: {
+    viewBox: "0 0 16 16",
+    body: `<g fill="currentColor"><circle cx="6" cy="3.5" r="1.2" /><circle cx="10" cy="3.5" r="1.2" /><circle cx="6" cy="8" r="1.2" /><circle cx="10" cy="8" r="1.2" /><circle cx="6" cy="12.5" r="1.2" /><circle cx="10" cy="12.5" r="1.2" /></g>`,
+  },
   chevron: {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M4 6l4 4 4-4" />`,

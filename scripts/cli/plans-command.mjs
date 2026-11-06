@@ -4,6 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { buildRepositoryPlanSnapshot, selectRepositoryPlan, validateRepositoryPlans } from "../../modules/plan-suite/index.mjs";
+import { placePlan } from "../../modules/plan-suite/backlog-registry.mjs";
+import { primaryCheckoutRecords } from "../../modules/plan-suite/repository-validation.mjs";
 import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 import { primaryCheckout } from "../../modules/plan-suite/plan-git.mjs";
 import { approvalFreshness, completionPreflight, mergeReadiness } from "../../modules/plan-suite/review-gates.mjs";
@@ -22,12 +24,14 @@ const PLANS_USAGE = [
   "       roborepo plans sync-base [--continue] [--base <branch>] [--json]",
   "       roborepo plans stop-servers <plan> [--dry-run] [--json]",
   "       roborepo plans repair <root> [--dry-run]",
+  "       roborepo plans order place <plan> [--top|--bottom] [--json]",
 ].join("\n");
 
 export function plansCommand(args) {
   const [sub, ...rest] = args;
   if (sub === "repair") return plansRepairCommand(rest);
   if (sub === "validate") return plansValidateCommand(rest);
+  if (sub === "order") return plansOrderCommand(rest);
   if (LIFECYCLE_MODEL.transition(sub)) return plansTransitionCommand(sub, rest);
   if (sub === "preflight") return plansPreflightCommand(rest);
   if (sub === "merge-readiness") return plansMergeReadinessCommand(rest);
@@ -88,10 +92,52 @@ function plansValidateCommand(args) {
       if (plan.validated.source === "worktree") console.log(`  validated from worktree ${plan.validated.worktree}: ${plan.validated.relativePath}`);
       for (const item of plan.findings) console.log(`  ${item.severity.padEnd(8)} ${item.code}: ${item.message}`);
     }
+    if (result.repositoryFindings.length) console.log("repository");
+    for (const item of result.repositoryFindings) console.log(`  ${item.severity.padEnd(8)} ${item.code}: ${item.message}`);
     const { plans, findings, blocking } = result.summary;
     console.log(`${plans} plan${plans === 1 ? "" : "s"} checked in ${result.repository.name}: ${findings} finding${findings === 1 ? "" : "s"}, ${blocking} blocking.`);
   }
-  if (result.summary.blocking > 0) process.exit(1);
+  // exitCode rather than exit(): the report can outgrow a pipe buffer, and exit() would cut it off.
+  if (result.summary.blocking > 0) process.exitCode = 1;
+}
+
+// Records a Backlog plan's place in its namespace order. Without a position, a plan connected to a
+// ranked plan is written where the effective order puts it, and a plan that is not ranked stays
+// unprioritized.
+// Exit status: 0 when the result is recorded (staying unprioritized included), 1 when refused, 2 on
+// a usage error.
+function plansOrderCommand(args) {
+  const [verb, ...rest] = args;
+  const { flags, positional } = parseArgs(rest);
+  if (verb !== "place" || !positional[0] || (flags.top && flags.bottom)) {
+    console.error(PLANS_USAGE);
+    process.exit(2);
+  }
+  let result;
+  let record;
+  try {
+    const primary = primaryCheckout(process.cwd());
+    const records = primaryCheckoutRecords(primary);
+    record = selectRepositoryPlan({ root: primary, plans: records }, positional[0], { cwd: process.cwd() });
+    result = placePlan({ root: primary, records, record, position: flags.top ? "top" : flags.bottom ? "bottom" : null });
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify({ ok: true, plan: { id: record.plan.id, path: record.plan.relativePath, namespace: record.plan.namespace }, ...result }, null, 2));
+    return;
+  }
+  const descriptions = {
+    attached: "attached to its ranked prerequisites",
+    ranked: "already ranked",
+    top: "placed at the top",
+    bottom: "placed at the bottom",
+    unprioritized: "left in Needs prioritization",
+  };
+  console.log(`plan: ${record.plan.relativePath} (${record.plan.id}), namespace ${record.plan.namespace}: ${descriptions[result.placed]}`);
+  if (result.ignoredPosition) console.log(`--${result.ignoredPosition} ignored: a plan connected to a ranked plan stays with its group.`);
+  for (const move of result.moves) console.log(`automatic ${move.kind === "attached" ? "attachment" : "move"}: ${move.id} now at position ${move.to + 1}`);
+  console.log(result.order.join(" "));
 }
 
 // Every lifecycle transition the manifest declares. Exit status: 0 when the post-commit validator
@@ -117,6 +163,8 @@ async function plansTransitionCommand(transition, args) {
     console.log(`${transition}: ${lifecycle.from} -> ${lifecycle.to}, ${result.commit ? `committed ${result.commit.slice(0, 12)} on ${result.base}` : "already recorded"}`);
     if (result.fastForward) console.log(`fast-forward: ${result.fastForward.applied ? "applied" : result.fastForward.reason}`);
     if (result.worktreeCopy) console.log(`worktree copy: ${result.worktreeCopy}`);
+    for (const dependent of result.references?.cleared || []) console.log(`dependency cleared: ${dependent}`);
+    for (const dependent of result.references?.left || []) console.log(`dependency left in place, its worktree owns the copy: ${dependent}`);
     for (const link of result.staleLinks) console.log(`stale link to ${result.plan.from}: ${link}`);
     printFailedChecks(result.checks);
     console.log(result.verdict);

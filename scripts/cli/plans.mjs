@@ -1,4 +1,4 @@
-// The Plans portal's snapshot API: cached plan snapshots, documents, prompts, and priority edits,
+// The Plans portal's snapshot API: cached plan snapshots, documents, prompts, and Backlog order saves,
 // with private fields stripped before they cross the HTTP boundary. `roborepo plans` lives in
 // plans-command.mjs.
 import { packageStatusSummary } from "./package-status.mjs";
@@ -10,8 +10,11 @@ import {
   findPlanByKey,
   planSnapshotFingerprint,
   readPlanDocument,
-  updatePlanPriority as updatePlanPriorityInDocs,
+  domainError,
 } from "../../modules/plan-suite/index.mjs";
+import { saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
+import { primaryCheckout, repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
+import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { loadRegistry } from "../../modules/repositories/index.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockPlanDocument, mockPlansSnapshot } from "./mock-home.mjs";
 
@@ -46,6 +49,11 @@ export function scopeSnapshot(snapshot, repositoryId) {
     repositories: snapshot.repositories.filter((repository) => inScope(repository.repositoryId)),
     repositoryScans: scans.length ? scans : [{ repositoryId, state: "unavailable", planCount: 0, checkoutCount: 0 }],
     errors: (snapshot.errors || []).filter((error) => inScope(error.repositoryId)),
+    backlog: (snapshot.backlog || []).filter((entry) => inScope(entry.repositoryId)),
+    // A scoped page still needs every repo its breadcrumb can jump to.
+    backlogRepositories: (snapshot.backlog || [])
+      .filter((entry) => entry.urlKey && (entry.namespaces.length || entry.noNamespace.length))
+      .map(({ urlKey, name }) => ({ urlKey, name })),
   };
 }
 
@@ -79,12 +87,52 @@ export function buildPlansPrompt({ action, keys, mode }) {
   return { prompt: buildPrompt(action, selected, { mode }) };
 }
 
-export function updatePlanPriority({ id, key, priority, expectedPriority, mtimeMs, repositoryId }) {
-  // Writes resolve current evidence/worktree authority rather than a cached recovery selection.
+// A Backlog Save: one namespace's whole order, against the revision the draft was opened from.
+export function saveBacklogOrder({ repositoryId, namespace, order, unprioritized, revision }) {
   const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
-  const result = updatePlanPriorityInDocs(snapshot, { id, key, priority, expectedPriority, mtimeMs, repositoryId });
+  const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
+  if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
+  const records = snapshot.plans.filter((record) => record.repository.repositoryId === repositoryId);
+  const result = saveNamespaceOrder({ root: repository.root, records, namespace, order, unprioritized, revision });
   cachedSnapshot = null;
-  return publicMutationResult(result);
+  return result;
+}
+
+// Lifts one namespace to the top of its repo's Backlog, or returns it to alphabetical order.
+export function setBacklogNamespacePinned({ repositoryId, namespace, pinned }) {
+  const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
+  const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
+  if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
+  const result = setNamespacePinned({ root: repository.root, namespace, pinned });
+  cachedSnapshot = null;
+  return result;
+}
+
+// Retires one unprioritized Backlog plan through the same transition `roborepo plans archive` runs: a
+// commit on the base branch, nothing pushed. A ranked plan is refused, so a page working from an older
+// snapshot cannot archive what has since been prioritized.
+export async function archiveBacklogPlan({ repositoryId, id, reason }) {
+  if (typeof id !== "string" || !id) throw domainError("INVALID_CHANGE", "id must name the plan to archive.");
+  const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
+  const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
+  const entry = snapshot.backlog.find((item) => item.repositoryId === repositoryId);
+  if (!repository || !entry) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
+  const unprioritized = new Set(entry.namespaces.flatMap((view) => view.needsPrioritization.flatMap((block) => block.ids)));
+  if (!unprioritized.has(id)) throw domainError("INVALID_CHANGE", `Only unprioritized Backlog plans can be archived here: ${id}.`);
+  const primary = primaryCheckout(repository.root);
+  const base = repositoryBaseBranch(primary);
+  if (!base) {
+    throw domainError("INVALID_CHANGE", "This repo's base branch can't be determined, so nothing was archived.", {
+      resolution: "Run `git remote set-head origin --auto`, or archive it with `roborepo plans archive <plan> --reason <text> --base <branch>`.",
+    });
+  }
+  try {
+    const result = await transitionPlan({ cwd: primary, transition: "archive", selector: id, reason, base });
+    if (result.verdict !== "APPROVED") throw domainError("INVALID_CHANGE", `${id} moved, but its post-commit checks failed.`);
+    return { archived: id, references: result.references };
+  } finally {
+    cachedSnapshot = null;
+  }
 }
 
 export function refreshPlans({ repositoryId = null } = {}) {
@@ -99,14 +147,6 @@ function rebuildSnapshot(registry, fingerprint = planSnapshotFingerprint({ regis
   cachedSnapshot = buildPlanSnapshot({ stateRoot, registry, packageState: planSuitePackageState() });
   cachedSnapshotIsMock = false;
   cachedFingerprint = fingerprint;
-}
-
-// Strips the same private fields (absolutePath, repository.root) from a mutation result's record
-// that publicSnapshot() strips from every plan in a full snapshot — the domain layer's record
-// shape always carries them internally, but they must never cross the HTTP boundary.
-function publicMutationResult(result) {
-  const { absolutePath, repository, ...plan } = result.record;
-  return { change: result.change, record: { ...plan, repository: stripRepositoryRoot(repository) } };
 }
 
 function planSuitePackageState() {

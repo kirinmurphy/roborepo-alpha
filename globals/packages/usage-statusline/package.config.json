@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "id": "usage-statusline",
-  "label": "Usage Statusline (CLI's only)",
-  "description": "Shows context and rate-limit usage in supported harness footers without model calls.",
+  "label": "Usage Statusline",
+  "description": "Shows context and rate-limit usage in supported harness footers, and context usage above the prompt in the Claude desktop app, without model calls.",
   "lifecycle": "optional",
   "presentation": {
     "category": "token-optimization",
@@ -38,6 +38,10 @@
       "type": "harness-config",
       "source": "codex/status-line.json",
       "harness": "codex"
+    },
+    {
+      "type": "claude-plugin-dir",
+      "source": "claude/context-row"
     }
   ],
   "defaultEnabled": false

@@ -59,7 +59,6 @@ function json(result, label) {
 function planDoc({ id, title, nextAction = "Implement the first task.", extra = "", dependsOn = "[]" }) {
   return `---
 id: ${id}
-priority: medium
 next_action: ${nextAction}
 blocked_by: []
 depends_on: ${dependsOn}
@@ -186,7 +185,7 @@ id: fence001
   assert.equal(missing.status, 1, "an unresolvable plan exits 1");
   assert.match(missing.stderr, /No plan matches nosuch01/);
 
-  fs.writeFileSync(path.join(root, "docs/plans/backlog/test-noid.md"), "---\npriority: low\n---\n\n# No id\n");
+  fs.writeFileSync(path.join(root, "docs/plans/backlog/test-noid.md"), "---\n---\n\n# No id\n");
   const blocking = roborepo(["plans", "validate", "docs/plans/backlog/test-noid.md"], { cwd: root });
   assert.equal(blocking.status, 1, "a blocking finding (missing id) exits 1");
 

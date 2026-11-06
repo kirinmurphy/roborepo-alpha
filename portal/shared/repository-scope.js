@@ -5,6 +5,7 @@
 //
 //   onRepositoryScopeChange((scope) => refetch());   // after the selector, Clear, or back/forward
 //   setRepositoryScope("roborepo");                 // pushes the URL, then notifies
+//   setRepositoryScopeGuard({ isDirty, confirm });  // lets a page hold a change it has work to save
 //   scopedPagePath(page);                           // a nav href that keeps or drops the scope
 //
 // No imports and no top-level DOM access beyond the guarded popstate listener, so the pure helpers
@@ -55,10 +56,32 @@ export function isRepositoryScopeUnavailable(error) {
 }
 
 // Changing the scope pushes a history entry instead of navigating, so in-memory page state (Plans
-// filters, say) survives; the page refetches from its change listener.
+// filters, say) survives; the page refetches from its change listener. The scoped page starts from
+// the top, as a new page would; back/forward skip this and keep the browser's scroll restoration.
 export function setRepositoryScope(scope) {
   if ((scope || null) === currentRepositoryScope()) return;
+  if (guard?.isDirty()) {
+    guard.confirm(() => applyScope(scope));
+    return;
+  }
+  applyScope(scope);
+}
+
+function applyScope(scope) {
   history.pushState(null, "", hrefWithRepositoryScope(location.href, scope));
+  window.scrollTo(0, 0);
+  notifyIfChanged("push");
+}
+
+// A page with unsaved work can hold scope changes: while `isDirty()` is true, a change waits for
+// `confirm(proceed)`, and back/forward leaves the scope alone until the page calls
+// syncRepositoryScopeFromUrl, because the browser has already moved the URL and only the page knows
+// whether it will stay there.
+export function setRepositoryScopeGuard(value) {
+  guard = value;
+}
+
+export function syncRepositoryScopeFromUrl() {
   notifyIfChanged();
 }
 
@@ -66,18 +89,25 @@ export function clearRepositoryScope() {
   setRepositoryScope(null);
 }
 
+// `source` is "push" when this page chose the scope, "history" for back/forward. A pushed scope is a
+// new place, so a page drops its own position parameters; history already restored them.
 export function onRepositoryScopeChange(listener) {
-  window.addEventListener(CHANGE_EVENT, (event) => listener(event.detail.scope));
+  window.addEventListener(CHANGE_EVENT, (event) => listener(event.detail.scope, { source: event.detail.source }));
 }
 
 let lastScope = typeof location === "undefined" ? null : currentRepositoryScope();
+let guard = null;
 
-function notifyIfChanged() {
+function notifyIfChanged(source = "history") {
   const scope = currentRepositoryScope();
   if (scope === lastScope) return;
   lastScope = scope;
-  window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: { scope } }));
+  window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: { scope, source } }));
 }
 
 // Back/forward restores the scope with everything else in the URL.
-if (typeof window !== "undefined") window.addEventListener("popstate", notifyIfChanged);
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => {
+    if (!guard?.isDirty()) notifyIfChanged();
+  });
+}

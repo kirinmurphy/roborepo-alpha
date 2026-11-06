@@ -111,6 +111,92 @@ make_home() {
   echo "$tmp"
 }
 
+# A throwaway dev clone: its own Git config, with every other top-level entry linked from this
+# checkout, so the real installer runs without touching this checkout's Git config. Copying the tree
+# would cost more and, from a linked worktree, its `.git` file would still point at the real clone.
+make_git_clone_fixture() {
+  local clone entry
+  clone="$(mktemp -d "$homes_root/clone.XXXXXX")"
+  git -c init.defaultBranch=main -c core.hooksPath=/dev/null init -q "$clone"
+  for entry in "$repo_root"/* "$repo_root"/.[!.]*; do
+    [[ "$(basename "$entry")" == ".git" ]] && continue
+    ln -s "$entry" "$clone/$(basename "$entry")"
+  done
+  echo "$clone"
+}
+
+local_hooks_path() {
+  git -C "$1" config --local --get core.hooksPath || true
+}
+
+test_checkout_pre_push_hook() {
+  # Each clone links its own roborepo command, so each runs under its own home.
+  local home_dir clone out entry
+  home_dir="$(make_home)"
+  out="$home_dir/out"
+
+  clone="$(make_git_clone_fixture)"
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --dry-run --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook dry run exits 0" "$out"
+  [[ -z "$(local_hooks_path "$clone")" ]] && pass "dry run leaves core.hooksPath unset" || fail "dry run leaves core.hooksPath unset" "$out"
+  assert_file_contains "$out" "git hooks: would set core.hooksPath=scripts/git-hooks" "dry run reports the hook it would turn on"
+
+  printf '#!/bin/sh\n' > "$clone/.git/hooks/post-merge"
+  ln -s "$clone/.git/hooks/post-merge" "$clone/.git/hooks/pre-commit"
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook install exits 0" "$out"
+  [[ "$(local_hooks_path "$clone")" == "scripts/git-hooks" ]] && pass "install turns on the pre-push hook in a dev clone" || fail "install turns on the pre-push hook in a dev clone" "$out"
+  assert_file_contains "$out" "git hooks: set core.hooksPath=scripts/git-hooks" "install reports the hook it turned on"
+  assert_file_contains "$out" "no longer run.*post-merge pre-commit" "install names the hooks the new hooks path hides, symlinks included"
+  [[ -x "$clone/scripts/git-hooks/pre-push" ]] && pass "the pre-push hook is executable" || fail "the pre-push hook is executable" "$out"
+
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook reinstall exits 0" "$out"
+  assert_file_contains "$out" "git hooks: keeping core.hooksPath=scripts/git-hooks" "a second install keeps the value it set"
+
+  home_dir="$(make_home)"
+  out="$home_dir/out"
+  clone="$(make_git_clone_fixture)"
+  git -C "$clone" config --local core.hooksPath .custom-hooks
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook install with an existing value exits 0" "$out"
+  [[ "$(local_hooks_path "$clone")" == ".custom-hooks" ]] && pass "install preserves an existing core.hooksPath" || fail "install preserves an existing core.hooksPath" "$out"
+
+  # An empty value is set on purpose: Git then uses its default hooks directory.
+  home_dir="$(make_home)"
+  out="$home_dir/out"
+  clone="$(make_git_clone_fixture)"
+  git -C "$clone" config --local core.hooksPath ""
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook install with an empty value exits 0" "$out"
+  [[ -z "$(local_hooks_path "$clone")" ]] && pass "install preserves an empty core.hooksPath" || fail "install preserves an empty core.hooksPath" "$out"
+  assert_file_contains "$out" "git hooks: keeping core.hooksPath=" "install reports keeping an empty value"
+
+  home_dir="$(make_home)"
+  out="$home_dir/out"
+  clone="$(make_git_clone_fixture)"
+  printf '[core]\n\thooksPath = %s/shared-hooks\n' "$home_dir" > "$home_dir/.gitconfig"
+  printf '#!/bin/sh\n' > "$clone/.git/hooks/post-merge"
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "hook install with a global value exits 0" "$out"
+  [[ "$(local_hooks_path "$clone")" == "scripts/git-hooks" ]] && pass "a global core.hooksPath does not block the clone's setting" || fail "a global core.hooksPath does not block the clone's setting" "$out"
+  assert_file_contains "$out" "core.hooksPath \\($home_dir/shared-hooks\\) no longer applies" "install warns that a global hooks path stops applying"
+  assert_file_not_contains "$out" "no longer run" "a default-directory hook that a global hooks path already hid is not reported"
+
+  home_dir="$(make_home)"
+  out="$home_dir/out"
+  clone="$(make_git_clone_fixture)"
+  ROBOREPO_PACKAGE_MODE=1 HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "package mode install exits 0" "$out"
+  [[ -z "$(local_hooks_path "$clone")" ]] && pass "package mode leaves core.hooksPath unset" || fail "package mode leaves core.hooksPath unset" "$out"
+  assert_file_not_contains "$out" "git hooks:" "package mode says nothing about git hooks"
+
+  # A checkout without the hook has nothing to turn on.
+  home_dir="$(make_home)"
+  out="$home_dir/out"
+  clone="$(make_git_clone_fixture)"
+  rm "$clone/scripts"
+  mkdir "$clone/scripts"
+  for entry in "$repo_root"/scripts/*; do
+    [[ "$(basename "$entry")" == "git-hooks" ]] || ln -s "$entry" "$clone/scripts/$(basename "$entry")"
+  done
+  HOME="$home_dir" "$clone/scripts/install/main.sh" --on-conflict keep </dev/null >"$out" 2>&1 || fail "install without the hook exits 0" "$out"
+  [[ -z "$(local_hooks_path "$clone")" ]] && pass "a checkout without the hook leaves core.hooksPath unset" || fail "a checkout without the hook leaves core.hooksPath unset" "$out"
+}
+
 seed_user_configs() {
   local home_dir="$1"
   printf '{"model":"opus","permissions":{"allow":["Bash(foo)"]}}\n' > "$home_dir/.claude/settings.json"
@@ -654,6 +740,7 @@ test_uninstall_removes_runtime_state_and_backups() {
     "$home_dir/.cli-backups/20260621-174033"
   printf '{"behaviors":{"delete-files":"allow"},"commands":{}}\n' > "$home_dir/.roborepo/command-overrides.json"
   printf '{"packages":["caveman"]}\n' > "$home_dir/.roborepo/enabled-packages.json"
+  printf '{"packages":["caveman"]}\n' > "$home_dir/.roborepo/applied-packages.json"
   printf '{"enabled":true}\n' > "$home_dir/.roborepo/telemetry/state.json"
   printf 'event\n' > "$home_dir/.roborepo/telemetry/spool/claude.jsonl"
   printf '12345\n' > "$home_dir/.roborepo/portal/server-4317.pid"
@@ -663,6 +750,7 @@ test_uninstall_removes_runtime_state_and_backups() {
 
   assert_absent "$home_dir/.roborepo/command-overrides.json" "uninstall removes command override state"
   assert_absent "$home_dir/.roborepo/enabled-packages.json" "uninstall removes enabled packages state"
+  assert_absent "$home_dir/.roborepo/applied-packages.json" "uninstall removes applied packages state"
   assert_absent "$home_dir/.roborepo/telemetry" "uninstall removes telemetry data"
   assert_absent "$home_dir/.roborepo/telemetry-backups" "uninstall removes telemetry backups"
   assert_absent "$home_dir/.roborepo/portal" "uninstall removes portal PID files"
@@ -1223,5 +1311,6 @@ test_windows_installer_root_preflight_order
 test_windows_installer_root_collision_dedup_and_drift
 test_repo_local_codex_skill_layer_present
 test_write_guard_root_config_message
+test_checkout_pre_push_hook
 
 echo "all install collision tests passed"

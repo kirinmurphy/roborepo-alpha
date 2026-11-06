@@ -10,7 +10,7 @@ import { verifiedLandedRecovery } from "../../modules/plan-suite/landed-recovery
 import { authoritativeMarkdown } from "../../modules/plan-suite/worktree-copy.mjs";
 import { approvalFreshness, mergeReadiness } from "../../modules/plan-suite/review-gates.mjs";
 import { worktreeCopyIntegration } from "../../modules/plan-suite/copy-integration.mjs";
-import { buildPlanSnapshot, repositoryRecord, readPlanRecord, updatePlanPriority, parsePlanMarkdown } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, repositoryRecord, readPlanRecord, parsePlanMarkdown } from "../../modules/plan-suite/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-recovery-check-")));
 const restoreGitConfig = isolateGitConfig(root);
@@ -23,7 +23,7 @@ try {
   git(main, "init", "-qb", "main"); git(main, "remote", "add", "origin", "https://github.com/example/recovery.git");
   const relativePath = "docs/plans/review/recovery.md";
   fs.mkdirSync(path.dirname(path.join(main, relativePath)), { recursive: true });
-  const precursor = "---\nid: abc12345\npriority: high\nnext_action: Review\nblocked_by: []\ndepends_on: []\nrelated: []\nworktree: feature\n---\n\n# Recover the reviewed implementation\n\n## Implementation plan\n\n- [x] Implement the behavior\n\n## Review\n\n### Findings\n\nNone.\n";
+  const precursor = "---\nid: abc12345\nnext_action: Review\nblocked_by: []\ndepends_on: []\nrelated: []\nworktree: feature\n---\n\n# Recover the reviewed implementation\n\n## Implementation plan\n\n- [x] Implement the behavior\n\n## Review\n\n### Findings\n\nNone.\n";
   fs.writeFileSync(path.join(main, relativePath), precursor);
   git(main, "add", "."); git(main, "commit", "-qm", "seed"); const seed = git(main, "rev-parse", "HEAD");
   const work = path.join(root, "feature"); git(main, "worktree", "add", "-qb", "feature", work);
@@ -70,11 +70,7 @@ try {
   recordRepositoryDiscovery({ repositoryId: "git:github.com/example/recovery", kind: "git", displayName: "recovery", source: "developer-runtime", evidence: "git-remote", confidence: "high", localRoot: "main", localRootKind: "clone", localRootPath: main, stateRoot });
   const selected = buildPlanSnapshot({ stateRoot }).plans.find((entry) => entry.plan.id === "abc12345");
   assert.equal(selected.plan.authority.reason, "verified-landed-recovery", "portal and canonical reader agree");
-  updatePlanPriority(buildPlanSnapshot({ stateRoot }), { key: selected.key, priority: "low", expectedPriority: "high", mtimeMs: selected.plan.mtimeMs, repositoryId: selected.repository.repositoryId });
-  assert.equal(fs.readFileSync(path.join(main, relativePath), "utf8"), recovered, "priority writes never redirect into primary recovery evidence");
-  assert.match(fs.readFileSync(path.join(work, relativePath), "utf8"), /priority: low/);
   const changedCopy = { markdown: fs.readFileSync(path.join(work, relativePath), "utf8") };
-  assert.equal(verifiedLandedRecovery({ ...options, copy: changedCopy }).ok, true, "priority updates preserve recovery authority");
   assert.deepEqual(authoritativeMarkdown(main, record).authority, { source: "primary", reason: "verified-landed-recovery" });
   assert.equal(verifiedLandedRecovery({ ...options, copy: { markdown: changedCopy.markdown.replace("Implement the behavior", "Different requirements") } }).ok, false, "other worktree edits invalidate recovery");
   assert.equal(verifiedLandedRecovery({ ...options, markdown: recovered.replace("Implement the behavior", "Change requirements") }).ok, false);

@@ -1,6 +1,5 @@
 ---
 id: windows-provider-path-schema
-priority: low
 next_action: Verify supported Windows provider locations on the shared runner, then decide whether home-relative manifest resolution suffices before extending the path schema.
 blocked_by: []
 depends_on: []

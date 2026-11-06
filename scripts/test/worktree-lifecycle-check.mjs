@@ -9,6 +9,8 @@ import { Readable } from "node:stream";
 import { repositoriesRoutes } from "../cli/portal-routes-repositories.mjs";
 import { dispatchRoutes } from "../cli/portal-router.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
+import { withTemporaryStorage } from "../../modules/repositories/temporary-storage.mjs";
+import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { deriveWorktreeState, resolveWorktreeStaleDays } from "../../modules/repositories/worktree-state.mjs";
@@ -18,10 +20,181 @@ import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "../cli/work
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { loadRegistry } from "../../modules/repositories/registry.mjs";
 import { rootId } from "../../modules/repositories/identity.mjs";
-import { archiveBranchTip, archiveRefName, removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
+import { removeWorktree, archiveBranchTip, archiveRefName, removalLogPath, withCleanupLock } from "../../modules/repositories/worktree-removal.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mjs";
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
+
+// Injected filesystem failures below are simulations, not native permission evidence.
+{
+  const denied = () => { throw Object.assign(new Error("directory denied"), { code: "EPERM" }); };
+  // A tiny filesystem double covers complete removal even when native rmdir is blocked.
+  let removed = false;
+  const complete = await withTemporaryStorage("landing", async () => ({ landed: true }), { fsApi: {
+    mkdtempSync: () => "/synthetic/owned",
+    lstatSync() { if (removed) throw Object.assign(new Error("gone"), { code: "ENOENT" }); return { dev: 1, ino: 1, isDirectory: () => true }; },
+    readdirSync: () => [], rmdirSync() { removed = true; },
+  } });
+  assert.equal(complete.landed, true);
+  assert.deepEqual(complete.cleanupWarnings, []);
+  assert.equal(removed, true);
+  const warnings = [];
+  const fixtures = [];
+  const options = { fsApi: { ...fs, mkdtempSync(prefix) { const directory = fs.mkdtempSync(prefix); fixtures.push(directory); return directory; }, rmdirSync: denied }, warn: (message) => warnings.push(message) };
+  let temporary;
+  const result = await withTemporaryStorage("landing", async (directory) => {
+    temporary = directory;
+    for (const sibling of ["first", "second"]) {
+      fs.mkdirSync(path.join(directory, sibling));
+      fs.writeFileSync(path.join(directory, sibling, "object"), "synthetic");
+    }
+    return { landed: false, reason: "not absorbed" };
+  }, options);
+  assert.equal(result.landed, false);
+  assert.equal(result.cleanupWarnings.length, 1);
+  assert.equal(warnings.length, 1);
+  for (const sibling of ["first", "second"]) assert.deepEqual(fs.readdirSync(path.join(temporary, sibling)), []);
+  assert.match(path.basename(temporary), /^roborepo-disposable-landing-/);
+  const original = new Error("assessment failed");
+  await assert.rejects(withTemporaryStorage("landing", async () => { throw original; }, options), (error) => error === original && error.cleanupWarnings.length === 1);
+  await assert.rejects(withTemporaryStorage("preservation", async (directory) => {
+    fs.writeFileSync(path.join(directory, "object"), "synthetic");
+    throw original;
+  }, { ...options, fsApi: { ...options.fsApi, unlinkSync: denied } }), (error) => error.cause === original && error.errors.includes(original) && /cleanup failed/.test(error.message));
+  await assert.rejects(withTemporaryStorage("landing", async (directory) => {
+    fs.writeFileSync(path.join(directory, "object"), "synthetic");
+    return { landed: true };
+  }, { ...options, fsApi: { ...options.fsApi, unlinkSync() {} } }), /left a file/);
+  await assert.rejects(withTemporaryStorage("landing", async () => ({ landed: true }), {
+    ...options, fsApi: { ...options.fsApi, readdirSync: denied },
+  }), /cleanup failed/);
+  await assert.rejects(withTemporaryStorage("landing", async () => ({ landed: true }), {
+    ...options, fsApi: { ...fs, rmdirSync() { throw Object.assign(new Error("io failed"), { code: "EIO" }); } },
+  }), /io failed/);
+  await assert.rejects(withTemporaryStorage("preservation", async (directory) => {
+    fs.writeFileSync(path.join(directory, "object"), "synthetic");
+    return { state: "unknown", reason: "original assessment failure" };
+  }, { ...options, fsApi: { ...options.fsApi, unlinkSync: denied } }), (error) =>
+    error.assessment.state === "unknown" && /original assessment failure/.test(error.message) && /cleanup failed/.test(error.message));
+  await assert.rejects(withTemporaryStorage("landing", async (directory) => {
+    fs.writeFileSync(path.join(directory, "unexpected"), "synthetic");
+    return { landed: true };
+  }, { ...options, fsApi: { ...options.fsApi, lstatSync(file) {
+    if (path.basename(file) === "unexpected") return { isDirectory: () => false, isFile: () => false, isSymbolicLink: () => false };
+    return fs.lstatSync(file);
+  } } }), /unexpected entry/);
+  let replaced = false;
+  await assert.rejects(withTemporaryStorage("landing", async () => {
+    replaced = true;
+    return { landed: true };
+  }, { ...options, fsApi: { ...options.fsApi, lstatSync(file) {
+    const stat = fs.lstatSync(file);
+    if (replaced) return { dev: stat.dev, ino: stat.ino + 1, isDirectory: () => true };
+    return stat;
+  } } }), /replaced/);
+  const removal = await removeWorktree("unused", { path: "/unused/worktree", branch: "feature" }, {
+    kind: "automatic", runGit: async () => ({ ok: false, error: "EPERM: worktree removal denied" }),
+  });
+  assert.equal(removal.ok, false);
+  assert.equal(removal.entry, undefined);
+  assert.match(removal.reason, /worktree removal denied/);
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-cleanup-outside-"));
+  fixtures.push(outside);
+  fs.writeFileSync(path.join(outside, "keep"), "untouched");
+  await withTemporaryStorage("landing", async (directory) => {
+    fs.symlinkSync(outside, path.join(directory, "link"));
+    return { landed: true };
+  }, options);
+  assert.equal(fs.readFileSync(path.join(outside, "keep"), "utf8"), "untouched");
+  // Remove synthetic file contents even when the host retains the test directory shells.
+  for (const directory of fixtures) {
+    for (const name of fs.readdirSync(directory)) {
+      const file = path.join(directory, name);
+      if (!fs.lstatSync(file).isDirectory()) fs.unlinkSync(file);
+    }
+  }
+  // Exercise each public assessment under simulated directory denial.
+  const rmdir = fs.rmdirSync;
+  const warn = console.warn;
+  fs.rmdirSync = denied;
+  console.warn = () => {};
+  try {
+    const landing = await inspectBranchLanding("unused", "feature", { runGit: async () => ({ ok: false }) });
+    assert.equal(landing.reason, "unsupported Git drivers");
+    assert.equal(landing.cleanupWarnings.length, 1);
+    const preservation = await assessWorktreePreservation("unused", { runGit: async () => { throw new Error(original.message); } });
+    assert.equal(preservation.state, "unknown");
+    assert.equal(preservation.reason, original.message);
+    assert.equal(preservation.cleanupWarnings.length, 1);
+    await assert.rejects(inspectBranchLanding("unused", "feature", { runGit: async () => { throw original; } }), (error) => error === original);
+  } finally { fs.rmdirSync = rmdir; console.warn = warn; }
+  // Reach historical attribute reads and the content merge, not just early Git failures.
+  const rm = fs.rmSync;
+  const unlink = fs.unlinkSync;
+  const indexes = [];
+  const historicalGit = async (_cwd, args, options = {}) => {
+    const output = (stdout) => ({ ok: true, code: 0, stdout });
+    if (args[0] === "config") return output("");
+    if (args[0] === "symbolic-ref") return output("main");
+    if (args[0] === "merge-base") return output("fork");
+    if (args[0] === "reflog") return output("tip\nfork");
+    if (args[0] === "rev-list") return output(args.includes("--reverse") ? "landed" : args.includes("--first-parent") ? "landed\nfork" : "tip");
+    if (args[0] === "ls-tree") return output("file.txt\0");
+    if (args.includes("read-tree")) {
+      indexes.push(options.plumbing.indexFile);
+      fs.writeFileSync(options.plumbing.indexFile, "temporary index");
+      return output("");
+    }
+    if (args[0] === "check-attr") return output("file.txt\0filter\0unspecified\0file.txt\0merge\0unspecified\0");
+    if (args[0] === "merge-tree") return output("tree");
+    if (args[0] === "rev-parse") return output(args.includes("--git-common-dir") ? os.tmpdir() : args[1].endsWith("^{tree}") ? "tree" : "tip");
+    throw new Error(`unexpected Git command: ${args.join(" ")}`);
+  };
+  fs.rmdirSync = denied;
+  fs.rmSync = denied;
+  console.warn = () => {};
+  try {
+    for (const recorded of [null, "landed"]) {
+      const landing = await inspectBranchLanding("unused", "feature", { recorded, runGit: historicalGit });
+      assert.equal(landing.landed, true, JSON.stringify(landing));
+      assert.equal(landing.reused, Boolean(recorded));
+      assert.equal(landing.cleanupWarnings.length, 1);
+      assert.ok(indexes.every((file) => !fs.existsSync(file)), "temporary indexes must be removed");
+    }
+    for (const command of ["ls-tree", "read-tree", "check-attr", "merge-tree", "landed^{tree}"]) {
+      const failed = await inspectBranchLanding("unused", "feature", { runGit: (cwd, args, options) =>
+        args.includes(command) ? { ok: false, code: 128, stdout: "", stderr: `${command} denied` } : historicalGit(cwd, args, options) });
+      assert.equal(failed.reason, "scan unavailable");
+      assert.equal(failed.error, `${command} denied`);
+    }
+    const unsupported = await inspectBranchLanding("unused", "feature", { runGit: (cwd, args, options) =>
+      args[0] === "check-attr" ? { ok: true, code: 0, stdout: "file.txt\0filter\0custom\0" } : historicalGit(cwd, args, options) });
+    assert.equal(unsupported.landed, false);
+    assert.match(unsupported.error, /unsupported attribute filter=custom/);
+    fs.unlinkSync = denied;
+    await assert.rejects(inspectBranchLanding("unused", "feature", { runGit: historicalGit }), /temporary cleanup failed/);
+  } finally {
+    fs.rmSync = rm; fs.rmdirSync = rmdir; fs.unlinkSync = unlink; console.warn = warn;
+    for (const file of indexes) if (fs.existsSync(file)) fs.unlinkSync(file);
+  }
+  // Native disposable fixture: a successful return must mean either removal or verified shells.
+  let native;
+  const nativeResult = await withTemporaryStorage("preservation", async (directory) => {
+    native = directory;
+    fs.mkdirSync(path.join(directory, "nested"));
+    fs.writeFileSync(path.join(directory, "nested", "object"), "synthetic");
+    return { state: "preserved" };
+  });
+  assert.equal(nativeResult.state, "preserved");
+  assert.equal(fs.existsSync(path.join(native, "nested", "object")), false);
+  if (!nativeResult.cleanupWarnings.length) assert.equal(fs.existsSync(native), false);
+  console.log(`native temporary cleanup: ${nativeResult.cleanupWarnings.length ? "verified directory shells deferred" : "fully removed"}`);
+}
+
+if (process.argv.includes("--temporary-cleanup-only")) {
+  console.log("temporary cleanup regressions: passed");
+  process.exit(0);
+}
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-worktree-lifecycle-"));
 const restoreGitConfig = isolateGitConfig(root);

@@ -29,7 +29,9 @@ export const plansRoutes = defineRoutes([
     },
   },
   postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
-  postJsonRoute("/api/plans/priority", (handlers, body) => handlers.updatePlanPriority(body), { domainError: true }),
+  postJsonRoute("/api/plans/order", (handlers, body) => handlers.saveBacklogOrder(body), { domainError: true }),
+  postJsonRoute("/api/plans/namespace-pin", (handlers, body) => handlers.setBacklogNamespacePinned(body), { domainError: true }),
+  postJsonRoute("/api/plans/archive", (handlers, body) => handlers.archiveBacklogPlan(body), { domainError: true }),
   {
     method: "POST",
     path: "/api/plans/refresh",
@@ -69,10 +71,10 @@ function postJsonRoute(path, run, { domainError = false } = {}) {
     method: "POST",
     path,
     handler: (req, res, { handlers }) => {
-      readJsonBody(req, (body, err) => {
+      readJsonBody(req, async (body, err) => {
         if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
         try {
-          send(res, 200, "application/json", JSON.stringify(run(handlers, body || {})));
+          send(res, 200, "application/json", JSON.stringify(await run(handlers, body || {})));
         } catch (error) {
           if (domainError) return sendDomainError(res, error);
           send(res, 400, "application/json", JSON.stringify({ error: String(error?.message || error) }));

@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
+import { signalGroup } from "../cli/browser/local-service.mjs";
 import { createBrowserCliHome } from "./lib/browser-cli-home.mjs";
 import { freePort, responds, waitFor } from "./lib/local-http.mjs";
 
@@ -32,7 +33,7 @@ try {
   assert.equal(cli.run(["package", "enable", "feature-verification"]).status, 0);
 
   const deadPort = await freePort();
-  const unavailable = JSON.parse(cli.stub(["--scenario", passing, "--url", `http://127.0.0.1:${deadPort}/`, "--json"]).stdout);
+  const unavailable = report(cli.stub(["--scenario", passing, "--url", `http://127.0.0.1:${deadPort}/`, "--json"]));
   assert.equal(unavailable.status, "blocked");
   assert.match(unavailable.limitations.join("\n"), /no local service responded/, "an unavailable service is an actionable limitation");
 
@@ -41,13 +42,13 @@ try {
 
   const startedPort = await freePort();
   const started = cli.stub(["--scenario", passing, "--url", `http://127.0.0.1:${startedPort}/`, "--serve", serve(startedPort), "--json"]);
-  assert.equal(JSON.parse(started.stdout).status, "passed", "the run waits for the service it started");
+  assert.equal(report(started).status, "passed", "the run waits for the service it started");
   assert.equal(await responds(startedPort), false, "a service the run started is gone afterward");
 
   // A dev command that backgrounds its server exits 0 at once; the server is still the run's to stop.
   const backgroundPort = await freePort();
   const backgrounded = cli.stub(["--scenario", passing, "--url", `http://127.0.0.1:${backgroundPort}/`, "--serve", `${serve(backgroundPort)} &`, "--json"]);
-  assert.equal(JSON.parse(backgrounded.stdout).status, "passed", "a backgrounding --serve still serves the run");
+  assert.equal(report(backgrounded).status, "passed", "a backgrounding --serve still serves the run");
   assert.equal(await responds(backgroundPort), false, "a backgrounded server the run started is gone afterward");
 
   const existingPort = await freePort();
@@ -58,7 +59,7 @@ try {
   assert.equal(await responds(existingPort), true, "a service that was already running is still running");
   assert.ok(!fs.existsSync(marker), "--serve is not run when the URL already responds");
 
-  const serveWithoutUrl = JSON.parse(cli.stub(["--scenario", passing, "--serve", "true", "--json"]).stdout);
+  const serveWithoutUrl = report(cli.stub(["--scenario", passing, "--serve", "true", "--json"]));
   assert.equal(serveWithoutUrl.status, "blocked", "--serve without --url cannot tell when the service is ready");
 
   // Interrupted while waiting: the served process listens on a port the run never polls, so the run
@@ -80,7 +81,7 @@ try {
     try {
       const result = cli.stub(["--scenario", passing, "--url", `http://127.0.0.1:${stubbornPort}/`, "--serve",
         `node ${[stubborn, stubbornPort, stubbornPid].map((arg) => JSON.stringify(String(arg))).join(" ")}`, "--json"]);
-      assert.equal(JSON.parse(result.stdout).status, "passed");
+      assert.equal(report(result).status, "passed");
       assert.equal(await responds(stubbornPort), false, "cleanup stops a service that ignores SIGTERM before returning");
     } finally {
       if (fs.existsSync(stubbornPid)) {
@@ -89,10 +90,30 @@ try {
     }
   }
 
-  console.log("ok: browser service lifecycle (reuse, start/stop, background, interrupt, bad URL, forced shutdown)");
+  if (process.platform === "darwin") {
+    // A group whose only member has exited but is not yet reaped: macOS answers EPERM rather than
+    // ESRCH (Linux still signals it). Cleanup must read that as "nothing left to stop", not throw
+    // before the report prints.
+    const exited = spawn("sleep", ["100"], { detached: true, stdio: "ignore" });
+    await waitFor(async () => exited.pid !== undefined);
+    process.kill(-exited.pid, "SIGKILL");
+    // Polls synchronously so the event loop cannot reap the child while the kill lands.
+    const deadline = Date.now() + 2000;
+    while (signalGroup(exited.pid, 0) && Date.now() < deadline) {}
+    assert.equal(signalGroup(exited.pid, 0), false, "a group with only an unreaped exited member has nothing to signal");
+  }
+
+  console.log("ok: browser service lifecycle (reuse, start/stop, background, interrupt, bad URL, forced shutdown, unreaped group)");
 } finally {
   for (const child of children) child.kill();
   cli.cleanup();
+}
+
+// Parses a run's --json report, failing with the run's exit status and stderr when it printed none,
+// so a run that dies before reporting says why instead of failing on empty JSON input.
+function report(result) {
+  assert.ok(result.stdout.trim(), `browser run printed no report (status ${result.status}, signal ${result.signal}):\n${result.stderr}`);
+  return JSON.parse(result.stdout);
 }
 
 function isAlive(pid) {

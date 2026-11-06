@@ -1,6 +1,5 @@
 ---
 id: wrap-up-coderabbit-integration-plan
-priority: low
 next_action: Verify native workflow discovery across supported providers and scope the cross-package correction separately from optional CodeRabbit integration.
 blocked_by: []
 depends_on: []

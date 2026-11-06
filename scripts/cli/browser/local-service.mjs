@@ -74,12 +74,14 @@ async function waitForGroupExit(pid) {
   return false;
 }
 
-function signalGroup(pid, signal) {
+// macOS answers EPERM, not ESRCH, while a killed group holds only zombies awaiting reaping. The
+// group is always one this run started, so EPERM means nothing in it can run any more.
+export function signalGroup(pid, signal) {
   try {
     process.kill(-pid, signal);
     return true;
   } catch (error) {
-    if (error.code === "ESRCH") return false;
+    if (error.code === "ESRCH" || error.code === "EPERM") return false;
     throw error;
   }
 }
