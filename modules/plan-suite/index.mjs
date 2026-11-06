@@ -121,6 +121,7 @@ const DOMAIN_ERROR_STATUS = {
   LIFECYCLE_REQUIREMENTS: 422,
   PLAN_NOT_FOUND: 404,
   MOVE_FAILED: 500,
+  MOVE_NOT_COMMITTED: 500,
 };
 
 export function readPlanDocument(snapshot, key) {

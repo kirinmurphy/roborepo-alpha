@@ -18,7 +18,7 @@ import {
   selectRepositoryPlan,
 } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
-import { namingGateFindings } from "./naming.mjs";
+import { namingGateFindings, pathFreeFileError } from "./naming.mjs";
 import { buildRepairPrompt } from "./repair-prompt.mjs";
 import { currentBranch, dirtyPaths, findLinkedWorktree, git, gitOrThrow, linksToPath, primaryCheckout, topLevel } from "./plan-git.mjs";
 import { TRANSITION_RULES } from "./transition-rules.mjs";
@@ -33,6 +33,10 @@ const GATE_KINDS = { archived: new Set(["lifecycle"]) };
 // Moving a plan into implementation is the last cheap moment to fix its filename: inbound links and
 // worktree records accumulate from here on. Later transitions never revisit it.
 const NAMING_GATED_TRANSITIONS = new Set(["promote", "start"]);
+const UNCOMMITTED_MOVE_RESOLUTION = "Run `git status` in the repo. Fix what stopped the commit and commit the staged move, or restore those files to undo it.";
+// A retry can't tell a failed commit from a failed undo, whose staged rename lacks some of the move's
+// edits, and the plan may carry uncommitted edits of its own. So it recommends neither way out.
+const RETRIED_MOVE_RESOLUTION = "Run `git status` in the repo. Commit the staged move only if every edit it should carry is staged. To undo it instead, restore those files, which discards any uncommitted edits to them.";
 
 export async function transitionPlan(options) {
   const { cwd = process.cwd(), selector, transition: transitionId, base = "main" } = options;
@@ -55,6 +59,16 @@ export async function transitionPlan(options) {
   const base0 = git(primary, ["rev-parse", base]).stdout;
 
   if (!atDestination && !transition.from.includes(from)) refuseSource(record, transition, from);
+  if (!git(primary, ["ls-files", "--error-unmatch", "--", fromPath]).ok) {
+    throw domainError("INVALID_CHANGE", `${fromPath} is not committed, so it cannot be moved.`, {
+      resolution: "Commit the plan on the base branch first.",
+    });
+  }
+  // An earlier run's commit or undo failed after its rename, so the plan only reads as being here. Recording it
+  // as done would be false, and committing here would land only half of that move.
+  if (atDestination && !git(primary, ["cat-file", "-e", `HEAD:${fromPath}`]).ok) {
+    throw domainError("MOVE_NOT_COMMITTED", `The plan's move to ${fromPath} was not committed.`, { resolution: RETRIED_MOVE_RESOLUTION });
+  }
   if (atDestination && !rules.carriesEdits && !rules.reassigns) {
     return result({ primary, cwd, base, transition, record, fromPath, toPath: fromPath, commit: null, options, target, rules, evidence: {} });
   }
@@ -62,11 +76,6 @@ export async function transitionPlan(options) {
   const toPath = atDestination ? fromPath : path.relative(primary,
     lifecycleMoveDestination(fs.realpathSync(primary), fs.realpathSync(record.absolutePath), transition.to).destination).split(path.sep).join("/");
   const paths = atDestination ? [fromPath] : [fromPath, toPath];
-  if (!git(primary, ["ls-files", "--error-unmatch", "--", fromPath]).ok) {
-    throw domainError("INVALID_CHANGE", `${fromPath} is not committed, so it cannot be moved.`, {
-      resolution: "Commit the plan on the base branch first.",
-    });
-  }
   const dirty = dirtyPaths(primary, paths);
   if (dirty.length && !rules.carriesEdits) {
     throw domainError("INVALID_CHANGE", "The plan has uncommitted changes in the primary checkout.", {
@@ -93,15 +102,33 @@ export async function transitionPlan(options) {
     return result({ primary, cwd, base, transition, record, fromPath, toPath, commit: null, options, target, rules, evidence: prepared.evidence || {} });
   }
 
+  assertPlanWritable(primary, fromPath);
+  const clearedDependents = prepareClearedReferences(primary, references.cleared, record.plan.id);
+
   if (!atDestination) {
     // A repository that predates a lifecycle folder (ready/ and review/, say) gets it on first use.
     fs.mkdirSync(path.join(primary, path.dirname(toPath)), { recursive: true });
     gitOrThrow(primary, ["mv", "--", fromPath, toPath]);
   }
-  fs.writeFileSync(path.join(primary, toPath), content);
-  for (const dependent of references.cleared) clearReference(primary, dependent, record.plan.id);
-  gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
-  gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
+  try {
+    fs.writeFileSync(path.join(primary, toPath), content);
+    for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.markdown);
+    gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
+  } catch (err) {
+    if (atDestination) throw err;
+    throw undoUnstagedMove({ primary, fromPath, toPath, original: current, clearedDependents, cause: err });
+  }
+  try {
+    gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
+  } catch (err) {
+    if (atDestination) throw err;
+    // Past the rename the plan already sits at its new path, so saying the move failed would be false.
+    // It isn't undone here: every edit is staged, so committing finishes the move whole.
+    throw domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but the move was not committed.`, {
+      resolution: UNCOMMITTED_MOVE_RESOLUTION,
+      details: err.details ?? [pathFreeFileError(err)],
+    });
+  }
   const commit = git(primary, ["rev-parse", "HEAD"]).stdout;
   const fastForward = target ? fastForwardTarget(target.path, base, base0) : undefined;
   return result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, dependentPaths: references.cleared, evidence: { ...(prepared.evidence || {}), ...(fastForward ? { fastForward } : {}), ...(rules.clearsReferences ? { references } : {}) } });
@@ -130,10 +157,56 @@ function planReferences(primary, snapshot, record) {
   return { cleared, left };
 }
 
-function clearReference(primary, relativePath, id) {
-  const file = path.join(primary, relativePath);
-  const content = fs.readFileSync(file, "utf8");
-  fs.writeFileSync(file, ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content));
+// The edits didn't reach the index, so committing the staged rename would land a plan without them and
+// leave its dependents waiting on it. The pre-move text is in hand, so putting it back loses nothing,
+// including uncommitted plan edits. Returns the error to raise.
+function undoUnstagedMove({ primary, fromPath, toPath, original, clearedDependents, cause }) {
+  const details = cause.details ?? [pathFreeFileError(cause)];
+  try {
+    // Only what changed is rewritten: the file that refused the first write may refuse this one too.
+    const restore = (file, text) => { if (fs.readFileSync(file, "utf8") !== text) fs.writeFileSync(file, text); };
+    restore(path.join(primary, toPath), original);
+    for (const dependent of clearedDependents) restore(dependent.file, dependent.original);
+    gitOrThrow(primary, ["mv", "--", toPath, fromPath]);
+  } catch {
+    return domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but its edits were not saved.`, {
+      resolution: "Run `git status` in the repo and restore those files to undo the move. Committing the staged move would leave its edits out.",
+      details,
+    });
+  }
+  return domainError("MOVE_FAILED", "The plan's files could not be updated, so it was not moved.", {
+    resolution: "Run `git status` in the repo, resolve what it shows, then try again.",
+    details,
+  });
+}
+
+// The move rewrites the plan after renaming it, so a file it can't write refuses here, with nothing changed.
+function assertPlanWritable(primary, relativePath) {
+  try {
+    fs.accessSync(path.join(primary, relativePath), fs.constants.W_OK);
+  } catch (err) {
+    throw domainError("INVALID_CHANGE", `The plan file could not be updated (${pathFreeFileError(err)}).`, {
+      resolution: "Check that the plan file is writable, then try again.",
+      details: [relativePath],
+    });
+  }
+}
+
+// Runs before the rename, so a dependent that can't be rewritten refuses the move with nothing changed.
+function prepareClearedReferences(primary, relativePaths, id) {
+  return relativePaths.map((relativePath) => {
+    const file = path.join(primary, relativePath);
+    try {
+      fs.accessSync(file, fs.constants.W_OK);
+      const content = fs.readFileSync(file, "utf8");
+      return { file, original: content, markdown: ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content) };
+    } catch (err) {
+      throw domainError("INVALID_CHANGE", `A plan that depends on this one could not be updated (${pathFreeFileError(err)}).`, {
+        resolution: "Check that the plan file is writable, then archive again.",
+        details: [relativePath],
+      });
+    }
+  });
 }
 
 function result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, dependentPaths = [], evidence }) {

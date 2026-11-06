@@ -163,7 +163,7 @@ drawer, the badge opens that namespace, as the namespace filter does, when the n
 Prioritize lists only the prerequisites its tree does not draw. Prerequisites never affect another namespace's order.
 
 **Details and Prioritize** show prioritized plans in the same order. Details is always flat cards, and its banner's
-**Prioritize Now** opens Prioritize. A namespace with only new plans opens in Prioritize directly. Prioritize shows compact rows and groups linked plans, and Save returns to
+**Prioritize Now** opens Prioritize. A namespace with only unprioritized plans opens in Prioritize directly. Prioritize shows compact rows and groups linked plans, and Save returns to
 Details:
 
 - Plans connected by direct `depends_on` edges, both ends in this namespace's Backlog, form one block
@@ -352,7 +352,7 @@ committed.
 same commit, so nothing keeps waiting on it. It does not rewire a chain: archiving B in A → B → C leaves C
 with no link to A. It refuses when one of those plans has uncommitted changes, and leaves a plan bound to a
 worktree alone, reporting it, because that worktree owns the plan's copy. `related` entries stay, as do the
-archived plan's own lists and those of completed and archived plans, which are history. A refusal changes nothing; repeating a move that already happened commits nothing. The
+archived plan's own lists and those of completed and archived plans, which are history. A refusal changes nothing; repeating a move that already happened commits nothing. A commit that fails after the rename leaves the move staged and says so, so you can finish or undo it with Git. The
 page can still show validation findings for a plan that needs repair.
 
 ## Git Metadata
@@ -467,7 +467,9 @@ The Plans page uses the normalized package catalog state. It does not inspect sk
 - The browser never sends file paths; the server reads only plans it discovered itself.
 - Repository sources scope repository discovery; their paths appear only in the Manage repositories
   dialog.
-- Plan records and `/api/plans` responses, including scan errors, do not expose absolute paths.
+- Plan records and `/api/plans` responses, including scan errors, do not expose absolute paths. The
+  one exception is `/api/plans/document`, which returns the opened plan's path for the drawer's copy
+  button.
 - Portable prompts requested through the API use repository name, relative path, metadata,
   warnings, and bounded excerpts; the portal's Copy menus offer repository-aware prompts only.
 - The browser does not execute document scripts, and writes only the changes described in
