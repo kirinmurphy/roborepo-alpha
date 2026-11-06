@@ -125,7 +125,7 @@ function staleLock(file, fsApi) {
 async function retireBranch(mainPath, branch, tip, runGit) {
   const occupied = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
   if (!occupied.ok || occupied.stdout.split("\n").includes(`branch refs/heads/${branch}`)) return { ok: false, error: "branch is occupied or worktree inventory unavailable" };
-  return runGit(mainPath, ["update-ref", "-d", `refs/heads/${branch}`, tip], { timeoutMs: 10000 });
+  return runGit(mainPath, ["update-ref", "--no-deref", "-d", `refs/heads/${branch}`, tip], { timeoutMs: 10000 });
 }
 
 // Only a recorded successful checkout removal authorizes this narrow retry.

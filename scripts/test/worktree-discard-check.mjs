@@ -45,6 +45,15 @@ try {
   saveTransaction(retryState, { id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(), target: { repositoryId: detached.mainPath, path: path.join(detached.mainPath, "absent-detached"), name: "detached", branch: null, tip: detachedTip } });
   assert.equal((await retryBranchRetirement(detached.mainPath, "detached", { stateRoot: retryState, apply: true })).action, "removed");
   assert.equal(git(detached.mainPath, "rev-parse", "refs/heads/null"), detachedTip, "detached retry cannot retire a branch named null");
+  git(detached.mainPath, "symbolic-ref", "refs/heads/alias", "refs/heads/main");
+  saveTransaction(retryState, {
+    id: randomUUID(), state: "checkout-removed", createdAt: new Date().toISOString(),
+    target: { repositoryId: detached.mainPath, path: path.join(detached.mainPath, "absent-alias"), name: "alias", branch: "alias", tip: detachedTip },
+  });
+  const aliasRetry = await retryBranchRetirement(detached.mainPath, "alias", { stateRoot: retryState, apply: true });
+  assert.equal(aliasRetry.action, "removed");
+  assert.equal(git(detached.mainPath, "show-ref", "--verify", "refs/heads/main"), `${detachedTip} refs/heads/main`, "retirement preserves a symbolic branch's target");
+  assert.equal(git(detached.mainPath, "branch", "--list", "alias"), "");
   for (const repo of retryRepos) {
     assert.equal(git(repo.mainPath, "branch", "--list", "pending"), "pending", "other repo's retirement leaves this branch intact");
     const retry = await retryBranchRetirement(repo.mainPath, "pending", { stateRoot: retryState, apply: true });
