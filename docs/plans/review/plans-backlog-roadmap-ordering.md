@@ -593,9 +593,9 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] In a bare-repo layout, `assertRunningInPrimary` sends an absolute path to the browser through `archiveBacklogPlan`. Reproduced at `transitionPlan`; the route is traced, not run. — fixed (a4cd60cf)
 - [x] The commit-failure tests do not assert that the move is staged. — fixed (a4cd60cf)
 - [x] The plan's table and non-goal omit that a `Waiting on` badge links only a namespace with Backlog plans. — corrected in this record
-- [ ] Retrying `archive`, `submit`, or `reopen` after `MOVE_NOT_COMMITTED` reports the move as recorded, because the early return in `transitionPlan` runs before the not-committed check. Reproduced with `plans archive` on a throwaway fixture.
-- [ ] After `MOVE_NOT_COMMITTED` the archive dialog keeps **Archive Plan** live, and a second click replaces the guidance with a refusal naming a raw id: `portal/plans/archive-dialog.js`. The route is reproduced; the dialog is traced, not run.
-- [ ] `docs/internal/plans-portal-internals.md` says a plan at the destination always returns `alreadyRecorded`, and its step list omits the staged outcome.
+- [x] Retrying `archive`, `submit`, or `reopen` after `MOVE_NOT_COMMITTED` reports the move as recorded, because the early return in `transitionPlan` runs before the not-committed check. Reproduced with `plans archive` on a throwaway fixture. — fixed (a579c8dd)
+- [x] After `MOVE_NOT_COMMITTED` the archive dialog keeps **Archive Plan** live, and a second click replaces the guidance with a refusal naming a raw id: `portal/plans/archive-dialog.js`. The route is reproduced; the dialog is traced, not run. — fixed (a579c8dd)
+- [x] `docs/internal/plans-portal-internals.md` says a plan at the destination always returns `alreadyRecorded`, and its step list omits the staged outcome. — fixed (a579c8dd)
 
 ### Verification
 
