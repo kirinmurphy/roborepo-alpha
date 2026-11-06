@@ -46,8 +46,8 @@ function git(cwd, ...args) {
 }
 
 // Enough lines between the frontmatter and the end that edits to each merge without conflict.
-function planText({ priority = "high", status = "Started." } = {}) {
-  return `---\nid: p1\npriority: ${priority}\nworktree: wt\n---\n\n# Plan\n\n## Summary\n\nWhy.\n\n## Context\n\nWhat.\n\n## Status\n\n${status}\n`;
+function planText({ nextAction = "start", status = "Started." } = {}) {
+  return `---\nid: p1\nnext_action: ${nextAction}\nworktree: wt\n---\n\n# Plan\n\n## Summary\n\nWhy.\n\n## Context\n\nWhat.\n\n## Status\n\n${status}\n`;
 }
 
 function write(file, content) {
@@ -84,14 +84,14 @@ try {
   write(path.join(repo.tree, PLAN), planText({ status: "Phase 2 done." }));
   assert.deepEqual(check(repo), { state: "consistent" }, "nothing since the start: the primary copy equals the merge-base version");
 
-  write(path.join(repo.main, PLAN), planText({ priority: "low" }));
+  write(path.join(repo.main, PLAN), planText({ nextAction: "revise" }));
   assert.deepEqual(check(repo), { state: "outside-edit", committed: false }, "an uncommitted primary edit is an outside edit");
   git(repo.main, "commit", "-qam", "edit on main");
   assert.deepEqual(check(repo), { state: "outside-edit", committed: true }, "a committed primary edit is an outside edit");
 
   git(repo.tree, "commit", "-qam", "more progress");
   git(repo.tree, "merge", "-q", "--no-edit", "main");
-  assert.match(fs.readFileSync(path.join(repo.tree, PLAN), "utf8"), /priority: low[\s\S]*Phase 2 done/, "the merge carried main's edit");
+  assert.match(fs.readFileSync(path.join(repo.tree, PLAN), "utf8"), /next_action: revise[\s\S]*Phase 2 done/, "the merge carried main's edit");
   assert.deepEqual(check(repo), { state: "consistent" }, "merging main into the worktree moves the merge base past the edit");
 
   // Squash merge: main gets a version only the branch's own commits produced.
@@ -113,7 +113,7 @@ try {
 
   // Git cannot answer: the result says so instead of guessing.
   const broken = fixture("broken");
-  write(path.join(broken.main, PLAN), planText({ priority: "low" }));
+  write(path.join(broken.main, PLAN), planText({ nextAction: "revise" }));
   assert.equal(check(broken, null).state, "unchecked", "a detached worktree HEAD cannot be checked");
   assert.equal(check(broken, "no-such-branch").state, "unchecked", "an unresolvable merge base cannot be checked");
   git(broken.main, "checkout", "-q", "--detach");
@@ -130,7 +130,7 @@ try {
   assert.equal(blobId(sample, "sha256"), git(sha256.main, "hash-object", "sample.md"), "SHA-256 blob ids match git hash-object");
   write(path.join(sha256.tree, PLAN), planText({ status: "Progress." }));
   assert.deepEqual(check(sha256), { state: "consistent" }, "the check reads SHA-256 repositories");
-  write(path.join(sha256.main, PLAN), planText({ priority: "low" }));
+  write(path.join(sha256.main, PLAN), planText({ nextAction: "revise" }));
   assert.deepEqual(check(sha256), { state: "outside-edit", committed: false });
 
   console.log("plan authority: ok");

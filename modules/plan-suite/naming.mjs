@@ -25,15 +25,15 @@ import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 
 // Namespaces that apply to most software projects and need no per-repository declaration.
 export const UNIVERSAL_NAMESPACES = Object.freeze([
-  "cli", "git", "infra", "os", "test", "docs", "security", "perf",
+  "cli", "git", "infra", "os", "testing", "docs", "security", "perf",
 ]);
 
 // Lifecycles whose filenames are still governed by the convention: every stage a plan can still
 // leave. Terminal lifecycles (no outgoing transition in the lifecycle manifest) are exempt.
 const VALIDATED_LIFECYCLES = new Set([...LIFECYCLE_MODEL.folders].filter((id) => LIFECYCLE_MODEL.transitionsFrom(id).length > 0));
 
-// Suffixes that encode something already tracked elsewhere: lifecycle is the folder, priority and
-// blockers are frontmatter, and a version belongs in the plan body if it matters at all. A filename
+// Suffixes that encode something already tracked elsewhere: lifecycle is the folder, order is the
+// ordering registry, blockers are frontmatter, and a version belongs in the plan body if it matters at all. A filename
 // gets linked to; all of these change.
 const FORBIDDEN_SUFFIXES = [
   "plan", "todo", "followup", "followups", "backlog", "active", "completed", "complete",
@@ -55,10 +55,18 @@ export const PLANS_CONFIG_RELATIVE_PATH = "docs/plans/plans-config.json";
 // parses the config once rather than once per file.
 const configCache = new Map();
 
+// Filesystem error messages embed absolute paths, and these errors reach the browser, so only the code
+// crosses over. A parse or shape error names no path and says what to repair, so its message stays.
+export function pathFreeFileError(err) {
+  return String(err?.code || err?.message || err);
+}
+
 // Reads a repository's declared project namespaces. A repository without the file is not an error —
 // most repositories will not have one — so this reports `configured: false` and lets the caller
-// decide. Malformed JSON is treated the same way: naming validation is advisory, and failing a
-// whole scan over an unparseable config would be a worse outcome than not enforcing the rule.
+// decide. An unreadable or malformed file is a different case: the repository did adopt the
+// convention, so it reports `error` and an empty vocabulary rather than passing for "not configured"
+// or keeping an older vocabulary. Scans stay tolerant; `plans validate` and the promote and start
+// gates surface the error.
 export function readProjectNamespaces(repositoryRoot) {
   const file = path.join(repositoryRoot, PLANS_CONFIG_RELATIVE_PATH);
   let stat;
@@ -74,12 +82,14 @@ export function readProjectNamespaces(repositoryRoot) {
   let value = { configured: false, namespaces: [] };
   try {
     const data = JSON.parse(fs.readFileSync(file, "utf8"));
-    const names = data && typeof data.namespaces === "object" && data.namespaces
-      ? Object.keys(data.namespaces).filter((name) => typeof name === "string" && name.trim())
-      : [];
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error("the top level must be a JSON object");
+    if (data.namespaces !== undefined && (!data.namespaces || typeof data.namespaces !== "object" || Array.isArray(data.namespaces))) {
+      throw new Error("`namespaces` must be an object");
+    }
+    const names = Object.keys(data.namespaces || {}).filter((name) => name.trim());
     value = { configured: true, namespaces: names.map((name) => name.trim()) };
-  } catch {
-    value = { configured: false, namespaces: [] };
+  } catch (err) {
+    value = { configured: true, namespaces: [], error: pathFreeFileError(err) };
   }
   configCache.set(file, { mtimeMs: stat.mtimeMs, value });
   return value;
@@ -120,7 +130,7 @@ export function validatePlanNaming({ filename, lifecycle, projectNamespaces = []
     findings.push(finding("FORBIDDEN_PLAN_FILENAME_SUFFIX", { meta: { filename, suffix } }));
   }
 
-  const allowed = [...UNIVERSAL_NAMESPACES, ...projectNamespaces];
+  const allowed = approvedNamespaces(projectNamespaces);
   if (!matchNamespace(stem, allowed)) {
     findings.push(finding("UNKNOWN_PLAN_NAMESPACE", {
       meta: { filename, namespace: stem.slice(0, stem.indexOf("-")), allowed: [...allowed].sort() },
@@ -130,11 +140,33 @@ export function validatePlanNaming({ filename, lifecycle, projectNamespaces = []
   return findings;
 }
 
-// Namespaces may themselves contain hyphens — `usage-statusline` and `plan-lifecycle` are both
-// declared in this repository — so the prefix cannot be read as "everything before the first
-// hyphen". Match the longest declared namespace the stem actually starts with, and require a
-// hyphen after it so `plan` never claims `plan-lifecycle-foo.md` out from under the more specific
-// namespace, and `perf` never matches `performance-budget.md`.
+// The vocabulary a repository's filenames may use once it has declared any namespace.
+export function approvedNamespaces(projectNamespaces = []) {
+  return projectNamespaces.length ? [...UNIVERSAL_NAMESPACES, ...projectNamespaces] : [];
+}
+
+// The one namespace a plan filename resolves to, or null when it has none: the shape is wrong, the
+// prefix is not approved, or the repository declared no vocabulary. Never a guess.
+export function resolvePlanNamespace(filename, projectNamespaces = []) {
+  if (typeof filename !== "string" || !filename.endsWith(".md")) return null;
+  const stem = filename.slice(0, -3);
+  if (!STEM_PATTERN.test(stem)) return null;
+  return matchNamespace(stem, approvedNamespaces(projectNamespaces)) || null;
+}
+
+// What the promote and start gates refuse: a bad filename, or a config that cannot say whether the
+// filename is good. Only a repository that declared namespaces is held to the convention.
+export function namingGateFindings({ repositoryRoot, filename, lifecycle }) {
+  const config = readProjectNamespaces(repositoryRoot);
+  if (config.error) return [finding("INVALID_PLANS_CONFIG", { meta: { error: config.error } })];
+  return validatePlanNaming({ filename, lifecycle, projectNamespaces: config.namespaces });
+}
+
+// Namespaces may themselves contain hyphens — `agent-config` and `local-data` are both declared in
+// this repository — so the prefix cannot be read as "everything before the first hyphen". Match the
+// longest declared namespace the stem actually starts with, and require a hyphen after it so a
+// shorter namespace never claims a file out from under a longer one that starts with it, and `perf`
+// never matches `performance-budget.md`.
 function matchNamespace(stem, allowed) {
   return [...allowed]
     .sort((a, b) => b.length - a.length)

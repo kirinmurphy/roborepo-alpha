@@ -11,24 +11,10 @@
 // and commit those moves, and the page's tabs already say which lifecycle a card is in.
 //
 // It does not call APIs, inspect filters, render global toasts, or decide whether it remains
-// visible — those are page (app.js) responsibilities. On a dropdown select it dispatches a
-// bubbling `plan-change` event with the mutation intent; it never awaits the mutation itself.
-// Because there's no imperative ack channel, loading/error state is a pure function of the last
-// `record` this element received: `onSelect` sets `loading = true` and repaints immediately, and
-// the *next* `record` property set (same record on failure, new record on success — the
-// orchestrator re-sets it either way once the mutation settles) clears it. This keeps the element
-// a pure function of its `record` prop rather than needing app.js to call back into it.
+// visible — those are page (app.js) responsibilities.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { planCompletion } from "/portal/plans/plan-completion.js";
-import { showsPriority } from "/portal/plans/lifecycle.js";
 import { chip } from "/portal/plans/templates.js";
-
-const PRIORITY_OPTIONS = [
-  ["high", "high"],
-  ["medium", "medium"],
-  ["low", "low"],
-  ["none", "none"],
-];
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -47,47 +33,19 @@ class PlanStatusElement extends HTMLElement {
     return this._record;
   }
 
-  emitChange(property, value) {
-    this.dispatchEvent(new CustomEvent("plan-change", {
-      bubbles: true,
-      composed: true,
-      detail: { property, value, record: this._record },
-    }));
-  }
-
-  renderPriorityDropdown(record) {
-    const dropdown = document.createElement("option-dropdown");
-    dropdown.options = PRIORITY_OPTIONS;
-    dropdown.value = record.plan.priority;
-    dropdown.onSelect = (value) => {
-      dropdown.loading = true;
-      dropdown.title = "";
-      dropdown.classList.remove("dropdown-error");
-      this.emitChange("priority", value);
-    };
-    return dropdown;
-  }
-
   render() {
     const record = this._record;
     const plan = record.plan;
     const isBlocked = plan.blockers.length > 0;
 
-    const age = formatModifiedAge(plan.modifiedAt);
-    const node = fill(tpl("tpl-plan-status"), { meta: age });
-    const modified = node.querySelector("[data-slot=modified]");
-    const modifiedDate = new Date(plan.modifiedAt);
-    const knownDate = !Number.isNaN(modifiedDate.getTime());
-    modified.title = knownDate ? `Modified ${modifiedDate.toLocaleString()}` : "Modified time unknown";
-    modified.setAttribute("aria-label", knownDate ? `Modified ${age}${age === "now" ? "" : " ago"}` : "Modified time unknown");
-    if (knownDate) modified.dateTime = modifiedDate.toISOString();
+    const node = tpl("tpl-plan-status");
+    renderModifiedTime(node.querySelector("[data-slot=modified]"), plan.modifiedAt);
     node.querySelector("[data-slot=actions]").append(...(this.actionContent || []));
     const warnings = plan.validation.warnings.length;
     if (warnings) node.querySelector("[data-slot=warnings]").replaceWith(chip(`${warnings} warning${warnings === 1 ? "" : "s"}`, "warn"));
     const stateBadgeSlot = node.querySelector("[data-slot=state-badge]");
-    // Read-only (a page without the Plans mutation orchestrator, e.g. Home): priority renders as a
-    // plain chip and the blocked badge is static, since nothing would handle the plan-change /
-    // blocked-click events they dispatch.
+    // Read-only (a page that opens no blockers popover, e.g. Home): the blocked badge is static,
+    // since nothing would handle the blocked-click event it dispatches.
     const readonly = this.hasAttribute("readonly");
     if (isBlocked && readonly) {
       stateBadgeSlot.textContent = `blocked by ${plan.blockers.length}`;
@@ -114,19 +72,22 @@ class PlanStatusElement extends HTMLElement {
     if (plan.lifecycle === "review" && openFindings > 0) {
       node.querySelector("[data-slot=findings]").replaceWith(chip(`${openFindings} open finding${openFindings === 1 ? "" : "s"}`, "warn"));
     }
-    // Priority is only relevant while deciding which plan to start.
-    const prioritySlot = node.querySelector("[data-slot=priority]");
-    prioritySlot.hidden = !showsPriority(plan.lifecycle);
-    if (showsPriority(plan.lifecycle)) {
-      prioritySlot.append(
-        readonly ? chip(`${plan.priority} priority`) : this.renderPriorityDropdown(record),
-      );
-    }
     this.replaceChildren(node);
   }
 }
 
 customElements.define("plan-status", PlanStatusElement);
+
+// Fills a <time> holding a [data-slot=meta] span, the clock-and-age label a card and a Prioritize row share.
+export function renderModifiedTime(time, value) {
+  const age = formatModifiedAge(value);
+  time.querySelector("[data-slot=meta]").textContent = age;
+  const date = new Date(value);
+  const known = !Number.isNaN(date.getTime());
+  time.title = known ? `Modified ${date.toLocaleString()}` : "Modified time unknown";
+  time.setAttribute("aria-label", known ? `Modified ${age}${age === "now" ? "" : " ago"}` : "Modified time unknown");
+  if (known) time.dateTime = date.toISOString();
+}
 
 function formatModifiedAge(value) {
   const date = new Date(value);

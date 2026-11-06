@@ -85,6 +85,18 @@ assert.deepEqual(alphaOnly.plans.map((plan) => plan.key), ["a1"]);
 assert.deepEqual(alphaOnly.repositories, [{ repositoryId: ALPHA }]);
 assert.deepEqual(alphaOnly.repositoryScans, [{ repositoryId: ALPHA, state: "scanned" }]);
 assert.deepEqual(alphaOnly.errors, []);
+assert.deepEqual(
+  scopeSnapshot({
+    ...snapshot,
+    backlog: [
+      { repositoryId: ALPHA, urlKey: "alpha", name: "alpha", namespaces: [{}], noNamespace: [] },
+      { repositoryId: BETA, urlKey: "beta", name: "beta", namespaces: [], noNamespace: ["k"] },
+      { repositoryId: HIDDEN, urlKey: "ignored", name: "ignored", namespaces: [], noNamespace: [] },
+    ],
+  }, ALPHA).backlogRepositories,
+  [{ urlKey: "alpha", name: "alpha" }, { urlKey: "beta", name: "beta" }],
+  "a scoped snapshot still lists every repo with Backlog plans, for the breadcrumb",
+);
 // A repository Plans never scanned (no recorded checkout) reads as not scanned, not as "no
 // repositories known".
 assert.deepEqual(scopeSnapshot(snapshot, HIDDEN).repositoryScans, [{ repositoryId: HIDDEN, state: "unavailable", planCount: 0, checkoutCount: 0 }]);

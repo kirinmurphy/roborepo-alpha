@@ -1,6 +1,5 @@
 ---
 id: plan-session-launching-milestone-3
-priority: low
 next_action: Define the platform adapter contract from the completed macOS implementation and establish the Linux support matrix
 blocked_by: []
 depends_on:

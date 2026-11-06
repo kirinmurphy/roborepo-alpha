@@ -6,7 +6,6 @@
       "folder": "backlog",
       "label": "Backlog",
       "tab": "primary",
-      "showsPriority": true,
       "worktreeBound": false,
       "actions": [
         { "command": "plan-promote", "label": "Promote", "description": "Validate this plan and commit it to Ready." },
@@ -19,7 +18,6 @@
       "folder": "ready",
       "label": "Ready",
       "tab": "primary",
-      "showsPriority": true,
       "worktreeBound": false,
       "actions": [
         { "command": "plan-execute", "label": "Start", "description": "Implement this plan in an isolated worktree." },
@@ -32,7 +30,6 @@
       "folder": "active",
       "label": "Active",
       "tab": "primary",
-      "showsPriority": false,
       "worktreeBound": true,
       "actions": [
         { "command": "plan-execute", "label": "Continue", "description": "Resume implementation in this plan's worktree." },
@@ -46,7 +43,6 @@
       "folder": "review",
       "label": "Review",
       "tab": "primary",
-      "showsPriority": false,
       "worktreeBound": true,
       "actions": [
         { "command": "plan-review", "label": "Review", "description": "Recheck the work, fix what has a clear fix, and request your approval." },
@@ -60,7 +56,6 @@
       "folder": "completed",
       "label": "Completed",
       "tab": "overflow",
-      "showsPriority": false,
       "worktreeBound": false,
       "actions": []
     },
@@ -69,7 +64,6 @@
       "folder": "archived",
       "label": "Archived",
       "tab": "overflow",
-      "showsPriority": false,
       "worktreeBound": false,
       "actions": []
     },
@@ -78,7 +72,6 @@
       "folder": null,
       "label": "Unclassified",
       "tab": "overflow",
-      "showsPriority": false,
       "worktreeBound": false,
       "actions": []
     }

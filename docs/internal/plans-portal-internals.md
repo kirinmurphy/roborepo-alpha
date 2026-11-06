@@ -24,8 +24,11 @@ The page uses:
   header, navigation, active-page state, updated-at text, theme toggle, and shared hidden-element
   behavior
 
-The portal writes to plan files through `POST /api/plans/priority`, which rewrites the
-`priority` frontmatter line. Lifecycle changes are made by the plan suite's commands. Which
+The portal writes `plans-order.json` under `docs/plans/`: `POST /api/plans/order` saves a namespace's
+Backlog order and `POST /api/plans/namespace-pin` sets its pin (see "Backlog ordering" below). Its one
+lifecycle change is `POST /api/plans/archive`, which retires one unprioritized Backlog plan through the same
+`transitionPlan` as `roborepo plans archive`, committing on the base branch. Every other lifecycle
+change is made by the plan suite's commands. Which
 repositories Plans reads is decided by the repository registry and its sources
 (`scripts/cli/repository-sources.mjs`), not by Plans.
 
@@ -65,10 +68,41 @@ primary copy.
 Lifecycle findings are visible in plan records and through `roborepo plans validate`. The portal has
 no lifecycle mutation route or move dialog; every move goes through the transition operation below.
 
+## Backlog ordering
+
+| Module | Owns |
+| --- | --- |
+| `modules/plan-suite/naming.mjs` | `resolvePlanNamespace`: longest approved prefix. `plan.namespace` is computed in `buildPlanRecord`, then recomputed against the primary checkout's vocabulary in `repositoryPlanRecords` |
+| `modules/plan-suite/backlog-order.mjs` | Pure calculations: `findDependencyCycles`, `deriveGroups`, `proposeOrder` |
+| `modules/plan-suite/backlog-registry.mjs` | The registry file: `buildBacklogIndex` (the snapshot's `backlog` field), `saveNamespaceOrder`, `placePlan`, and the private `applyOrder` both of those end in |
+| `portal/plans/backlog-model.js` | Pure browser model: URL level, directory counts, prerequisite status, Next up, draft moves on whole blocks |
+| `portal/plans/backlog.js` | Directory and list rendering, the draft, Save, and the guard |
+
+The index is calculated from the plans, the config, and the registry on every read and never written,
+so a dependency edit regroups on the next load and reaches the file at the next write. A transition
+commits only the plan's own paths (an archive adds the dependents it clears) and never touches the registry; `applyOrder` is where a plan that
+left Backlog is pruned. Registry reads and writes always use the primary checkout, including for a
+worktree-only plan.
+
+A draft carries the namespace's revision: a hash of the config bytes, the namespace's saved order, and
+each namespace plan's id, filename, and `depends_on`. Pins and other namespaces' orders are left out,
+since a Save re-reads the file and keeps them. A Save against any other revision is `STALE_ORDER`
+(409). The open page learns of changes on load, **Refresh**, after mutations, and at Save; there is no
+push channel.
+
+`portal/shared/repository-scope.js` has a `setRepositoryScopeGuard` seam so a page can hold a scope
+change. Back/forward cannot be cancelled, so with a dirty draft `app.js` pushes the draft's URL back
+and asks; `syncRepositoryScopeFromUrl` then applies the move. A capture-phase click listener covers
+links outside the board, the board's own links guard themselves, and `beforeunload` covers tab close
+and reload.
+
+Naming findings are blocking: `roborepo plans validate` exits 1, and the promote and start transitions
+add them through `namingGateFindings`, since severity alone does not gate a transition.
+
 ## Lifecycle Model
 
 `manifests/platform/plan-lifecycle.json` declares each state once: its id and folder, label, tab
-placement (primary or overflow), whether priority shows, whether it is worktree-bound (Active and
+placement (primary or overflow), whether it is worktree-bound (Active and
 Review), and its copy-prompt actions; plus the transitions, each with its source states,
 destination, and the commands that run it. `lifecycle-manifest.mjs` validates it at load and
 compiles frozen lookups (`LIFECYCLE_MODEL`). The manifest names states and does not encode rules:
@@ -84,7 +118,7 @@ compiles frozen lookups (`LIFECYCLE_MODEL`). The manifest names states and does 
 | `canonical-scan.mjs` | publishes `lifecycleProjection()` as the snapshot's `lifecycle` field |
 
 The portal never imports the manifest. `portal/plans/lifecycle.js` holds the projection a page
-receives in its plans snapshot (`setLifecycleModel`), and tabs, labels, priority display, and
+receives in its plans snapshot (`setLifecycleModel`), and tabs, labels, and
 actions (`portal/plans/plan-actions.js`) read it from there.
 
 While a plan is in Review its worktree copy may still be in `active/`. `plan-copies.mjs` reads the
@@ -103,11 +137,12 @@ It runs from the primary checkout on the base branch and:
    runs the completion preflight, `close` checks integration (`copy-integration.mjs`), approval
    freshness, and landing (`landing-gate.mjs` over `modules/repositories/worktree-landed.mjs`, which
    verifies the plan's recorded absorbing commit before scanning), `archive` applies the copy
-   carry and writes the reason;
+   carry and writes the reason, and declares `clearsReferences`, which removes the plan's id from the
+   `depends_on` and `blocked_by` of unfinished plans not bound to a worktree;
 4. validates the content it will commit against the destination (`ready` and `completed` tolerate no
    findings, `active` and `review` tolerate `UNCONFIRMED_NOT_TESTED`, `archived` checks only its
    own rules), refusing with the findings and a repair prompt;
-5. `git mv`, writes the content, commits with `--only` the old and new paths, and returns six
+5. `git mv`, writes the content, commits with `--only` the old and new paths plus any cleared dependents, and returns six
    post-commit checks from `transition-checks.mjs`.
 
 A plan already at the destination returns `alreadyRecorded` without rerunning the gates; for
@@ -123,13 +158,15 @@ All routes are served by the loopback-only portal server.
 | `/api/plans` | GET | compact plan index and package state |
 | `/api/plans/document?key=<key>` | GET | one plan's Markdown, rendered HTML, metadata, tasks, and warnings |
 | `/api/plans/prompt` | POST | build repository-aware or portable prompt from server-issued plan keys |
-| `/api/plans/priority` | POST | change one plan's priority, guarded by expected value and mtime |
+| `/api/plans/order` | POST | save one namespace's whole Backlog order, guarded by its revision |
+| `/api/plans/namespace-pin` | POST | pin or unpin one namespace in `plans-order.json` |
+| `/api/plans/archive` | POST | archive one unprioritized Backlog plan with a reason; refuses a ranked plan |
 | `/api/plans/refresh` | POST | rebuild the in-memory snapshot |
 
 POST routes require the same origin and per-server mutation token protections as other portal
 mutations.
 
-Priority mutation failures use the structured domain error serializer in
+Order save failures use the structured domain error serializer in
 `scripts/cli/portal-routes-plans.mjs`. Its allowed fields must stay in sync with
 `portalPostJson` in `portal/shared/api.js`; otherwise a new field is dropped at the boundary.
 
@@ -188,8 +225,7 @@ worktree identity, precursor blobs already on base, unchanged requirements/findi
 complete review and explicit approval, exact implementation, and the absorbing first-parent base
 commit. Temporary merge objects do not persist. Missing/detached worktrees remain unavailable.
 
-A qualifying record retains primary authority and reason `verified-landed-recovery`. Priority
-writes re-resolve current state and target the assigned worktree; evidence selection grants no
-general primary write authority. Base refs, including refs not checked out anywhere, participate
+A qualifying record retains primary authority and reason `verified-landed-recovery`; evidence
+selection grants no general primary write authority. Base refs, including refs not checked out anywhere, participate
 in snapshot invalidation. `mergeReadiness` additionally requires a committed packet, clean index
 and filesystem, and a current reviewed base implementation before merging.

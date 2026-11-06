@@ -12,7 +12,7 @@ import { configFileMcpProviders, ensureConfigFileMcp, removeConfigFileMcp } from
 import { loadMcpPresets } from "./mcp-presets.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
 import { hookFilePath, mergeHooksInto, unmergeHooksFrom, installHookScripts, removeHookScripts } from "./hook-composition.mjs";
-import { installPackageRuntimeAsset, mergeHarnessConfig, removePackageRuntimeAsset, unmergeHarnessConfig } from "./package-harness-config.mjs";
+import { installClaudePluginDir, installPackageRuntimeAsset, mergeHarnessConfig, removeClaudePluginDir, removePackageRuntimeAsset, unmergeHarnessConfig } from "./package-harness-config.mjs";
 import { installPackageCommands, removePackageCommands } from "./slash-commands.mjs";
 import { cleanupPackageProjections } from "./package-projection-cleanup.mjs";
 import { SKILL_TRIGGERS_FILE } from "./skill-trigger-fixtures.mjs";
@@ -707,6 +707,9 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
       case "package-runtime-asset":
         installPackageRuntimeAsset(pkg, component, { dryRun });
         break;
+      case "claude-plugin-dir":
+        installClaudePluginDir(pkg, component, { dryRun, readSettings, writeSettings, settingsPath: USER_CLAUDE_SETTINGS });
+        break;
       case "harness-config":
         if (dryRun) { console.log(`  [dry-run] merge harness config ${component.source} (${component.harness})`); break; }
         mergeHarnessConfig(pkg, component, {
@@ -957,6 +960,9 @@ async function removePackageComponents(pkg, { dryRun = false } = {}) {
         break;
       case "package-runtime-asset":
         removePackageRuntimeAsset(pkg, component, { dryRun });
+        break;
+      case "claude-plugin-dir":
+        removeClaudePluginDir(pkg, component, { dryRun, readSettings, writeSettings, settingsPath: USER_CLAUDE_SETTINGS });
         break;
       case "skill":
         if (dryRun) {

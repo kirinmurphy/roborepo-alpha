@@ -41,6 +41,62 @@ export function removePackageRuntimeAsset(pkg, component, { dryRun = false } = {
   }
 }
 
+// A Claude plugin folder is registered through CLAUDE_CODE_PLUGIN_DIRS because it is the one route
+// Claude Code reads for desktop-hosted sessions as well as terminal ones, with no marketplace step.
+const CLAUDE_PLUGIN_DIRS_ENV = "CLAUDE_CODE_PLUGIN_DIRS";
+
+export function claudePluginDirDestination(pkg, component) {
+  return path.join(stateDir, "package-runtime", pkg.id, path.basename(component.source));
+}
+
+function pluginDirList(settings) {
+  const value = settings.env?.[CLAUDE_PLUGIN_DIRS_ENV];
+  return typeof value === "string" ? value.split(path.delimiter).filter(Boolean) : [];
+}
+
+export function claudePluginDirRegistered(settings, pkg, component) {
+  return pluginDirList(settings).includes(claudePluginDirDestination(pkg, component));
+}
+
+// Replaces the installed copy wholesale so a file dropped from the source does not linger. The
+// variable can name folders from elsewhere, so entries are added and removed one at a time.
+export function installClaudePluginDir(pkg, component, { dryRun = false, readSettings, writeSettings, settingsPath } = {}) {
+  const sourcePath = path.join(repoRoot, component.source);
+  const destPath = claudePluginDirDestination(pkg, component);
+  if (dryRun) {
+    console.log(`  [dry-run] install Claude plugin folder ${component.source} -> ${destPath}`);
+    return;
+  }
+  fs.rmSync(destPath, { recursive: true, force: true });
+  fs.cpSync(sourcePath, destPath, { recursive: true });
+  const settings = readSettings(settingsPath);
+  const dirs = pluginDirList(settings);
+  if (!dirs.includes(destPath)) {
+    settings.env = { ...settings.env, [CLAUDE_PLUGIN_DIRS_ENV]: [...dirs, destPath].join(path.delimiter) };
+    writeSettings(settingsPath, settings);
+  }
+  console.log(`  Claude plugin folder: ${destPath}`);
+}
+
+export function removeClaudePluginDir(pkg, component, { dryRun = false, readSettings, writeSettings, settingsPath } = {}) {
+  const destPath = claudePluginDirDestination(pkg, component);
+  if (dryRun) {
+    console.log(`  [dry-run] remove Claude plugin folder ${destPath}`);
+    return;
+  }
+  fs.rmSync(destPath, { recursive: true, force: true });
+  const settings = readSettings(settingsPath);
+  const dirs = pluginDirList(settings);
+  if (dirs.includes(destPath)) {
+    const remaining = dirs.filter((dir) => dir !== destPath);
+    if (remaining.length) settings.env[CLAUDE_PLUGIN_DIRS_ENV] = remaining.join(path.delimiter);
+    else delete settings.env[CLAUDE_PLUGIN_DIRS_ENV];
+    if (Object.keys(settings.env).length === 0) delete settings.env;
+    writeSettings(settingsPath, settings);
+  }
+  console.log(`  removed Claude plugin folder: ${destPath}`);
+}
+
 export function readHarnessConfig(component, pkg) {
   const data = JSON.parse(fs.readFileSync(path.join(repoRoot, component.source), "utf8"));
   return expandPackageRuntimeRefs(data, packageRuntimeSubstitutions(pkg));

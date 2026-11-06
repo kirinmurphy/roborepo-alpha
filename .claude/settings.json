@@ -46,11 +46,6 @@
       "Bash(pgrep:*)",
       "Bash(kill:*)",
       "Bash(scripts/test/test-install-collisions.sh:*)"
-    ],
-    "deny": [
-      "Bash(git push:*)",
-      "Bash(git pull:*)"
     ]
-  },
-  "roborepoProfile": "readonly"
+  }
 }

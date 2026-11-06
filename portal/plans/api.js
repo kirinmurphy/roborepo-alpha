@@ -17,8 +17,19 @@ export function refreshSnapshot() {
   return portalPostJson(withRepositoryScope("/api/plans/refresh"), {});
 }
 
-export function updatePlanPriority(id, key, priority, expectedPriority, mtimeMs, repositoryId) {
-  return portalPostJson("/api/plans/priority", { id, key, priority, expectedPriority, mtimeMs, repositoryId });
+// One namespace's whole order. A draft opened from an older revision is refused with STALE_ORDER.
+export function saveBacklogOrder({ repositoryId, namespace, order, unprioritized, revision }) {
+  return portalPostJson("/api/plans/order", { repositoryId, namespace, order, unprioritized, revision });
+}
+
+export function setNamespacePinned({ repositoryId, namespace, pinned }) {
+  return portalPostJson("/api/plans/namespace-pin", { repositoryId, namespace, pinned });
+}
+
+// Moves one unprioritized Backlog plan to Archived, in a commit on the repo's base branch that also
+// clears it from the plans depending on it.
+export function archiveBacklogPlan({ repositoryId, id, reason }) {
+  return portalPostJson("/api/plans/archive", { repositoryId, id, reason });
 }
 
 export function fetchPlanDocument(key) {

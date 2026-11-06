@@ -38,10 +38,6 @@
           </div>
         </div>
         <div class="filter-row">
-          <label for="priority">Priority</label>
-          <select id="priority"></select>
-        </div>
-        <div class="filter-row">
           <label for="blocked">Blocked</label>
           <select id="blocked"></select>
         </div>
@@ -61,6 +57,33 @@
       <div class="filters-dialog-actions">
         <button id="filters-cancel" type="button" data-btn="secondary">Cancel</button>
         <button id="filters-update" type="button" data-btn="cta" disabled>Update</button>
+      </div>
+    </dialog>
+    <!-- Backlog Prioritize: every way out of a dirty draft asks here first. -->
+    <dialog id="ordering-guard" data-dialog-size="sm" aria-labelledby="ordering-guard-message">
+      <div class="modal-body">
+        <p id="ordering-guard-message" data-slot="message"></p>
+        <p class="backlog-dialog-error" data-slot="error" role="alert"></p>
+      </div>
+      <div class="filters-dialog-actions">
+        <button type="button" data-btn="cta" data-slot="save">Save and Continue</button>
+        <button type="button" data-btn="secondary" data-slot="discard">Discard Changes</button>
+        <button type="button" data-btn="secondary" data-slot="keep">Keep Editing</button>
+      </div>
+    </dialog>
+    <dialog id="ordering-archive" data-dialog-size="sm" aria-labelledby="ordering-archive-title">
+      <div class="modal-body">
+        <p id="ordering-archive-title" class="backlog-archive-title" data-slot="title"></p>
+        <label class="backlog-archive-reason" data-slot="reason-field">Why is this being archived?
+          <textarea data-slot="reason" rows="2"></textarea>
+        </label>
+        <p data-slot="consequence" hidden></p>
+        <p data-slot="dependents" hidden></p>
+        <p class="backlog-dialog-error" data-slot="error" role="alert"></p>
+      </div>
+      <div class="filters-dialog-actions">
+        <button type="button" data-btn="secondary" data-slot="cancel">Cancel</button>
+        <button type="button" data-btn="cta" data-slot="confirm">Continue</button>
       </div>
     </dialog>
     <div id="blockers-popover" class="blockers-popover" hidden role="menu">
@@ -144,12 +167,122 @@
         <div class="doc-details">
           <h3 class="card-header-row">
             <a class="repo-badge" data-slot="repo-badge"></a>
+            <a class="namespace-badge" data-slot="namespace-badge" hidden></a>
             <span class="title-link" data-slot="title-link"></span>
           </h3>
           <p class="description-line" data-slot="description"></p>
         </div>
         <div data-slot="status-mount"></div>
       </article>
+    </template>
+    <!-- Backlog: directory levels, then one namespace list as Details or Prioritize. -->
+    <template id="tpl-backlog-breadcrumb"><nav class="backlog-breadcrumb" aria-label="Backlog location"></nav></template>
+    <template id="tpl-backlog-breadcrumb-separator"><span class="backlog-breadcrumb-separator" aria-hidden="true">&rsaquo;</span></template>
+    <template id="tpl-backlog-breadcrumb-link"><a data-slot="label"></a></template>
+    <template id="tpl-backlog-breadcrumb-current"><span aria-current="page" data-slot="label"></span></template>
+    <template id="tpl-backlog-directory"><div class="backlog-directory" role="group" aria-label="Backlog directory"></div></template>
+    <template id="tpl-backlog-directory-row">
+      <a class="backlog-directory-row">
+        <portal-icon data-slot="icon" size="sm" aria-hidden="true"></portal-icon>
+        <span class="backlog-directory-label" data-slot="label"></span>
+        <span class="backlog-directory-counts" data-slot="counts"></span>
+        <portal-icon class="backlog-directory-chevron" name="chevron" size="sm" aria-hidden="true"></portal-icon>
+      </a>
+    </template>
+    <template id="tpl-backlog-directory-item">
+      <div class="backlog-directory-item">
+        <button type="button" class="backlog-pin" data-slot="pin"><portal-icon name="pin" size="sm" aria-hidden="true"></portal-icon></button>
+      </div>
+    </template>
+    <template id="tpl-backlog-count"><span class="backlog-count"><strong data-slot="number"></strong> <span data-slot="label"></span></span></template>
+    <template id="tpl-backlog-no-config">
+      <portal-notice class="portal-notice" variant="warning">
+        <div class="portal-banner-copy backlog-no-config">
+          <p>This repo has no plan namespaces yet. Run the <code>/plan-suite-init</code> skill to declare them.</p>
+          <p class="portal-banner-supporting">Namespaces are the categories a repo's plans are sorted into, taken from each plan's filename prefix, such as <code>git</code> in <code>git-worktree-cleanup.md</code>. Each namespace keeps its own priority order and puts its top plan in Next up.</p>
+          <p class="portal-banner-supporting">All repos have default namespaces available once set up, including <code>cli</code>, <code>git</code>, <code>docs</code>, and <code>security</code>.</p>
+        </div>
+      </portal-notice>
+    </template>
+    <template id="tpl-backlog-finding">
+      <portal-notice class="portal-notice" variant="warning" icon="warning">
+        <p><strong data-slot="message"></strong> <span data-slot="resolution"></span></p>
+      </portal-notice>
+    </template>
+    <template id="tpl-backlog-move-notice">
+      <portal-notice class="portal-notice" variant="info" icon="info">
+        <p data-slot="text"></p>
+      </portal-notice>
+    </template>
+    <template id="tpl-backlog-repair">
+      <div class="backlog-repair-row">
+        <button type="button" class="backlog-plan-title" data-slot="title"></button>
+        <code data-slot="filename"></code>
+        <ul class="backlog-repair-findings" data-slot="findings" hidden></ul>
+        <button type="button" data-btn="secondary" data-slot="repair" hidden>Copy Repair Prompt</button>
+      </div>
+    </template>
+    <template id="tpl-backlog-finding-line"><li><span data-slot="message"></span> <span class="backlog-repair-resolution" data-slot="resolution"></span></li></template>
+    <template id="tpl-backlog-namespace-header">
+      <div class="backlog-namespace-header">
+        <span data-slot="breadcrumb"></span>
+        <div class="backlog-mode-toggle" role="group" aria-label="Backlog view">
+          <button type="button" data-mode="details">Details</button>
+          <button type="button" data-mode="ordering">Prioritize</button>
+        </div>
+      </div>
+    </template>
+    <template id="tpl-backlog-section">
+      <section class="backlog-section"><h3 class="backlog-section-title" data-slot="title"></h3></section>
+    </template>
+    <template id="tpl-backlog-next-up-header">
+      <div class="backlog-section-header">
+        <portal-info-icon data-tip="The next priority plan for each category below: its highest-ranked plan that isn't held up by other work." aria-label="Next up: the next priority plan for each category below, its highest-ranked plan that isn't held up by other work."></portal-info-icon>
+      </div>
+    </template>
+    <template id="tpl-backlog-row">
+      <div class="backlog-block-body">
+        <span class="backlog-position" data-slot="position"></span>
+        <div class="backlog-block-plans"><span data-slot="plans"></span></div>
+        <span data-slot="controls"></span>
+      </div>
+    </template>
+    <template id="tpl-backlog-tree-row"><div class="backlog-tree-row"></div></template>
+    <template id="tpl-backlog-tree-guide"><span class="backlog-tree-guide" aria-hidden="true"></span></template>
+    <template id="tpl-backlog-prioritize-banner">
+      <div class="backlog-prioritize-banner">
+        <span data-slot="text"></span>
+        <button type="button" data-btn="cta" data-slot="prioritize">Prioritize Now</button>
+      </div>
+    </template>
+    <template id="tpl-backlog-plan">
+      <div class="backlog-plan">
+        <div class="backlog-plan-doc">
+          <div class="backlog-plan-heading">
+            <button type="button" class="backlog-plan-title" data-slot="title"></button>
+            <time class="meta-line backlog-plan-age" data-slot="modified"><portal-icon name="clock" size="sm" aria-hidden="true"></portal-icon><span data-slot="meta"></span></time>
+          </div>
+          <span class="backlog-plan-purpose" data-slot="purpose"></span>
+        </div>
+        <span class="backlog-plan-clue" data-slot="clue"></span>
+      </div>
+    </template>
+    <template id="tpl-backlog-controls"><div class="backlog-controls" role="group" aria-label="Move"></div></template>
+    <template id="tpl-backlog-control">
+      <button type="button" class="icon-action"><portal-icon size="sm" aria-hidden="true"></portal-icon></button>
+    </template>
+    <template id="tpl-backlog-handle">
+      <span class="backlog-drag-handle" draggable="true" role="img" aria-label="Drag to move" title="Drag to move"><portal-icon name="grip" size="sm" aria-hidden="true"></portal-icon></span>
+    </template>
+    <template id="tpl-backlog-blocked"><span class="state-badge warn">blocked</span></template>
+    <template id="tpl-backlog-drop-empty"><p class="backlog-drop-empty">Drop plans here</p></template>
+    <template id="tpl-backlog-drop-return"><p class="backlog-drop-empty backlog-drop-return">Return to unprioritized</p></template>
+    <template id="tpl-backlog-action-bar">
+      <div class="backlog-action-bar" role="group" aria-label="Unsaved order">
+        <span class="backlog-action-status" data-slot="status" role="status"></span>
+        <button type="button" data-btn="secondary" data-slot="cancel">Cancel</button>
+        <button type="button" data-btn="cta" data-slot="save">Save</button>
+      </div>
     </template>
     {{PLAN_DRAWER}}
     {{REPOSITORY_SOURCES}}
@@ -159,6 +292,8 @@
     <script src="/portal/shared/close-button.js" type="module"></script>
     <script src="/portal/shared/copy-button.js" type="module"></script>
     <script src="/portal/shared/menu-button.js" type="module"></script>
+    <script src="/portal/shared/info-icon.js" type="module"></script>
+    <script src="/portal/shared/tooltip.js" type="module"></script>
     <script src="/portal/plans/elements/index.js" type="module"></script>
     <script src="/portal/shared/theme.js" type="module"></script>
     <script src="/portal/plans/app.js" type="module"></script>

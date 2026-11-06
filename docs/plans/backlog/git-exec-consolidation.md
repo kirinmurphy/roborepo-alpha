@@ -1,6 +1,5 @@
 ---
 id: git-exec-consolidation
-priority: low
 next_action: Inventory the three private wrappers and capture diff subprocess, then migrate exact read-only operations to the shared bounded Git seam.
 blocked_by: []
 depends_on: []

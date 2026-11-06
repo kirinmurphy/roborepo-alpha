@@ -1,16 +1,15 @@
 import { portalFillSlots as fill, portalMiddleEllipsis, portalTpl as tpl } from "/portal/shared/api.js";
 import { planCompletion } from "/portal/plans/plan-completion.js";
-import { worktreeDetailsButton } from "./worktree-details.js";
 
 // What a matched plan hands the shared checkout row (buildRootSection's `identity`): the plans glyph,
-// and the title, completion, worktree-details trigger, and next action in place of the branch label.
-// Everything else on the row — Git warning, port, Links — still comes from the checkout. Once the
-// worktree has merged, a Close action says so itself, so the row drops its merged badge.
-export function matchedPlanIdentity(plan, checkout, { mainCheckouts = [], nextAction = null, onOpenPlan, onCopyPrompt, onStopServers = null, onDelete = null } = {}) {
+// and the title, completion, and next action in place of the branch label. Everything else on the
+// row — Git warning, port, Links, worktree dropdown — still comes from the checkout. Once the worktree
+// has merged, a Close action says so itself, so the row drops its merged badge.
+export function matchedPlanIdentity(plan, checkout, { nextAction = null, onOpenPlan, onCopyPrompt } = {}) {
   const node = tpl("tpl-plan-identity");
   // Close is only offered once review approved finished work, so the done badge beside it adds nothing.
   const closes = nextAction?.command === "plan-close";
-  node.append(planItem(plan, onOpenPlan, worktreeDetailsButton(plan, checkout, { mainCheckouts, onStopServers, onDelete }), { showCompletion: !closes }));
+  node.append(planItem(plan, onOpenPlan, { showCompletion: !closes }));
   const closesMerged = closes && checkout.worktreeState === "landed";
   if (nextAction) node.querySelector("[data-slot=controls]").append(nextActionButton(plan, nextAction, { merged: closesMerged, onCopyPrompt }));
   return { glyph: "plans", label: "Plan", node, hideWorktreeBadge: closesMerged };
@@ -52,16 +51,14 @@ const PLAN_TITLE_MAX_LENGTH = 70;
 
 // One active plan with its completion ring (or done badge). Its title opens the read-only plan
 // drawer. The row's own worktree badge already says when the plan's worktree has merged, so the
-// completion here stays about tasks. `afterTitle` (a matched row's worktree toggle) sits between the
-// title and the completion.
-export function planItem(plan, onOpenPlan, afterTitle = null, { showCompletion = true } = {}) {
+// completion here stays about tasks.
+export function planItem(plan, onOpenPlan, { showCompletion = true } = {}) {
   const title = portalMiddleEllipsis(plan.title, PLAN_TITLE_MAX_LENGTH);
   const node = fill(tpl("tpl-plan-item"), { title });
   const button = node.querySelector("[data-slot=title]");
   if (title !== plan.title) button.title = plan.title;
   button.addEventListener("click", () => onOpenPlan?.(plan));
   const controls = node.querySelector("[data-slot=controls]");
-  if (afterTitle) controls.append(afterTitle);
   const completion = showCompletion && planCompletion(plan);
   if (completion) controls.append(completion);
   return node;

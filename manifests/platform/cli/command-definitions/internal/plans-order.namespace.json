@@ -1,0 +1,12 @@
+{
+  "path": ["plans", "order"],
+  "kind": "internal",
+  "title": "Plan order",
+  "description": "Manage Backlog order within a namespace",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["order"]
+  }
+}

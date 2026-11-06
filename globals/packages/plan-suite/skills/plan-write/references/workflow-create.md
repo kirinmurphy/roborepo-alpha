@@ -14,6 +14,7 @@
 9. Run both validation layers. See below.
 10. Leave concrete `next_action`, and an initial `- [ ]` implementation checklist that
     `/plan-promote` will refine.
+11. Place the plan in its namespace's Backlog order. See "Placing a new plan" below.
 
 If the work is too vague to be implementation-ready, create a draft backlog plan and list missing decisions.
 
@@ -32,6 +33,21 @@ plan ends up with a namespace nobody checked against the repository's vocabulary
 When `plans-config.json` does not exist, say so explicitly and propose an initial vocabulary drawn
 from the repository, as described under "When no project config exists" in `plan-schema.md`. Do not
 silently fall back to universal namespaces.
+
+## Placing a new plan
+
+Order is a list of plan ids per namespace in `docs/plans/plans-order.json`. `roborepo plans order
+place <plan>` is the only way this skill writes it, and it writes to the primary checkout.
+
+| The new plan | Do | Result |
+| --- | --- | --- |
+| Depends on a same-namespace Backlog plan that is already ranked | Run `roborepo plans order place <plan>`; ask nothing | It joins that group. Connecting several ranked groups merges them at the earliest member's position, and the command lists what moved |
+| Is independent, or depends only on unranked plans, and the user is present | Offer insertion at the top or bottom of the namespace, or **Prioritize later**. Run `order place <plan> --top` or `--bottom` for the first two; run nothing for the third | Placed, or left at the top of Needs prioritization |
+| Is independent, or depends only on unranked plans, in a non-interactive run | Run nothing | It stays in Needs prioritization |
+
+Report the command's automatic moves. If it fails, say so and report the plan as unprioritized:
+never claim a placement that was not written. `depends_on` holds only true prerequisites; never add
+one to get a position.
 
 ## Validation before delivery
 

@@ -10,6 +10,7 @@ import {
 import { FILTER_LABELS, FRESHNESS_LABELS } from "./state.js";
 import { lifecycleActions, lifecycleLabel } from "./lifecycle.js";
 import { primaryPlanAction, incompleteDependencies } from "./plan-actions.js";
+import { hrefWithNamespace, openPrerequisites } from "./backlog-model.js";
 
 export function rootChip(root, onRemove) {
   const node = fill(tpl("tpl-root-chip"), { path: root });
@@ -180,7 +181,7 @@ export function drawerContent(doc, drawerActions) {
     title: plan.title,
     path: `${doc.plan.repository.name} / ${plan.relativePath}`,
     html: doc.html,
-    // Priority, modified time, warnings, blockers, and completion render in the shared <plan-status> section
+    // Modified time, warnings, blockers, and completion render in the shared <plan-status> section
     // mounted alongside this metadata list. The next action is the agent's own pointer into the
     // plan, so it is shown here in the full document view and not on the card.
     meta: [
@@ -228,7 +229,7 @@ export function cardActionMenu(record, cardActions) {
 // prompt; nothing on the card moves a plan between lifecycle folders, since the suite commands own
 // those moves and commit them.
 export function cardPrimaryAction(record, cardActions) {
-  const dependencies = planDependencies(record, cardActions.plans || [], cardActions.onOpen);
+  const dependencies = planDependencies(record, cardActions.plans || [], cardActions.onOpen, { namespaceAction: cardActions.namespaceAction });
   if (dependencies) return dependencies;
   const action = primaryPlanAction(record.plan, incompleteDependencies(record, cardActions.plans || []));
   if (!action) return null;
@@ -246,29 +247,56 @@ export function cardPrimaryAction(record, cardActions) {
 }
 
 // Resolve against all plans in the repository, including lifecycles hidden by the current tab.
-export function planDependencies(record, allPlans, onOpen) {
-  const dependencies = incompleteDependencies(record, allPlans);
-  if (record.plan.lifecycle !== "backlog" || !dependencies.length) return null;
-  const node = tpl("tpl-plan-dependencies");
+// `drawnIds` are prerequisites the caller already shows some other way, such as in the same tree.
+export function planDependencies(record, allPlans, onOpen, { drawnIds = new Set(), namespaceAction } = {}) {
+  if (record.plan.lifecycle !== "backlog") return null;
+  const prerequisites = openPrerequisites(record, allPlans).filter((item) => !drawnIds.has(item.id));
+  return prerequisites.length ? dependencyList("Waiting on", prerequisites, onOpen, { ownNamespace: record.plan.namespace, namespaceAction }) : null;
+}
+
+// A labelled list of plans. A badge appears only for a plan outside `ownNamespace`. `namespaceAction`
+// gives the handler that goes to a namespace, or null when there is nowhere to go, which leaves the
+// badge as plain text.
+export function dependencyList(heading, items, onOpen, { ownNamespace = null, namespaceAction } = {}) {
+  const node = fill(tpl("tpl-plan-dependencies"), { heading: `${heading}:` });
   const list = node.querySelector("[data-slot=dependencies]");
-  dependencies.forEach((id, index) => {
-    if (index) list.append(", ");
-    const target = allPlans.find((item) => item.plan.id === id && item.repository.id === record.repository.id);
-    if (!target) {
-      list.append(id);
-      return;
+  list.setAttribute("aria-label", heading);
+  list.append(...items.map((item) => {
+    const row = fill(tpl("tpl-plan-dependency"), { status: item.status ? `(${item.status})` : "" });
+    const label = row.querySelector("[data-slot=label]");
+    const badge = row.querySelector("[data-slot=namespace]");
+    const foreign = item.namespace && item.namespace !== ownNamespace;
+    badge.hidden = !foreign;
+    if (foreign) renderNamespaceBadge(badge, item.namespace, namespaceAction?.(item.namespace));
+    if (!item.key) {
+      label.textContent = item.label;
+      return row;
     }
     const link = document.createElement("button");
     link.type = "button";
-    link.textContent = id;
-    link.title = target.plan.title;
+    link.textContent = item.label;
     link.addEventListener("click", (event) => {
       event.stopPropagation();
-      onOpen(target.key);
+      onOpen(item.key);
     });
-    list.append(link);
-  });
+    label.replaceChildren(link);
+    return row;
+  }));
   return node;
+}
+
+// With `onSelect`, the badge is a link to that namespace. Modified clicks open it in a new tab or
+// window as usual.
+export function renderNamespaceBadge(badge, namespace, onSelect) {
+  badge.textContent = namespace;
+  if (!onSelect) return;
+  badge.href = hrefWithNamespace(location.href, namespace);
+  badge.title = `Open ${namespace}`;
+  badge.addEventListener("click", (event) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    onSelect(namespace);
+  });
 }
 
 export function drawerTaskItems(tasks) {

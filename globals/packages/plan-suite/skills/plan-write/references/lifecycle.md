@@ -15,8 +15,8 @@ have remaining actionable work, next action, current implementation context, suc
 blockers when present.
 
 `review`: implementation complete and checked by `/plan-execute`'s validation loop, awaiting the
-human review and approval in `/plan-review`. `/plan-execute` commits the move from active after a
-clean validation pass and a passing completion preflight, or `/plan-review` commits it from a
+human review and approval in `/plan-review`. `/plan-execute` commits the move from active after its
+validation loop ends and the completion preflight passes, or `/plan-review` commits it from a
 complete active plan; it is not a claim that a human accepted the work. Fixes within the
 requirements stay here; a material scope change returns the plan to active, never to ready.
 

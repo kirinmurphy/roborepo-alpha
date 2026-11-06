@@ -35,8 +35,7 @@ let mergedPlans = new Map();
 // The command each worktree-matched plan leads with on the Plans page, by plan key.
 let nextPlanActions = new Map();
 
-// The same plan detail drawer the Plans page opens. Read-only here: priority edits go through the
-// Plans page's mutation flow, which Home does not carry.
+// The same plan detail drawer the Plans page opens, read-only here: the blocked badge is static.
 const planDrawer = createPlanDrawer({
   getPlans: () => plansSnapshot?.plans || [],
   getPlanSuitePackage: () => plansSnapshot?.planSuitePackage || {},

@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { buildPlanSnapshot, planSnapshotFingerprint, updatePlanPriority } from "../../modules/plan-suite/index.mjs";
+import { buildPlanSnapshot, planSnapshotFingerprint } from "../../modules/plan-suite/index.mjs";
 import { hideRepository, loadRegistry, updateRegistry } from "../../modules/repositories/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
@@ -22,8 +22,8 @@ function git(cwd, ...args) {
   assert.equal(result.status, 0, result.stderr);
 }
 
-function plan(id, title, priority = "high", worktree = "") {
-  return `---\nid: ${id}\npriority: ${priority}\nnext_action: Do it\nworktree: ${worktree}\n---\n\n# ${title}\n`;
+function plan(id, title, worktree = "") {
+  return `---\nid: ${id}\nnext_action: Do it\nworktree: ${worktree}\n---\n\n# ${title}\n`;
 }
 
 function write(file, content) {
@@ -38,7 +38,7 @@ function snapshotFor(stateRoot) {
 try {
   const main = path.join(tempRoot, "planned");
   write(path.join(main, "docs/plans/backlog/same.md"), plan("same111", "Same"));
-  write(path.join(main, "docs/plans/backlog/differs.md"), plan("diff222", "Differs", "high", "feature-x"));
+  write(path.join(main, "docs/plans/backlog/differs.md"), plan("diff222", "Differs", "feature-x"));
   write(path.join(main, "docs/plans/backlog/main-only.md"), plan("main333", "Main only"));
   fs.mkdirSync(main, { recursive: true });
   git(main, "init", "-q", "-b", "main");
@@ -47,12 +47,12 @@ try {
   git(main, "commit", "-qm", "seed");
   const worktree = path.join(tempRoot, "trees", "feature-x");
   git(main, "worktree", "add", "-q", "-b", "feature-x", worktree);
-  write(path.join(worktree, "docs/plans/backlog/differs.md"), plan("diff222", "Differs in the worktree", "high", "feature-x"));
+  write(path.join(worktree, "docs/plans/backlog/differs.md"), plan("diff222", "Differs in the worktree", "feature-x"));
   // A second worktree that is only behind main: it holds an older copy of a plan it never touched.
   const behind = path.join(tempRoot, "trees", "behind");
   git(main, "worktree", "add", "-q", "-b", "behind", behind);
   write(path.join(main, "docs/plans/backlog/main-only.md"), plan("main333", "Main only, edited since"));
-  write(path.join(behind, "docs/plans/backlog/differs.md"), plan("diff222", "An older copy elsewhere", "high", "feature-x"));
+  write(path.join(behind, "docs/plans/backlog/differs.md"), plan("diff222", "An older copy elsewhere", "feature-x"));
   write(path.join(worktree, "docs/plans/active/new.md"), plan("new444", "Worktree only"));
 
   // ---- Runtime-discovered repository stays usable for Plans after its process goes offline. ----
@@ -98,14 +98,6 @@ try {
   assert.equal(byId.new444.plan.checkout, "feature-x", "a worktree-only plan is labeled with its worktree");
   assert.equal(byId.new444.plan.authority, null, "a worktree-only plan has no primary copy to resolve against");
   assert.equal(byId.new444.repository.id, byId.same111.repository.id, "every checkout's plans belong to one repository");
-
-  // Edits: the backlog plan is written in the main checkout; the worktree-only plan in its worktree.
-  updatePlanPriority(snapshot, { id: "diff222", key: byId.diff222.key, priority: "low", expectedPriority: "high", mtimeMs: byId.diff222.mtimeMs });
-  assert.match(fs.readFileSync(path.join(main, "docs/plans/backlog/differs.md"), "utf8"), /priority: low/);
-  assert.match(fs.readFileSync(path.join(worktree, "docs/plans/backlog/differs.md"), "utf8"), /priority: high/, "the worktree copy is untouched");
-  updatePlanPriority(snapshot, { id: "new444", key: byId.new444.key, priority: "low", expectedPriority: "high", mtimeMs: byId.new444.mtimeMs });
-  assert.match(fs.readFileSync(path.join(worktree, "docs/plans/active/new.md"), "utf8"), /priority: low/, "a worktree-only plan is edited in its worktree");
-  assert.ok(!fs.existsSync(path.join(main, "docs/plans/active/new.md")));
 
   // ---- Plans settings and ROBOREPO_PLAN_ROOTS no longer affect Plans ----
   const decoy = path.join(tempRoot, "decoy");

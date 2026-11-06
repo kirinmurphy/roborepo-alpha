@@ -34,7 +34,6 @@ One bold line on its own, before anything else, naming the plan and its lifecycl
 ```text
 **Submitted for review: "<title>" (<id>)**
 **Still active: "<title>" (<id>), <n> objectives blocked**
-**Stopped at the validation cap: "<title>" (<id>), <n> findings open**
 **Review findings fixed: "<title>" (<id>), ready for /plan-review again**
 ```
 
@@ -79,8 +78,8 @@ session's permissions, a hook, or the remote refused it.
 
 ## Exceptions
 
-Report only what did not pass. A clean run says nothing here: reaching `review/` already means the
-Validation Loop ended clean and the completion preflight passed.
+Report only what did not pass. A clean run says nothing here: reaching `review/` without a cap entry
+below means the Validation Loop ended clean and the completion preflight passed.
 
 | Check | Result | What it means |
 | --- | --- | --- |
@@ -89,7 +88,7 @@ Validation Loop ended clean and the completion preflight passed.
 Include, when they apply:
 
 - failed, skipped, or not-run checks, with the exact command not run and why;
-- a Validation Loop that stopped at the cap, with its open findings;
+- a Validation Loop that reached the cap, with the last pass's fixes, which were not revalidated;
 - checks that fail on the base branch as well;
 - blocked objectives and what blocks them;
 - paired skills skipped or unavailable, with the reason;

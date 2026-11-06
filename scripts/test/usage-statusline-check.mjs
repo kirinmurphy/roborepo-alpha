@@ -101,6 +101,54 @@ function runFormatter(input, env = {}) {
   }
 }
 
+// --- desktop context row: install, registration, unrelated entries survive ---
+{
+  const home = makeHome();
+  try {
+    const otherDir = "/elsewhere/other-plugin";
+    fs.writeFileSync(
+      path.join(home, ".claude", "settings.json"),
+      `${JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: otherDir, KEEP_ME: "1" } }, null, 2)}\n`,
+    );
+    const env = { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), SKIP_MCP: "1" };
+    const pluginDir = path.join(home, ".roborepo", "package-runtime", "usage-statusline", "context-row");
+    const readEnv = () => JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8")).env;
+    const run = (...args) => spawnSync(process.execPath, [cli, "package", ...args], { env, encoding: "utf8" });
+
+    assert.equal(run("enable", "usage-statusline").status, 0, "enable succeeds with an existing plugin list");
+    for (const file of [".claude-plugin/plugin.json", "hooks/hooks.json", "hooks/register.tsx", "types/index.d.ts"]) {
+      assert.ok(fs.existsSync(path.join(pluginDir, file)), `enable installs ${file}`);
+    }
+    assert.equal(readEnv().CLAUDE_CODE_PLUGIN_DIRS, [otherDir, pluginDir].join(path.delimiter), "enable appends to the plugin list");
+
+    assert.equal(run("enable", "usage-statusline").status, 0, "re-enable succeeds");
+    assert.equal(readEnv().CLAUDE_CODE_PLUGIN_DIRS, [otherDir, pluginDir].join(path.delimiter), "re-enable does not duplicate the entry");
+
+    const liveStatus = () => JSON.parse(run("status", "usage-statusline", "--json").stdout).status;
+    assert.equal(liveStatus(), "enabled", "status reports the plugin folder as live");
+
+    fs.rmSync(pluginDir, { recursive: true });
+    assert.notEqual(liveStatus(), "enabled", "status notices a missing folder");
+    assert.equal(run("enable", "usage-statusline").status, 0, "re-enable repairs a missing folder");
+    assert.ok(fs.existsSync(path.join(pluginDir, "hooks", "register.tsx")), "re-enable restores the folder");
+
+    // The orphan sweep walks package-runtime, so it must recognize the folder as wanted.
+    const cleanup = path.join(repoRoot, "scripts/cli/package-projection-cleanup.mjs");
+    assert.equal(spawnSync(process.execPath, [cleanup], { env, encoding: "utf8" }).status, 0, "orphan cleanup succeeds");
+    assert.ok(fs.existsSync(path.join(pluginDir, "hooks", "register.tsx")), "orphan cleanup keeps the enabled plugin folder");
+    assert.equal(run("reconcile").status, 0, "reconcile succeeds");
+    assert.ok(fs.existsSync(path.join(pluginDir, "hooks", "register.tsx")), "reconcile keeps the plugin folder");
+    assert.equal(readEnv().CLAUDE_CODE_PLUGIN_DIRS, [otherDir, pluginDir].join(path.delimiter), "reconcile keeps the registration");
+
+    assert.equal(run("disable", "usage-statusline").status, 0, "disable succeeds");
+    assert.ok(!fs.existsSync(pluginDir), "disable removes the plugin folder");
+    assert.equal(readEnv().CLAUDE_CODE_PLUGIN_DIRS, otherDir, "disable leaves other plugin entries");
+    assert.equal(readEnv().KEEP_ME, "1", "disable leaves unrelated env values");
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
 // --- Claude singleton conflict preserved ------------------------------------
 {
   const home = makeHome();

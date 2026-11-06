@@ -26,7 +26,6 @@ try {
 
   fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "has-frontmatter.md"), `---
 id: has-frontmatter
-priority: high
 next_action: Already fine
 blocked_by: []
 depends_on: []
@@ -53,7 +52,7 @@ reviewed_commit:
   assert.match(scaffold, /id: [0-9a-z]{6,8}\n/);
   assert.equal(classifyPlanId(/id: ([0-9a-z]+)/.exec(scaffold)[1]), "short");
   assert.notEqual(scaffoldFrontmatter(), scaffold, "each repair mints a distinct id");
-  assert.match(scaffold, /priority: none/);
+  assert.doesNotMatch(scaffold, /priority/);
   assert.match(scaffold, /next_action: .+/);
   assert.match(scaffold, /blocked_by: \[\]/);
   assert.match(scaffold, /depends_on: \[\]/);

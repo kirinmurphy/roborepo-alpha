@@ -31,7 +31,6 @@ Recommended frontmatter:
 ```yaml
 ---
 id: a3f9c2k1
-priority: high
 next_action: Implement the next concrete task
 blocked_by: []
 depends_on: []
@@ -45,7 +44,6 @@ Rules:
 
 - `id`: a short opaque base36 string, 6-8 lowercase alphanumerics, unique within the repository and
   never changed once written. See "Plan ids" below.
-- `priority`: `high`, `medium`, `low`, or `none`.
 - `next_action`: required in backlog, ready, active, and review; empty for completed and archived plans.
 - `blocked_by`, `depends_on`, and `related`: arrays.
 - `reviewed_commit`: commit intentionally reviewed against repository state; empty means never reviewed.
@@ -162,9 +160,9 @@ A plan filename is `<namespace>-<slug>.md`, lowercase and hyphenated.
 ### Rules
 
 - Never suffix a filename with `-plan`. Everything under `docs/plans` is a plan.
-- Never encode lifecycle, priority, dates, or status in a filename (`-todo`, `-followups`,
-  `-active`, `-v2`). Lifecycle is the folder; the rest is frontmatter. Filenames get linked to;
-  status changes.
+- Never encode lifecycle, order, dates, or status in a filename (`-todo`, `-followups`,
+  `-active`, `-v2`). Lifecycle is the folder, Backlog order is `plans-order.json`, and the rest
+  is frontmatter. Filenames get linked to; status changes.
 - Keep the slug specific enough to disambiguate from siblings in the same namespace.
 - A milestone or suite series shares a prefix plus an ordinal: `<namespace>-<series>-<n>`.
 - The H1 is prose for a reader — normal capitalization and spacing, naming the outcome. It is not
@@ -183,7 +181,7 @@ These apply to most software projects and need no per-repository declaration:
 | `git` | Git operations, branch and worktree models, merge and history behavior |
 | `infra` | Build, release, packaging, distribution, dependency and environment management |
 | `os` | Operating-system-specific behavior: path semantics, platform detection, per-OS support |
-| `test` | Test harness, fixtures, coverage, CI verification strategy |
+| `testing` | Test harness, fixtures, coverage, flaky tests, CI failures, CI verification strategy |
 | `docs` | Documentation systems, reference material, authoring conventions |
 | `security` | Trust boundaries, permissions, secrets handling, supply-chain concerns |
 | `perf` | Work whose primary goal is efficiency: latency, memory, cost |
@@ -216,6 +214,10 @@ the plan findable among its siblings.
 Prefer the universal namespace only when the work genuinely is generic — cross-cutting Git
 mechanics, platform path handling, or build tooling that no project namespace describes better.
 
+Choose by what the plan changes, not what it mentions or how it is verified. A plan that fixes a
+flaky test's setup is `testing` even when the test covers `ui`; a plan that evaluates how a feature
+behaves belongs to that feature, not to `testing`.
+
 If none of the available namespaces fits, propose adding one to the project config rather than
 inventing an unlisted prefix — an unlisted prefix is how the vocabulary decays into the ad-hoc
 naming this convention exists to replace.
@@ -227,13 +229,15 @@ not invent unlisted prefixes. Run `/plan-suite-init`, which proposes a vocabular
 repository, has the user refine it, and writes the agreed set. Keep the file to values —
 `schemaVersion` and `namespaces`; these rules stay here in the skill, not in per-repository config.
 
-Readiness requires: H1 title, Summary, Goals or desired outcome, Current state or Context, Proposed design or Implementation plan, Validation or acceptance criteria, frontmatter `id`, frontmatter `priority`, and non-empty `next_action`.
+Readiness requires: H1 title, Summary, Goals or desired outcome, Current state or Context, Proposed design or Implementation plan, Validation or acceptance criteria, frontmatter `id`, and non-empty `next_action`.
+
+A plan's namespace is the longest approved `<namespace>-` prefix of its filename, derived on read and never stored. Its place in the Backlog is a position in `docs/plans/plans-order.json`, a repository-local list of plan ids per namespace, never a frontmatter field; see "Placing a new plan" in `workflow-create.md`.
 
 Section headings are matched by label against a synonym list, so several common titles satisfy the same requirement — `Purpose` or `Overview` for Summary, `Current behavior` or `Background` for Context, `Implementation checklist`/`sequence`/`phases` or `Proposed behavior` for Proposed design, `Exit criteria` for Validation. The authoritative list is `modules/plan-suite/section-synonyms.mjs`; add to it rather than renaming existing documents.
 
 Completed plans additionally need a `Verification` section with real content under it — evidence the work was checked, or an explicit statement of what was not verified. A bare heading does not satisfy it. Record evidence itself, never a path under `/tmp` or another temporary folder: the OS deletes those within days and the plan outlives them.
 
-Validation reports each problem as a finding with a stable code, a plain-language message, and a resolution. In place, findings are advisory: a plan can sit in any folder with findings, and the portal reports them. A lifecycle transition is stricter: moving a plan into a folder whose requirements it does not meet is refused with `LIFECYCLE_REQUIREMENTS`, listing every problem at once along with a generated repair prompt, and nothing moves. Moves into `ready/` and `completed/` require no findings at all; moves into `active/` and `review/` tolerate unconfirmed `## Not tested` entries; a move into `archived/` checks only the archived rules.
+Validation reports each problem as a finding with a stable code, a plain-language message, and a resolution. In place, findings do not move or hide a plan: it can sit in any folder with findings, and the portal reports them. Blocking ones, naming findings among them, make `roborepo plans validate` exit 1, and `promote` and `start` also refuse a naming finding or an unreadable `plans-config.json`. A lifecycle transition is stricter: moving a plan into a folder whose requirements it does not meet is refused with `LIFECYCLE_REQUIREMENTS`, listing every problem at once along with a generated repair prompt, and nothing moves. Moves into `ready/` and `completed/` require no findings at all; moves into `active/` and `review/` tolerate unconfirmed `## Not tested` entries; a move into `archived/` checks only the archived rules.
 
 Use Markdown checkboxes for executable work:
 
@@ -326,5 +330,4 @@ Only Result, Approval, and this provenance subsection may differ from integrated
 The shared verifier checks repository/assignment identity, precursor integration, unchanged
 requirements and findings, complete review, explicit human approval, exact implementation, and
 historical base absorption. A later implementation change, conflict, or missing/detached assigned
-worktree invalidates the exception. Pending evidence is not durable approval. Portal priority
-writes still target the assigned worktree. See plan-review's resume reference for the procedure.
+worktree invalidates the exception. Pending evidence is not durable approval. See plan-review's resume reference for the procedure.

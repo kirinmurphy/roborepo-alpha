@@ -17,6 +17,7 @@ import path from "node:path";
 import { finding, messagesOf } from "./findings.mjs";
 import { checkOutsideEdits, isWorktreeBound, resolvePlanAuthority } from "./plan-authority.mjs";
 import { lifecycleFromPath, parseFrontmatter, planFilesInRepository, readPlanRecord, repositoryRecord } from "./index.mjs";
+import { readProjectNamespaces, resolvePlanNamespace } from "./naming.mjs";
 
 export function scanCheckout(checkout, canonical) {
   const { files, scoped } = planFilesInRepository(repositoryRecord(checkout.path, canonical));
@@ -51,6 +52,17 @@ export function selectRecords([primary, ...others]) {
     }
   }
   return records;
+}
+
+// selectRecords with every plan's namespace resolved against the first checkout's vocabulary. A
+// record read from a worktree otherwise resolved it against that worktree's older or newer config,
+// and the order it would rank in lives with the primary checkout.
+export function repositoryPlanRecords(scans) {
+  const { namespaces } = readProjectNamespaces(scans[0].checkout.path);
+  return selectRecords(scans).map((record) => ({
+    ...record,
+    plan: { ...record.plan, namespace: resolvePlanNamespace(path.basename(record.plan.relativePath), namespaces) },
+  }));
 }
 
 // The records one primary copy stands for: usually one, from whichever copy is authoritative.

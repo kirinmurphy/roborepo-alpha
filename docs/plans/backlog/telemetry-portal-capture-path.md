@@ -1,6 +1,5 @@
 ---
 id: u8211thb
-priority: medium
 next_action: Design a hermetic portal-to-capture scenario using a simulated supported harness and the production telemetry capture path
 blocked_by: []
 depends_on: []

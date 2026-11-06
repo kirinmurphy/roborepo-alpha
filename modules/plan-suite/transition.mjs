@@ -4,7 +4,8 @@
 // It resolves the plan, checks the move against the lifecycle manifest, applies that transition's
 // rules (transition-rules.mjs), validates the destination, renames the plan with `git mv`, commits
 // only the plan's old and new paths, and approves the result only after fresh post-commit checks
-// (transition-checks.mjs). Unrelated staged or unstaged work in the primary checkout is never
+// (transition-checks.mjs). Archiving alone also clears the plan from the prerequisites of unfinished
+// plans, in the same commit, so nothing is left waiting on work that will never happen. Unrelated staged or unstaged work in the primary checkout is never
 // touched. A refused move mutates nothing, a repeated move commits nothing, and nothing is pushed.
 import fs from "node:fs";
 import path from "node:path";
@@ -13,9 +14,11 @@ import {
   domainError,
   lifecycleFindings,
   lifecycleMoveDestination,
+  removeFrontmatterListEntry,
   selectRepositoryPlan,
 } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
+import { namingGateFindings } from "./naming.mjs";
 import { buildRepairPrompt } from "./repair-prompt.mjs";
 import { currentBranch, dirtyPaths, findLinkedWorktree, git, gitOrThrow, linksToPath, primaryCheckout, topLevel } from "./plan-git.mjs";
 import { TRANSITION_RULES } from "./transition-rules.mjs";
@@ -27,6 +30,9 @@ const TOLERATED = { active: new Set(["UNCONFIRMED_NOT_TESTED"]), review: new Set
 // Archiving is explicit termination, not a claim that the plan is sound, so only the archived
 // destination's own rules gate it; the document-wide structure rules do not.
 const GATE_KINDS = { archived: new Set(["lifecycle"]) };
+// Moving a plan into implementation is the last cheap moment to fix its filename: inbound links and
+// worktree records accumulate from here on. Later transitions never revisit it.
+const NAMING_GATED_TRANSITIONS = new Set(["promote", "start"]);
 
 export async function transitionPlan(options) {
   const { cwd = process.cwd(), selector, transition: transitionId, base = "main" } = options;
@@ -41,7 +47,8 @@ export async function transitionPlan(options) {
   assertRunningInPrimary(cwd, primary, transition.id);
   assertOnBaseBranch(primary, base);
   const target = transition.id === "start" ? findLinkedWorktree(primary, options.worktree) : null;
-  const record = selectRepositoryPlan(buildRepositoryPlanSnapshot({ cwd: primary }), selector, { cwd });
+  const snapshot = buildRepositoryPlanSnapshot({ cwd: primary });
+  const record = selectRepositoryPlan(snapshot, selector, { cwd });
   const from = record.plan.lifecycle;
   const fromPath = record.plan.relativePath;
   const atDestination = from === transition.to;
@@ -68,6 +75,8 @@ export async function transitionPlan(options) {
     });
   }
 
+  const references = rules.clearsReferences ? planReferences(primary, snapshot, record) : { cleared: [], left: [] };
+
   const current = fs.readFileSync(path.join(primary, fromPath), "utf8");
   // A repeated move of a plan already at its destination skips the gates that judged the move; it
   // only commits the command's own pending edits, if any.
@@ -75,7 +84,9 @@ export async function transitionPlan(options) {
     ? { content: current, evidence: {} }
     : await (rules.prepare ? rules.prepare({ primary, record, content: current, options, base, today: today() }) : { content: current });
   const content = prepared.content;
-  assertDestinationReady(record, transition.to, content);
+  assertDestinationReady(record, transition.to, content, NAMING_GATED_TRANSITIONS.has(transition.id)
+    ? namingGateFindings({ repositoryRoot: primary, filename: path.basename(fromPath), lifecycle: from })
+    : []);
 
   const committed = git(primary, ["show", `HEAD:${fromPath}`]);
   if (atDestination && committed.ok && committed.raw === content && dirty.length === 0) {
@@ -88,14 +99,44 @@ export async function transitionPlan(options) {
     gitOrThrow(primary, ["mv", "--", fromPath, toPath]);
   }
   fs.writeFileSync(path.join(primary, toPath), content);
-  gitOrThrow(primary, ["add", "--", toPath]);
-  gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths]);
+  for (const dependent of references.cleared) clearReference(primary, dependent, record.plan.id);
+  gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
+  gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
   const commit = git(primary, ["rev-parse", "HEAD"]).stdout;
   const fastForward = target ? fastForwardTarget(target.path, base, base0) : undefined;
-  return result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, evidence: { ...(prepared.evidence || {}), ...(fastForward ? { fastForward } : {}) } });
+  return result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, dependentPaths: references.cleared, evidence: { ...(prepared.evidence || {}), ...(fastForward ? { fastForward } : {}), ...(rules.clearsReferences ? { references } : {}) } });
 }
 
-function result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, evidence }) {
+// The unfinished plans that name this one as a prerequisite. A plan bound to a worktree is left alone:
+// its worktree copy is the authoritative one, and editing the base copy behind it would read as a
+// conflicting copy later. Completed and archived plans keep their history. A dependent with
+// uncommitted edits refuses the move, since committing the file would commit someone else's work too.
+function planReferences(primary, snapshot, record) {
+  const { id } = record.plan;
+  const dependents = id
+    ? snapshot.plans.filter((other) => other.key !== record.key
+      && !["completed", "archived"].includes(other.plan.lifecycle)
+      && [...(other.plan.dependencies || []), ...(other.plan.blockers || [])].includes(id))
+    : [];
+  const cleared = dependents.filter((other) => !other.plan.worktree).map((other) => other.plan.relativePath);
+  const left = dependents.filter((other) => other.plan.worktree).map((other) => other.plan.relativePath);
+  const dirty = cleared.length ? dirtyPaths(primary, cleared) : [];
+  if (dirty.length) {
+    throw domainError("INVALID_CHANGE", "A plan that depends on this one has uncommitted changes, so its dependency cannot be cleared.", {
+      resolution: "Commit or discard those changes, then archive again.",
+      details: dirty,
+    });
+  }
+  return { cleared, left };
+}
+
+function clearReference(primary, relativePath, id) {
+  const file = path.join(primary, relativePath);
+  const content = fs.readFileSync(file, "utf8");
+  fs.writeFileSync(file, ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content));
+}
+
+function result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, dependentPaths = [], evidence }) {
   const checks = validateTransition({
     cwd,
     primary,
@@ -106,6 +147,7 @@ function result({ primary, cwd, base, transition, record, fromPath, toPath, comm
     commit,
     worktree: target ? { name: options.worktree, path: target.path } : null,
     bodyUnchanged: Boolean(rules.bodyUnchanged),
+    dependentPaths,
   });
   return {
     verdict: checks.every((check) => check.ok) ? "APPROVED" : "REFUSED",
@@ -121,11 +163,14 @@ function result({ primary, cwd, base, transition, record, fromPath, toPath, comm
   };
 }
 
-function assertDestinationReady(record, lifecycle, content) {
+function assertDestinationReady(record, lifecycle, content, gateFindings) {
   const tolerated = TOLERATED[lifecycle] || new Set();
   const kinds = GATE_KINDS[lifecycle];
-  const findings = lifecycleFindings(content, { lifecycle }).findings
-    .filter((item) => !tolerated.has(item.code) && (!kinds || kinds.has(item.kind)));
+  const findings = [
+    ...lifecycleFindings(content, { lifecycle }).findings
+      .filter((item) => !tolerated.has(item.code) && (!kinds || kinds.has(item.kind))),
+    ...gateFindings,
+  ];
   if (!findings.length) return;
   throw domainError("LIFECYCLE_REQUIREMENTS", `"${record.plan.title}" does not meet the ${lifecycle} requirements, so it was not moved.`, {
     resolution: "Resolve the listed findings in the plan, then run the transition again.",

@@ -5,7 +5,6 @@
 <link rel="stylesheet" href="/portal/plans/plan-drawer.css" />
     <div id="toast" class="toast" hidden>
       <p class="toast-message" data-slot="message"></p>
-      <div class="toast-actions" data-slot="actions"></div>
     </div>
     <dialog id="skill-modal" data-dialog-size="lg" aria-labelledby="skill-modal-title">
       <div class="modal-head">
@@ -181,7 +180,13 @@
       <span class="blockers-popover-item blockers-popover-item-unresolved" data-slot="title"></span>
     </template>
     <template id="tpl-plan-dependencies">
-      <span class="plan-dependencies">depends on <span data-slot="dependencies"></span></span>
+      <div class="plan-dependencies">
+        <span data-slot="heading"></span>
+        <ul class="plan-dependency-list" role="list" data-slot="dependencies"></ul>
+      </div>
+    </template>
+    <template id="tpl-plan-dependency">
+      <li class="plan-dependency"><a class="namespace-badge" data-slot="namespace"></a> <span data-slot="label"></span> <span data-slot="status"></span></li>
     </template>
     <template id="tpl-menu-item">
       <button type="button" class="menu-button-item">
@@ -200,7 +205,6 @@
     <template id="tpl-plan-status">
       <div class="plan-status-content">
         <div class="status-document" role="group" aria-label="Document status">
-          <div class="priority-slot" data-slot="priority"></div>
           <time class="meta-line" data-slot="modified"><portal-icon name="clock" size="sm" aria-hidden="true"></portal-icon><span data-slot="meta"></span></time>
           <span data-slot="warnings" hidden></span>
         </div>

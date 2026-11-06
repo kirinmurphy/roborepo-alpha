@@ -1,5 +1,5 @@
 // The plan lifecycle, declared once in manifests/platform/plan-lifecycle.json: each state's folder,
-// label, tab, priority display, worktree binding, and portal copy-prompt actions, plus the
+// label, tab, worktree binding, and portal copy-prompt actions, plus the
 // transitions between states and the commands that perform them.
 //
 // The manifest names states; it does not encode rules. Destination validators stay in
@@ -41,9 +41,7 @@ export function validateLifecycleManifest(manifest) {
     }
     if (typeof state.label !== "string" || !state.label.trim()) fail(`${state.id}: label is required`);
     if (!TABS.has(state.tab)) fail(`${state.id}: tab must be primary or overflow`);
-    for (const key of ["showsPriority", "worktreeBound"]) {
-      if (typeof state[key] !== "boolean") fail(`${state.id}: ${key} must be a boolean`);
-    }
+    if (typeof state.worktreeBound !== "boolean") fail(`${state.id}: worktreeBound must be a boolean`);
     if (!Array.isArray(state.actions)) fail(`${state.id}: actions must be an array`);
     for (const action of state.actions) {
       if (!SLUG.test(action?.command || "")) fail(`${state.id}: action command must be a slug`);
@@ -93,11 +91,10 @@ export function compileLifecycleModel(manifest) {
 // and actions without carrying its own copy.
 export function lifecycleProjection(model) {
   return {
-    states: model.states.map(({ id, label, tab, showsPriority, worktreeBound, actions }) => ({
+    states: model.states.map(({ id, label, tab, worktreeBound, actions }) => ({
       id,
       label,
       tab,
-      showsPriority,
       worktreeBound,
       actions: actions.map(({ command, label: actionLabel, description }) => ({ command, label: actionLabel, description })),
     })),

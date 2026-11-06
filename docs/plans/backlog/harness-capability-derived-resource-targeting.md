@@ -1,6 +1,5 @@
 ---
 id: harness-capability-derived-resource-targeting
-priority: high
 next_action: Inventory current resource targeting and restrictions, then implement one capability resolver while reusing the existing Codex permission hook and provider delivery boundary.
 blocked_by: []
 depends_on: []

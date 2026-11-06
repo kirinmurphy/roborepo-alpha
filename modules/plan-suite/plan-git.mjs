@@ -37,6 +37,15 @@ export function currentBranch(cwd) {
   return git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout;
 }
 
+// The branch lifecycle commits land on when no caller names one: the remote's default, then main or
+// master. Null when none of those says, so a caller refuses rather than guessing, because treating
+// whichever branch is checked out as the base would defeat the check that it is the base.
+export function repositoryBaseBranch(cwd) {
+  const remote = git(cwd, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
+  if (remote.ok && remote.stdout) return remote.stdout.replace(/^refs\/remotes\/origin\//, "");
+  return ["main", "master"].find((name) => git(cwd, ["rev-parse", "--verify", "--quiet", `refs/heads/${name}`]).ok) ?? null;
+}
+
 // Finds the linked worktree whose Git administrative name (`.git/worktrees/<name>`) is `name`. The
 // main checkout has no administrative name and can never match. Returns null when none does.
 export function linkedWorktreeNamed(primary, name) {

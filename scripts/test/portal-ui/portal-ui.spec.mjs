@@ -3,6 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
+import { backlogUrlFor } from "./helpers.mjs";
 import { codexHookGuidance } from "../../harnesses/codex/hook-guidance.mjs";
 import { buildBehaviorView } from "../../cli/config.mjs";
 
@@ -1429,8 +1430,8 @@ test.describe("repository-first portal Home", () => {
       await expect(row.getByRole("button", { name: "Links" })).toHaveCount(0);
     }
 
-    // An unclaimed worktree keeps its branch label with its tooltip, port, and Links; its copy control
-    // is the worktree dropdown, which copies the branch and path but has no plan file.
+    // An unclaimed worktree keeps its branch label with its tooltip, port, and Links; the worktree
+    // dropdown stands in for its copy control, copying the branch and path but no plan file.
     await expect(loose.locator("[data-slot=root-info]")).toBeVisible();
     await expect(loose.locator("[data-slot=root-copy] portal-copy-menu")).toHaveCount(0);
     await loose.getByRole("button", { name: "Worktree details for feature/loose" }).click();
@@ -1540,14 +1541,12 @@ test.describe("repository-first portal Home", () => {
     await page.route("**/api/plans/prompt", (route) => route.fulfill({ json: { prompt: `prompt for ${route.request().postDataJSON().action}` } }));
   }
 
-  test("a worktree plan row shows its next action beside the details toggle and copies its prompt", async ({ page }) => {
+  test("a worktree plan row shows its next action beside its completion and copies its prompt", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     await planFixture(page);
     await routeNextAction(page, { lifecycle: "review" });
     await page.goto("/");
     const identity = roboRepoCard(page).locator(".plan-identity").filter({ hasText: "Plan A" });
-    // The worktree toggle follows the title, ahead of the completion; the action closes the line.
-    await expect(identity.getByRole("button", { name: "Worktree details for Plan A" })).toBeVisible();
     await expect(identity.getByRole("progressbar", { name: "Plan A completion" })).toBeVisible();
     const action = identity.getByRole("button", { name: "Review", exact: true });
     await expect(action).toHaveAttribute("title", "Copy the /plan-review prompt");
@@ -1587,13 +1586,25 @@ test.describe("repository-first portal Home", () => {
     const wide = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
     const centerY = (box) => box.y + box.height / 2;
     expect(Math.abs(centerY(wide[0]) - centerY(wide[3]))).toBeLessThan(2);
+    // The row's name stands 12px clear of what follows it, on plan and worktree rows alike.
+    expect(wide[2].x - (wide[0].x + wide[0].width)).toBeCloseTo(12, 0);
+    const looseRow = checkoutRow(card, "feature/loose");
+    const looseName = await looseRow.locator("[data-slot=root-info]").boundingBox();
+    const looseDrift = await looseRow.locator(".git-drift").boundingBox();
+    expect(looseDrift.x - (looseName.x + looseName.width)).toBeCloseTo(12, 0);
+    // The worktree dropdown is the row's rightmost control: port, Links, then the dropdown.
+    expect(wide[4].x + wide[4].width).toBeLessThanOrEqual(wide[5].x);
+    expect(wide[5].x + wide[5].width).toBeLessThanOrEqual(wide[1].x);
+    // A main checkout has no dropdown and reserves no space for one: its Links ends the row.
+    const mainLinks = await checkoutRow(card, "main branch").getByRole("button", { name: "Links", exact: true }).boundingBox();
+    expect(mainLinks.x + mainLinks.width).toBeCloseTo(wide[1].x + wide[1].width, 0);
     await page.screenshot({ path: testInfo.outputPath("plan-row-wide.png") });
     await page.setViewportSize({ width: 720, height: 800 });
     const narrow = await Promise.all([titleButton, toggle, progress, action, port, links, row].map((item) => item.boundingBox()));
     await page.screenshot({ path: testInfo.outputPath("plan-row-wrapped.png") });
-    expect(narrow[1].y).toBeGreaterThanOrEqual(narrow[0].y + narrow[0].height);
-    expect(Math.abs(centerY(narrow[1]) - centerY(narrow[2]))).toBeLessThan(2);
-    expect(Math.abs(centerY(narrow[1]) - centerY(narrow[3]))).toBeLessThan(2);
+    expect(narrow[2].y).toBeGreaterThanOrEqual(narrow[0].y + narrow[0].height);
+    expect(Math.abs(centerY(narrow[2]) - centerY(narrow[3]))).toBeLessThan(2);
+    expect(narrow[1].y - narrow[6].y).toBeCloseTo(wide[1].y - wide[6].y, 0);
     expect(narrow[4].y - narrow[6].y).toBeCloseTo(wide[4].y - wide[6].y, 0);
     expect(narrow[5].y - narrow[6].y).toBeCloseTo(wide[5].y - wide[6].y, 0);
     expect(narrow[0].height).toBe(wide[0].height);
@@ -2210,7 +2221,7 @@ test.describe("shared plan drawer", () => {
     fs.mkdirSync(path.join(planRoot, ".git"));
     fs.mkdirSync(path.join(planRoot, "docs", "plans", "active"), { recursive: true });
     fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "drawer-fixture.md"), [
-      "---", "id: drawerfx", "priority: high", "next_action: Check the drawer", "---", "",
+      "---", "id: drawerfx", "next_action: Check the drawer", "---", "",
       "# Drawer fixture plan", "", "## Summary", "", "Body text for the drawer.", "",
       "## Tasks", "", "- [x] First task", "- [ ] Second task", "",
     ].join("\n"));
@@ -2300,7 +2311,6 @@ test.describe("shared plan drawer", () => {
     await expect(drawer.locator("#drawer-title")).toHaveText("Drawer fixture plan");
     await expect(drawer.locator("#drawer-tasks li")).toHaveCount(2);
     await expect(drawer.locator("plan-status option-dropdown")).toHaveCount(0);
-    await expect(drawer.getByText(`${record.plan.priority} priority`, { exact: true })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(drawer).not.toBeVisible();
   });
@@ -2329,7 +2339,7 @@ test.describe("Plans card commands", () => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
   let planRoot;
   const plan = (id, title, tasks) => [
-    "---", `id: ${id}`, "priority: high", "next_action: Do the next thing", "---", "",
+    "---", `id: ${id}`, "next_action: Do the next thing", "---", "",
     `# ${title}`, "", "## Summary", "", "Body.", "", "## Tasks", "", tasks, "",
   ].join("\n");
   test.beforeAll(() => {
@@ -2347,7 +2357,7 @@ test.describe("Plans card commands", () => {
   test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
   test.beforeEach(async ({ page }) => {
     await addRepositorySource(page, planRoot);
-    await page.route("**/api/plans", async (route) => {
+    await page.route(/\/api\/plans(\?|$)/, async (route) => {
       const data = await (await route.fetch()).json();
       data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       await route.fulfill({ json: data });
@@ -2365,8 +2375,8 @@ test.describe("Plans card commands", () => {
     ["Review", "Approved card plan", "Close", "plan-close", "review/card-approved.md"],
   ]) {
     test(`a ${tab.toLowerCase()} card's ${label} copies the /${command} prompt and moves nothing`, async ({ page }) => {
-      await page.goto("/plans");
-      await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
+      await page.goto(tab === "Backlog" ? await backlogUrlFor(page, title) : "/plans");
+      if (tab !== "Backlog") await page.getByText(new RegExp(`^${tab} \\(`)).first().click();
       const card = page.locator("plan-card", { hasText: title });
       if (tab === "Active") {
         await expect(card.locator(".recommended-cta")).toHaveCount(0);
@@ -2390,11 +2400,6 @@ test.describe("Plans card commands", () => {
         const drawerPrompt = page.waitForRequest((request) => request.url().endsWith("/api/plans/prompt"));
         await drawerAction.click();
         expect((await drawerPrompt).postDataJSON().action).toBe(command);
-        const documentStatus = drawer.getByRole("group", { name: "Document status", exact: true });
-        await documentStatus.getByRole("button", { name: "high", exact: true }).click();
-        await documentStatus.getByRole("option", { name: "low", exact: true }).click();
-        await expect(documentStatus.getByRole("button", { name: "low", exact: true })).toBeVisible();
-        await expect(drawerAction).toBeVisible();
       }
     });
   }
@@ -2406,7 +2411,6 @@ test.describe("Plans card commands", () => {
     await page.screenshot({ path: testInfo.outputPath("plans-layout.png") });
     const documentStatus = card.getByRole("group", { name: "Document status", exact: true });
     await expect(documentStatus.getByLabel(/^Modified /)).toContainText("now");
-    await expect(documentStatus.getByRole("button", { name: "high", exact: true })).toHaveCount(0);
     const [detailsBox, modifiedBox, warningsBox] = await Promise.all([
       card.getByRole("button", { name: /Findings card plan/ }).first().boundingBox(),
       documentStatus.getByLabel(/^Modified /).boundingBox(),
@@ -2483,7 +2487,7 @@ test.describe("Plans card commands", () => {
 
   test("copy menus show compact labels and separate the document filename", async ({ page }, testInfo) => {
     for (const lifecycle of ["backlog", "ready", "active", "review"]) {
-      await page.goto(`/plans?lifecycle=${lifecycle}`);
+      await page.goto(lifecycle === "backlog" ? await backlogUrlFor(page, "Backlog card plan") : `/plans?lifecycle=${lifecycle}`);
       const card = page.locator("plan-card").first();
       await card.getByRole("button", { name: "Plan actions", exact: true }).click();
       const menu = card.getByRole("group", { name: "Copy options", exact: true });
@@ -2545,7 +2549,7 @@ test.describe("Plans card commands", () => {
   });
 
   test("a structurally complete backlog card shows Promote without positive document badges", async ({ page }) => {
-    await page.route("**/api/plans", async (route) => {
+    await page.route(/\/api\/plans(\?|$)/, async (route) => {
       const data = await (await route.fetch()).json();
       data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
       const record = data.plans.find((record) => record.plan.title === "Backlog card plan");
@@ -2553,7 +2557,7 @@ test.describe("Plans card commands", () => {
       record.plan.readiness = "ready";
       await route.fulfill({ json: data });
     });
-    await page.goto("/plans?lifecycle=backlog");
+    await page.goto(await backlogUrlFor(page, "Backlog card plan"));
     const card = page.locator("plan-card", { hasText: "Backlog card plan" });
     await expect(card.getByRole("button", { name: "Promote", exact: true })).toBeVisible();
     await expect(card.getByRole("group", { name: "Document status", exact: true }).getByLabel(/^Modified /)).toContainText("now");

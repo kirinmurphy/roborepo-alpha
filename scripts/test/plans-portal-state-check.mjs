@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import {
-  isVisible,
-  replaceRecord,
-  filteredListActionFor,
   matchesFilters,
   optionCounts,
   resolveBlockers,
@@ -19,27 +16,14 @@ import {
   FILTER_OPTION_DEFS,
   lifecycleFromSearchParams,
 } from "../../portal/plans/state.js";
-import { isLifecycle, lifecycleActions, lifecycleLabel, lifecycleTabs, setLifecycleModel, showsPriority } from "../../portal/plans/lifecycle.js";
+import { isLifecycle, lifecycleActions, lifecycleLabel, lifecycleTabs, setLifecycleModel } from "../../portal/plans/lifecycle.js";
 import { primaryPlanAction, recommendedPlanCommand, incompleteDependencies } from "../../portal/plans/plan-actions.js";
 import { LIFECYCLE_MODEL, lifecycleProjection } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 
-// Pure mutation-orchestration
-// helpers (isVisible, replaceRecord, filteredListActionFor) have no DOM dependency, so this test
-// drives them directly the same way telemetry-portal-state-check.mjs exercises telemetry's URL
-// state helpers — no browser needed.
+// The page's filter, sort, and lifecycle helpers have no DOM dependency, so this test drives them
+// directly the same way telemetry-portal-state-check.mjs exercises telemetry's URL state helpers.
 
 setLifecycleModel(lifecycleProjection(LIFECYCLE_MODEL));
-testLifecycleMoveMakesVisibleCardInvisible();
-testPriorityChangeUnderMatchingFilterMakesInvisible();
-testPriorityChangeUnderAllKeepsVisible();
-testPriorityFiltersOnlyApplyToBacklogAndReady();
-testRecordNotPreviouslyVisibleStaysInvisible();
-testReplaceRecordSwapsOldKeyForNew();
-testReplaceRecordLeavesOtherRecordsUntouched();
-testFilteredListActionForLifecycleReturnsNull();
-testFilteredListActionForPriorityWhenFilterMatchesPreviousValue();
-testFilteredListActionForPriorityNullWhenFilterDoesNotMatch();
-testFilteredListActionForUnrelatedPropertyReturnsNull();
 testResolveBlockersResolvesMatchingId();
 testResolveBlockersMarksUnresolvedId();
 testResolveBlockersScopedToSameRepository();
@@ -59,23 +43,6 @@ testRecommendedCommandFollowsTheLifecycle();
 testFilterNamesNeverReadAsLifecycleOrApproval();
 console.log("ok: plans portal state checks passed");
 
-function testPriorityFiltersOnlyApplyToBacklogAndReady() {
-  setLifecycleModel(lifecycleProjection(LIFECYCLE_MODEL));
-  for (const lifecycle of LIFECYCLE_MODEL.stateIds) {
-    for (const priority of ["high", "medium", "low", "none"]) {
-      const item = record({ lifecycle, priority });
-      assert.equal(matchesFilters(item, { ...FILTER_DEFAULTS, priority }), true, `${lifecycle} with matching priority`);
-      const otherPriority = priority === "high" ? "low" : "high";
-      assert.equal(matchesFilters(item, { ...FILTER_DEFAULTS, priority: otherPriority }), !["backlog", "ready"].includes(lifecycle), `${lifecycle} ignores priority outside the queue`);
-      assert.equal(matchesFilters(item, FILTER_DEFAULTS), true, "all priorities keeps every lifecycle");
-    }
-  }
-  const counts = optionCounts("priority", ["all", "high", "none"], LIFECYCLE_MODEL.stateIds.map((lifecycle) => record({ lifecycle })), FILTER_DEFAULTS);
-  assert.equal(counts.get("all"), 2, "priority counts only include backlog and ready");
-  assert.equal(counts.get("high"), 2, "legacy active or completed priority does not inflate counts");
-  assert.equal(counts.get("none"), 0);
-}
-
 // The portal holds no lifecycle list of its own: everything below comes from the projection the
 // server publishes in the plans snapshot, built from the same manifest the domain module reads.
 function testLifecycleModelComesFromTheSnapshot() {
@@ -91,8 +58,6 @@ function testLifecycleModelComesFromTheSnapshot() {
   assert.deepEqual(lifecycleTabs().filter((tab) => tab.secondary).map((tab) => tab.id), ["completed", "archived", "unclassified"]);
   assert.equal(lifecycleLabel("ready"), "Ready");
   assert.ok(isLifecycle("unclassified"));
-  assert.equal(showsPriority("review"), false);
-  assert.equal(showsPriority("completed"), false);
   assert.deepEqual(lifecycleActions("review").map((action) => action.label), ["Review", "Fix findings", "Close", "Archive"]);
 }
 
@@ -136,7 +101,7 @@ function testFilterNamesNeverReadAsLifecycleOrApproval() {
   }
 }
 
-function record({ key = "k1", lifecycle = "backlog", priority = "high", id = "plan-1", repositoryId = "r1", blockers = [], taskCounts = { total: 0, complete: 0, remaining: 0 } } = {}) {
+function record({ key = "k1", lifecycle = "backlog", id = "plan-1", repositoryId = "r1", blockers = [], taskCounts = { total: 0, complete: 0, remaining: 0 } } = {}) {
   return {
     key,
     mtimeMs: 1,
@@ -145,7 +110,6 @@ function record({ key = "k1", lifecycle = "backlog", priority = "high", id = "pl
       id,
       title: "Plan " + id,
       lifecycle,
-      priority,
       relativePath: `docs/plans/${lifecycle}/${id}.md`,
       nextAction: "",
       blockers,
@@ -163,91 +127,27 @@ function record({ key = "k1", lifecycle = "backlog", priority = "high", id = "pl
   };
 }
 
-function testLifecycleMoveMakesVisibleCardInvisible() {
-  const r = record({ lifecycle: "backlog" });
-  const before = isVisible(r, "backlog", FILTER_DEFAULTS);
-  const moved = record({ ...r, lifecycle: "active" });
-  moved.plan.lifecycle = "active";
-  const after = isVisible(moved, "backlog", FILTER_DEFAULTS);
-  assert.equal(before, true, "expected the original record visible on the backlog tab");
-  assert.equal(after, false, "expected the moved record invisible on the backlog tab");
-}
-
-function testPriorityChangeUnderMatchingFilterMakesInvisible() {
-  const filters = { ...FILTER_DEFAULTS, priority: "high" };
-  const r = record({ priority: "high" });
-  assert.equal(isVisible(r, "backlog", filters), true);
-  const changed = record({ priority: "low" });
-  assert.equal(isVisible(changed, "backlog", filters), false, "priority filter=high must exclude a record now priority=low");
-}
-
-function testPriorityChangeUnderAllKeepsVisible() {
-  const filters = { ...FILTER_DEFAULTS, priority: "all" };
-  const changed = record({ priority: "low" });
-  assert.equal(isVisible(changed, "backlog", filters), true, "priority filter=all must keep any priority visible");
-}
-
-function testRecordNotPreviouslyVisibleStaysInvisible() {
-  // A record already excluded by lifecycle tab before a priority change stays excluded after —
-  // there is no removal to notify about (the doc: "a record not previously visible does not
-  // generate a removal toast").
-  const filters = { ...FILTER_DEFAULTS };
-  const r = record({ lifecycle: "active" });
-  const wasVisible = isVisible(r, "backlog", filters);
-  assert.equal(wasVisible, false);
-  const changed = record({ lifecycle: "active", priority: "low" });
-  const nowVisible = isVisible(changed, "backlog", filters);
-  assert.equal(nowVisible, false);
-}
-
-function testReplaceRecordSwapsOldKeyForNew() {
-  const original = record({ key: "old-key" });
-  const updated = record({ key: "new-key" });
-  const plans = [record({ key: "other" }), original];
-  const replaced = replaceRecord(plans, "old-key", updated);
-  assert.equal(replaced.length, 2);
-  assert.equal(replaced.find((item) => item.key === "new-key"), updated, "returned old key must be replaced by the new key exactly once");
-  assert.equal(replaced.some((item) => item.key === "old-key"), false, "the stale old key must no longer be present");
-}
-
-function testReplaceRecordLeavesOtherRecordsUntouched() {
-  const other = record({ key: "other" });
-  const plans = [other, record({ key: "target" })];
-  const replaced = replaceRecord(plans, "target", record({ key: "target-v2" }));
-  assert.equal(replaced[0], other, "an unrelated record must be returned as the same reference, not rebuilt");
-}
-
-function testFilteredListActionForLifecycleReturnsNull() {
-  const change = { property: "lifecycle", previousValue: "backlog", newValue: "active" };
-  const state = { selectedLifecycle: "backlog", filters: { ...FILTER_DEFAULTS } };
-  assert.equal(filteredListActionFor(change, state), null,
-    "lifecycle changes happen through plan-suite commands, not the page's mutation toast");
-}
-
-function testFilteredListActionForPriorityWhenFilterMatchesPreviousValue() {
-  const change = { property: "priority", previousValue: "high", newValue: "low" };
-  const state = { selectedLifecycle: "backlog", filters: { ...FILTER_DEFAULTS, priority: "high" } };
-  const action = filteredListActionFor(change, state);
-  assert.ok(action);
-  assert.equal(action.type, "priority");
-  assert.equal(action.value, "low");
-}
-
-function testFilteredListActionForPriorityNullWhenFilterDoesNotMatch() {
-  const change = { property: "priority", previousValue: "high", newValue: "low" };
-  const state = { selectedLifecycle: "backlog", filters: { ...FILTER_DEFAULTS, priority: "all" } };
-  assert.equal(filteredListActionFor(change, state), null);
-}
-
-function testFilteredListActionForUnrelatedPropertyReturnsNull() {
-  const change = { property: "unknown", previousValue: "x", newValue: "y" };
-  const state = { selectedLifecycle: "backlog", filters: { ...FILTER_DEFAULTS } };
-  assert.equal(filteredListActionFor(change, state), null);
-}
-
 // Sanity: matchesFilters is re-exported and used by isVisible internally — confirm the import
 // itself resolves (would throw at module load if state.js's exports changed shape).
 assert.equal(typeof matchesFilters, "function");
+
+// Backlog's Blockers filter also counts unfinished prerequisites; other lifecycles read blocked_by only.
+function testBlockersFilterCountsPrerequisitesInBacklogOnly() {
+  const filters = { ...FILTER_DEFAULTS, blocked: "unblocked" };
+  const working = record({ key: "w", id: "working", lifecycle: "active" });
+  const done = record({ key: "d", id: "done", lifecycle: "completed" });
+  const waiting = record({ key: "a", id: "waiting" });
+  waiting.plan.dependencies = ["working"];
+  const finished = record({ key: "f", id: "finished" });
+  finished.plan.dependencies = ["done"];
+  const activeWaiting = record({ key: "aw", id: "active-waiting", lifecycle: "active" });
+  activeWaiting.plan.dependencies = ["working"];
+  const plans = [working, done, waiting, finished, activeWaiting];
+  const keys = (value) => plans.filter((item) => matchesFilters(item, { ...filters, blocked: value }, null, plans)).map((item) => item.key);
+  assert.deepEqual(keys("blocked"), ["a"], "only the Backlog plan waiting on unfinished work is blocked");
+  assert.deepEqual(keys("unblocked"), ["w", "d", "f", "aw"]);
+}
+testBlockersFilterCountsPrerequisitesInBacklogOnly();
 
 function testResolveBlockersResolvesMatchingId() {
   const blocker = record({ key: "b", id: "plan-b" });
@@ -393,10 +293,12 @@ function testActiveSortSinksUnstartedAndUntrackedToTheBottom() {
 }
 
 function testActiveSortFallsBackToPlanSortOnTies() {
-  const a = record({ id: "aaa", lifecycle: "active", priority: "low", taskCounts: counts(5, 10) });
-  const b = record({ id: "bbb", lifecycle: "active", priority: "high", taskCounts: counts(5, 10) });
+  const a = record({ id: "aaa", lifecycle: "active", taskCounts: counts(5, 10) });
+  const b = record({ id: "bbb", lifecycle: "active", taskCounts: counts(5, 10) });
+  a.plan.modifiedAt = "2026-01-01T00:00:00Z";
+  b.plan.modifiedAt = "2026-02-01T00:00:00Z";
   assert.deepEqual(order([a, b]), ["bbb", "aaa"],
-    "equal completion must defer to planSort, which ranks high priority first");
+    "equal completion must defer to planSort, which ranks the most recently changed first");
 }
 
 function testSortForLifecycleOnlyChangesActive() {
