@@ -1642,6 +1642,37 @@ test.describe("Backlog directory and ordering", () => {
     expect(errors).toEqual([]);
   });
 
+  for (const uncommitted of [false, true]) {
+    test(`an archive whose refresh fails holds only that plan until a newer snapshot (uncommitted: ${uncommitted})`, async ({ page }) => {
+      setOrder(["alphaa01", "alphab02"]);
+      await openOrdering(page);
+      await page.route("**/api/plans/archive", (route) => route.fulfill({
+        status: uncommitted ? 500 : 200,
+        contentType: "application/json",
+        body: JSON.stringify(uncommitted ? { error: { message: "Move uncommitted", code: "MOVE_NOT_COMMITTED" } } : { ok: true }),
+      }));
+      const failing = /\/api\/plans\/refresh/;
+      await page.route(failing, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
+      const archive = page.getByRole("button", { name: "Archive Traces", exact: true });
+      await archive.click();
+      const dialog = page.locator("#ordering-archive");
+      await dialog.getByRole("textbox").fill("Superseded.");
+      await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+      await expect(dialog.getByRole("button", { name: "Archive Plan", exact: true })).toBeEnabled();
+      await dialog.getByRole("button", { name: "Archive Plan", exact: true }).click();
+      if (uncommitted) {
+        await expect(dialog.getByText("Move uncommitted")).toBeVisible();
+        await dialog.getByRole("button", { name: "Close", exact: true }).click();
+      }
+      await expect(dialog).toBeHidden();
+      await expect(archive).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Archive Diagnostics", exact: true })).toBeEnabled();
+      await page.unroute(failing);
+      await page.getByRole("button", { name: "Refresh", exact: true }).click();
+      await expect(archive).toBeEnabled();
+    });
+  }
+
   test("a Save whose refresh fails keeps the saved order on screen and says the page is out of date", async ({ page }) => {
     await openOrdering(page);
     const failing = /\/api\/plans\/refresh/;

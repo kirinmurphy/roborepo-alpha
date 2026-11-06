@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
+import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { reviewFreshness } from "../../modules/plan-suite/review-freshness.mjs";
 import { buildPlanSnapshot } from "../../modules/plan-suite/index.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
@@ -519,6 +520,21 @@ try {
     assert.equal(git(root, "status", "--porcelain"), statusBefore, "the rename and edits are undone");
     assert.equal(fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8"), planBefore, "the plan's text is restored");
     assert.equal(fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8"), dependentBefore, "the dependent still names the plan");
+
+    // A dependent that keeps refusing writes can't stop the undo, since it never changed.
+    const writeFileSync = fs.writeFileSync;
+    fs.writeFileSync = (file, ...args) => {
+      if (path.basename(String(file)) === path.basename(backlog("arch-dirty"))) throw Object.assign(new Error("injected write failure"), { code: "EIO" });
+      return writeFileSync(file, ...args);
+    };
+    try {
+      await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }), { code: "MOVE_FAILED" });
+    } finally {
+      fs.writeFileSync = writeFileSync;
+    }
+    assert.equal(head(root), before, "a refused archive commits nothing");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "a failed write undoes the rename and edits");
+    assert.equal(fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8"), planBefore, "the plan's text is restored after a failed write");
 
     // A commit that fails after the rename says the plan moved, and keeps git's reason for this reader.
     // A signing program that fails stops the commit; a hook could be bypassed by an inherited core.hooksPath.

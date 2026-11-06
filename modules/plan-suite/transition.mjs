@@ -160,8 +160,10 @@ function planReferences(primary, snapshot, record) {
 function undoUnstagedMove({ primary, fromPath, toPath, original, clearedDependents, cause }) {
   const details = cause.details ?? [pathFreeFileError(cause)];
   try {
-    fs.writeFileSync(path.join(primary, toPath), original);
-    for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.original);
+    // Only what changed is rewritten: the file that refused the first write may refuse this one too.
+    const restore = (file, text) => { if (fs.readFileSync(file, "utf8") !== text) fs.writeFileSync(file, text); };
+    restore(path.join(primary, toPath), original);
+    for (const dependent of clearedDependents) restore(dependent.file, dependent.original);
     gitOrThrow(primary, ["mv", "--", toPath, fromPath]);
   } catch {
     return domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but its edits were not saved.`, {
