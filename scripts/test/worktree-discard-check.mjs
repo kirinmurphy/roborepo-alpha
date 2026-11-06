@@ -180,6 +180,10 @@ try {
   } finally { fs.writeFileSync = originalWrite; }
   const master = fixture(); git(master.mainPath, "branch", "-m", "main", "master");
   assert.equal((await preview(master)).target.baseRef, "refs/heads/master");
+  git(master.mainPath, "branch", "-m", "master", "trunk");
+  assert.equal((await preview(master)).target.baseRef, "refs/heads/trunk");
+  git(master.mainPath, "checkout", "--detach", "-q");
+  assert.equal((await preview(master)).target.baseRef, "HEAD");
   const logState = path.join(root, "logs");
   await Promise.all(Array.from({ length: 20 }, (_, i) => appendRemoval(logState, { at: new Date().toISOString(), i })));
   assert.equal(fs.readFileSync(removalLogPath(logState), "utf8").trim().split("\n").length, 20);

@@ -146,12 +146,13 @@ async function assessDiscard({ mainPath, repositoryId, worktree, scope = "all", 
   const guard = await checkWorktreeRemoval({ worktree: fresh, kind: "confirmed", consent: true, mainPath, currentPath, activePlan: activePlans().has(fresh.name) });
   if (!guard.ok) throw new Error(guard.reason);
   const inventory = await inventoryDiscard(fresh.path, { runGit });
-  base ||= await defaultLandingBase((args) => runGit(mainPath, args));
+  base ||= (await defaultLandingBase((args) => runGit(mainPath, args))) || (scope === "all" ? "HEAD" : null);
   if (!base) throw new Error("base unavailable");
   const resolvedBase = await runGit(mainPath, ["rev-parse", "--symbolic-full-name", "--verify", "--end-of-options", base]);
   base = resolvedBase.stdout.trim();
   const targetRef = fresh.branch ? `refs/heads/${fresh.branch}` : null;
-  if (!resolvedBase.ok || !/^refs\/(heads|remotes)\//.test(base) || base === targetRef) {
+  const retained = /^refs\/(heads|remotes)\//.test(base) || (scope === "all" && base === "HEAD");
+  if (!resolvedBase.ok || !retained || base === targetRef) {
     throw new Error("base must be a retained branch distinct from the worktree branch");
   }
   const baseState = await runGit(mainPath, ["rev-parse", "--verify", `${base}^{commit}`]);
