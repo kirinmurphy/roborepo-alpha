@@ -10,6 +10,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
+import { withCleanupLock } from "../../modules/repositories/worktree-cleanup-lock.mjs";
 import { appendRemoval, removalLogPath } from "../../modules/repositories/worktree-removal.mjs";
 import { saveTransaction, readTransaction } from "../../modules/repositories/worktree-transactions.mjs";
 import {
@@ -234,6 +235,24 @@ try {
   assert.ok(refresh, "a second writer attempts to refresh the pruned record");
   await refresh;
   assert.equal(readTransaction(concurrentRoot, pending.id).state, "applying", "pruning cannot unlink a concurrent replacement");
+  const lockRoot = path.join(tempRoot, "stale-lock");
+  const lockDir = path.join(lockRoot, "worktree-cleanup");
+  const lockFile = path.join(lockDir, "global.lock");
+  fs.mkdirSync(lockDir, { recursive: true });
+  fs.writeFileSync(lockFile, "2147483647\n");
+  let contender;
+  let contendersEntered = 0;
+  const takeoverFs = Object.create(fs);
+  takeoverFs.rmSync = (file, options) => {
+    if (file === lockFile && !contender) {
+      contender = withCleanupLock(lockRoot, () => { contendersEntered++; });
+    }
+    return fs.rmSync(file, options);
+  };
+  await withCleanupLock(lockRoot, () => { contendersEntered++; }, { fsApi: takeoverFs });
+  assert.ok(contender, "the contender arrived during stale-lock reclamation");
+  assert.equal((await contender).locked, true);
+  assert.equal(contendersEntered, 1, "only one contender may reclaim a stale lock");
   console.log("ok: cleanup retention bounds, concurrent append and transaction refresh");
 
   console.log(`ok: retention policy engine (${stores.length} stores registered)`);

@@ -167,7 +167,9 @@ Transactions contain no file bytes or Git refs. Per-path digest detail over 2 Mi
 digests. The file set is bounded to seven days and 5 MiB. A pruned receipt cannot be consumed.
 A state-root lock with a bounded wait serializes transaction writes, pruning, log append and
 compaction, and maintenance resets of both stores. The log keeps 30 days and 2 MiB. Callers must
-stop writers before the final checkout check because editors do not take the cleanup lock.
+stop writers before the final checkout check because editors do not take the cleanup lock. A
+crash during stale-lock recovery can leave a `.lock.recover` marker. Remove that marker only after
+confirming that cleanup and maintenance are idle.
 
 Legacy snapshots are version-1 commits under `refs/roborepo/worktree-archives/<uuid>`, with a tip
 parent and manifest plus index/tracked/untracked/ignored payload trees. Production no longer writes

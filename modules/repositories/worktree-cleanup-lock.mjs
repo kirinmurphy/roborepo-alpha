@@ -8,12 +8,7 @@ export async function withCleanupLock(stateRoot, action, { fsApi = fs, repositor
   const repositoryKey = repositoryPath ? createHash("sha256").update(repositoryPath).digest("hex").slice(0, 16) : "global";
   const file = path.join(dir, `${repositoryKey}.lock`);
   let handle = openLock(file, fsApi);
-  // A cleanup killed by a signal or a reboot never reaches `finally`, and its lock would otherwise
-  // block every later run. Take over only when the recorded process is gone.
-  if (handle == null && staleLock(file, fsApi)) {
-    fsApi.rmSync(file, { force: true });
-    handle = openLock(file, fsApi);
-  }
+  if (handle == null && staleLock(file, fsApi)) handle = recoverStaleLock(file, fsApi);
   if (handle == null) return { locked: true, result: null };
   try {
     fsApi.writeSync(handle, `${process.pid}\n`);
@@ -33,6 +28,20 @@ export async function withCleanupStoreLock(stateRoot, action, fsApi = fs) {
     if (Date.now() >= deadline) throw new Error("worktree cleanup store lock wait expired");
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+}
+
+// Recheck under an exclusive recovery marker so contenders cannot unlink a replacement lock.
+function recoverStaleLock(file, fsApi) {
+  const marker = `${file}.recover`;
+  const claim = openLock(marker, fsApi);
+  if (claim == null) return null;
+  try {
+    if (staleLock(file, fsApi)) fsApi.rmSync(file, { force: true });
+  } finally {
+    fsApi.closeSync(claim);
+    fsApi.rmSync(marker, { force: true });
+  }
+  return openLock(file, fsApi);
 }
 
 function openLock(file, fsApi) {
