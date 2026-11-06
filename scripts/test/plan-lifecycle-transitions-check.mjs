@@ -486,6 +486,15 @@ try {
     assert.ok(exists(root, backlog("arch-busy")));
     fs.writeFileSync(path.join(root, backlog("arch-dirty")), git(root, "show", `HEAD:${backlog("arch-dirty")}`));
 
+    // A dependent that can't be rewritten refuses before the rename, so nothing is left half moved.
+    git(root, "checkout", "--", backlog("arch-dirty"));
+    const statusBefore = git(root, "status", "--porcelain");
+    fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o444);
+    refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a read-only dependent", /could not be updated \(EACCES\)/);
+    fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o644);
+    assert.equal(head(root), before, "a refused archive commits nothing");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "a refused archive leaves no staged move");
+
     // A dependent bound to a worktree keeps its reference, and the result names it; the clean one clears.
     commit(root, "Bind a dependent", {
       [backlog("arch-dirty")]: linkedDoc("archdirt", "depends_on: [archbusy]\nblocked_by: []\nrelated: []\nworktree: arch-bound"),

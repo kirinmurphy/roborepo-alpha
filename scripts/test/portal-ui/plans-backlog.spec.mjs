@@ -7,7 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
-import { addRepositorySource, enablePlanBoard, removeRepositorySources } from "./helpers.mjs";
+import { addRepositorySource, enablePlanBoard, portalToken, removeRepositorySources } from "./helpers.mjs";
 
 const document = ({ id, title, deps = [], summary = `Purpose of ${title}.` }) => [
   "---", `id: ${id}`, "next_action: Do it", `depends_on: [${deps.join(", ")}]`, "---", "",
@@ -574,6 +574,64 @@ test.describe("Backlog directory and ordering", () => {
       await expect(region).not.toHaveClass(/is-excerpt-expanded/);
     } finally {
       fs.rmSync(path.join(repo, "docs/plans/active/alpha-long-active.md"));
+    }
+  });
+
+  test("a failed archive names no absolute path and leaves the plan where it was", async ({ page }) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-archive-failure-"));
+    const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout;
+    const put = (relative, content) => {
+      fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
+      fs.writeFileSync(path.join(root, relative), content);
+    };
+    const dependent = path.join(root, "docs/plans/backlog/beta-after.md");
+    const lock = path.join(root, ".git/index.lock");
+    try {
+      git("init", "-q", "-b", "main");
+      git("config", "user.name", "Portal Test");
+      git("config", "user.email", "portal@example.invalid");
+      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
+      put("docs/plans/backlog/alpha-free.md", document({ id: "failfree1", title: "Free one" }));
+      put("docs/plans/backlog/beta-after.md", document({ id: "failafter", title: "Waits elsewhere", deps: ["failfree1"] }));
+      git("add", ".");
+      git("commit", "-q", "-m", "fixture");
+      await addRepositorySource(page, root);
+      const { backlog } = await (await page.request.get("/api/plans")).json();
+      const { repositoryId } = backlog.find((item) => item.name === path.basename(root));
+      const token = await portalToken(page);
+      const archive = async () => {
+        const response = await page.request.post("/api/plans/archive", {
+          headers: { "X-Cli-Portal-Token": token },
+          data: { repositoryId, id: "failfree1", reason: "Abandoned." },
+        });
+        return { status: response.status(), text: await response.text() };
+      };
+      const expectUnchanged = () => {
+        expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
+        expect(git("status", "--porcelain")).toBe("");
+      };
+
+      // Git's own message for a held lock names the lock file's full path.
+      fs.writeFileSync(lock, "");
+      const locked = await archive();
+      fs.rmSync(lock);
+      expect(locked.status).toBe(500);
+      expect(locked.text).toContain("could not be archived");
+      expect(locked.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
+      fs.chmodSync(dependent, 0o444);
+      const readOnly = await archive();
+      fs.chmodSync(dependent, 0o644);
+      expect(readOnly.status).toBe(400);
+      expect(readOnly.text).toContain("could not be updated (EACCES)");
+      expect(readOnly.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
+      expect((await archive()).status).toBe(200);
+      expect(fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 

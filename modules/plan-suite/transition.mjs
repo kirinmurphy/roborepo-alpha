@@ -18,7 +18,7 @@ import {
   selectRepositoryPlan,
 } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
-import { namingGateFindings } from "./naming.mjs";
+import { namingGateFindings, pathFreeFileError } from "./naming.mjs";
 import { buildRepairPrompt } from "./repair-prompt.mjs";
 import { currentBranch, dirtyPaths, findLinkedWorktree, git, gitOrThrow, linksToPath, primaryCheckout, topLevel } from "./plan-git.mjs";
 import { TRANSITION_RULES } from "./transition-rules.mjs";
@@ -93,13 +93,15 @@ export async function transitionPlan(options) {
     return result({ primary, cwd, base, transition, record, fromPath, toPath, commit: null, options, target, rules, evidence: prepared.evidence || {} });
   }
 
+  const clearedDependents = prepareClearedReferences(primary, references.cleared, record.plan.id);
+
   if (!atDestination) {
     // A repository that predates a lifecycle folder (ready/ and review/, say) gets it on first use.
     fs.mkdirSync(path.join(primary, path.dirname(toPath)), { recursive: true });
     gitOrThrow(primary, ["mv", "--", fromPath, toPath]);
   }
   fs.writeFileSync(path.join(primary, toPath), content);
-  for (const dependent of references.cleared) clearReference(primary, dependent, record.plan.id);
+  for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.markdown);
   gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
   gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
   const commit = git(primary, ["rev-parse", "HEAD"]).stdout;
@@ -130,10 +132,21 @@ function planReferences(primary, snapshot, record) {
   return { cleared, left };
 }
 
-function clearReference(primary, relativePath, id) {
-  const file = path.join(primary, relativePath);
-  const content = fs.readFileSync(file, "utf8");
-  fs.writeFileSync(file, ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content));
+// Runs before the rename, so a dependent that can't be rewritten refuses the move with nothing changed.
+function prepareClearedReferences(primary, relativePaths, id) {
+  return relativePaths.map((relativePath) => {
+    const file = path.join(primary, relativePath);
+    try {
+      fs.accessSync(file, fs.constants.W_OK);
+      const content = fs.readFileSync(file, "utf8");
+      return { file, markdown: ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content) };
+    } catch (err) {
+      throw domainError("INVALID_CHANGE", `A plan that depends on this one could not be updated (${pathFreeFileError(err)}).`, {
+        resolution: "Check that the plan file is writable, then archive again.",
+        details: [relativePath],
+      });
+    }
+  });
 }
 
 function result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, dependentPaths = [], evidence }) {

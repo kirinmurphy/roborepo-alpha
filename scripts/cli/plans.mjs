@@ -13,6 +13,7 @@ import {
   domainError,
 } from "../../modules/plan-suite/index.mjs";
 import { saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
+import { pathFreeFileError } from "../../modules/plan-suite/naming.mjs";
 import { primaryCheckout, repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { loadRegistry } from "../../modules/repositories/index.mjs";
@@ -130,9 +131,21 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
     const result = await transitionPlan({ cwd: primary, transition: "archive", selector: id, reason, base });
     if (result.verdict !== "APPROVED") throw domainError("INVALID_CHANGE", `${id} moved, but its post-commit checks failed.`);
     return { archived: id, references: result.references };
+  } catch (err) {
+    throw browserSafeArchiveError(err);
   } finally {
     cachedSnapshot = null;
   }
+}
+
+// Git's stderr and filesystem messages embed absolute paths, and this answer reaches the browser. The
+// `roborepo plans archive` command keeps them, since its reader is at the machine they name.
+function browserSafeArchiveError(err) {
+  if (err?.code !== "MOVE_FAILED" && !err?.syscall) return err;
+  const detail = err.syscall ? pathFreeFileError(err) : err.message;
+  return domainError("MOVE_FAILED", `This plan could not be archived: ${detail}`, {
+    resolution: "Run `git status` in the repo, resolve what it shows, then try again.",
+  });
 }
 
 export function refreshPlans({ repositoryId = null } = {}) {
