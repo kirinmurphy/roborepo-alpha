@@ -109,7 +109,7 @@ function coreHooksInstallAfterPackageHooks() {
   for (const [command, position] of before) {
     assert.equal(after.get(command), position, `package hook kept its trust position: ${command}`);
   }
-  for (const command of commands(coreCodex)) assert.ok(after.has(command), `core hook installed: ${command}`);
+  for (const handler of handlers(coreCodex)) assert.ok(after.has(handler), `core hook installed: ${handler}`);
   for (const script of coreScripts) assert.ok(fs.existsSync(path.join(home, ".codex", "hooks", script)), `core script copied: ${script}`);
   for (const script of coreScripts.filter((name) => fs.statSync(path.join(coreHooksSource, name)).mode & 0o111)) {
     assert.ok(fs.statSync(path.join(home, ".codex", "hooks", script)).mode & 0o111, `core script stays executable: ${script}`);
@@ -130,7 +130,14 @@ function coreHooksInstallAfterPackageHooks() {
   const labelled = JSON.parse(fs.readFileSync(hooksPath, "utf8"));
   const labels = Object.values(labelled.hooks).flatMap((entries) => entries.flatMap((entry) => entry.hooks || []))
     .map((hook) => hook.statusMessage).filter(Boolean);
-  assert.deepEqual(labels.sort(), ["RoboRepo: command permissions", "RoboRepo: concise command output", "RoboRepo: protected branch push", "RoboRepo: unmanaged skills check"].sort(),
+  const expectedLabels = [
+    "RoboRepo: command permissions",
+    "RoboRepo: concise command output",
+    "RoboRepo: protected branch push",
+    "RoboRepo: unmanaged skills check",
+    "RoboRepo: verified push approval",
+  ];
+  assert.deepEqual(labels.sort(), expectedLabels.sort(),
     "reapplying upgrades the native review labels on existing core hooks");
   assert.deepEqual([...handlerPositions(hooksPath)], [...after], "labelling preserves every hook's command and position");
   run(env, cli, "bundle", "apply", "hooks");
@@ -175,11 +182,13 @@ function updateShipsHooksNewToASelectedBundle() {
   }
   const after = handlerPositions(hooksPath);
   for (const [command, position] of before) assert.equal(after.get(command), position, `kept its trust position: ${command}`);
-  const installed = commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks);
+  const installedHooks = JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks;
+  const installed = commands(installedHooks);
   assert.equal(installed.filter((command) => command.includes(added)).length, 1, "the new handler is installed once");
   const claudeInstalled = commands(JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8")).hooks);
   assert.equal(claudeInstalled.filter((command) => command.includes(added)).length, 1, "the new handler is registered once for Claude");
-  assert.equal(installed.length, new Set(installed).size, "no handler is installed twice");
+  const installedHandlers = handlers(installedHooks);
+  assert.equal(installedHandlers.length, new Set(installedHandlers).size, "no handler is installed twice for one event");
 
   // An older merge re-added the whole grown group, so the core handlers it already had appear twice.
   // The next update keeps each one's first copy, where its trust is, and drops the rest.
@@ -188,8 +197,8 @@ function updateShipsHooksNewToASelectedBundle() {
   duplicated.hooks.PreToolUse.push(structuredClone(coreGroup));
   fs.writeFileSync(hooksPath, JSON.stringify(duplicated));
   run(env, cli, "bundle", "apply", "--selected");
-  const collapsed = commands(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks);
-  assert.equal(collapsed.length, new Set(collapsed).size, "update removes repeated core handlers");
+  const collapsed = handlers(JSON.parse(fs.readFileSync(hooksPath, "utf8")).hooks);
+  assert.equal(collapsed.length, new Set(collapsed).size, "update removes repeated core handlers within each event");
   assert.deepEqual([...handlerPositions(hooksPath)], [...after], "every first copy keeps its trust position");
 
   run(env, cli, "bundle", "remove", "hooks");
@@ -312,10 +321,19 @@ function handlerPositions(hooksPath) {
   const positions = new Map();
   for (const [event, groups] of Object.entries(hooks)) {
     groups.forEach((group, groupIndex) => group.hooks.forEach((hook, handlerIndex) => {
-      positions.set(hook.command, `${event}:${groupIndex}:${handlerIndex}`);
+      positions.set(handlerKey(event, hook.command), `${event}:${groupIndex}:${handlerIndex}`);
     }));
   }
   return positions;
+}
+
+function handlers(fragment) {
+  return Object.entries(fragment).flatMap(([event, groups]) =>
+    groups.flatMap((group) => group.hooks.map((hook) => handlerKey(event, hook.command))));
+}
+
+function handlerKey(event, command) {
+  return `${event}\t${command}`;
 }
 
 function commands(fragment) {
