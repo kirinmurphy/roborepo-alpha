@@ -667,4 +667,8 @@ regression checks below.
 
 ### Approval
 
-- Decision: requested
+- Decision: approved
+- Reviewed implementation commit: 4c4740dadd53da88703896d1eaa67deca29ec2ef
+- Confirmed by: human
+
+The user selected “Approve this commit” in the exact-commit review prompt on 2026-11-06.
