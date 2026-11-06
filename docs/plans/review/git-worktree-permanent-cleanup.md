@@ -512,7 +512,18 @@ regression checks below.
 
 ### Findings
 
-- [ ] Discard accepts the target branch or its raw tip as a landing base, allowing a leftovers receipt for an unmerged commit.
+- [x] Check every ref in an occupied checkout’s symbolic branch chain — fixed in review (0e579737).
+- [x] Keep a replacement lock created after its prior owner exits — fixed in review (6b6ee7e5).
+- [x] Fall back to primary HEAD when the implicit Delete base is unusable — fixed in review (4d198da2).
+- [x] Serialize contenders reclaiming a stale cleanup lock — fixed in review (98b29b86).
+- [x] Protect checkouts using the selected symbolic branch — fixed in review (f863ed8d).
+- [x] Count and label commits with an empty subject in Delete previews — fixed in review (576db77e).
+- [x] Serialize transaction updates, pruning, log append, and maintenance resets — fixed in review (86211a41).
+- [x] Enable Delete with a custom primary branch or detached primary HEAD — fixed in review (d8be2cca).
+- [x] Require a new discard preview when the active-plan warning changes — fixed in review (fdc8b459).
+- [x] Retire the selected ref without following it to another branch — fixed in review (0dad1284).
+- [x] Report pending legacy recovery even when cleanup has no candidates — fixed in review (7e812077).
+- [x] Require an independent branch to prove landing before issuing a leftovers receipt — fixed in review (a2045fe1).
 - [x] Pending branch retirement collided across repos sharing a branch name — filter owning
   repo before checking ambiguity; the regression failed before the fix and passed afterward.
 - [x] Artifact tests asserted classification only — added real squash-landed automatic removal,
@@ -639,8 +650,13 @@ regression checks below.
 - Base failure: `env -u ROBOREPO_ASSUME_INTERACTIVE npm run check </dev/null` reached `test-cli.sh`, where three package authoring rollback checks failed before temporary symlink removal was refused. `bash scripts/test/test-cli.sh --quiet </dev/null` on the synchronized base reproduced all three failures and the removal refusal. The full gate did not reach later suites.
 - `npm run test:portal-ui -- --grep worktree` could not start its local listener on either attempt. No browser assertion ran on the synchronized commit.
 
+- Validator passes 1–4 reproduced preview, branch-retirement, migration-reporting, and retention issues. Every listed review fix has a focused regression.
+- Discard regressions exercised before native worktree removal was refused. Retention assertions passed for bounds, 40 cross-process appends, concurrent transaction refresh, and stale-lock recovery. Both suites returned nonzero. Legacy recovery assertions completed before fixture removal was refused.
+- The full gate on `4d198da2` repeated the synchronized base’s three CLI failures and stopped before the worktree and browser suites. Earlier external-terminal results cover the pre-review implementation only.
+- Local `main` advanced to `4013387f86c7fc77c299881ce593318aaee2d337` during review. The next review round needs to synchronize that implementation before approval can be requested.
+
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: 7f9e7fdd70235f5693385b20d429eac2f54276f6
+- Reviewed implementation commit: 6b6ee7e5488940fc0252f716f77ab726c22cc432
 - Base commit: da88e4f38c535afa61afe212a0e56698d369b076
