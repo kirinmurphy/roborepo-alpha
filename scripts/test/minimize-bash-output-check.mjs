@@ -11,16 +11,21 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const hooks = [
   ["Claude", path.join(repoRoot, "globals/system/hooks/claude/minimize-bash-output.mjs"), "Bash", "command"],
   ["Codex", path.join(repoRoot, "globals/harnesses/codex/hooks/minimize-bash-output.mjs"), "exec_command", "cmd"],
+  ["Codex desktop", path.join(repoRoot, "globals/harnesses/codex/hooks/minimize-bash-output.mjs"), "Bash", "command"],
 ];
 
-function decide(hook, toolName, key, command) {
+function runHook(hook, toolName, key, command) {
   const result = spawnSync(process.execPath, [hook], {
     input: JSON.stringify({ cwd: repoRoot, tool_name: toolName, tool_input: { [key]: command } }),
     encoding: "utf8",
   });
   assert.equal(result.status, 0, `hook exited ${result.status}: ${result.stderr}`);
-  if (!result.stdout.trim()) return "defer";
-  return JSON.parse(result.stdout).hookSpecificOutput.permissionDecision;
+  if (!result.stdout.trim()) return undefined;
+  return JSON.parse(result.stdout).hookSpecificOutput;
+}
+
+function decide(hook, toolName, key, command) {
+  return runHook(hook, toolName, key, command)?.permissionDecision ?? "defer";
 }
 
 const denied = [
@@ -52,6 +57,13 @@ for (const [name, hook, toolName, key] of hooks) {
   for (const command of notDenied) {
     assert.notEqual(decide(hook, toolName, key, command), "deny", `${name} does not deny: ${command}`);
   }
+}
+
+for (const [name, hook, toolName, key] of hooks.filter(([name]) => name.startsWith("Codex"))) {
+  const output = runHook(hook, toolName, key, "npm run lint");
+  assert.equal(output.permissionDecision, "allow", `${name} approves the rewritten lint command`);
+  assert.deepEqual(output.updatedInput, { [key]: "npm run lint 2>&1 | tail -n 120" }, `${name} preserves the command field`);
+  assert.equal(decide(hook, toolName, key, "ls; npm run lint"), "defer", `${name} leaves a compound lint command unchanged`);
 }
 // The Claude hook auto-approves a short list of read-only commands. The approval covers the whole
 // string, so it must not reach anything chained, redirected, or substituted after a safe prefix.

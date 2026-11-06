@@ -33,6 +33,18 @@
           }
         ]
       }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "Bash|exec_command|shell|local_shell|bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$HOME/.codex/hooks/permission-check.mjs\"",
+            "statusMessage": "RoboRepo: verified push approval"
+          }
+        ]
+      }
     ]
   }
 }

@@ -33,14 +33,14 @@ const input = readHookInput()
 if (!input) process.exit(0)
 const toolName = input.tool_name || input.toolName || input.tool || ''
 const toolInput = input.tool_input || input.toolInput || {}
-// exec_command sends the command as `cmd`; older shell tools send `command`. A rewrite goes back
-// under the same key.
+// Desktop shell calls arrive as Bash/command; exec_command uses cmd. A rewrite goes back under
+// the same key.
 const commandKey = toolInput.command === undefined ? 'cmd' : 'command'
 const command = toolInput[commandKey] || ''
 
 // Codex's shell tool goes by a few names depending on version/config. Act only on those; anything
 // else passes through untouched.
-const SHELL_TOOLS = new Set(['exec_command', 'shell', 'local_shell', 'bash'])
+const SHELL_TOOLS = new Set(['Bash', 'exec_command', 'shell', 'local_shell', 'bash'])
 if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !command) {
   process.exit(0)
 }
