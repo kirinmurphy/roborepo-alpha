@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: Get the user's approval of d8813c34, then they merge PR 59 and run /plan-close.
+next_action: Finish the review of f16f87d1, push it when the user asks, confirm CI is green, then get the user's approval.
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -513,6 +513,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **Pinned namespaces lead the repo screen and Next up, stored in `plans-order.json` (user decision).** Pins are listed first pinned first, so re-pinning is how to reorder them. Alternative: alphabetical among pins, which could not express that one focus comes before another. Details shows one namespace at a time, so a pin has nothing to reorder there.
 - **A stale pin is pruned at the next write, not when the config changes (user asked for pruning; timing follows the read-purity rule).** It stops applying as soon as the namespace leaves the config. A pin on an approved namespace with nothing in Backlog stays.
 - **A commit that fails after the rename leaves the move staged and says so (user decision at review).** The error names the new path and how to finish or undo it. Alternative: roll back the rename and dependent edits, which adds work to the path every transition shares and could lose uncommitted plan edits that a transition carries.
+- **A write or staging failure undoes the move (user decision at review, 2026-11-06).** This narrows the entry above to commit failures, where every edit is staged and committing finishes the move whole. Before the edits are staged, committing would land the plan without them and leave its dependents waiting on it. The pre-move text is in hand, so restoring it loses nothing. Alternative: explain the staged state here too, which leaves that bad commit one step away.
 - **Unblocked means no blocker and no unfinished prerequisite (user decision).** research_bots' lone `ingest` plan showed `1 unblocked` because the count accepted a prerequisite in Active. Directory counts and Backlog's Blockers filter now share this rule; other lifecycles' filter still reads `blocked_by` only. Next up keeps accepting work underway, as decided above.
 
 ## Not tested
@@ -598,11 +599,11 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `docs/internal/plans-portal-internals.md` says a plan at the destination always returns `alreadyRecorded`, and its step list omits the staged outcome. — fixed (a579c8dd)
 - [x] An untracked plan already in its destination folder gets the not-committed message, though no move ran and nothing is staged: `modules/plan-suite/transition.mjs`. Reproduced with `plans promote` on a throwaway fixture. — fixed (822bbb32)
 - [x] The archive dialog now shows every refusal's resolution, so portal users read guidance written for agents, such as "Ask the user before switching branches": `portal/plans/archive-dialog.js`, `scripts/cli/plans.mjs`. Reproduced at `archiveBacklogPlan`; the dialog is traced, not run. — fixed (eb9d206b)
-- [ ] Retrying after a failed undo says to commit the staged move, the opposite of the first error's warning: `UNCOMMITTED_MOVE_RESOLUTION` in `modules/plan-suite/transition.mjs`. Reproduced by injecting failures.
-- [ ] The failed-undo branch of `undoUnstagedMove` has no test, and step 5 of `plans-portal-internals.md` omits it.
-- [ ] Rolling back a write or staging failure overrides the user's decision to explain the staged state, with no new decision recorded. — escalated to the human
-- [ ] This record stops at d8813c34: nothing here covers the undo, the archive hold, the banner wording, or their tests, and `next_action` names the old commit.
-- [ ] `plans-backlog.spec.mjs` uses `#ordering-archive` where `getByRole("dialog")` works.
+- [x] Retrying after a failed undo says to commit the staged move, the opposite of the first error's warning: `UNCOMMITTED_MOVE_RESOLUTION` in `modules/plan-suite/transition.mjs`. Reproduced by injecting failures. — fixed (f16f87d1)
+- [x] The failed-undo branch of `undoUnstagedMove` has no test, and step 5 of `plans-portal-internals.md` omits it. — fixed (f16f87d1)
+- [x] Rolling back a write or staging failure overrides the user's decision to explain the staged state, with no new decision recorded. — decided by the user: keep the undo; Decision Log updated
+- [x] This record stops at d8813c34: nothing here covers the undo, the archive hold, the banner wording, or their tests, and `next_action` names the old commit. — corrected in this record
+- [x] `plans-backlog.spec.mjs` uses `#ordering-archive` where `getByRole("dialog")` works. — fixed (f16f87d1)
 
 ### Verification
 
@@ -646,8 +647,9 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - CI on d8813c34 (PR 59): `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed.
 - CI on b6eb206a (PR 59): `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed. CI on base at da88e4f3 passed.
 - At b6eb206a: `backlog-model-check`, `backlog-order-check`, `plan-lifecycle-transitions-check`, `docs-reference-check`, and `plan-tree-naming-check` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 96 of 96; `roborepo plans validate rxv53v6z` reported 0 findings.
-- Review of the changes since d8813c34, Validator pass 1 at b6eb206a (fresh-context subagent): the last 5 findings above, 4 `fix` and 1 `escalate`. It also reported 2 the user set aside on 2026-11-06 as not tied to this plan: a `git mv` that fails partway in `transitionPlan` is not undone, on a line older than this work, and two tests skip their read-only refusals as root. The merge of `main` at e3658b0b touches only Codex hook and permission files, and its remerge diff is empty.
-- `roborepo plans sync-base` refused on an untracked `transcripts/` folder that is not this review's. `main` at da88e4f3 is already an ancestor of the branch, so there was nothing to merge.
+- Review of the changes since d8813c34, Validator pass 1 at b6eb206a (fresh-context subagent): the last 5 findings above, 4 `fix` and 1 `escalate`. It also reported 2 the user set aside on 2026-11-06 as not tied to this plan. The merge of `main` at e3658b0b touches only Codex hook and permission files, and its remerge diff is empty.
+- Changes reviewed since d8813c34: the undo of a move whose edits can't be written or staged, the archive control's hold until a newer snapshot arrives, the banner's wording, and their tests. `main` at da88e4f3 is already in the branch.
+- At f16f87d1: `plan-lifecycle-transitions-check` and `docs-reference-check` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 96 of 96.
 
 ### Result
 
