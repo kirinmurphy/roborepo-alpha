@@ -512,13 +512,14 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - **The banner says default namespaces apply "once set up".** `approvedNamespaces` returns nothing until a repo declares its own, so saying every repo already has them would be false for the repo showing the banner.
 - **Pinned namespaces lead the repo screen and Next up, stored in `plans-order.json` (user decision).** Pins are listed first pinned first, so re-pinning is how to reorder them. Alternative: alphabetical among pins, which could not express that one focus comes before another. Details shows one namespace at a time, so a pin has nothing to reorder there.
 - **A stale pin is pruned at the next write, not when the config changes (user asked for pruning; timing follows the read-purity rule).** It stops applying as soon as the namespace leaves the config. A pin on an approved namespace with nothing in Backlog stays.
+- **A commit that fails after the rename leaves the move staged and says so (user decision at review).** The error names the new path and how to finish or undo it. Alternative: roll back the rename and dependent edits, which adds work to the path every transition shares and could lose uncommitted plan edits that a transition carries.
 - **Unblocked means no blocker and no unfinished prerequisite (user decision).** research_bots' lone `ingest` plan showed `1 unblocked` because the count accepted a prerequisite in Active. Directory counts and Backlog's Blockers filter now share this rule; other lifecycles' filter still reads `blocked_by` only. Next up keeps accepting work underway, as decided above.
 
 ## Not tested
 
-- [ ] The Backlog on your own portal with real plans. You have viewed it on real repos through a portal running this worktree, but only you can confirm it works for your plans.
-- [ ] Next up with real ranks. Rank plans in research_bots and press Save, which writes `docs/plans/plans-order.json` in its primary checkout, then check the repo screen. Only you can press Save on your repos. This repo's own `plans-order.json` already holds real ranks, and a read-only calculation from it gave 7 Next up plans with no moves or findings; that did not exercise the page.
-- [ ] Next up's length on a large repo. Once several roborepo-alpha namespaces have ranked plans, judge whether the cards above the namespace list help or push it too far down. A test cannot judge this.
+- [x] The Backlog on your own portal with real plans. You have viewed it on real repos through a portal running this worktree, but only you can confirm it works for your plans.
+- [x] Next up with real ranks. Rank plans in research_bots and press Save, which writes `docs/plans/plans-order.json` in its primary checkout, then check the repo screen. Only you can press Save on your repos. This repo's own `plans-order.json` already holds real ranks, and a read-only calculation from it gave 7 Next up plans with no moves or findings; that did not exercise the page.
+- [x] Next up's length on a large repo. Once several roborepo-alpha namespaces have ranked plans, judge whether the cards above the namespace list help or push it too far down. A test cannot judge this.
 
 ## Review
 
@@ -586,7 +587,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] No test reaches the raw filesystem error branch of `browserSafeArchiveError` in `scripts/cli/plans.mjs`. — fixed (f176988a)
 - [x] `archiveBacklogPlan` calls `primaryCheckout` outside its error handling, and that error's `details` carry raw git stderr to the browser. Traced, not run. — fixed (f176988a)
 - [x] Plan and addendum text still described `Waiting on N`, `Needs prioritization (1)`, and clickable drawer badges, and omitted Ordering's drawn prerequisites and its opening mode. — corrected in this record
-- [ ] A `git add` or `git commit` failure after the rename leaves the move staged, and the browser says only that the plan could not be archived; a retry is then refused. Reproduced with a failing pre-commit hook. — escalated to the human
+- [x] A `git add` or `git commit` failure after the rename leaves the move staged, and the browser says only that the plan could not be archived; a retry is then refused. Reproduced with a failing pre-commit hook. — decided by the user: explain the staged state; fixed (ced28146)
 
 ### Verification
 
@@ -620,6 +621,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Post-merge Validator pass 1 at b6378eb7 (fresh-context subagent): 5 `fix` and 2 `escalate` findings, all listed above; it did not run the portal UI suite.
 - Post-merge Validator pass 2 at d352757c (fresh-context subagent): the last 5 findings above, 4 `fix` and 1 `escalate`.
 - At d352757c: `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 94 of 94.
+- Manual: the three `## Not tested` entries were confirmed by the user on 2026-11-05: "all UI smoke testing has been completed and all behaviors meet expectations".
 
 ### Result
 
