@@ -588,10 +588,10 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] `archiveBacklogPlan` calls `primaryCheckout` outside its error handling, and that error's `details` carry raw git stderr to the browser. Traced, not run. — fixed (f176988a)
 - [x] Plan and addendum text still described `Waiting on N`, `Needs prioritization (1)`, and clickable drawer badges, and omitted Ordering's drawn prerequisites and its opening mode. — corrected in this record
 - [x] A `git add` or `git commit` failure after the rename leaves the move staged, and the browser says only that the plan could not be archived; a retry is then refused. Reproduced with a failing pre-commit hook. — decided by the user: explain the staged state; fixed (ced28146)
-- [ ] The archive dialog shows only the error's message, so `MOVE_NOT_COMMITTED` hides how to finish or undo the move, and the page keeps listing the moved plan: `portal/plans/archive-dialog.js`, `portal/plans/backlog.js`.
-- [ ] Rerunning a transition after `MOVE_NOT_COMMITTED` can commit half the move: `transitionPlan` treats the plan as already at its destination. Reproduced with `plans promote` on a throwaway fixture.
-- [ ] In a bare-repo layout, `assertRunningInPrimary` sends an absolute path to the browser through `archiveBacklogPlan`. Reproduced at `transitionPlan`; the route is traced, not run.
-- [ ] The commit-failure tests do not assert that the move is staged.
+- [x] The archive dialog shows only the error's message, so `MOVE_NOT_COMMITTED` hides how to finish or undo the move, and the page keeps listing the moved plan: `portal/plans/archive-dialog.js`, `portal/plans/backlog.js`. — fixed (a4cd60cf)
+- [x] Rerunning a transition after `MOVE_NOT_COMMITTED` can commit half the move: `transitionPlan` treats the plan as already at its destination. Reproduced with `plans promote` on a throwaway fixture. — fixed (a4cd60cf)
+- [x] In a bare-repo layout, `assertRunningInPrimary` sends an absolute path to the browser through `archiveBacklogPlan`. Reproduced at `transitionPlan`; the route is traced, not run. — fixed (a4cd60cf)
+- [x] The commit-failure tests do not assert that the move is staged. — fixed (a4cd60cf)
 - [x] The plan's table and non-goal omit that a `Waiting on` badge links only a namespace with Backlog plans. — corrected in this record
 
 ### Verification
