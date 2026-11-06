@@ -512,6 +512,7 @@ regression checks below.
 
 ### Findings
 
+- [ ] Discard accepts the target branch or its raw tip as a landing base, allowing a leftovers receipt for an unmerged commit.
 - [x] Pending branch retirement collided across repos sharing a branch name — filter owning
   repo before checking ambiguity; the regression failed before the fix and passed afterward.
 - [x] Artifact tests asserted classification only — added real squash-landed automatic removal,
@@ -630,3 +631,16 @@ regression checks below.
   terminal. The supplied output ends with `165 passed (2.0m)` and `CI checks passed`.
 - The run resolves the remaining verification objective. The last independent validation pass
   found no new issues, and only plan evidence has changed since that pass.
+
+### Human review verification — 2026-11-06
+
+- Synchronized local `main` at `da88e4f38c535afa61afe212a0e56698d369b076` into the feature worktree at `7f9e7fdd70235f5693385b20d429eac2f54276f6` without conflicts.
+- `bash scripts/doctor.sh --quiet` passed 97 checks. Docs references, plan-suite skill checks, command rendering, trigger fixtures, and `git diff --check main...HEAD` passed.
+- Base failure: `env -u ROBOREPO_ASSUME_INTERACTIVE npm run check </dev/null` reached `test-cli.sh`, where three package authoring rollback checks failed before temporary symlink removal was refused. `bash scripts/test/test-cli.sh --quiet </dev/null` on the synchronized base reproduced all three failures and the removal refusal. The full gate did not reach later suites.
+- `npm run test:portal-ui -- --grep worktree` could not start its local listener on either attempt. No browser assertion ran on the synchronized commit.
+
+### Result
+
+- Status: pending
+- Reviewed implementation commit: 7f9e7fdd70235f5693385b20d429eac2f54276f6
+- Base commit: da88e4f38c535afa61afe212a0e56698d369b076
