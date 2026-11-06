@@ -1,6 +1,6 @@
 ---
 id: 9xzkn4vz
-next_action: Run /plan-review on the submitted implementation.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["4xc0gjuw", "a7bslb00", "z3j2x3x1", "b2sgiejd", "l1mz96d9", "0jped168"]
@@ -672,3 +672,34 @@ regression checks below.
 - Confirmed by: human
 
 The user selected “Approve this commit” in the exact-commit review prompt on 2026-11-06.
+
+## Completion
+
+Proven-preserved worktrees can be removed without creating recovery copies. Unresolved
+leftovers require consent tied to the exact preview, and legacy recovery remains a separate
+migration. Plan closure commits before checkout cleanup begins.
+
+## Verification
+
+- Absorbing commit: d9663f9f500e14c8cc66d595271ed5a83fd23e59
+- RoboRepo confirmed fresh human approval at `4c4740dadd53da88703896d1eaa67deca29ec2ef`.
+  That revision and the absorbing commit have identical content outside `docs/plans/`.
+- The user confirmed that CI passed on the pull request. This is user-supplied evidence.
+  The repository's CI runs `npm run check`, including the native worktree suites and portal
+  browser tests. The earlier external-terminal verification records the focused results.
+- Checked the repository, CLI, Plans portal, architecture, and lifecycle references, the
+  CLI internals, and both affected skills against the landed deletion, retry, and migration
+  behavior.
+- `env -u ROBOREPO_ASSUME_INTERACTIVE npm run check </dev/null` passed all 97 doctor checks
+  and stopped at the three package-authoring rollback failures already reproduced on the
+  review base. Removing the temporary skill symlink returned `Operation not permitted`.
+- The artifact and discard suites classified their synthetic worktrees as eligible. Git
+  returned `Operation not permitted` when removing the checkouts, so those assertions failed.
+  The lifecycle comparison differed in temporary cleanup warning paths. The snapshot suite
+  was blocked at removal of a synthetic directory. Legacy recovery and retention passed their
+  assertions before fixture removal failed. The close-integration, command-catalog, and
+  CLI-surface suites also exited nonzero during fixture removal.
+- `npm run test:portal-ui -- --grep worktree` could not bind to `127.0.0.1` on either attempt.
+  No browser assertions ran during this closure attempt.
+- Plan validation, docs references, plan-suite skill checks, slash command rendering, trigger
+  fixtures, and `git diff --check` passed.
