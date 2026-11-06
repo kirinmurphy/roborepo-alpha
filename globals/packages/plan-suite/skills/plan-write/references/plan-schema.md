@@ -295,6 +295,8 @@ plan, and `/plan-review` adds to it and records the approval:
 - Confirmed by: human
 ```
 
+- The record is specific to this plan: its requirements, its implementation, and evidence needed to
+  approve it. General lifecycle, tooling, or environment issues go to the user in the conversation.
 - Findings are plain checkboxes. An unchecked finding is open work: it keeps the completion preflight
   failing until it is fixed, by the validation loop, by `/plan-review` in its own session, or by
   `/plan-execute` when the user sends it back, with the resolution after a dash. Earlier findings
