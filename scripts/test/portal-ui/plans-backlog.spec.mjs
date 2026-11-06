@@ -164,7 +164,7 @@ test.describe("Backlog directory and ordering", () => {
     await openNamespace(page);
     await expect(page.getByRole("heading", { name: /^(Needs prioritization|Prioritized)/ })).toHaveCount(0);
     await expect(page.locator(".title-link")).toHaveText(["Storage", "Retrieval", "Diagnostics"]);
-    await expect(page.locator(".backlog-prioritize-banner")).toContainText("1 new plan needs prioritization");
+    await expect(page.locator(".backlog-prioritize-banner")).toContainText("1 plan needs prioritization");
     await expect(page.locator("backlog-block")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Move up" })).toHaveCount(0);
     await expect(page.getByText("linked plans")).toHaveCount(0);
@@ -225,7 +225,7 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute("aria-pressed", "true");
     await expect(page.locator(".title-link")).toHaveText(["Diagnostics"]);
-    await expect(page.locator(".backlog-prioritize-banner")).toContainText("new plans need prioritization");
+    await expect(page.locator(".backlog-prioritize-banner")).toContainText("plans need prioritization");
   });
 
   test("a sustained hover reads the description on over the page, with nothing moving", async ({ page }) => {
@@ -546,7 +546,7 @@ test.describe("Backlog directory and ordering", () => {
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
     expect(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.alpha).toBeUndefined();
-    await expect(page.getByText("4 new plans need prioritization")).toBeVisible();
+    await expect(page.getByText("4 plans need prioritization")).toBeVisible();
   });
 
   test("the sustained-hover panel is the default in every lifecycle", async ({ page }) => {
@@ -592,6 +592,7 @@ test.describe("Backlog directory and ordering", () => {
       git("config", "user.email", "portal@example.invalid");
       put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
       put("docs/plans/backlog/alpha-free.md", document({ id: "failfree1", title: "Free one" }));
+      put("docs/plans/backlog/alpha-other.md", document({ id: "failother", title: "Other one" }));
       put("docs/plans/backlog/beta-after.md", document({ id: "failafter", title: "Waits elsewhere", deps: ["failfree1"] }));
       git("add", ".");
       git("commit", "-q", "-m", "fixture");
@@ -686,22 +687,47 @@ test.describe("Backlog directory and ordering", () => {
       // The dialog gives the reader that way forward, and the list stops offering the moved plan.
       git("config", "commit.gpgsign", "true");
       git("config", "gpg.program", "false");
-      await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
-      await page.getByRole("button", { name: "Archive Free one", exact: true }).click();
-      await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("textbox").fill("Abandoned.");
-      await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("button", { name: "Continue" }).click();
       const confirmation = page.getByRole("dialog", { name: "Are you sure?" });
-      await confirmation.getByRole("button", { name: "Archive Plan" }).click();
-      await expect(confirmation).toContainText("the move was not committed");
+      const archiveFreeOne = page.getByRole("button", { name: "Archive Free one", exact: true });
+      const hitUncommittedMove = async () => {
+        await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
+        await archiveFreeOne.click();
+        await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("textbox").fill("Abandoned.");
+        await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("button", { name: "Continue" }).click();
+        await confirmation.getByRole("button", { name: "Archive Plan" }).click();
+        await expect(confirmation).toContainText("the move was not committed");
+      };
+      await hitUncommittedMove();
       await expect(confirmation).toContainText("Fix what stopped the commit");
       await expect(confirmation.getByRole("button", { name: "Archive Plan" })).toBeHidden();
-      await expect(page.getByRole("button", { name: "Archive Free one", exact: true })).toHaveCount(0);
+      await expect(archiveFreeOne).toHaveCount(0);
       await confirmation.getByRole("button", { name: "Close" }).click();
       await expect(confirmation).toBeHidden();
+
+      // The next opening starts over, with none of that error's controls left behind.
+      await page.getByRole("button", { name: "Archive Other one", exact: true }).click();
+      const reopened = page.getByRole("dialog", { name: 'Archive "Other one"?' });
+      await expect(reopened.getByRole("button", { name: "Continue" })).toBeVisible();
+      await reopened.getByRole("button", { name: "Cancel" }).click();
+      await expect(reopened).toBeHidden();
+      git("reset", "--quiet", "--hard");
+
+      // A reload that fails can't drop the moved plan from the list, so only its control turns off.
+      const failedReload = /\/api\/plans\/refresh/;
+      await page.route(failedReload, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
+      await hitUncommittedMove();
+      await confirmation.getByRole("button", { name: "Close" }).click();
+      await expect(archiveFreeOne).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Archive Other one", exact: true })).toBeEnabled();
+      await page.unroute(failedReload);
       git("config", "--unset", "commit.gpgsign");
       git("config", "--unset", "gpg.program");
       git("reset", "--quiet", "--hard");
       expectUnchanged();
+
+      // A later snapshot lifts the hold: the undone plan can be archived again.
+      await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
+      await expect(archiveFreeOne).toBeEnabled();
 
       expect((await archive()).status).toBe(200);
       expect(fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
@@ -1561,7 +1587,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.locator("backlog-block")).toHaveCount(3);
     await expect(page.getByRole("heading", { name: /^Needs prioritization/ })).toHaveText("Needs prioritization");
     await page.getByRole("button", { name: "Details", exact: true }).click();
-    await expect(page.locator(".backlog-prioritize-banner")).toContainText("4 new plans need prioritization");
+    await expect(page.locator(".backlog-prioritize-banner")).toContainText("4 plans need prioritization");
   });
 
   test("a plan with a duplicate id is shown with its reason and no controls", async ({ page }) => {

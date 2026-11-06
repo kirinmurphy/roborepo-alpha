@@ -1,6 +1,6 @@
 // <backlog-block> — one movable unit in Backlog's Prioritize mode: a single plan row, or a container of
 // linked plans, drawn as a dependency tree, that moves as one. Set .block ({ ids, keys }), .section
-// ("ordered" | "needs"), .index, .count, .plans (key -> record), .locked, .held, .dirty, .onOpen, and
+// ("ordered" | "needs"), .index, .count, .plans (key -> record), .locked, .held, .dirty, .isArchived (key -> whether its move has already landed), .onOpen, and
 // .namespaceAction (see dependencyList) right after creation, then append to the DOM. A locked block shows a badge in place of its controls; a held one keeps them, disabled, while a
 // Save settles.
 //
@@ -109,11 +109,12 @@ class BacklogBlockElement extends HTMLElement {
 
   renderArchive(record) {
     const button = tpl("tpl-backlog-control");
-    const disabled = this.held || this.dirty;
+    const archived = this.isArchived(record.key);
+    const disabled = archived || this.held || this.dirty;
     button.classList.add("backlog-archive");
     button.dataset.noExcerpt = "";
     button.setAttribute("aria-label", `Archive ${record.plan.title}`);
-    button.title = disabled ? "Save or cancel your order first" : "Archive plan";
+    button.title = archived ? "This plan has moved. Refresh to see the latest plans" : disabled ? "Save or cancel your order first" : "Archive plan";
     button.querySelector("portal-icon").setAttribute("name", "trash");
     button.disabled = disabled;
     button.addEventListener("click", () => {

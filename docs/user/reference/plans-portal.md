@@ -163,7 +163,7 @@ drawer, the badge opens that namespace, as the namespace filter does, when the n
 Prioritize lists only the prerequisites its tree does not draw. Prerequisites never affect another namespace's order.
 
 **Details and Prioritize** show prioritized plans in the same order. Details is always flat cards, and its banner's
-**Prioritize Now** opens Prioritize. A namespace with only new plans opens in Prioritize directly. Prioritize shows compact rows and groups linked plans, and Save returns to
+**Prioritize Now** opens Prioritize. A namespace with only unprioritized plans opens in Prioritize directly. Prioritize shows compact rows and groups linked plans, and Save returns to
 Details:
 
 - Plans connected by direct `depends_on` edges, both ends in this namespace's Backlog, form one block

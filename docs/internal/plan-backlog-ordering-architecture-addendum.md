@@ -196,18 +196,13 @@ flowchart TB
 
 ### Details mode: full, independent plan cards
 
-A joined dependency (`C` depends on `A` and `B`), an unrelated `X`, and an independent unprioritized `N` are used below. **Despite the logical A/B/C grouping, Details never wraps or nests their cards.** It has no reordering controls.
+A joined dependency (`C` depends on `A` and `B`), an unrelated `X`, and an independent unprioritized `N` are used below. `N` is counted in the banner, and appears as a row in Ordering rather than a card here. **Despite the logical A/B/C grouping, Details never wraps or nests their cards.** It has no reordering controls.
 
 ```text
 ┌───────────────────────── Plans · Backlog ──────────────────────────┐
 │ All repos / roborepo / AGENTS                     [Details] Ordering │
 │                                                                    │
-│ Needs prioritization (1)                                           │
-│ ┌────────────────────────────────────────────────────────────────┐ │
-│ │ AGENTS · Agent trace export (N)                                │ │
-│ │ Export agent execution traces for inspection.                  │ │
-│ │ Backlog                                                0%     │ │
-│ └────────────────────────────────────────────────────────────────┘ │
+│ 1 plan needs prioritization                       [Prioritize Now] │
 │                                                                    │
 │ Ordered                                                            │
 │ ┌────────────────────────────────────────────────────────────────┐ │

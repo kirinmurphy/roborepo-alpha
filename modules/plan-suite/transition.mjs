@@ -111,11 +111,16 @@ export async function transitionPlan(options) {
     fs.writeFileSync(path.join(primary, toPath), content);
     for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.markdown);
     gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
+  } catch (err) {
+    if (atDestination) throw err;
+    throw undoUnstagedMove({ primary, fromPath, toPath, original: current, clearedDependents, cause: err });
+  }
+  try {
     gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
   } catch (err) {
     if (atDestination) throw err;
     // Past the rename the plan already sits at its new path, so saying the move failed would be false.
-    // It isn't undone here: this path can carry uncommitted plan edits that a rollback would lose.
+    // It isn't undone here: every edit is staged, so committing finishes the move whole.
     throw domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but the move was not committed.`, {
       resolution: UNCOMMITTED_MOVE_RESOLUTION,
       details: err.details ?? [pathFreeFileError(err)],
@@ -149,6 +154,27 @@ function planReferences(primary, snapshot, record) {
   return { cleared, left };
 }
 
+// The edits didn't reach the index, so committing the staged rename would land a plan without them and
+// leave its dependents waiting on it. The pre-move text is in hand, so putting it back loses nothing,
+// including uncommitted plan edits. Returns the error to raise.
+function undoUnstagedMove({ primary, fromPath, toPath, original, clearedDependents, cause }) {
+  const details = cause.details ?? [pathFreeFileError(cause)];
+  try {
+    fs.writeFileSync(path.join(primary, toPath), original);
+    for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.original);
+    gitOrThrow(primary, ["mv", "--", toPath, fromPath]);
+  } catch {
+    return domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but its edits were not saved.`, {
+      resolution: "Run `git status` in the repo and restore those files to undo the move. Committing the staged move would leave its edits out.",
+      details,
+    });
+  }
+  return domainError("MOVE_FAILED", "The plan's files could not be updated, so it was not moved.", {
+    resolution: "Run `git status` in the repo, resolve what it shows, then try again.",
+    details,
+  });
+}
+
 // The move rewrites the plan after renaming it, so a file it can't write refuses here, with nothing changed.
 function assertPlanWritable(primary, relativePath) {
   try {
@@ -168,7 +194,7 @@ function prepareClearedReferences(primary, relativePaths, id) {
     try {
       fs.accessSync(file, fs.constants.W_OK);
       const content = fs.readFileSync(file, "utf8");
-      return { file, markdown: ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content) };
+      return { file, original: content, markdown: ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content) };
     } catch (err) {
       throw domainError("INVALID_CHANGE", `A plan that depends on this one could not be updated (${pathFreeFileError(err)}).`, {
         resolution: "Check that the plan file is writable, then archive again.",

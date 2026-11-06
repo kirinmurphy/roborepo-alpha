@@ -489,16 +489,36 @@ try {
     // A dependent that can't be rewritten refuses before the rename, so nothing is left half moved.
     git(root, "checkout", "--", backlog("arch-dirty"));
     const statusBefore = git(root, "status", "--porcelain");
-    fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o444);
-    refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a read-only dependent", /could not be updated \(EACCES\)/);
-    fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o644);
+    // Root writes a read-only file anyway, so these cases cannot be staged there.
+    if (process.getuid?.() !== 0) {
+      fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o444);
+      refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a read-only dependent", /could not be updated \(EACCES\)/);
+      fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o644);
+      assert.equal(head(root), before, "a refused archive commits nothing");
+      assert.equal(git(root, "status", "--porcelain"), statusBefore, "a refused archive leaves no staged move");
+      fs.chmodSync(path.join(root, backlog("arch-busy")), 0o444);
+      refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive of a read-only plan", /plan file could not be updated \(EACCES\)/);
+      fs.chmodSync(path.join(root, backlog("arch-busy")), 0o644);
+      assert.equal(head(root), before, "a refused archive commits nothing");
+      assert.equal(git(root, "status", "--porcelain"), statusBefore, "a read-only plan leaves no staged move");
+    }
+
+    // Edits that can't be staged undo the rename, so no half-finished move is left to commit.
+    const attributes = path.join(root, ".git/info/attributes");
+    fs.mkdirSync(path.dirname(attributes), { recursive: true });
+    fs.writeFileSync(attributes, `${backlog("arch-dirty")} filter=refuse\n`);
+    git(root, "config", "filter.refuse.clean", "false");
+    git(root, "config", "filter.refuse.required", "true");
+    const dependentBefore = fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8");
+    const planBefore = fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8");
+    const unstaged = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive whose edits can't be staged", /could not be updated, so it was not moved/);
+    assert.equal(unstaged.code, "MOVE_FAILED");
+    fs.rmSync(attributes);
+    git(root, "config", "--remove-section", "filter.refuse");
     assert.equal(head(root), before, "a refused archive commits nothing");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "a refused archive leaves no staged move");
-    fs.chmodSync(path.join(root, backlog("arch-busy")), 0o444);
-    refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive of a read-only plan", /plan file could not be updated \(EACCES\)/);
-    fs.chmodSync(path.join(root, backlog("arch-busy")), 0o644);
-    assert.equal(head(root), before, "a refused archive commits nothing");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "a read-only plan leaves no staged move");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the rename and edits are undone");
+    assert.equal(fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8"), planBefore, "the plan's text is restored");
+    assert.equal(fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8"), dependentBefore, "the dependent still names the plan");
 
     // A commit that fails after the rename says the plan moved, and keeps git's reason for this reader.
     // A signing program that fails stops the commit; a hook could be bypassed by an inherited core.hooksPath.

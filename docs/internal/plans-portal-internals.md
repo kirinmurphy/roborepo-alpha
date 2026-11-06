@@ -143,8 +143,9 @@ It runs from the primary checkout on the base branch and:
    findings, `active` and `review` tolerate `UNCONFIRMED_NOT_TESTED`, `archived` checks only its
    own rules), refusing with the findings and a repair prompt;
 5. `git mv`, writes the content, commits with `--only` the old and new paths plus any cleared dependents, and returns six
-   post-commit checks from `transition-checks.mjs`. A failure after the rename leaves the move staged
-   and raises `MOVE_NOT_COMMITTED`, which names the new path and how to finish or undo it.
+   post-commit checks from `transition-checks.mjs`. If the edits can't be written or staged, the
+   rename and edits are undone and the move fails. If the commit itself fails, the whole move stays
+   staged and raises `MOVE_NOT_COMMITTED`, which names the new path and how to finish or undo it.
 
 A plan already at the destination returns `alreadyRecorded` without rerunning the gates; for
 `promote` and `close` it commits the command's pending edits to the plan, if any. If the plan's move

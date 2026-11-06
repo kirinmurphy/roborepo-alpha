@@ -50,6 +50,9 @@ export function createBacklogController(deps) {
   let selectionKey = null;
   // A newly selected namespace still owes its opening mode, which needs its view from the snapshot.
   let openingModeOwed = false;
+  // Plan key -> the snapshot current when its archive moved it. That snapshot still lists the plan, so
+  // its control stays off until a newer one arrives, even if the reload after the move failed.
+  const archivedUnder = new Map();
   let drag = null;
   let saveError = null;
   let pendingFocus = null;
@@ -278,7 +281,7 @@ export function createBacklogController(deps) {
   }
 
   function prioritizeBanner(count) {
-    const node = fill(tpl("tpl-backlog-prioritize-banner"), { text: `${count} new ${count === 1 ? "plan needs" : "plans need"} prioritization` });
+    const node = fill(tpl("tpl-backlog-prioritize-banner"), { text: `${count} ${count === 1 ? "plan needs" : "plans need"} prioritization` });
     node.querySelector("[data-slot=prioritize]").addEventListener("click", () => selectMode("ordering"));
     return node;
   }
@@ -288,7 +291,7 @@ export function createBacklogController(deps) {
     const namespaceAction = namespaceActionFor(entry);
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
-      Object.assign(node, { block, section, index, count, plans, locked, held: isHeld(), dirty: isDirty(), onOpen: deps.onOpen, namespaceAction });
+      Object.assign(node, { block, section, index, count, plans, locked, held: isHeld(), dirty: isDirty(), isArchived: (key) => archivedUnder.get(key) === deps.getSnapshot(), onOpen: deps.onOpen, namespaceAction });
       return node;
     };
     const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
@@ -344,6 +347,10 @@ export function createBacklogController(deps) {
   function openArchive(entry, record) {
     const dependents = dependentsOf(record, deps.getSnapshot().plans);
     const titles = (bound) => dependents.filter((item) => Boolean(item.plan.worktree) === bound).map((item) => item.plan.title);
+    const reloadAfterMove = () => {
+      archivedUnder.set(record.key, deps.getSnapshot());
+      return deps.onSaved();
+    };
     archiveDialog.open({
       title: record.plan.title,
       released: titles(false),
@@ -353,11 +360,11 @@ export function createBacklogController(deps) {
           await api.archiveBacklogPlan({ repositoryId: entry.repositoryId, id: record.plan.id, reason });
         } catch (err) {
           // The plan did move, so the list behind the dialog must stop offering it.
-          if (err.code === "MOVE_NOT_COMMITTED") await deps.onSaved();
+          if (err.code === "MOVE_NOT_COMMITTED") await reloadAfterMove();
           throw err;
         }
         // The dialog stays up until then, so the archived plan's controls are never offered again.
-        await deps.onSaved();
+        await reloadAfterMove();
       },
     });
   }
