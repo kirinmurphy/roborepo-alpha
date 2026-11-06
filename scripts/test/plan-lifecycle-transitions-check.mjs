@@ -536,7 +536,7 @@ try {
     }
 
     // When the undo fails too, the staged rename lacks the move's edits, so neither the error nor a retry
-    // may lead with committing it.
+    // may recommend committing it, and a retry warns what restoring discards.
     let moves = 0;
     childProcess.spawnSync = (binary, args, options) => {
       if (args[2] === "add") return { status: 1, stdout: "", stderr: "injected add failure" };
@@ -560,7 +560,7 @@ try {
     assert.equal(fs.readFileSync(path.join(root, "docs/plans/archived/test-arch-busy.md"), "utf8"), planBefore, "the staged rename has none of the move's edits");
     const retriedUndo = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "retrying after a failed undo", /was not committed/);
     assert.equal(retriedUndo.code, "MOVE_NOT_COMMITTED");
-    assert.match(retriedUndo.resolution, /restore those files to undo the move, then run this again\. Commit the staged move only if `git diff --cached` shows its edits/);
+    assert.match(retriedUndo.resolution, /Commit the staged move only if every edit it should carry is staged\. To undo it instead, restore those files, which discards any uncommitted edits/);
     assert.equal(head(root), before, "a retry after a failed undo commits nothing");
     git(root, "reset", "--quiet", "--hard");
     assert.equal(git(root, "status", "--porcelain"), statusBefore, "the failed undo restores cleanly");

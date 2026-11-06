@@ -151,8 +151,8 @@ It runs from the primary checkout on the base branch and:
 
 A plan already at the destination returns `alreadyRecorded` without rerunning the gates; for
 `promote` and `close` it commits the command's pending edits to the plan, if any. If the plan's move
-was never committed, the transition refuses with `MOVE_NOT_COMMITTED` instead, and advises undoing
-the move first, since it can't tell which failure left it staged. Git access for these
+was never committed, the transition refuses with `MOVE_NOT_COMMITTED` instead. It can't tell which
+failure left the move staged, so it says when committing is safe and what restoring discards. Git access for these
 modules is in `plan-git.mjs`.
 
 ## API
