@@ -109,11 +109,11 @@ class BacklogBlockElement extends HTMLElement {
 
   renderArchive(record) {
     const button = tpl("tpl-backlog-control");
-    const disabled = this.held || this.dirty;
+    const disabled = this.held || this.dirty || this.archiveHolds?.has(record.key);
     button.classList.add("backlog-archive");
     button.dataset.noExcerpt = "";
     button.setAttribute("aria-label", `Archive ${record.plan.title}`);
-    button.title = disabled ? "Save or cancel your order first" : "Archive plan";
+    button.title = this.archiveHolds?.has(record.key) ? "Waiting for the latest plans" : disabled ? "Save or cancel your order first" : "Archive plan";
     button.querySelector("portal-icon").setAttribute("name", "trash");
     button.disabled = disabled;
     button.addEventListener("click", () => {

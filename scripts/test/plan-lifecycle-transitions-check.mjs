@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
+import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { reviewFreshness } from "../../modules/plan-suite/review-freshness.mjs";
 import { buildPlanSnapshot } from "../../modules/plan-suite/index.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
@@ -489,16 +490,52 @@ try {
     // A dependent that can't be rewritten refuses before the rename, so nothing is left half moved.
     git(root, "checkout", "--", backlog("arch-dirty"));
     const statusBefore = git(root, "status", "--porcelain");
-    fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o444);
-    refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a read-only dependent", /could not be updated \(EACCES\)/);
-    fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o644);
-    assert.equal(head(root), before, "a refused archive commits nothing");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "a refused archive leaves no staged move");
-    fs.chmodSync(path.join(root, backlog("arch-busy")), 0o444);
-    refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive of a read-only plan", /plan file could not be updated \(EACCES\)/);
-    fs.chmodSync(path.join(root, backlog("arch-busy")), 0o644);
-    assert.equal(head(root), before, "a refused archive commits nothing");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "a read-only plan leaves no staged move");
+    for (const [name, label, pattern] of [
+      ["arch-dirty", "archive with a read-only dependent", /could not be updated \(EACCES\)/],
+      ["arch-busy", "archive of a read-only plan", /plan file could not be updated \(EACCES\)/],
+    ]) {
+      const file = path.join(root, backlog(name));
+      fs.chmodSync(file, 0o444);
+      try {
+        let writable = true;
+        try { fs.accessSync(file, fs.constants.W_OK); } catch { writable = false; }
+        if (writable) {
+          console.log(`skip: ${label} (runner can write read-only files)`);
+          continue;
+        }
+        refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), label, pattern);
+        assert.equal(head(root), before, "a refused archive commits nothing");
+        assert.equal(git(root, "status", "--porcelain"), statusBefore, "a refused archive leaves no staged move");
+      } finally {
+        fs.chmodSync(file, 0o644);
+      }
+    }
+
+    // Fail after the rename and after at least one write: recovery must restore references too.
+    for (const failure of ["write", "add"]) {
+      const writeFileSync = fs.writeFileSync;
+      const spawnSync = childProcess.spawnSync;
+      try {
+        if (failure === "write") fs.writeFileSync = (file, ...args) => {
+          if (file === path.join(root, backlog("arch-dirty"))) throw new Error("injected write failure");
+          return writeFileSync(file, ...args);
+        };
+        if (failure === "add") childProcess.spawnSync = (binary, args, options) => {
+          if (binary === "git" && args[2] === "add") return { status: 1, stdout: "", stderr: "injected add failure" };
+          return spawnSync(binary, args, options);
+        };
+        syncBuiltinESMExports();
+        await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }));
+      } finally {
+        fs.writeFileSync = writeFileSync;
+        childProcess.spawnSync = spawnSync;
+        syncBuiltinESMExports();
+      }
+      assert.equal(head(root), before, `${failure} failure commits nothing`);
+      assert.equal(git(root, "status", "--porcelain"), statusBefore, `${failure} failure undoes every archive edit`);
+      assert.ok(exists(root, backlog("arch-busy")));
+      assert.match(read(path.join(root, backlog("arch-dirty"))), /^depends_on: \[archbusy\]$/m);
+    }
 
     // A commit that fails after the rename says the plan moved, and keeps git's reason for this reader.
     // A signing program that fails stops the commit; a hook could be bypassed by an inherited core.hooksPath.

@@ -33,7 +33,7 @@ const GATE_KINDS = { archived: new Set(["lifecycle"]) };
 // Moving a plan into implementation is the last cheap moment to fix its filename: inbound links and
 // worktree records accumulate from here on. Later transitions never revisit it.
 const NAMING_GATED_TRANSITIONS = new Set(["promote", "start"]);
-const UNCOMMITTED_MOVE_RESOLUTION = "Run `git status` in the repo. Fix what stopped the commit and commit the staged move, or restore those files to undo it.";
+const UNCOMMITTED_MOVE_RESOLUTION = "Run `git status` in the repo. Before committing, recreate and stage every intended plan edit and dependent-reference removal along with the rename, or restore all affected paths to undo the move. Never commit the staged rename alone.";
 
 export async function transitionPlan(options) {
   const { cwd = process.cwd(), selector, transition: transitionId, base = "main" } = options;
@@ -111,6 +111,20 @@ export async function transitionPlan(options) {
     fs.writeFileSync(path.join(primary, toPath), content);
     for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.markdown);
     gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
+  } catch (err) {
+    if (!atDestination && rules.clearsReferences) {
+      // Archive inputs were clean. Restore the entire operation if writing or staging any
+      // edit fails, so a staged rename cannot be committed without its reference cleanup.
+      gitOrThrow(primary, ["restore", "--source=HEAD", "--staged", "--worktree", "--", ...paths, ...references.cleared]);
+      throw err;
+    }
+    if (atDestination) throw err;
+    throw domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but the move was not committed.`, {
+      resolution: UNCOMMITTED_MOVE_RESOLUTION,
+      details: err.details ?? [pathFreeFileError(err)],
+    });
+  }
+  try {
     gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
   } catch (err) {
     if (atDestination) throw err;

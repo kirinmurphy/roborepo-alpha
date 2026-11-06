@@ -59,6 +59,7 @@ export function createBacklogController(deps) {
   // plans may no longer be in the snapshot.
   let draftSource = null;
 
+  const archiveHolds = new Map();
   const archiveDialog = createArchiveDialog();
   bindDialogs();
   window.addEventListener("beforeunload", (event) => {
@@ -98,6 +99,9 @@ export function createBacklogController(deps) {
   // dirty one is never overwritten, and is flagged stale when the namespace it was opened from has
   // changed or is gone, so the safeguards still stand until the user discards it.
   function reconcile() {
+    for (const [key, snapshot] of archiveHolds) {
+      if (snapshot !== deps.getSnapshot()) archiveHolds.delete(key);
+    }
     const entry = selectedEntry();
     const scope = currentRepositoryScope();
     const namespace = namespaceFromSearch(location.search);
@@ -278,7 +282,7 @@ export function createBacklogController(deps) {
   }
 
   function prioritizeBanner(count) {
-    const node = fill(tpl("tpl-backlog-prioritize-banner"), { text: `${count} new ${count === 1 ? "plan needs" : "plans need"} prioritization` });
+    const node = fill(tpl("tpl-backlog-prioritize-banner"), { text: `${count} ${count === 1 ? "plan needs" : "plans need"} prioritization` });
     node.querySelector("[data-slot=prioritize]").addEventListener("click", () => selectMode("ordering"));
     return node;
   }
@@ -288,7 +292,7 @@ export function createBacklogController(deps) {
     const namespaceAction = namespaceActionFor(entry);
     const blockNode = (block, section, index, count) => {
       const node = document.createElement("backlog-block");
-      Object.assign(node, { block, section, index, count, plans, locked, held: isHeld(), dirty: isDirty(), onOpen: deps.onOpen, namespaceAction });
+      Object.assign(node, { block, section, index, count, plans, locked, held: isHeld(), dirty: isDirty(), archiveHolds, onOpen: deps.onOpen, namespaceAction });
       return node;
     };
     const nodes = [namespaceHeader(entry, view), ...graphNotices(view)];
@@ -342,6 +346,7 @@ export function createBacklogController(deps) {
   }
 
   function openArchive(entry, record) {
+    if (archiveHolds.has(record.key)) return;
     const dependents = dependentsOf(record, deps.getSnapshot().plans);
     const titles = (bound) => dependents.filter((item) => Boolean(item.plan.worktree) === bound).map((item) => item.plan.title);
     archiveDialog.open({
@@ -353,11 +358,17 @@ export function createBacklogController(deps) {
           await api.archiveBacklogPlan({ repositoryId: entry.repositoryId, id: record.plan.id, reason });
         } catch (err) {
           // The plan did move, so the list behind the dialog must stop offering it.
-          if (err.code === "MOVE_NOT_COMMITTED") await deps.onSaved();
+          if (err.code === "MOVE_NOT_COMMITTED") {
+            archiveHolds.set(record.key, deps.getSnapshot());
+            await deps.onSaved();
+            deps.onRender();
+          }
           throw err;
         }
+        archiveHolds.set(record.key, deps.getSnapshot());
         // The dialog stays up until then, so the archived plan's controls are never offered again.
         await deps.onSaved();
+        deps.onRender();
       },
     });
   }

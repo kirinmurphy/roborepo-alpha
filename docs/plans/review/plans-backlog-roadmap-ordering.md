@@ -8,6 +8,10 @@ reviewed_commit: 9a2ebc741199674f967b35235c32f2aa295ba3b6
 worktree: plan-backlog-roadmap-ordering
 ---
 
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:0839586eb8490c1862270f70fe2b100b2437fd1cb8530a754bd9800b364289d5 -->
+
 # Organize and prioritize backlog plans by namespace
 
 ## Summary
@@ -106,7 +110,7 @@ flowchart LR
 | --- | --- |
 | No repo selected | Only repositories with Backlog plans; ready, unprioritized, and total counts |
 | Repo selected, no namespace | **Next up** when any plan qualifies, then **All Plans**: approved namespaces with Backlog plans, pinned first, each with ready, unprioritized, and total counts; **No namespace** last if invalid plans exist |
-| Repo and namespace selected | Details: a banner counting the plans that need prioritization, then ranked cards. Ordering: **Needs prioritization** at top when nonempty, then the ordered list. Details/Ordering toggle. A namespace with nothing ranked opens in Ordering on arrival |
+| Repo and namespace selected | Details: a banner saying “N plans need prioritization” (singular: “1 plan needs prioritization”), with a Prioritize Now action, then ranked cards. The count includes previously ranked plans returned to Needs prioritization; it does not label them new. Ordering: **Needs prioritization** at top when nonempty, then the ordered list. Details/Ordering toggle. A namespace with nothing ranked opens in Ordering on arrival |
 | Repo and **No namespace** selected | Files with missing, malformed, or unapproved filename prefixes, with errors and a repair path; no priority editing until repaired |
 
 Counts measure **plans**, not collapsed groups. No empty-state congratulation such as “All backlog plans have been prioritized.” Use terse UI labels such as `Needs prioritization`, `Prioritized`, `Details`, `Prioritize`, and `Save`. This plan's prose keeps the words Ordered and Ordering for those two labels; the UI, user docs, and code comments use the new ones, and code identifiers keep `ordering`.
@@ -649,3 +653,6 @@ Autonomous decisions made during implementation, each clear, with its effects in
 ### Approval
 
 - Decision: requested
+
+
+<!-- /coderabbit-ai-generated:v1 -->

@@ -1,3 +1,7 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:9dffb1e241d0eda5604a946f62adddab807e10c83ed7508ee4384966f7fdfc36 -->
+
 # Architecture addendum: namespace-scoped Backlog ordering
 
 **Status:** Technical design companion to `plans-backlog-roadmap-ordering.md`  
@@ -202,12 +206,7 @@ A joined dependency (`C` depends on `A` and `B`), an unrelated `X`, and an indep
 ┌───────────────────────── Plans · Backlog ──────────────────────────┐
 │ All repos / roborepo / AGENTS                     [Details] Ordering │
 │                                                                    │
-│ Needs prioritization (1)                                           │
-│ ┌────────────────────────────────────────────────────────────────┐ │
-│ │ AGENTS · Agent trace export (N)                                │ │
-│ │ Export agent execution traces for inspection.                  │ │
-│ │ Backlog                                                0%     │ │
-│ └────────────────────────────────────────────────────────────────┘ │
+│ 1 plan needs prioritization                 [Prioritize Now]       │
 │                                                                    │
 │ Ordered                                                            │
 │ ┌────────────────────────────────────────────────────────────────┐ │
@@ -1255,3 +1254,6 @@ The save should check the repository snapshot or revision used to create the dra
 - **Parsing performance:** measure filename-prefix resolution on representative repository indexes and ensure namespace vocabularies are loaded once per repository snapshot.
 
 This note is a design record with a visual Backlog UI contract, not a managed plan document. It intentionally has no plan frontmatter or lifecycle location and has not been run through the repository's plan validator.
+
+
+<!-- /coderabbit-ai-generated:v1 -->
