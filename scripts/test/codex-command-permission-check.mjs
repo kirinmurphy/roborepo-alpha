@@ -31,7 +31,8 @@ for (const [toolName, key] of [["Bash", "command"], ["exec_command", "cmd"]]) {
     assert.equal(result.status, 0, result.stderr);
     const output = result.stdout.trim() ? JSON.parse(result.stdout).hookSpecificOutput : undefined;
     assert.equal(output?.permissionDecision, expected, `${toolName}/${key}: ${command}`);
-    if (expected) assert.match(output.permissionDecisionReason, /^roborepo permissions:/);
+    // A delegated push denial can carry the branch guard’s reason.
+    if (expected) assert.match(output.permissionDecisionReason, /^roborepo(?: permissions)?:/);
     if (command === "rm scratch.txt") assert.match(output.permissionDecisionReason, /Codex cannot ask.*Run the command yourself/);
   }
 }
