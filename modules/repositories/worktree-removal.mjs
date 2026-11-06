@@ -77,10 +77,24 @@ async function branchIsUnoccupied(mainPath, branch, runGit) {
   const ref = `refs/heads/${branch}`;
   const listed = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
   if (!listed.ok || listed.stdout.split("\n").includes(`branch ${ref}`)) return false;
-  // Porcelain resolves symbolic branches. Check the raw HEADs for checkouts using an alias.
-  if (linkedWorktrees(path.join(mainPath, ".git")).some((worktree) => worktree.branch === branch)) return false;
-  const primary = await runGit(mainPath, ["symbolic-ref", "--quiet", "--no-recurse", "HEAD"]);
-  return primary.code === 1 || (primary.ok && primary.stdout.trim() !== ref);
+  const symbolic = (name) => runGit(mainPath, ["symbolic-ref", "--quiet", "--no-recurse", name]);
+  const target = await symbolic(ref);
+  if (target.code === 1) return true;
+  if (!target.ok) return false;
+
+  // Porcelain shows only the final branch. An occupied checkout also needs every alias along its chain.
+  const occupied = new Set(linkedWorktrees(path.join(mainPath, ".git"))
+    .filter((worktree) => worktree.branch).map((worktree) => `refs/heads/${worktree.branch}`));
+  const primary = await symbolic("HEAD");
+  if (primary.ok) occupied.add(primary.stdout.trim());
+  else if (primary.code !== 1) return false;
+  for (const name of occupied) {
+    if (name === ref) return false;
+    const next = await symbolic(name);
+    if (next.ok) occupied.add(next.stdout.trim());
+    else if (next.code !== 1) return false;
+  }
+  return true;
 }
 
 async function retireBranch(mainPath, branch, tip, runGit) {
