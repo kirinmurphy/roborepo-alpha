@@ -253,6 +253,26 @@ try {
   assert.ok(contender, "the contender arrived during stale-lock reclamation");
   assert.equal((await contender).locked, true);
   assert.equal(contendersEntered, 1, "only one contender may reclaim a stale lock");
+
+  fs.writeFileSync(lockFile, "2147483647\n");
+  let reads = 0;
+  let successor;
+  let releaseSuccessor;
+  const successorHeld = new Promise((resolve) => { releaseSuccessor = resolve; });
+  const replacementFs = Object.create(fs);
+  replacementFs.readFileSync = (file, options) => {
+    const contents = fs.readFileSync(file, options);
+    if (++reads === 2) {
+      fs.rmSync(lockFile);
+      successor = withCleanupLock(lockRoot, () => successorHeld);
+    }
+    return contents;
+  };
+  const staleOwner = await withCleanupLock(lockRoot, () => "overlap", { fsApi: replacementFs });
+  releaseSuccessor();
+  assert.ok(successor, "a normal caller replaced the lock during stale inspection");
+  assert.equal((await successor).locked, false);
+  assert.equal(staleOwner.locked, true, "recovery cannot unlink the replacement lock");
   console.log("ok: cleanup retention bounds, concurrent append and transaction refresh");
 
   console.log(`ok: retention policy engine (${stores.length} stores registered)`);

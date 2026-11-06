@@ -56,13 +56,24 @@ function openLock(file, fsApi) {
 // An empty lock may belong to a run that has opened it but not yet written its pid, so only a
 // recorded pid with no live process counts as stale.
 function staleLock(file, fsApi) {
-  let pid;
-  try { pid = Number.parseInt(fsApi.readFileSync(file, "utf8"), 10); } catch { return false; }
-  if (!Number.isInteger(pid) || pid <= 0) return false;
+  let handle;
   try {
-    process.kill(pid, 0);
+    handle = fsApi.openSync(file, "r");
+    const pid = Number.parseInt(fsApi.readFileSync(handle, "utf8"), 10);
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return false;
+    } catch (error) {
+      if (error.code !== "ESRCH") return false;
+    }
+    // Keep the inspected inode open until the comparison so it cannot be recycled for a new lock.
+    const observed = fsApi.fstatSync(handle);
+    const current = fsApi.lstatSync(file);
+    return observed.dev === current.dev && observed.ino === current.ino;
+  } catch {
     return false;
-  } catch (err) {
-    return err?.code === "ESRCH";
+  } finally {
+    if (handle != null) fsApi.closeSync(handle);
   }
 }
