@@ -104,7 +104,7 @@ export async function previewWorktreeDiscard(options) {
       const assessment = await assessDiscard(options);
       if (!assessment.eligible) return assessment;
       const now = Date.now();
-      const record = { id: randomUUID(), state: "previewed", target: assessment.target, scope: assessment.scope, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + DAY).toISOString(), digest: assessment.inventory.digest, identities: compactIdentities(assessment.inventory.identities) };
+      const record = { id: randomUUID(), state: "previewed", target: assessment.target, scope: assessment.scope, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + DAY).toISOString(), digest: assessment.inventory.digest, warnings: assessment.warnings, identities: compactIdentities(assessment.inventory.identities) };
       saveTransaction(stateRoot, record);
       const { inventory, ...preview } = assessment;
       return { ...preview, receipt: record.id, expiresAt: record.expiresAt };
@@ -172,8 +172,11 @@ async function assessDiscard({ mainPath, repositoryId, worktree, scope = "all", 
 }
 
 function compareAssessment(record, fresh) {
-  if (!fresh.eligible || digest(record.target) !== digest(fresh.target) || record.digest !== fresh.inventory.digest) {
-    return { ...kept("state changed after preview; review a new preview"), differences: differences(record.identities, fresh.inventory?.identities) };
+  const warningChanged = digest(record.warnings ?? []) !== digest(fresh.warnings ?? []);
+  if (!fresh.eligible || digest(record.target) !== digest(fresh.target) || record.digest !== fresh.inventory.digest || warningChanged) {
+    const changed = differences(record.identities, fresh.inventory?.identities);
+    if (warningChanged) changed.groups.push("active plan");
+    return { ...kept("state changed after preview; review a new preview"), differences: changed };
   }
   return null;
 }

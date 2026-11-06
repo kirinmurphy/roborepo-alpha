@@ -68,6 +68,17 @@ try {
   fs.mkdirSync(path.join(f.work, "node_modules"));
   fs.writeFileSync(path.join(f.work, "node_modules", "generated"), "output");
   const first = await preview(f);
+  let activePlan = false;
+  const claimOptions = { ...f, activePlans: () => new Set(activePlan ? [f.worktree.name] : []) };
+  const unclaimed = await preview(claimOptions);
+  assert.deepEqual(unclaimed.warnings, []);
+  activePlan = true;
+  let stopAttempted = false;
+  const stop = async () => { stopAttempted = true; return { ok: false }; };
+  const changedClaim = await applyWorktreeDiscard({ ...claimOptions, receipt: unclaimed.receipt, stop });
+  assert.match(changedClaim.reason, /state changed after preview/);
+  assert.equal(stopAttempted, false);
+  assert.deepEqual((await preview(claimOptions)).warnings, ["plan still active"]);
   assert.equal(first.groups.tracked[0].path, "base.txt");
   assert.equal(first.groups.ignored[0].path, "private-settings");
   assert.equal(first.groups.untracked[0].path, "new file\nname");
