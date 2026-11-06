@@ -593,6 +593,9 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] In a bare-repo layout, `assertRunningInPrimary` sends an absolute path to the browser through `archiveBacklogPlan`. Reproduced at `transitionPlan`; the route is traced, not run. — fixed (a4cd60cf)
 - [x] The commit-failure tests do not assert that the move is staged. — fixed (a4cd60cf)
 - [x] The plan's table and non-goal omit that a `Waiting on` badge links only a namespace with Backlog plans. — corrected in this record
+- [ ] Retrying `archive`, `submit`, or `reopen` after `MOVE_NOT_COMMITTED` reports the move as recorded, because the early return in `transitionPlan` runs before the not-committed check. Reproduced with `plans archive` on a throwaway fixture.
+- [ ] After `MOVE_NOT_COMMITTED` the archive dialog keeps **Archive Plan** live, and a second click replaces the guidance with a refusal naming a raw id: `portal/plans/archive-dialog.js`. The route is reproduced; the dialog is traced, not run.
+- [ ] `docs/internal/plans-portal-internals.md` says a plan at the destination always returns `alreadyRecorded`, and its step list omits the staged outcome.
 
 ### Verification
 
@@ -628,6 +631,7 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - At d352757c: `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 94 of 94.
 - Manual: the three `## Not tested` entries were confirmed by the user on 2026-11-05: "all UI smoke testing has been completed and all behaviors meet expectations".
 - Post-merge Validator pass 3 at 407711cc (fresh-context subagent): the last 5 findings above, all `fix`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit: 93 of 94, the one failure being the intermittent breadcrumb test above.
+- Post-merge Validator pass 4 at c277ce00 (fresh-context subagent): the last 3 findings above, all `fix`. `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` at that commit passed 94 of 94.
 
 ### Result
 
