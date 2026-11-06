@@ -91,6 +91,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
     }
     if (!selectedBranch && !scopedName) rows.push(...await cleanupDetachedBranches(mainPath, worktrees, { apply, stateRoot }));
     const pending = await legacyRecoveryCount(mainPath);
+    if (!rows.length && pending) return [{ legacyRecoveryPending: pending }];
     return rows.map((row) => ({ ...row, legacyRecoveryPending: pending }));
   };
   if (!apply && !selectedBranch) return action();
@@ -161,6 +162,7 @@ export async function worktreeCleanupCommand(args) {
   // A dry run keeps everything; name the rows `--apply` would remove so they read differently from
   // rows a guard blocked.
   else for (const row of rows) {
+    if (!row.action) continue;
     const action = row.action === "kept" && row.eligible ? "eligible" : row.action;
     console.log(`${row.branch || row.name || "worktree"}: ${action} (${row.state || "unknown"})${row.reason ? ` — ${row.reason}` : ""}`);
   }

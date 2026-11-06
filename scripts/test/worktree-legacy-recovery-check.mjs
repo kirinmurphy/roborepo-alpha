@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
 import { legacyRecovery, legacyRecoveryCount, restoreLegacyBackup } from "../../modules/repositories/worktree-legacy-recovery.mjs";
 import { inspectCommitLanding } from "../../modules/repositories/worktree-landed.mjs";
@@ -23,13 +24,24 @@ try {
   const repo = path.join(root, "repo"); fs.mkdirSync(repo);
   git(repo, "init", "-qb", "main"); write(repo, "seed", "seed\n"); git(repo, "add", "seed"); git(repo, "commit", "-qm", "seed");
   const initial = git(repo, "rev-parse", "HEAD");
+  const reachable = "refs/roborepo/abandoned/reachable-fffffff";
+  git(repo, "update-ref", reachable, initial);
+  const cli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
+  const cleanup = (...args) => spawnSync(process.execPath, [cli, "git", "worktrees", "cleanup", ...args], {
+    cwd: repo, encoding: "utf8", env: { ...process.env, ROBOREPO_STATE_ROOT: path.join(root, "state") },
+  });
+  const cleanupJson = cleanup("--json");
+  assert.equal(cleanupJson.status, 0, cleanupJson.stderr);
+  assert.deepEqual(JSON.parse(cleanupJson.stdout), [{ legacyRecoveryPending: 1 }]);
+  const cleanupText = cleanup();
+  assert.equal(cleanupText.status, 0, cleanupText.stderr);
+  assert.equal(cleanupText.stdout.trim(), "Legacy recovery pending: 1; run roborepo git worktrees legacy-recovery");
   const branch = path.join(root, "feature"); git(repo, "worktree", "add", "-qb", "feature", branch);
   write(branch, "code", "feature\n"); git(branch, "add", "code"); git(branch, "commit", "-qm", "feature");
   const tip = git(branch, "rev-parse", "HEAD");
   git(repo, "merge", "--squash", "feature"); git(repo, "commit", "-qm", "squash");
   const mismatch = "refs/roborepo/abandoned/feature-deadbee";
-  const reachable = "refs/roborepo/abandoned/reachable-fffffff";
-  git(repo, "update-ref", mismatch, tip); git(repo, "update-ref", reachable, initial);
+  git(repo, "update-ref", mismatch, tip);
   assert.equal((await inspectCommitLanding(repo, tip)).landed, true, "squashed legacy tip needs no branch reflog");
   assert.equal((await inspectCommitLanding(repo, initial)).proof, "reachable");
   const preserved = await createWorktreeSnapshot(branch); assert.equal(preserved.ok, true, preserved.reason);
