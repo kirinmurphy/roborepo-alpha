@@ -113,6 +113,17 @@ try {
   const unmerged = fixture();
   fs.writeFileSync(path.join(unmerged.work, "unique"), "unique"); git(unmerged.work, "add", "."); git(unmerged.work, "commit", "-qm", "unique commit");
   assert.equal((await previewWorktreeDiscard({ ...unmerged, scope: "leftovers" })).eligible, false);
+  const unmergedTip = git(unmerged.work, "rev-parse", "HEAD");
+  git(unmerged.mainPath, "symbolic-ref", "refs/heads/feature-alias", "refs/heads/feature");
+  for (const base of ["feature", "refs/heads/feature", "feature-alias", unmergedTip]) {
+    const refused = await previewWorktreeDiscard({ ...unmerged, scope: "leftovers", base });
+    assert.equal(refused.action, "kept", `unmerged branch cannot prove its own landing via ${base}`);
+    assert.equal(refused.receipt, undefined);
+  }
+  git(unmerged.mainPath, "branch", "integration", unmergedTip);
+  const preserved = await preview({ ...unmerged, scope: "leftovers", base: "integration" });
+  assert.equal(preserved.target.baseRef, "refs/heads/integration");
+  assert.equal(preserved.commits.landed, true);
   const cleanup = await cleanupWorktrees({ cwd: unmerged.mainPath, stateRoot: unmerged.stateRoot, remove: "feature", confirm: true, apply: true, discover: async () => ({ instances: [] }) });
   assert.equal(cleanup[0].action, "kept"); assert.match(cleanup[0].reason, /discard/); assert.ok(fs.existsSync(unmerged.work));
   const all = await preview(unmerged); assert.deepEqual(all.commits.subjects, ["unique commit"]);
