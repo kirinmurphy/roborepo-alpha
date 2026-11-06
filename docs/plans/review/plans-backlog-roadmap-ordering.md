@@ -582,9 +582,9 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - [x] Details has a banner instead of a Needs prioritization section, with no Decision Log entry. — decided by the user: keep the merged behavior; requirements and Decision Log updated
 - [x] Stale plan text on real ranks. — corrected in this record
 - [x] Merging `main` after the squash left a stale copy of this plan in `active/`. — fixed (924bb037)
-- [ ] A read-only plan file still leaves a half-finished move: `transitionPlan` in `modules/plan-suite/transition.mjs` checks only dependents before `git mv`, then its write to the plan throws. Reproduced on a throwaway fixture.
-- [ ] No test reaches the raw filesystem error branch of `browserSafeArchiveError` in `scripts/cli/plans.mjs`.
-- [ ] `archiveBacklogPlan` calls `primaryCheckout` outside its error handling, and that error's `details` carry raw git stderr to the browser. Traced, not run.
+- [x] A read-only plan file still leaves a half-finished move: `transitionPlan` in `modules/plan-suite/transition.mjs` checks only dependents before `git mv`, then its write to the plan throws. Reproduced on a throwaway fixture. — fixed (f176988a)
+- [x] No test reaches the raw filesystem error branch of `browserSafeArchiveError` in `scripts/cli/plans.mjs`. — fixed (f176988a)
+- [x] `archiveBacklogPlan` calls `primaryCheckout` outside its error handling, and that error's `details` carry raw git stderr to the browser. Traced, not run. — fixed (f176988a)
 - [x] Plan and addendum text still described `Waiting on N`, `Needs prioritization (1)`, and clickable drawer badges, and omitted Ordering's drawn prerequisites and its opening mode. — corrected in this record
 - [ ] A `git add` or `git commit` failure after the rename leaves the move staged, and the browser says only that the plan could not be archived; a retry is then refused. Reproduced with a failing pre-commit hook. — escalated to the human
 
