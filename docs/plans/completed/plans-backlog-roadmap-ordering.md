@@ -1,6 +1,6 @@
 ---
 id: rxv53v6z
-next_action: The user merges PR 59, then runs /plan-close.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["plans-portal-live-refresh-and-static-preflight", "plan-lifecycle-suite-blockers-dependencies", "plan-unclassified-plan-recovery", "p3vbk03v"]
@@ -670,3 +670,20 @@ Autonomous decisions made during implementation, each clear, with its effects in
 - Confirmed by: human
 
 The user answered "Approve c55f8891" in the review conversation on 2026-11-06, after the review packet for that commit.
+
+## Completion summary
+
+Backlog now helps decide what to build next. It navigates from repos to namespaces to one list of plans, and order is explicit within a namespace, saved only by an explicit Save. Dependency-connected plans move together in Prioritize, unprioritized plans are called out first, and a repo's screen leads with Next up. Every Backlog plan lists the unfinished prerequisites it is waiting on. The H/M/L priority field is gone from code, skills, docs, and live plans. The work landed in two pull requests: PR 56, then PR 59 with the fixes from its post-merge review.
+
+## Verification
+
+### Final closure verification — 2026-11-06
+
+- Approved commit: c55f88913be70b6af2736caeda5591185539ec69
+- Absorbing commit: 1d58f42756aadf84743700cc905e24d365f3aac8
+- Approval: `roborepo plans approval rxv53v6z` -> fresh. Landing: `roborepo plans landed rxv53v6z` -> yes, newly scanned. The worktree's plan copy was byte-identical to the primary copy.
+- Gate evidence from CI on 1d58f427: `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed.
+- Plan tests on 1d58f427: `backlog-model-check`, `backlog-order-check`, `plan-lifecycle-transitions-check`, `plans-portal-state-check`, `docs-reference-check`, `plan-tree-naming-check`, and `plan-suite-skills-check` passed; `node scripts/test/portal-ui/run.mjs plans-backlog plans-status` passed 96 of 96.
+- Priority removal: no removed symbol appears under `modules`, `portal`, `scripts`, `manifests`, `globals`, `README.md`, `docs/user`, or `docs/internal`, and no Backlog, Ready, Active, or Review plan has a `priority:` line.
+- Docs of record: the files under `## Documentation impact` were searched for old priority wording and new ordering terms, and `docs-reference-check` passed. They were not reread line by line at closure; the review's Validator passes compared them to the code.
+- Not verified at closure: the full local portal UI suite, which last passed before PR 59's failure-path fixes. The user's manual confirmation of 2026-11-05 also predates those fixes, which change only failure paths and the banner's wording.
