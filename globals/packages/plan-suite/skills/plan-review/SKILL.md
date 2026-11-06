@@ -161,7 +161,9 @@ of it. The human's review is the independent check; this step makes sure they re
   constraints of every loaded paired skill where the diff falls under them. Its three convention
   checks, Flow and cohesion, Data and state, and Comments and abstractions, apply to changed and
   directly affected code: a comment the diff adds that only restates the code is a fix, harmless
-  narration that was already there is not a finding, and length alone is never a finding.
+  narration that was already there is not a finding, and length alone is never a finding. Issues the
+  plan did not cause are not findings, whether they sit outside the diff or in general lifecycle,
+  tooling, or environment behavior: it lists each once under `Outside this plan` in its report.
 - Classify every finding by consequence, not size: **fix** when the right fix is clear and stays
   within the plan's requirements and specified contracts, code included; **escalate** when it
   chooses between real alternatives, each with a compelling argument for it, changes requirements or a contract the plan did not specify,
@@ -209,6 +211,10 @@ findings; earlier findings may stay for readable history.
 ### Approval
 - Decision: requested
 ```
+
+Record only what is specific to this plan. `Outside this plan` items, and any general issue this
+review runs into, such as a lifecycle command refusing over an unrelated file, go in the review
+packet instead.
 
 Keep each finding to one line a fixer can act on: what is wrong and where. Record evidence itself,
 never a path under `/tmp` or another temporary folder: the OS deletes those within days and the
@@ -258,6 +264,7 @@ Present a review packet:
 - each Validator pass and what it found;
 - every commit this review made in step 5;
 - base failures, named as such;
+- issues outside this plan, each proposed as separate work when it is worth doing;
 - the manual checks that need the human, from `## Not tested`;
 - each escalated finding as a decision: the options, their consequences, and a recommendation.
 

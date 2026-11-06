@@ -41,7 +41,8 @@ disk, and record in the plan that the Validator ran in-session.
 1. **Validator pass.** The Validator applies the rubric to the current work and reports.
 2. **Record.** Add each `fix` and `escalate` finding as an unchecked checkbox under `## Review` →
    `### Findings` in the worktree's copy of the plan, and each `base` result under
-   `### Verification`.
+   `### Verification`. `Outside this plan` items stay out of the plan and go to the user in the
+   final report.
 3. **Fix.** Fix every `fix` finding, rerun the checks it affects, commit, and check the finding off
    with its commit: `- [x] Missing retry test — fixed (<short commit>)`. Never ask the user whether
    to fix a `fix` finding, however many passes have run. An `escalate` finding stays unchecked and
@@ -98,8 +99,9 @@ Each pass checks:
    cannot, and helpers and shared abstractions lower the cost of understanding the code rather than
    raise it.
 
-Issues outside the diff that the plan did not cause are not findings. Mention them once as possible
-follow-ups.
+Issues the plan did not cause are not findings, whether they sit outside the diff or in general
+lifecycle, tooling, or environment behavior. List each once under `Outside this plan` in the report,
+without a class.
 
 Checks 7 to 9 apply to changed and directly affected code, and use the same classes as every other
 finding:
@@ -139,6 +141,8 @@ One line per finding:
 ```text
 <class> — <file:line or plan section> — <what is wrong>
 ```
+
+After the findings, add an `Outside this plan` list with one line per issue, when there are any.
 
 A pass with no findings says so and names what it checked. A silent pass is indistinguishable from
 a skipped one.

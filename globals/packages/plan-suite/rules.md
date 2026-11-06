@@ -8,3 +8,17 @@ stays.
 When a comment needs a reason, write the reason itself. Track progress in the plan, not in code.
 
 A path the code actually reads, writes, or serves is behavior, not a citation, and stays.
+
+## Plan Records Stay Plan-Specific
+
+A line belongs in a plan's `## Review` record (`### Findings`, `### Verification`) or Decision Log
+only when it concerns this plan's requirements, its implementation, or evidence needed to approve it.
+
+Report a general lifecycle, tooling, or environment issue to the user in the conversation, and
+propose it as separate work when it is worth doing. It stays out of the plan record, even when it
+interrupted this plan's work. Examples: a defect in shared transition code this plan did not
+introduce, or an unrelated untracked file that made a lifecycle command refuse.
+
+Two cases stay in the plan. A gate failure the base branch has too is approval evidence, so it keeps
+its `### Verification` line. An issue that leaves this plan blocked gets an `## Open Questions` entry
+naming what it stops.
