@@ -504,37 +504,36 @@ try {
       assert.equal(git(root, "status", "--porcelain"), statusBefore, "a read-only plan leaves no staged move");
     }
 
-    // Edits that can't be staged undo the rename, so no half-finished move is left to commit.
-    const attributes = path.join(root, ".git/info/attributes");
-    fs.mkdirSync(path.dirname(attributes), { recursive: true });
-    fs.writeFileSync(attributes, `${backlog("arch-dirty")} filter=refuse\n`);
-    git(root, "config", "filter.refuse.clean", "false");
-    git(root, "config", "filter.refuse.required", "true");
+    // Edits that can't be written or staged undo the rename, so no half-finished move is left to commit.
+    // The failures are injected because a real one, such as a failing clean filter, can stop `git mv`
+    // first on some systems, before there is anything to undo. The dependent keeps refusing writes
+    // during the undo too, which it survives because that file never changed.
     const dependentBefore = fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8");
     const planBefore = fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8");
-    const unstaged = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive whose edits can't be staged", /could not be updated, so it was not moved/);
-    assert.equal(unstaged.code, "MOVE_FAILED");
-    fs.rmSync(attributes);
-    git(root, "config", "--remove-section", "filter.refuse");
-    assert.equal(head(root), before, "a refused archive commits nothing");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the rename and edits are undone");
-    assert.equal(fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8"), planBefore, "the plan's text is restored");
-    assert.equal(fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8"), dependentBefore, "the dependent still names the plan");
-
-    // A dependent that keeps refusing writes can't stop the undo, since it never changed.
-    const writeFileSync = fs.writeFileSync;
-    fs.writeFileSync = (file, ...args) => {
-      if (path.basename(String(file)) === path.basename(backlog("arch-dirty"))) throw Object.assign(new Error("injected write failure"), { code: "EIO" });
-      return writeFileSync(file, ...args);
-    };
-    try {
-      await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }), { code: "MOVE_FAILED" });
-    } finally {
-      fs.writeFileSync = writeFileSync;
+    const realWriteFileSync = fs.writeFileSync;
+    const realSpawnSync = childProcess.spawnSync;
+    for (const failure of ["write", "stage"]) {
+      if (failure === "write") {
+        fs.writeFileSync = (file, ...args) => {
+          if (path.basename(String(file)) === path.basename(backlog("arch-dirty"))) throw Object.assign(new Error("injected write failure"), { code: "EIO" });
+          return realWriteFileSync(file, ...args);
+        };
+      } else {
+        childProcess.spawnSync = (binary, args, options) => (args[2] === "add" ? { status: 1, stdout: "", stderr: "injected add failure" } : realSpawnSync(binary, args, options));
+        syncBuiltinESMExports();
+      }
+      try {
+        await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }), { code: "MOVE_FAILED", message: /could not be updated, so it was not moved/ });
+      } finally {
+        fs.writeFileSync = realWriteFileSync;
+        childProcess.spawnSync = realSpawnSync;
+        syncBuiltinESMExports();
+      }
+      assert.equal(head(root), before, `a ${failure} failure commits nothing`);
+      assert.equal(git(root, "status", "--porcelain"), statusBefore, `a ${failure} failure undoes the rename and edits`);
+      assert.equal(fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8"), planBefore, `a ${failure} failure restores the plan's text`);
+      assert.equal(fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8"), dependentBefore, `the dependent still names the plan after a ${failure} failure`);
     }
-    assert.equal(head(root), before, "a refused archive commits nothing");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "a failed write undoes the rename and edits");
-    assert.equal(fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8"), planBefore, "the plan's text is restored after a failed write");
 
     // A commit that fails after the rename says the plan moved, and keeps git's reason for this reader.
     // A signing program that fails stops the commit; a hook could be bypassed by an inherited core.hooksPath.

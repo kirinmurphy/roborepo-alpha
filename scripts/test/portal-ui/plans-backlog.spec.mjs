@@ -621,13 +621,16 @@ test.describe("Backlog directory and ordering", () => {
       expect(locked.text).not.toContain(path.basename(root));
       expectUnchanged();
 
-      fs.chmodSync(dependent, 0o444);
-      const readOnly = await archive();
-      fs.chmodSync(dependent, 0o644);
-      expect(readOnly.status).toBe(400);
-      expect(readOnly.text).toContain("could not be updated (EACCES)");
-      expect(readOnly.text).not.toContain(path.basename(root));
-      expectUnchanged();
+      // Root writes a read-only file anyway, so this case cannot be staged there.
+      if (process.getuid?.() !== 0) {
+        fs.chmodSync(dependent, 0o444);
+        const readOnly = await archive();
+        fs.chmodSync(dependent, 0o644);
+        expect(readOnly.status).toBe(400);
+        expect(readOnly.text).toContain("could not be updated (EACCES)");
+        expect(readOnly.text).not.toContain(path.basename(root));
+        expectUnchanged();
+      }
 
       // A file where the archive folder belongs raises a raw filesystem error, whose message has the path.
       const blocker = path.join(root, "docs/plans/archived");
