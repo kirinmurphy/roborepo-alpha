@@ -628,6 +628,27 @@ test.describe("Backlog directory and ordering", () => {
       expect(readOnly.text).not.toContain(path.basename(root));
       expectUnchanged();
 
+      // A file where the archive folder belongs raises a raw filesystem error, whose message has the path.
+      const blocker = path.join(root, "docs/plans/archived");
+      fs.rmSync(blocker, { recursive: true, force: true });
+      fs.writeFileSync(blocker, "");
+      const blocked = await archive();
+      fs.rmSync(blocker);
+      expect(blocked.status).toBe(500);
+      expect(blocked.text).toMatch(/could not be archived: E[A-Z]+/);
+      expect(blocked.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
+      // Without its Git directory, the repo's own error text never reaches the browser.
+      const gitDir = path.join(root, ".git");
+      fs.renameSync(gitDir, `${gitDir}-away`);
+      const noGit = await archive();
+      fs.renameSync(`${gitDir}-away`, gitDir);
+      expect(noGit.status).toBe(400);
+      expect(noGit.text).toContain("can't be read as a Git checkout");
+      expect(noGit.text).not.toContain(path.basename(root));
+      expectUnchanged();
+
       expect((await archive()).status).toBe(200);
       expect(fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
     } finally {

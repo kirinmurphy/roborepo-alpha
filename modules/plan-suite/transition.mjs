@@ -93,6 +93,7 @@ export async function transitionPlan(options) {
     return result({ primary, cwd, base, transition, record, fromPath, toPath, commit: null, options, target, rules, evidence: prepared.evidence || {} });
   }
 
+  assertPlanWritable(primary, fromPath);
   const clearedDependents = prepareClearedReferences(primary, references.cleared, record.plan.id);
 
   if (!atDestination) {
@@ -130,6 +131,18 @@ function planReferences(primary, snapshot, record) {
     });
   }
   return { cleared, left };
+}
+
+// The move rewrites the plan after renaming it, so a file it can't write refuses here, with nothing changed.
+function assertPlanWritable(primary, relativePath) {
+  try {
+    fs.accessSync(path.join(primary, relativePath), fs.constants.W_OK);
+  } catch (err) {
+    throw domainError("INVALID_CHANGE", `The plan file could not be updated (${pathFreeFileError(err)}).`, {
+      resolution: "Check that the plan file is writable, then try again.",
+      details: [relativePath],
+    });
+  }
 }
 
 // Runs before the rename, so a dependent that can't be rewritten refuses the move with nothing changed.

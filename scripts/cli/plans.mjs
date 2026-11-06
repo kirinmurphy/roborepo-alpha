@@ -120,7 +120,7 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
   if (!repository || !entry) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
   const unprioritized = new Set(entry.namespaces.flatMap((view) => view.needsPrioritization.flatMap((block) => block.ids)));
   if (!unprioritized.has(id)) throw domainError("INVALID_CHANGE", `Only unprioritized Backlog plans can be archived here: ${id}.`);
-  const primary = primaryCheckout(repository.root);
+  const primary = gitCheckoutForArchive(repository.root);
   const base = repositoryBaseBranch(primary);
   if (!base) {
     throw domainError("INVALID_CHANGE", "This repo's base branch can't be determined, so nothing was archived.", {
@@ -140,6 +140,16 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
 
 // Git's stderr and filesystem messages embed absolute paths, and this answer reaches the browser. The
 // `roborepo plans archive` command keeps them, since its reader is at the machine they name.
+function gitCheckoutForArchive(root) {
+  try {
+    return primaryCheckout(root);
+  } catch {
+    throw domainError("INVALID_CHANGE", "This repo can't be read as a Git checkout, so nothing was archived.", {
+      resolution: "Run `git status` in the repo, resolve what it shows, then try again.",
+    });
+  }
+}
+
 function browserSafeArchiveError(err) {
   if (err?.code !== "MOVE_FAILED" && !err?.syscall) return err;
   const detail = err.syscall ? pathFreeFileError(err) : err.message;

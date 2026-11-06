@@ -494,6 +494,11 @@ try {
     fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o644);
     assert.equal(head(root), before, "a refused archive commits nothing");
     assert.equal(git(root, "status", "--porcelain"), statusBefore, "a refused archive leaves no staged move");
+    fs.chmodSync(path.join(root, backlog("arch-busy")), 0o444);
+    refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive of a read-only plan", /plan file could not be updated \(EACCES\)/);
+    fs.chmodSync(path.join(root, backlog("arch-busy")), 0o644);
+    assert.equal(head(root), before, "a refused archive commits nothing");
+    assert.equal(git(root, "status", "--porcelain"), statusBefore, "a read-only plan leaves no staged move");
 
     // A dependent bound to a worktree keeps its reference, and the result names it; the clean one clears.
     commit(root, "Bind a dependent", {
