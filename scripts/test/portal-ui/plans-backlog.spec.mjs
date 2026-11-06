@@ -684,7 +684,10 @@ test.describe("Backlog directory and ordering", () => {
       await confirmation.getByRole("button", { name: "Archive Plan" }).click();
       await expect(confirmation).toContainText("the move was not committed");
       await expect(confirmation).toContainText("Fix what stopped the commit");
+      await expect(confirmation.getByRole("button", { name: "Archive Plan" })).toBeHidden();
       await expect(page.getByRole("button", { name: "Archive Free one", exact: true })).toHaveCount(0);
+      await confirmation.getByRole("button", { name: "Close" }).click();
+      await expect(confirmation).toBeHidden();
       git("config", "--unset", "commit.gpgsign");
       git("config", "--unset", "gpg.program");
       git("reset", "--quiet", "--hard");

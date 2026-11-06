@@ -512,7 +512,8 @@ try {
     assert.match(git(root, "status", "--porcelain"), /^R {2}docs\/plans\/backlog\/test-arch-busy\.md -> docs\/plans\/archived\/test-arch-busy\.md$/m, "the move stays staged");
     git(root, "config", "--unset", "commit.gpgsign");
     git(root, "config", "--unset", "gpg.program");
-    assert.notEqual(plans(root, "archive", "archbusy", "--reason", "Abandoned.").status, 0, "retrying an uncommitted archive is refused");
+    const retriedArchive = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "retrying an uncommitted archive", /was not committed/);
+    assert.equal(retriedArchive.code, "MOVE_NOT_COMMITTED");
     assert.equal(head(root), before, "a retried archive commits nothing");
     git(root, "reset", "--quiet", "--hard");
     assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged move restores cleanly");

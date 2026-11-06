@@ -56,6 +56,11 @@ export async function transitionPlan(options) {
   const base0 = git(primary, ["rev-parse", base]).stdout;
 
   if (!atDestination && !transition.from.includes(from)) refuseSource(record, transition, from);
+  // An earlier run's commit failed after its rename, so the plan only reads as being here. Recording it
+  // as done would be false, and committing here would land only half of that move.
+  if (atDestination && !git(primary, ["cat-file", "-e", `HEAD:${fromPath}`]).ok) {
+    throw domainError("MOVE_NOT_COMMITTED", `The plan's move to ${fromPath} was not committed.`, { resolution: UNCOMMITTED_MOVE_RESOLUTION });
+  }
   if (atDestination && !rules.carriesEdits && !rules.reassigns) {
     return result({ primary, cwd, base, transition, record, fromPath, toPath: fromPath, commit: null, options, target, rules, evidence: {} });
   }
@@ -90,10 +95,6 @@ export async function transitionPlan(options) {
     : []);
 
   const committed = git(primary, ["show", `HEAD:${fromPath}`]);
-  // An earlier run's commit failed after its rename. Committing here would land only half of that move.
-  if (atDestination && !committed.ok) {
-    throw domainError("MOVE_NOT_COMMITTED", `The plan's move to ${fromPath} was not committed.`, { resolution: UNCOMMITTED_MOVE_RESOLUTION });
-  }
   if (atDestination && committed.ok && committed.raw === content && dirty.length === 0) {
     return result({ primary, cwd, base, transition, record, fromPath, toPath, commit: null, options, target, rules, evidence: prepared.evidence || {} });
   }

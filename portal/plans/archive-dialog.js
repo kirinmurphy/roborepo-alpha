@@ -60,6 +60,11 @@ export function createArchiveDialog() {
       dialog.close();
     } catch (err) {
       slot("error").textContent = [err.message, err.resolution].filter(Boolean).join(" ");
+      // The plan has moved, so asking again could only replace this guidance with a refusal.
+      if (err.code === "MOVE_NOT_COMMITTED") {
+        confirm.hidden = true;
+        cancel.textContent = "Close";
+      }
     } finally {
       archiving = false;
       confirm.disabled = false;
@@ -73,6 +78,8 @@ export function createArchiveDialog() {
       clearTimeout(answerTimer);
       target = next;
       step = "reason";
+      confirm.hidden = false;
+      cancel.textContent = "Cancel";
       reason.value = "";
       slot("error").textContent = "";
       renderStep();
