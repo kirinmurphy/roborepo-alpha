@@ -11,7 +11,8 @@ import { removeWorktree, retryBranchRetirement } from "../../modules/repositorie
 import { restoreWorktreeSnapshot, listWorktreeSnapshots, inventoryWorktree, readSnapshot } from "../../modules/repositories/worktree-snapshot.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { previewRepositoryWorktree, removeRepositoryWorktree, cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
-import { previewWorktreeDiscard, readTransaction } from "../../modules/repositories/worktree-discard.mjs";
+import { previewWorktreeDiscard } from "../../modules/repositories/worktree-discard.mjs";
+import { readTransaction } from "../../modules/repositories/worktree-transactions.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
 
