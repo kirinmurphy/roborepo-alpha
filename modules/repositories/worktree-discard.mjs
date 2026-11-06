@@ -165,9 +165,9 @@ async function assessDiscard({ mainPath, repositoryId, worktree, scope = "all", 
   if (scope === "leftovers" && (!landing.landed || (!reachable && landing.tip !== inventory.tip))) {
     throw new Error("committed work is not proven landed; leftovers consent cannot discard commits");
   }
-  const log = await runGit(mainPath, ["log", "--format=%s", `${baseCommit}..${inventory.tip}`], { maxBuffer: GIT_MAX_BINARY_BUFFER, timeoutMs: 10000 });
+  const log = await runGit(mainPath, ["log", "-z", "--format=%s", `${baseCommit}..${inventory.tip}`], { maxBuffer: GIT_MAX_BINARY_BUFFER, timeoutMs: 10000 });
   if (!log.ok) throw new Error("unmerged commit inventory unavailable");
-  const subjects = log.stdout.trimEnd().split("\n").filter(Boolean);
+  const subjects = log.stdout.split("\0").slice(0, -1).map((subject) => subject.trim() || "(no commit subject)");
   const stat = fs.lstatSync(fresh.path);
   return { action: "preview", eligible: true, scope, target: { repositoryId, repositoryPath: mainPath, path: fresh.path, name: fresh.name, branch: fresh.branch, tip: inventory.tip, baseRef: base, baseCommit, device: stat.dev, inode: stat.ino }, commits: { landed: landing.landed, unmerged: subjects.length, subjects }, groups: inventory.groups, servers, warnings: guard.warning ? [guard.warning] : [], blockers: [], inventory };
 }

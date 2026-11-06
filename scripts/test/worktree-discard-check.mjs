@@ -149,6 +149,10 @@ try {
   const all = await preview(unmerged); assert.deepEqual(all.commits.subjects, ["unique commit"]);
   assert.match((await applyWorktreeDiscard({ ...unmerged, receipt: all.receipt, requiredScope: "leftovers" })).reason, /scope/);
   assert.ok(fs.existsSync(unmerged.work), "a plan operation cannot apply whole-branch consent");
+  git(unmerged.work, "commit", "-q", "--allow-empty", "--allow-empty-message", "-m", "");
+  const blankSubject = await preview(unmerged);
+  assert.equal(blankSubject.commits.unmerged, 2);
+  assert.deepEqual(blankSubject.commits.subjects, ["(no commit subject)", "unique commit"]);
 
   const raw = fixture();
   git(raw.mainPath, "config", "filter.untrusted.clean", "false");
