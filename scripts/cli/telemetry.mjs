@@ -28,7 +28,7 @@ import { launchHookReview, loadHookReviewStatus } from "./hook-review-launch.mjs
 import { installCoreHooks } from "./hook-core-install.mjs";
 import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
-import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, saveBacklogOrder, setBacklogNamespacePinned, archiveBacklogPlan, refreshPlans } from "./plans.mjs";
+import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, previewPlanImport, savePlanImport, saveBacklogOrder, setBacklogNamespacePinned, archiveBacklogPlan, refreshPlans } from "./plans.mjs";
 import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   loadDeveloperRuntimeSnapshot,
@@ -841,6 +841,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadPlans: (params) => loadPlansSnapshot(params),
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
+    previewPlanImport: (params) => previewPlanImport(params),
+    savePlanImport: (params) => savePlanImport(params),
     saveBacklogOrder: (params) => saveBacklogOrder(params),
     setBacklogNamespacePinned: (params) => setBacklogNamespacePinned(params),
     archiveBacklogPlan: (params) => archiveBacklogPlan(params),

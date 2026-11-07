@@ -437,7 +437,7 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   border-bottom: 1px solid var(--line);
 }
 /* Before there is a board (no plans yet, not scanned) only Refresh stays on the row. */
-.lifecycle-bar[data-board="false"] :is(.lifecycle-title, .lifecycle-tabs, #filters-toggle) {
+.lifecycle-bar[data-board="false"] :is(.lifecycle-title, .lifecycle-tabs, #filters-toggle, #plan-import-toggle) {
   display: none;
 }
 .lifecycle-bar[hidden] {
@@ -459,6 +459,7 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
   margin-left: auto;
 }
 #filters-toggle { order: 3; margin-left: 8px; }
+#plan-import-toggle { order: 4; margin-left: 4px; }
 /* Refresh is the bare icon, with no button chrome. */
 .icon-action {
   display: inline-flex;
@@ -528,7 +529,8 @@ a:is(.repo-badge, .namespace-badge)[aria-disabled="true"] {
     margin-right: auto;
   }
   #filters-toggle { order: 1; }
-  #refresh { order: 2; margin-left: 4px; }
+  #plan-import-toggle { order: 2; }
+  #refresh { order: 3; margin-left: 4px; }
   .lifecycle-tabs .overflow-more-panel {
     left: 0;
     right: auto;
@@ -865,6 +867,12 @@ backlog-block.drop-after { box-shadow: 0 3px 0 var(--accent); }
 .backlog-action-status.is-error,
 .backlog-dialog-error { color: var(--danger); }
 .backlog-dialog-error:empty { display: none; }
+.plan-import-preview { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+.plan-import-preview dt { color: var(--muted); }
+.plan-import-preview dd { margin: 0; overflow-wrap: anywhere; }
+.plan-import-diff { max-height: 280px; margin: 0; padding: 8px; overflow: auto; border: 1px solid var(--line); font-size: 12px; }
+.plan-import-diff-add { color: var(--ok, inherit); }
+.plan-import-diff-remove { color: var(--danger); }
 .backlog-repair-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 12px 16px; justify-items: start; overflow-wrap: anywhere; }
 .backlog-repair-row > * { max-width: 100%; }
 .backlog-repair-row + .backlog-repair-row { border-top: 1px solid var(--line); }

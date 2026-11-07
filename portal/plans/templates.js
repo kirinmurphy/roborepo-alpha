@@ -58,7 +58,7 @@ export function selectOption([value, label]) {
 export function plansOnboardingStep(snapshot) {
   const scans = snapshot.repositoryScans || [];
   if (scans.length === 0) return "no-repositories";
-  if (!scans.some((scan) => scan.state === "scanned")) return "not-scanned";
+  if (!scans.some((scan) => scan.state === "scanned")) return scans.some((scan) => scan.state === "not-set-up") ? "not-set-up" : "not-scanned";
   return snapshot.plans.length === 0 ? "no-plans" : "plans";
 }
 
@@ -76,7 +76,12 @@ export function plansOnboardingState(snapshot, step, onManage, scope = null) {
   const scans = snapshot.repositoryScans || [];
   const scanned = scans.filter((scan) => scan.state === "scanned").length;
   const subject = scope ? scope.name : repositoryCount(step === "not-scanned" ? scans.length : scanned);
-  const fills = step === "not-scanned"
+  const fills = step === "not-set-up"
+    ? {
+      title: `Plans aren't set up in ${subject}`,
+      body: "Run the /plan-suite-init skill in the repo. It creates or reconnects the repo's plans branch.",
+    }
+    : step === "not-scanned"
     ? {
       title: `Not scanned yet: ${subject}`,
       body: "Plans reads each known repo's checkouts. None of them has a checkout Plans can read right now.",

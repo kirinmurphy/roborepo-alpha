@@ -5,6 +5,9 @@ import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
 import { readRepositoryScope } from "./portal-routes-scope.mjs";
 
+// Well past any real plan; the JSON envelope escapes the Markdown, so it runs larger than the file.
+const PLAN_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024;
+
 export const plansRoutes = defineRoutes([
   {
     // ?repo=<urlKey> narrows the snapshot to one repository (the shared Portal scope).
@@ -29,6 +32,8 @@ export const plansRoutes = defineRoutes([
     },
   },
   postJsonRoute("/api/plans/prompt", (handlers, body) => handlers.buildPlansPrompt(body)),
+  postJsonRoute("/api/plans/import/preview", (handlers, body) => handlers.previewPlanImport(body), { domainError: true, limit: PLAN_UPLOAD_LIMIT_BYTES }),
+  postJsonRoute("/api/plans/import", (handlers, body) => handlers.savePlanImport(body), { domainError: true, limit: PLAN_UPLOAD_LIMIT_BYTES }),
   postJsonRoute("/api/plans/order", (handlers, body) => handlers.saveBacklogOrder(body), { domainError: true }),
   postJsonRoute("/api/plans/namespace-pin", (handlers, body) => handlers.setBacklogNamespacePinned(body), { domainError: true }),
   postJsonRoute("/api/plans/archive", (handlers, body) => handlers.archiveBacklogPlan(body), { domainError: true }),
@@ -68,7 +73,7 @@ function sendDomainError(res, error) {
   send(res, status, "application/json", JSON.stringify(body));
 }
 
-function postJsonRoute(path, run, { domainError = false } = {}) {
+function postJsonRoute(path, run, { domainError = false, limit } = {}) {
   return {
     method: "POST",
     path,
@@ -81,7 +86,7 @@ function postJsonRoute(path, run, { domainError = false } = {}) {
           if (domainError) return sendDomainError(res, error);
           send(res, 400, "application/json", JSON.stringify({ error: String(error?.message || error) }));
         }
-      });
+      }, limit ? { limit } : undefined);
       return true;
     },
   };

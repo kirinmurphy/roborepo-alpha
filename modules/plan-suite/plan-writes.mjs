@@ -106,8 +106,8 @@ function refuseFindings(message, findings) {
   });
 }
 
-export async function savePlan({ cwd = process.cwd(), store = requireStore(cwd), markdown, filename }) {
-  const newId = generatePlanId();
+// `newId` lets a portal preview and its save name the same new plan.
+export async function savePlan({ cwd = process.cwd(), store = requireStore(cwd), markdown, filename, newId = generatePlanId() }) {
   return mutateStore({
     store,
     operation: ({ root }) => {

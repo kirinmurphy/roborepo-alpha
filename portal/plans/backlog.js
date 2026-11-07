@@ -346,15 +346,13 @@ export function createBacklogController(deps) {
 
   function openArchive(entry, record) {
     const dependents = dependentsOf(record, deps.getSnapshot().plans);
-    const titles = (bound) => dependents.filter((item) => Boolean(item.plan.worktree) === bound).map((item) => item.plan.title);
     const reloadAfterMove = () => {
       archivedUnder.set(record.key, deps.getSnapshot());
       return deps.onSaved();
     };
     archiveDialog.open({
       title: record.plan.title,
-      released: titles(false),
-      kept: titles(true),
+      released: dependents.map((item) => item.plan.title),
       onConfirm: async (reason) => {
         try {
           await api.archiveBacklogPlan({ repositoryId: entry.repositoryId, id: record.plan.id, reason });

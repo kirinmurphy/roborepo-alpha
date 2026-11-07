@@ -13,12 +13,13 @@ export function send(res, status, type, body, headers) {
   res.end(body);
 }
 
-export function readJsonBody(req, cb) {
+// Local control payloads are tiny; a route carrying a document passes its own limit.
+export function readJsonBody(req, cb, { limit = 64 * 1024 } = {}) {
   let raw = "";
   let tooBig = false;
   req.on("data", (chunk) => {
     raw += chunk;
-    if (raw.length > 64 * 1024) { tooBig = true; req.destroy(); } // local control payloads are tiny
+    if (raw.length > limit) { tooBig = true; req.destroy(); }
   });
   req.on("end", () => {
     if (tooBig) return cb(null, new Error("body too large"));

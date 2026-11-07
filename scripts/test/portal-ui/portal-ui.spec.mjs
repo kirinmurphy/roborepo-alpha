@@ -2583,11 +2583,13 @@ test.describe("Plans card commands", () => {
     const barBox = await bar.boundingBox();
     const rowBox = await row.boundingBox();
     expect(rowBox.x).toBeGreaterThan(barBox.x, "the title is a left column opposite the tabs");
-    // Filters is the right-most element, just after the tabs and their ⋮ menu; Refresh sits beside the title.
+    // Filters then Import Plan end the row, just after the tabs and their ⋮ menu; Refresh sits beside the title.
     const filtersBox = await page.locator("#filters-toggle").boundingBox();
+    const importBox = await page.locator("#plan-import-toggle").boundingBox();
     const refreshBox = await page.locator("#refresh").boundingBox();
     const titleBox = await title.boundingBox();
-    expect(Math.abs(filtersBox.x + filtersBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(importBox.x + importBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(1);
+    expect(importBox.x).toBeGreaterThanOrEqual(filtersBox.x + filtersBox.width);
     expect(rowBox.x + rowBox.width).toBeLessThanOrEqual(filtersBox.x + 1);
     expect(refreshBox.x).toBeGreaterThanOrEqual(titleBox.x + titleBox.width);
     expect(refreshBox.x + refreshBox.width).toBeLessThan(rowBox.x);
@@ -2631,11 +2633,13 @@ test.describe("Plans card commands", () => {
     const triggerBox = await trigger.boundingBox();
     expect(Math.abs(triggerBox.x - barBox.x),
       "the collapsed trigger is left-aligned").toBeLessThanOrEqual(1);
-    // Narrow: Filters at the right edge, Refresh directly to its right.
+    // Narrow: Filters, Import Plan, then Refresh at the right edge.
     const filtersBox = await page.locator("#filters-toggle").boundingBox();
+    const importBox = await page.locator("#plan-import-toggle").boundingBox();
     const refreshBox = await page.locator("#refresh").boundingBox();
     expect(Math.abs(refreshBox.x + refreshBox.width - barBox.x - barBox.width)).toBeLessThanOrEqual(8);
-    expect(refreshBox.x).toBeGreaterThanOrEqual(filtersBox.x + filtersBox.width);
+    expect(importBox.x).toBeGreaterThanOrEqual(filtersBox.x + filtersBox.width);
+    expect(refreshBox.x).toBeGreaterThanOrEqual(importBox.x + importBox.width);
     await items.filter({ hasText: /^Active \(/ }).click();
     await expect(page).toHaveURL(/lifecycle=active/);
     await expect(trigger).toHaveText("Active Plans");

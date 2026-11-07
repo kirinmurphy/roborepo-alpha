@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Portal (not-set-up notice, + button, upload modal), then One-time migration, then Tests and docs (fixture moves, test-cli.sh store check, docs of record), then the Validation Loop and submit.
+next_action: One-time migration helper, then Tests and docs (fixture moves, test-cli.sh store check, docs of record), then the Validation Loop and submit.
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
@@ -253,7 +253,7 @@ The modal validates and previews the title, plan ID, filename, and target folder
 - [x] **Lifecycle and code separation:** Preserve review, approval, landing, and close gates while evaluating code commits independently of plans commits. Drop the primary-checkout and base-branch requirement from plan commits, the start fast-forward, and sync-base plan-rename handling.
 - [x] **Outside consumers:** Update worktree cleanup (fail closed, exclude and lock `repo_plans`, refuse it in `plans start`), Codex workspace roots, repo discovery, and packaging. Remove the real-tree CI check.
 - [x] **Agent permissions:** Update plan-suite skills and `manifests/inventory/agent-permissions.json` to permit named plan CLI operations, and regenerate outputs under `generated/packages/plan-suite/`. Add remote branch protection guidance.
-- [ ] **Portal:** Add the not-set-up notice, the `+` button after Filters, modal `.md` upload with repo selection, validation/preview, diff confirmation for updates, and push feedback through the shared save path.
+- [x] **Portal:** Add the not-set-up notice, the `+` button after Filters, modal `.md` upload with repo selection, validation/preview, diff confirmation for updates, and push feedback through the shared save path.
 - [ ] **One-time migration:** Deliver the disposable helper, including worktree-bound plans. Verify remote persistence, and document code-branch cleanup and the rollout order. Do not retain migration logic in the product.
 - [ ] **Tests and docs:** Move plan fixtures in `scripts/test/` to the new layout, and add a store check to `scripts/test/test-cli.sh` covering the Validation list. Update the documents under Documentation impact. Run focused suite checks, `npm run test:portal-ui`, `npm run pack:dry-run`, and `npm run check`.
 
@@ -326,7 +326,8 @@ State of the work (what the checklist's unchecked items still need):
 | Canonical access | All readers moved. Home's plan path comes from the store (`planPath`); the drawer lost its authority rows | Nothing |
 | Lifecycle | Gates read the store and compare code without exclusions; sync-base lost rename handling, and nothing reads its `resolved` | Nothing |
 | Agent permissions | Manifest behavior, skills, rules, triggers, generated outputs, branch protection guidance in the user guide | Nothing |
-| Portal, migration, tests, docs | Guide's "Where Plans Live" section | All the rest. Dependencies are installed in this worktree (`npm ci`), so `npm run test:portal-ui` works. `/plan-suite-init` must tell a Codex user to run `roborepo update` after `plans init`, since the grants render from the repo the update runs in |
+| Portal | Not-set-up notice (empty state when scoped or alone, warning line under All repos), `+` after Filters, `plan-import-dialog.js`, `/api/plans/import` and `/preview`, `plans-import.spec.mjs` | Nothing |
+| Migration, tests, docs | Guide's "Where Plans Live" section | All the rest. Dependencies are installed in this worktree (`npm ci`), so `npm run test:portal-ui` works. `/plan-suite-init` must tell a Codex user to run `roborepo update` after `plans init`, since the grants render from the repo the update runs in |
 
 Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and are in `scripts/test/check-groups.json`; `test-cli.sh` still needs the store check. `scripts/test/lib/plan-store-fixture.mjs` adds a read-only store for checks that need no remote. `scripts/test/lib/plan-git-fixture.mjs` now builds a bare origin and a store: keys under `plans/` go to the store, others to `main`. Existing fixtures still using `docs/plans/` fail until moved; `plan-authority-check`, `plan-suite-authority-*`, `plan-landed-recovery-check`, and `plan-close-integration-check` test removed modules and are deleted or rewritten. Those mechanical moves suit Sonnet subagents.
 
@@ -351,6 +352,8 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 - **`plans reopen` marks an approval `invalidated`.** Reopening means the requirements changed, which an implementation comparison can't see, and `plans save` refuses approval edits, so the skill's old manual step had no way to happen. Alternative: letting `plans save` accept this one change, which opens the field the command exists to guard.
 - **Post-merge approval recovery becomes plain `plans approve`.** The `### Post-merge recovery` provenance existed to reconcile two copies; with one copy on the plans branch, recording approval touches nothing on the code branch.
 - **Skills name the `roborepo plans` commands directly** where they said "the repository's canonical command". The store has one interface, and agents get allow rules for exactly those commands.
+- **A portal upload shows Git's unified diff.** `git diff --no-index` over two temporary files needs no new dependency, and the headers that name those files are dropped. Alternative: a client-side diff library.
+- **Upload routes carry their own 4 MB body limit.** Other portal control routes stay at 64 KB, and a plan can exceed that once JSON-escaped.
 - **`branchIsUnoccupied` refuses the reserved branch directly.** Hiding the store from inventory made `repo-plans` look like an unoccupied branch to branch retirement. The refusal sits where every retirement path passes, and the branch also leaves the candidate list.
 
 ## Not tested

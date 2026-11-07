@@ -15,18 +15,15 @@ export function createArchiveDialog() {
   let answerTimer;
 
   const renderStep = () => {
-    const { title, released, kept } = target;
+    const { title, released } = target;
     const naming = `"${title}"`;
     const finalStep = step === "final";
     slot("title").textContent = finalStep ? "Are you sure?" : `Archive ${naming}?`;
     slot("reason-field").hidden = finalStep;
     slot("consequence").hidden = !finalStep;
-    slot("consequence").textContent = `This moves ${naming} to Archived and commits the move to the repo's base branch.`;
-    slot("dependents").hidden = !finalStep || !(released.length || kept.length);
-    slot("dependents").textContent = [
-      released.length ? `No longer depending on it: ${released.join(", ")}.` : "",
-      kept.length ? `Still naming it, because a worktree owns the copy: ${kept.join(", ")}.` : "",
-    ].filter(Boolean).join(" ");
+    slot("consequence").textContent = `This moves ${naming} to Archived and commits the move to the repo's plans branch.`;
+    slot("dependents").hidden = !finalStep || !released.length;
+    slot("dependents").textContent = released.length ? `No longer depending on it: ${released.join(", ")}.` : "";
     confirm.dataset.btn = finalStep ? "danger" : "cta";
     confirm.textContent = finalStep ? "Archive Plan" : "Continue";
     confirm.disabled = !finalStep && !reason.value.trim();

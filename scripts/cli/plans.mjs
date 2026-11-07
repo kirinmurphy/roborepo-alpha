@@ -1,6 +1,9 @@
 // The Plans portal's snapshot API: cached plan snapshots, documents, prompts, and Backlog order saves,
 // with private fields stripped before they cross the HTTP boundary. `roborepo plans` lives in
 // plans-command.mjs.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { packageStatusSummary } from "./package-status.mjs";
 import { stateRoot } from "./paths.mjs";
 import { autoDiscoveryEnabled } from "./repository-sources.mjs";
@@ -17,7 +20,9 @@ import { plannableRepositories } from "../../modules/plan-suite/canonical-scan.m
 import { repositoryCheckouts } from "../../modules/plan-suite/checkouts.mjs";
 import { pathFreeFileError } from "../../modules/plan-suite/naming.mjs";
 import { locateStore, refreshStore } from "../../modules/plan-suite/plan-store.mjs";
-import { repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
+import { git, repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
+import { SHORT_ID_PATTERN } from "../../modules/plan-suite/plan-id.mjs";
+import { planSaveChange, savePlan } from "../../modules/plan-suite/plan-writes.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { loadRegistry } from "../../modules/repositories/index.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockPlanDocument, mockPlansSnapshot } from "./mock-home.mjs";
@@ -137,6 +142,48 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
     throw browserSafeArchiveError(err);
   } finally {
     cachedSnapshot = null;
+  }
+}
+
+// What a portal upload would do, for the dialog's preview. Reads the local store and writes nothing;
+// the save validates again against the fresh tree.
+export function previewPlanImport({ repositoryId, filename, markdown }) {
+  const root = importStoreRoot(repositoryId, markdown);
+  const change = planSaveChange({ root, markdown, filename });
+  return { action: change.action, id: change.id, title: change.title, lifecycle: change.lifecycle, path: change.target, diff: change.action === "update" ? textDiff(change.before, change.after) : "" };
+}
+
+// The upload's save: the same operation as `roborepo plans save`, so it cannot change a lifecycle or an approval.
+export async function savePlanImport({ repositoryId, filename, markdown, newId }) {
+  const root = importStoreRoot(repositoryId, markdown);
+  try {
+    return await savePlan({ store: locateStore(root), filename, markdown, ...(SHORT_ID_PATTERN.test(newId || "") ? { newId } : {}) });
+  } catch (err) {
+    if (err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) throw err;
+    throw domainError("PLAN_STORE_FAILED", "This plan could not be saved.", { resolution: "Press Refresh, then try again. `roborepo plans init` repairs a damaged plans worktree." });
+  } finally {
+    cachedSnapshot = null;
+  }
+}
+
+function importStoreRoot(repositoryId, markdown) {
+  if (typeof markdown !== "string") throw domainError("INVALID_CHANGE", "Choose a Markdown file to upload.");
+  const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
+  const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
+  if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
+  return repository.root;
+}
+
+// A unified diff without Git's header lines, which name the temporary files.
+function textDiff(before, after) {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-plan-diff-"));
+  try {
+    fs.writeFileSync(path.join(folder, "before"), before);
+    fs.writeFileSync(path.join(folder, "after"), after);
+    const { raw } = git(folder, ["diff", "--no-index", "--no-color", "--", "before", "after"]);
+    return raw.slice(Math.max(raw.indexOf("@@"), 0));
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
   }
 }
 
