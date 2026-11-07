@@ -1,10 +1,11 @@
-// Git access for the plan-suite operations that mutate or inspect checkouts: lifecycle transitions,
-// base synchronization, the completion preflight, and approval freshness. Callers commit, rename,
-// and merge, so each operation owns its mutation preconditions. This wrapper preserves raw status
+// Code-branch helpers for the plan-suite operations that inspect or merge implementation checkouts:
+// base synchronization, the completion preflight, and approval freshness. Plan commits go through
+// plan-store.mjs instead. This wrapper preserves raw status
 // columns and uses a longer timeout than the repository executor's default polling reads.
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { RESERVED_PLANS_BRANCH } from "../repositories/worktree-inventory.mjs";
 import { domainError } from "./index.mjs";
 
 const GIT_TIMEOUT_MS = 60_000;
@@ -37,9 +38,9 @@ export function currentBranch(cwd) {
   return git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]).stdout;
 }
 
-// The branch lifecycle commits land on when no caller names one: the remote's default, then main or
+// The code branch gates compare against when no caller names one: the remote's default, then main or
 // master. Null when none of those says, so a caller refuses rather than guessing, because treating
-// whichever branch is checked out as the base would defeat the check that it is the base.
+// whichever branch is checked out as the base would make every comparison empty.
 export function repositoryBaseBranch(cwd) {
   const remote = git(cwd, ["symbolic-ref", "--quiet", "refs/remotes/origin/HEAD"]);
   if (remote.ok && remote.stdout) return remote.stdout.replace(/^refs\/remotes\/origin\//, "");
@@ -63,6 +64,11 @@ export function linkedWorktreeNamed(primary, name) {
 
 export function findLinkedWorktree(primary, name) {
   const found = linkedWorktreeNamed(primary, name);
+  if (found?.branch === RESERVED_PLANS_BRANCH) {
+    throw domainError("INVALID_CHANGE", `${name} is the reserved plans worktree, which never implements a plan.`, {
+      resolution: "Create a separate worktree for the implementation and pass its name.",
+    });
+  }
   if (found) return found;
   throw domainError("PLAN_NOT_FOUND", `No linked worktree is named ${name}.`, {
     resolution: "Pass the worktree's Git administrative name: basename of `git -C <worktree> rev-parse --absolute-git-dir`.",
@@ -73,11 +79,11 @@ export function worktreeName(checkoutPath) {
   return path.basename(git(checkoutPath, ["rev-parse", "--absolute-git-dir"]).stdout);
 }
 
-// Files that still name `oldPath`. Reported, never edited: rewriting them would put files other
-// than the plan into a plan-only transition commit.
-export function linksToPath(primary, oldPath) {
+// Files on the plans branch that still name `oldPath`. Reported, never edited: rewriting them would
+// put files other than the plan into a plan-only transition commit.
+export function linksToPath(storeRoot, oldPath) {
   if (!oldPath) return [];
-  const found = git(primary, ["grep", "-l", "-F", "--", oldPath]);
+  const found = git(storeRoot, ["grep", "-l", "-F", "--", oldPath]);
   return found.ok ? found.stdout.split("\n").filter(Boolean) : [];
 }
 

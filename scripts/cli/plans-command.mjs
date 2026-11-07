@@ -3,9 +3,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { buildRepositoryPlanSnapshot, selectRepositoryPlan, validateRepositoryPlans } from "../../modules/plan-suite/index.mjs";
+import { buildRepositoryPlanSnapshot, domainError, selectRepositoryPlan, validateRepositoryPlans } from "../../modules/plan-suite/index.mjs";
 import { placePlan } from "../../modules/plan-suite/backlog-registry.mjs";
-import { primaryCheckoutRecords } from "../../modules/plan-suite/repository-validation.mjs";
+import { approvePlan, savePlan, setConfigNamespaces } from "../../modules/plan-suite/plan-writes.mjs";
+import { initStore, refreshStore, requireStore } from "../../modules/plan-suite/plan-store.mjs";
 import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 import { primaryCheckout } from "../../modules/plan-suite/plan-git.mjs";
 import { approvalFreshness, completionPreflight, mergeReadiness } from "../../modules/plan-suite/review-gates.mjs";
@@ -16,7 +17,12 @@ import { stopPlanServers } from "../../modules/plan-suite/stop-servers.mjs";
 import { repairPlansMissingFrontmatter } from "../../modules/plan-suite/repair.mjs";
 
 const PLANS_USAGE = [
-  "usage: roborepo plans validate [<plan>] [--json]",
+  "usage: roborepo plans init [--worktree-root <path>] [--repo-name <name>] [--json]",
+  "       roborepo plans show <plan> [--json]",
+  "       roborepo plans save <file.md> [--json]",
+  "       roborepo plans approve <plan> --commit <sha> --confirmed-by <who> [--json]",
+  "       roborepo plans config namespaces <file.json> [--json]",
+  "       roborepo plans validate [<plan>] [--json]",
   "       roborepo plans promote|submit|reopen|close <plan> [--base <branch>] [--json]",
   "       roborepo plans start <plan> --worktree <name> [--base <branch>] [--json]",
   "       roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]",
@@ -29,6 +35,11 @@ const PLANS_USAGE = [
 
 export function plansCommand(args) {
   const [sub, ...rest] = args;
+  if (sub === "init") return plansInitCommand(rest);
+  if (sub === "show") return plansShowCommand(rest);
+  if (sub === "save") return plansSaveCommand(rest);
+  if (sub === "approve") return plansApproveCommand(rest);
+  if (sub === "config") return plansConfigCommand(rest);
   if (sub === "repair") return plansRepairCommand(rest);
   if (sub === "validate") return plansValidateCommand(rest);
   if (sub === "order") return plansOrderCommand(rest);
@@ -89,7 +100,6 @@ function plansValidateCommand(args) {
     for (const plan of result.plans) {
       if (plan.findings.length === 0) continue;
       console.log(`${plan.relativePath}${plan.id ? ` (${plan.id})` : ""}`);
-      if (plan.validated.source === "worktree") console.log(`  validated from worktree ${plan.validated.worktree}: ${plan.validated.relativePath}`);
       for (const item of plan.findings) console.log(`  ${item.severity.padEnd(8)} ${item.code}: ${item.message}`);
     }
     if (result.repositoryFindings.length) console.log("repository");
@@ -106,7 +116,7 @@ function plansValidateCommand(args) {
 // unprioritized.
 // Exit status: 0 when the result is recorded (staying unprioritized included), 1 when refused, 2 on
 // a usage error.
-function plansOrderCommand(args) {
+async function plansOrderCommand(args) {
   const [verb, ...rest] = args;
   const { flags, positional } = parseArgs(rest);
   if (verb !== "place" || !positional[0] || (flags.top && flags.bottom)) {
@@ -114,17 +124,13 @@ function plansOrderCommand(args) {
     process.exit(2);
   }
   let result;
-  let record;
   try {
-    const primary = primaryCheckout(process.cwd());
-    const records = primaryCheckoutRecords(primary);
-    record = selectRepositoryPlan({ root: primary, plans: records }, positional[0], { cwd: process.cwd() });
-    result = placePlan({ root: primary, records, record, position: flags.top ? "top" : flags.bottom ? "bottom" : null });
+    result = await placePlan({ store: requireStore(), selector: positional[0], position: flags.top ? "top" : flags.bottom ? "bottom" : null });
   } catch (err) {
     return failDomain(err, flags.json);
   }
   if (flags.json) {
-    console.log(JSON.stringify({ ok: true, plan: { id: record.plan.id, path: record.plan.relativePath, namespace: record.plan.namespace }, ...result }, null, 2));
+    console.log(JSON.stringify({ ok: true, ...result }, null, 2));
     return;
   }
   const descriptions = {
@@ -134,10 +140,11 @@ function plansOrderCommand(args) {
     bottom: "placed at the bottom",
     unprioritized: "left in Needs prioritization",
   };
-  console.log(`plan: ${record.plan.relativePath} (${record.plan.id}), namespace ${record.plan.namespace}: ${descriptions[result.placed]}`);
+  console.log(`plan: ${result.plan.path} (${result.plan.id}), namespace ${result.plan.namespace}: ${descriptions[result.placed]}`);
   if (result.ignoredPosition) console.log(`--${result.ignoredPosition} ignored: a plan connected to a ranked plan stays with its group.`);
   for (const move of result.moves) console.log(`automatic ${move.kind === "attached" ? "attachment" : "move"}: ${move.id} now at position ${move.to + 1}`);
   console.log(result.order.join(" "));
+  printSyncState(result);
 }
 
 // Every lifecycle transition the manifest declares. Exit status: 0 when the post-commit validator
@@ -160,11 +167,9 @@ async function plansTransitionCommand(transition, args) {
     const { lifecycle } = result.plan;
     console.log(`plan: ${result.plan.path}${result.plan.id ? ` (${result.plan.id})` : ""}`);
     if (result.worktree) console.log(`worktree: ${result.worktree.name}${result.worktree.branch ? ` on ${result.worktree.branch}` : ""}`);
-    console.log(`${transition}: ${lifecycle.from} -> ${lifecycle.to}, ${result.commit ? `committed ${result.commit.slice(0, 12)} on ${result.base}` : "already recorded"}`);
-    if (result.fastForward) console.log(`fast-forward: ${result.fastForward.applied ? "applied" : result.fastForward.reason}`);
-    if (result.worktreeCopy) console.log(`worktree copy: ${result.worktreeCopy}`);
+    console.log(`${transition}: ${lifecycle.from} -> ${lifecycle.to}, ${result.commit ? `committed ${result.commit.slice(0, 12)}` : "already recorded"}`);
+    printSyncState(result);
     for (const dependent of result.references?.cleared || []) console.log(`dependency cleared: ${dependent}`);
-    for (const dependent of result.references?.left || []) console.log(`dependency left in place, its worktree owns the copy: ${dependent}`);
     for (const link of result.staleLinks) console.log(`stale link to ${result.plan.from}: ${link}`);
     printFailedChecks(result.checks);
     console.log(result.verdict);
@@ -265,19 +270,136 @@ function plansSyncBaseCommand(args) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(`${result.branch}: ${result.state}${result.commit ? ` at ${result.commit.slice(0, 12)}` : ""}`);
-    for (const item of result.resolved) console.log(`plan rename resolved: ${item.from} -> ${item.to}`);
     for (const conflict of result.conflicts) console.log(`conflict: ${conflict}`);
     if (result.state === "conflicts") console.log("Resolve the conflicts, stage them, run the checks, then run `roborepo plans sync-base --continue`.");
   }
   if (result.state === "conflicts") process.exit(1);
 }
 
-// Resolves a plan the way the transitions do: its stage from the primary checkout, its content from
-// whichever copy is authoritative.
+// A gate's inputs: the code repository's main checkout, and the plan's record from the store.
 function runFromPrimary(selector, run) {
   const primary = primaryCheckout(process.cwd());
-  const record = selectRepositoryPlan(buildRepositoryPlanSnapshot({ cwd: primary }), selector, { cwd: process.cwd() });
+  const record = selectRepositoryPlan(buildRepositoryPlanSnapshot({ cwd: process.cwd() }), selector, { cwd: process.cwd() });
   return run({ primary, record });
+}
+
+// A commit the remote has not accepted is kept and reported, so a sandboxed run continues.
+function printSyncState(result) {
+  console.log(result.synchronized ? "synchronized" : `not synchronized: ${result.reason || "the remote could not be reached"}. The commit is kept and pushed by the next change that reaches the remote.`);
+}
+
+async function plansInitCommand(args) {
+  const { flags } = parseArgs(args, ["worktree-root", "repo-name"]);
+  let result;
+  try {
+    result = await initStore({ worktreeRoot: flags["worktree-root"] || "~/.worktrees", repoName: flags["repo-name"] || null });
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) console.log(JSON.stringify(result, null, 2));
+  else console.log(`plans ${result.state}: ${result.path} on ${result.branch}, synchronized`);
+}
+
+// Refreshes first, but still shows the plan when the remote cannot be reached or needs a person.
+async function plansShowCommand(args) {
+  const { flags, positional } = parseArgs(args);
+  if (!positional[0]) {
+    console.error(PLANS_USAGE);
+    process.exit(2);
+  }
+  try {
+    const store = requireStore();
+    const sync = await refreshStore(store).catch((err) => {
+      if (!err?.code) throw err;
+      return { synchronized: false, reason: err.message };
+    });
+    const record = selectRepositoryPlan(buildRepositoryPlanSnapshot({ cwd: store.root }), positional[0], { cwd: process.cwd() });
+    const markdown = fs.readFileSync(record.absolutePath, "utf8");
+    if (flags.json) {
+      console.log(JSON.stringify({ ok: true, id: record.plan.id, path: record.plan.relativePath, lifecycle: record.plan.lifecycle, synchronized: sync.synchronized, reason: sync.reason, markdown }, null, 2));
+      return;
+    }
+    if (!sync.synchronized) console.error(`not synchronized: ${sync.reason}`);
+    process.stdout.write(markdown);
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+}
+
+async function plansSaveCommand(args) {
+  const { flags, positional } = parseArgs(args);
+  if (!positional[0]) {
+    console.error(PLANS_USAGE);
+    process.exit(2);
+  }
+  let result;
+  try {
+    result = await savePlan({ markdown: readInputFile(positional[0]), filename: positional[0] });
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify({ ok: true, ...result }, null, 2));
+    return;
+  }
+  console.log(`${result.action === "unchanged" ? "unchanged" : `${result.action}d`}: ${result.path} (${result.id})`);
+  printSyncState(result);
+}
+
+async function plansApproveCommand(args) {
+  const { flags, positional } = parseArgs(args, ["commit", "confirmed-by"]);
+  if (!positional[0] || !flags.commit || !flags["confirmed-by"]) {
+    console.error(PLANS_USAGE);
+    process.exit(2);
+  }
+  let result;
+  try {
+    result = await approvePlan({ selector: positional[0], commit: flags.commit, confirmedBy: flags["confirmed-by"] });
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify({ ok: true, ...result }, null, 2));
+    return;
+  }
+  console.log(`approved: ${result.path} at ${result.commit}, confirmed by ${result.confirmedBy}`);
+  printSyncState(result);
+}
+
+async function plansConfigCommand(args) {
+  const [verb, ...rest] = args;
+  const { flags, positional } = parseArgs(rest);
+  if (verb !== "namespaces" || !positional[0]) {
+    console.error(PLANS_USAGE);
+    process.exit(2);
+  }
+  let result;
+  try {
+    let namespaces;
+    try {
+      namespaces = JSON.parse(readInputFile(positional[0]));
+    } catch (err) {
+      if (err?.code) throw err;
+      throw domainError("INVALID_CHANGE", `${positional[0]} is not valid JSON.`);
+    }
+    result = await setConfigNamespaces({ namespaces });
+  } catch (err) {
+    return failDomain(err, flags.json);
+  }
+  if (flags.json) {
+    console.log(JSON.stringify({ ok: true, ...result }, null, 2));
+    return;
+  }
+  console.log(`namespaces: ${result.namespaces.join(", ") || "(none)"}`);
+  printSyncState(result);
+}
+
+function readInputFile(file) {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch (err) {
+    throw domainError("INVALID_CHANGE", `${file} could not be read (${err?.code || "unknown"}).`);
+  }
 }
 
 function printFailedChecks(checks) {
@@ -317,7 +439,7 @@ async function plansStopServersCommand(args) {
   if (!result.ok) process.exit(1);
 }
 
-function plansRepairCommand(args) {
+async function plansRepairCommand(args) {
   const dryRun = args.includes("--dry-run");
   const root = args.find((arg) => !arg.startsWith("--"));
   if (!root) {
@@ -329,7 +451,7 @@ function plansRepairCommand(args) {
     console.error(`error: ${root} is not a readable directory`);
     process.exit(2);
   }
-  const { repaired, errors } = repairPlansMissingFrontmatter(resolvedRoot, { dryRun });
+  const { repaired, errors } = await repairPlansMissingFrontmatter(resolvedRoot, { dryRun });
   if (repaired.length === 0) {
     console.log("no plan docs missing frontmatter found.");
   } else {

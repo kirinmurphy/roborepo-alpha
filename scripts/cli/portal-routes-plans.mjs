@@ -38,7 +38,9 @@ export const plansRoutes = defineRoutes([
     handler: (req, res, { qs, handlers }) => {
       const scope = readRepositoryScope(new URLSearchParams(qs), res, handlers);
       if (!scope) return true;
-      send(res, 200, "application/json", JSON.stringify(handlers.refreshPlans({ repositoryId: scope.repositoryId ?? null })));
+      handlers.refreshPlans({ repositoryId: scope.repositoryId ?? null })
+        .then((snapshot) => send(res, 200, "application/json", JSON.stringify(snapshot)))
+        .catch((err) => send(res, 500, "application/json", JSON.stringify({ error: String(err?.message || err) })));
       return true;
     },
   },

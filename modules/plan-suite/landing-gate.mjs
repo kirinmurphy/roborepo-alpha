@@ -3,9 +3,8 @@
 // transition, and plan-scoped worktree cleanup verify that one commit instead of rescanning base
 // history. A recorded commit that no longer absorbs the branch falls back to the full scan.
 import fs from "node:fs";
-import path from "node:path";
 import { inspectBranchLanding } from "../repositories/worktree-landed.mjs";
-import { authoritativeMarkdown } from "./worktree-copy.mjs";
+import { linkedWorktreeNamed } from "./plan-git.mjs";
 
 const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 const ABSORBING_LINE = /^\s*[-*]\s+Absorbing commit:\s*`?([0-9a-f]+)`?\s*$/i;
@@ -24,15 +23,15 @@ export function recordedAbsorbingCommit(markdown) {
   return null;
 }
 
-// `markdown` is the primary copy, where /plan-close writes its verification; it defaults to the file
-// on disk. `branch` skips resolving the plan's worktree when the caller already has it.
+// `markdown` is the plan's text, where /plan-close writes its verification; it defaults to the file
+// in the store. `branch` skips resolving the plan's worktree when the caller already has it.
 export async function planLanding({ primary, record, base, branch = null, markdown = null }) {
   if (!record.plan.worktree) return { landed: true, reason: "implemented on the base branch", absorbingCommit: null };
-  const resolvedBranch = branch || authoritativeMarkdown(primary, record).worktree?.branch || null;
+  const resolvedBranch = branch || linkedWorktreeNamed(primary, record.plan.worktree)?.branch || null;
   if (!resolvedBranch) {
     return { landed: false, reason: `worktree ${record.plan.worktree} has no resolvable branch`, absorbingCommit: null };
   }
-  const content = markdown ?? fs.readFileSync(path.join(primary, record.plan.relativePath), "utf8");
+  const content = markdown ?? fs.readFileSync(record.absolutePath, "utf8");
   return inspectBranchLanding(primary, resolvedBranch, {
     base: `refs/heads/${base}`,
     recorded: recordedAbsorbingCommit(content),

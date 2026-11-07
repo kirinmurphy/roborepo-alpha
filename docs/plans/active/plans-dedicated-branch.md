@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Verify that Codex's sandbox can commit to the plans worktree, then build the plans store and redirect plan operations to it.
+next_action: Render the Codex Git grants from the Codex provider, then work the unchecked checklist items in order (see Execution notes).
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
@@ -247,8 +247,8 @@ The modal validates and previews the title, plan ID, filename, and target folder
 
 ## Implementation checklist
 
-- [ ] **Codex sandbox check:** From `codex exec` with the managed profile, run commit-only store operations against a fixture and confirm the sandbox can write `repo_plans` and the repository's common Git directory. If it cannot, make the smallest permission-render change that allows it, or record the blocker before continuing.
-- [ ] **Plan store:** Add `plan-store.mjs` with `origin/repo-plans`, `plans/`-level lifecycle directories/config/order, worktree location by branch, the lock, hook-free fetch/commit/push, bounded retry, pending-commit push, and `plans init` with its path-collision checks. Add a test fixture helper that creates a bare `origin` and clones.
+- [ ] **Codex sandbox check:** From `codex exec` with the managed profile, run commit-only store operations against a fixture and confirm the sandbox can write `repo_plans` and the repository's common Git directory. If it cannot, make the smallest permission-render change that allows it, or record the blocker before continuing. Check done, grant proven by hand; rendering it remains (see Execution notes).
+- [x] **Plan store:** Add `plan-store.mjs` with `origin/repo-plans`, `plans/`-level lifecycle directories/config/order, worktree location by branch, the lock, hook-free fetch/commit/push, bounded retry, pending-commit push, and `plans init` with its path-collision checks. Add a test fixture helper that creates a bare `origin` and clones.
 - [ ] **Canonical plan access:** Redirect scanning, snapshot fingerprinting, validation, ordering, transitions, review records, and CLI reads/writes to the new `plans/` paths. Remove copy authority, its findings and API fields, and `docs/plans/` behavior. Add `plans show`, `plans save`, `plans approve`, and `plans config namespaces`.
 - [ ] **Lifecycle and code separation:** Preserve review, approval, landing, and close gates while evaluating code commits independently of plans commits. Drop the primary-checkout and base-branch requirement from plan commits, the start fast-forward, and sync-base plan-rename handling.
 - [ ] **Outside consumers:** Update worktree cleanup (fail closed, exclude and lock `repo_plans`, refuse it in `plans start`), Codex workspace roots, repo discovery, and packaging. Remove the real-tree CI check.
@@ -304,6 +304,42 @@ The modal validates and previews the title, plan ID, filename, and target folder
 | `docs/internal/plans-portal-internals.md`, `docs-map.md`, `backlog-review.md`, `plan-suite-deferred-topics.md`, `plan-backlog-ordering-architecture-addendum.md`, `skills-and-commands.md`, `config-panel-internals.md`, `npm-release.md`, `rename-readiness.md`, `rename/` | Replace plan paths and links with titles and IDs. Dated records under `docs/internal/history/` stay as written |
 | `portal/home/index.html` | "Set by" copy for the worktree folder |
 | Migration operator guide, in the helper's header | Rollout order; removed with the helper |
+
+## Execution notes
+
+Standing instructions from the user, for every session working this plan:
+
+- **Hand off at stopping points.** Start a new session at each logical stopping point and continue `/plan-execute` there, so context stays small. Commit and update this plan first. Pass this instruction along in each brief, until the plan is complete.
+- **Harness-specific behavior belongs in the harness provider.** Put it under `scripts/harnesses/<provider>/`; keep the shared adapter and platform code harness-agnostic. Update `docs/internal/harness-provider-interface.md` if that helps.
+
+How to work on this branch:
+
+- The installed `roborepo` runs the old code from the primary checkout, so this plan's own lifecycle stays on `docs/plans/` until rollout: edit this copy in the worktree, and run `roborepo plans submit` from the primary checkout. Test new code with `node scripts/cli/main.mjs plans ...`.
+- `docs/plans/**` stays tracked on this branch; rollout removes it after merge.
+
+State of the work (what the checklist's unchecked items still need):
+
+| Item | Done | Remaining |
+| --- | --- | --- |
+| Codex | Probe results in the Decision Log | Render the grants. Add a generic seam next to `permissions.workspaceRoots` in `scripts/cli/permissions-render.mjs` and `renderCodexProfile`, with the Codex-specific path list in `scripts/harnesses/codex/`. Resolve workspace roots through the store (`scripts/harnesses/permission-workspace-roots.mjs`) |
+| Canonical access | `modules/plan-suite/` redirected, copy authority removed, `plan-writes.mjs`, CLI commands and catalog entries. `grep docs/plans` over `modules/` still finds `discovery-walk.mjs` | `cli-command-catalog-check.mjs`. Remove `authority`, `checkout`, `primaryRelativePath` readers in the portal (`portal/plans/templates.js`). Home and overview consumers of `repositoryScans` must handle state `not-set-up` |
+| Lifecycle | Gates read the store and compare code without exclusions; sync-base lost rename handling | Check `plans.mjs`, `stop-servers.mjs`, and any `resolved` readers of sync-base |
+| Outside consumers | `linkedWorktrees` filters the reserved branch by default | `scripts/cli/worktree-policy.mjs` through the store, failing closed; discovery; `package.json`; delete `plan-tree-naming-check.mjs` and its `check-groups.json` entry |
+| Permissions, portal, migration, tests, docs | | All of it |
+
+Tests: `scripts/test/plan-store-check.mjs` passes and needs adding to `scripts/test/check-groups.json` and `test-cli.sh`. `scripts/test/lib/plan-git-fixture.mjs` now builds a bare origin and a store: keys under `plans/` go to the store, others to `main`. Existing fixtures still using `docs/plans/` fail until moved; `plan-authority-check`, `plan-suite-authority-*`, `plan-landed-recovery-check`, and `plan-close-integration-check` test removed modules and are deleted or rewritten. Those mechanical moves suit Sonnet subagents.
+
+## Decision Log
+
+- **Codex needs an exact-path grant, not the whole Git directory (measured with `codex exec`, codex-cli 0.166.0, on a fixture with the primary outside the workspace roots).** Without a grant, `git add` in `repo_plans` fails on `<common>/worktrees/<name>/index.lock`. Granting write to `<common>/objects/**`, `<common>/worktrees/repo_plans/**`, and the exact paths `refs/heads/repo-plans`, `logs/refs/heads/repo-plans`, `refs/remotes/origin/repo-plans`, `logs/refs/remotes/origin/repo-plans`, each with its `.lock`, lets add, commit, fetch, `reset --keep`, and the lock file exit 0, while `hooks/`, `config`, and other branches stay denied. Alternative: all of `.git/**`, rejected because writing hooks or config runs code outside the sandbox. Codex accepts `write` only on an exact path or trailing `/**`, so the lock paths are listed. Git prints `Unable to create packed-refs.lock` on these commands; every exit status stays 0 and `packed-refs` stays denied, because writing it could move other branches.
+- **Inventory filters the reserved worktree centrally.** `linkedWorktrees` drops the `repo-plans` branch unless the store passes `includeReserved`. Alternative: a filter at each consumer, which a new consumer could forget.
+- **The store is located from Git's administrative files, not `git worktree list`.** The portal's stat-only fingerprint calls it every poll, and the plan's lookup is still by checked-out branch.
+- **Operations return files; the store writes them.** `mutateStore` runs an operation that reads the fresh tree and returns `{ files, message, result }`, so a rejected push re-runs it and `plans-order.json` is recomputed. Alternative: operations writing directly, which could not be re-applied.
+- **A same-plan change from another clone is refused for every operation, and the refusal lets a rerun proceed.** The fetch advances the local store, so a repeat runs against current content. Alternative: exempting transitions, which adds a mode for little benefit.
+- **A pending commit's order change is merged by intent when replayed.** Its closure is gone after an offline save, so it applies the ids it added and removed to the remote's order. Same-plan overlap still stops for a person.
+- **Transition check 6 now confirms the plans worktree is on `repo-plans`.** "Runs from the primary checkout" no longer means anything.
+- **Promote and close no longer carry uncommitted plan edits.** Skills save edits with `plans save`, then run the transition, since a transition reads only the store.
+- **`plans save` refuses every `### Approval` change, including `Decision: requested`.** `/plan-review` loses that placeholder; a plan with no record reads as `missing`. Update the skill to match.
 
 ## Follow-up task
 

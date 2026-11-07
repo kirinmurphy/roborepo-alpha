@@ -902,7 +902,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       // is that the server is now listening while it happens.
       setTimeout(() => {
         reconcileTelemetryRepositories();
-        try { refreshPlans(); } catch {}
+        refreshPlans().catch(() => {});
         startAnalysisRefresh();
       }, 0);
     },
@@ -910,7 +910,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
 }
 
 function startAutoDiscoveryScan() {
-  refreshDeveloperRuntimeSnapshot().then(() => { try { refreshPlans(); } catch {} }).catch(() => {});
+  refreshDeveloperRuntimeSnapshot().then(() => { refreshPlans().catch(() => {}); }).catch(() => {});
 }
 
 // A worktree removal or a cleanup opt-in changes what Home's next poll should show, so Runtime
@@ -922,7 +922,7 @@ async function afterWorktreeChange(pending) {
 }
 
 function afterSourceChange(payload) {
-  try { refreshPlans(); } catch {}
+  refreshPlans().catch(() => {});
   return payload;
 }
 

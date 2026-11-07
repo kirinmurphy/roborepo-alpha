@@ -1,5 +1,6 @@
-// A hermetic home and Git fixture for the plan lifecycle checks: real repositories with a primary
-// checkout on main and linked worktrees, driven through the real `roborepo` CLI entry point.
+// A hermetic home and Git fixture for the plan lifecycle checks: real repositories with a bare origin,
+// a primary checkout on main, a plans store, and linked worktrees, driven through the real `roborepo`
+// CLI entry point.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -37,7 +38,7 @@ export function createPlanFixture(prefix) {
     return result.stdout.trim();
   };
   const tryGit = (cwd, ...args) => spawnSync("git", ["-C", cwd, ...args], { env, encoding: "utf8" });
-  const roborepo = (args, { cwd }) => spawnSync(process.execPath, [cli, ...args], { cwd, env, encoding: "utf8" });
+  const roborepo = (args, { cwd, env: overrides = {} }) => spawnSync(process.execPath, [cli, ...args], { cwd, env: { ...env, ...overrides }, encoding: "utf8" });
   const json = (result, label) => {
     try {
       return JSON.parse(result.stdout);
@@ -46,14 +47,54 @@ export function createPlanFixture(prefix) {
     }
   };
 
-  // A repository whose primary checkout is on main, with each { path: content } committed.
-  const repository = (name, files) => {
+  // A repository with a bare `origin`, a primary checkout on main holding the code files, and a plans
+  // store holding the `plans/...` files, set up through the real `roborepo plans init`. Pass
+  // { store: false } for a repository that has not run it. `clone(root, name)` adds a second machine.
+  const repository = (name, files = {}, { store = true } = {}) => {
+    const origin = path.join(tmp, "remotes", `${name}.git`);
+    fs.mkdirSync(path.dirname(origin), { recursive: true });
+    git(tmp, "init", "--quiet", "--bare", "--initial-branch=main", origin);
     const root = path.join(tmp, name);
-    for (const [file, content] of Object.entries(files)) write(path.join(root, file), content);
-    git(tmp, "init", "--quiet", "--initial-branch=main", root);
+    git(tmp, "clone", "--quiet", origin, root);
+    git(root, "symbolic-ref", "HEAD", "refs/heads/main");
+    const code = Object.entries(files).filter(([file]) => !file.startsWith("plans/"));
+    const plans = Object.entries(files).filter(([file]) => file.startsWith("plans/"));
+    for (const [file, content] of code.length ? code : [["README.md", "fixture\n"]]) write(path.join(root, file), content);
     git(root, "add", "--", ".");
     git(root, "commit", "--quiet", "-m", "fixture");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    git(root, "push", "--quiet", "origin", "main");
+    if (!store) return root;
+    initStore(root, name);
+    if (plans.length) {
+      const storeRoot = storePath(root);
+      for (const [file, content] of plans) write(path.join(storeRoot, file), content);
+      git(storeRoot, "add", "--", ...plans.map(([file]) => file));
+      git(storeRoot, "commit", "--quiet", "-m", "fixture plans");
+      git(storeRoot, "push", "--quiet", "origin", "repo-plans:repo-plans");
+      git(storeRoot, "update-ref", "refs/remotes/origin/repo-plans", "HEAD");
+    }
     return root;
+  };
+
+  const initStore = (root, name = path.basename(root)) => {
+    const result = roborepo(["plans", "init", "--worktree-root", path.join(tmp, "worktree-root"), "--repo-name", name, "--json"], { cwd: root });
+    assert.equal(result.status, 0, `plans init failed:\n${result.stdout}${result.stderr}`);
+    return json(result, "plans init");
+  };
+
+  // The checked-out path of a repository's reserved plans worktree, as Git records it.
+  const storePath = (root) => {
+    const entry = git(root, "worktree", "list", "--porcelain").split("\n\n").find((item) => item.includes("branch refs/heads/repo-plans"));
+    assert.ok(entry, "the repository has a plans worktree");
+    return fs.realpathSync(/^worktree (.+)$/m.exec(entry)[1]);
+  };
+
+  // A second machine: a fresh clone of the same origin, not yet connected to the plans store.
+  const clone = (root, name) => {
+    const target = path.join(tmp, name);
+    git(tmp, "clone", "--quiet", git(root, "remote", "get-url", "origin"), target);
+    return target;
   };
 
   // A linked worktree on a new branch from main; returns { path, name, branch }.
@@ -71,7 +112,7 @@ export function createPlanFixture(prefix) {
   };
 
   const cleanup = () => fs.rmSync(tmp, { recursive: true, force: true });
-  return { tmp, env, git, tryGit, roborepo, json, repository, worktree, commit, cleanup };
+  return { tmp, env, git, tryGit, roborepo, json, repository, initStore, storePath, clone, worktree, commit, cleanup };
 }
 
 // A plan document that satisfies every non-terminal lifecycle's structure rules. `tasks` are the

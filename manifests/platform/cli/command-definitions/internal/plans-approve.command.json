@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "approve"],
+  "kind": "internal",
+  "title": "Record approval",
+  "description": "Record explicit human approval of one exact implementation commit",
+  "usage": "roborepo plans approve <plan> --commit <sha> --confirmed-by <who> [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["approve"]
+  }
+}

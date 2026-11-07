@@ -1,0 +1,12 @@
+{
+  "path": ["plans", "config"],
+  "kind": "internal",
+  "title": "Plans config",
+  "description": "Change the plans config through validated commands",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["config"]
+  }
+}

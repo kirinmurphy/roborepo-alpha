@@ -15,9 +15,14 @@ export function repositoryWorktrees(registry, repositoryId, options = {}) {
   return { main, worktrees, commonDirs: [...commonDirs] };
 }
 
+// The branch checked out in a repository's reserved plans worktree. That worktree holds no code, so
+// it is never a cleanup candidate, a Home worktree, or a place a plan can be implemented.
+export const RESERVED_PLANS_BRANCH = "repo-plans";
+
 // Git keeps one administrative directory per linked worktree. Read it directly so inventory does
-// not spawn a Git process for every checkout during a Runtime refresh.
-export function linkedWorktrees(commonDir, { fsApi = fs } = {}) {
+// not spawn a Git process for every checkout during a Runtime refresh. The reserved plans worktree is
+// left out unless the caller is the plan store.
+export function linkedWorktrees(commonDir, { fsApi = fs, includeReserved = false } = {}) {
   let names;
   try {
     names = fsApi.readdirSync(path.join(commonDir, "worktrees"));
@@ -38,6 +43,7 @@ export function linkedWorktrees(commonDir, { fsApi = fs } = {}) {
     const prunable = !root || !isDirectory(root, fsApi);
     const head = readOrNull(path.join(adminDir, "HEAD"), fsApi)?.trim() || null;
     const branch = head?.startsWith("ref: refs/heads/") ? head.slice("ref: refs/heads/".length) : null;
+    if (branch === RESERVED_PLANS_BRANCH && !includeReserved) continue;
     worktrees.push({
       path: root || checkoutPath,
       name,

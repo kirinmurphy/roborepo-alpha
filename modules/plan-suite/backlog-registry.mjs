@@ -1,8 +1,9 @@
-// docs/plans/plans-order.json, the one repository-local record of Backlog order: reading it, the
-// Backlog index every read is built from, and the only writes it ever receives (a portal Save, a
-// portal pin, and `roborepo plans order place`). The file lives in the primary checkout and stays uncommitted,
-// like any other edit there; a lifecycle transition never touches it, which is why a plan that has
-// left Backlog is ignored on read and pruned at the next write rather than removed when it moves.
+// plans/plans-order.json, the one record of a repository's Backlog order: reading it, the Backlog
+// index every read is built from, and the only writes it ever receives (a portal Save, a portal pin,
+// and `roborepo plans order place`). Each write is a store mutation, re-run on the new state if another
+// machine pushed first, so the file is recomputed rather than merged. A lifecycle transition never
+// touches it, which is why a plan that has left Backlog is ignored on read and pruned at the next write
+// rather than removed when it moves.
 //
 //   Registry entry             Effective order            Next write
 //   Plan now outside Backlog   ignored                    pruned
@@ -19,10 +20,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { blocksFromSequence, deriveGroups, proposeOrder, sequenceGroup } from "./backlog-order.mjs";
 import { finding } from "./findings.mjs";
-import { domainError } from "./index.mjs";
+import { buildRepositoryPlanSnapshot, domainError, selectRepositoryPlan } from "./index.mjs";
 import { PLANS_CONFIG_RELATIVE_PATH, approvedNamespaces, pathFreeFileError, readProjectNamespaces } from "./naming.mjs";
+import { PLANS_ORDER_RELATIVE_PATH, mutateStore } from "./plan-store.mjs";
 
-export const PLANS_ORDER_RELATIVE_PATH = "docs/plans/plans-order.json";
+export { PLANS_ORDER_RELATIVE_PATH };
 const SCHEMA_VERSION = 1;
 
 // state is "missing", "ok", or "invalid". A missing file means every plan is unprioritized and no
@@ -198,59 +200,83 @@ export function repositoryOrderFindings(root, records) {
   return registryFindings(orderingContext(root, records));
 }
 
+function storeRecords(root) {
+  return buildRepositoryPlanSnapshot({ cwd: root }).plans;
+}
+
 // Pins or unpins one namespace. It changes no plan's order, so it carries no revision.
-export function setNamespacePinned({ root, namespace, pinned }) {
-  const config = readProjectNamespaces(root);
-  const registry = readOrderRegistry(root);
-  assertRegistryWritable(config, registry);
-  if (pinned && !approvedNamespaces(config.namespaces).includes(namespace)) throw domainError("INVALID_CHANGE", `${namespace} is not an approved namespace.`);
-  const pins = livePins(config, registry);
-  const next = pinned ? (pins.includes(namespace) ? pins : [...pins, namespace]) : pins.filter((item) => item !== namespace);
-  writeRegistry(root, registry.namespaces, next);
-  return { namespace, pinned: Boolean(pinned), written: true };
+export function setNamespacePinned({ store, namespace, pinned }) {
+  return mutateStore({
+    store,
+    operation: ({ root }) => {
+      const config = readProjectNamespaces(root);
+      const registry = readOrderRegistry(root);
+      assertRegistryWritable(config, registry);
+      if (pinned && !approvedNamespaces(config.namespaces).includes(namespace)) throw domainError("INVALID_CHANGE", `${namespace} is not an approved namespace.`);
+      const pins = livePins(config, registry);
+      const next = pinned ? (pins.includes(namespace) ? pins : [...pins, namespace]) : pins.filter((item) => item !== namespace);
+      return {
+        files: { [PLANS_ORDER_RELATIVE_PATH]: registryText(registry.namespaces, next) },
+        message: `${pinned ? "Pin" : "Unpin"} plan namespace ${namespace}`,
+        result: { namespace, pinned: Boolean(pinned), written: true },
+      };
+    },
+  });
 }
 
 // A portal Save: the namespace's whole order, draft applied, or nothing. Refuses a stale draft.
-export function saveNamespaceOrder({ root, records, namespace, order, unprioritized = [], revision }) {
+export function saveNamespaceOrder({ store, namespace, order, unprioritized = [], revision }) {
   if (!isIdList(order)) throw domainError("INVALID_CHANGE", "order must be an array of plan ids.");
   if (!isIdList(unprioritized)) throw domainError("INVALID_CHANGE", "unprioritized must be an array of plan ids.");
-  const context = orderingContext(root, records);
-  assertRevision(context, namespace, revision);
-  const { groups, stored } = assertWritable(context, namespace);
-  const proposal = proposeOrder(stored, groups, { type: "replace", order, unprioritized });
-  return applyOrder({ ...proposal, context, namespace }, namespaceRevision(context, namespace));
+  return mutateStore({
+    store,
+    operation: ({ root }) => {
+      const context = orderingContext(root, storeRecords(root));
+      assertRevision(context, namespace, revision);
+      const { groups, stored } = assertWritable(context, namespace);
+      const proposal = proposeOrder(stored, groups, { type: "replace", order, unprioritized });
+      return orderWrite({ ...proposal, context, namespace });
+    },
+  });
 }
 
 // `roborepo plans order place`. A plan connected to a ranked plan is already ranked by the effective
 // order, so placing it only persists that; `position` applies to a plan that is not ranked yet, or
 // to a whole group the caller explicitly moves. With no position an unranked plan stays unranked.
-export function placePlan({ root, records, record, position = null }) {
-  const context = orderingContext(root, records);
-  const { plan } = record;
-  if (plan.lifecycle !== "backlog") throw domainError("INVALID_CHANGE", `${plan.relativePath} is not in Backlog, so it has no place in an order.`);
-  if (!plan.namespace) {
-    throw domainError("INVALID_CHANGE", `${path.basename(plan.relativePath)} has no approved namespace, so it cannot be ordered.`, {
-      resolution: "Rename the file to an approved `<namespace>-<slug>.md`, or add the namespace to docs/plans/plans-config.json.",
-    });
-  }
-  if (context.derived.unrankable.includes(plan)) throw domainError("INVALID_CHANGE", `${path.basename(plan.relativePath)} needs a unique id before it can be ordered.`);
-  const { groups, stored } = assertWritable(context, plan.namespace);
-  const effective = proposeOrder(stored, groups);
-  const attached = effective.order.includes(plan.id);
-  const revision = namespaceRevision(context, plan.namespace);
-  if (attached && !stored.includes(plan.id)) {
-    const applied = applyOrder({ ...effective, context, namespace: plan.namespace }, revision);
-    return { ...applied, placed: "attached", ignoredPosition: position };
-  }
-  if (!position) {
-    if (attached) return { ...applyOrder({ ...effective, context, namespace: plan.namespace }, revision), placed: "ranked" };
-    return { order: effective.order, moves: [], placed: "unprioritized", written: false };
-  }
-  const proposal = proposeOrder(stored, groups, { type: "place", id: plan.id, position });
-  // The plan and its group moved because the caller asked; only what else moved is automatic.
-  const placed = groups.find((group) => group.ids.includes(plan.id)).ids;
-  const moves = proposal.moves.filter((move) => !placed.includes(move.id));
-  return { ...applyOrder({ ...proposal, context, namespace: plan.namespace }, revision), moves, placed: position };
+export function placePlan({ store, selector, cwd = process.cwd(), position = null }) {
+  return mutateStore({
+    store,
+    operation: ({ root }) => {
+      const snapshot = buildRepositoryPlanSnapshot({ cwd: root });
+      const record = selectRepositoryPlan(snapshot, selector, { cwd });
+      const context = orderingContext(root, snapshot.plans);
+      const { plan } = record;
+      const identity = { plan: { id: plan.id, path: plan.relativePath, namespace: plan.namespace } };
+      if (plan.lifecycle !== "backlog") throw domainError("INVALID_CHANGE", `${plan.relativePath} is not in Backlog, so it has no place in an order.`);
+      if (!plan.namespace) {
+        throw domainError("INVALID_CHANGE", `${path.basename(plan.relativePath)} has no approved namespace, so it cannot be ordered.`, {
+          resolution: `Rename the file to an approved \`<namespace>-<slug>.md\`, or add the namespace with \`roborepo plans config namespaces\`.`,
+        });
+      }
+      if (context.derived.unrankable.includes(plan)) throw domainError("INVALID_CHANGE", `${path.basename(plan.relativePath)} needs a unique id before it can be ordered.`);
+      const { groups, stored } = assertWritable(context, plan.namespace);
+      const effective = proposeOrder(stored, groups);
+      const attached = effective.order.includes(plan.id);
+      const withIdentity = (write, fields) => ({ ...write, result: { ...write.result, ...identity, ...fields } });
+      if (attached && !stored.includes(plan.id)) {
+        return withIdentity(orderWrite({ ...effective, context, namespace: plan.namespace }), { placed: "attached", ignoredPosition: position });
+      }
+      if (!position) {
+        if (attached) return withIdentity(orderWrite({ ...effective, context, namespace: plan.namespace }), { placed: "ranked" });
+        return { files: {}, result: { ...identity, order: effective.order, moves: [], placed: "unprioritized", written: false } };
+      }
+      const proposal = proposeOrder(stored, groups, { type: "place", id: plan.id, position });
+      // The plan and its group moved because the caller asked; only what else moved is automatic.
+      const placed = groups.find((group) => group.ids.includes(plan.id)).ids;
+      const moves = proposal.moves.filter((move) => !placed.includes(move.id));
+      return withIdentity(orderWrite({ ...proposal, context, namespace: plan.namespace }), { moves, placed: position });
+    },
+  });
 }
 
 function isIdList(value) {
@@ -265,9 +291,9 @@ function assertRevision(context, namespace, revision) {
 }
 
 function assertRegistryWritable(config, registry) {
-  if (config.error) throw domainError("INVALID_CHANGE", "docs/plans/plans-config.json cannot be read, so nothing can be saved.", { details: [config.error] });
+  if (config.error) throw domainError("INVALID_CHANGE", "plans/plans-config.json cannot be read, so nothing can be saved.", { details: [config.error] });
   if (registry.state === "invalid") {
-    throw domainError("INVALID_CHANGE", "docs/plans/plans-order.json cannot be read, so it was not overwritten.", {
+    throw domainError("INVALID_CHANGE", "plans/plans-order.json cannot be read, so it was not overwritten.", {
       resolution: "Fix or remove the file, then try again.",
       details: [registry.error],
     });
@@ -282,39 +308,29 @@ function assertWritable(context, namespace) {
   return ordering;
 }
 
-// Persists a proposal after checking it and the revision one last time. Only saveNamespaceOrder and
-// placePlan call this. Other namespaces' entries, and entries this write cannot judge, stay as they
-// are.
-function applyOrder({ order, moves, findings, context, namespace }, expectedRevision) {
+// The store write for a proposal. Other namespaces' entries, and entries this write cannot judge, stay
+// as they are. `revision` is what the namespace's revision becomes once this lands, so an open draft
+// can keep saving without a reload.
+function orderWrite({ order, moves, findings, context, namespace }) {
   if (findings.length) throw domainError("INVALID_CHANGE", findings[0].message, { details: findings.map((item) => item.message) });
-  const fresh = orderingContext(context.root, context.records);
-  assertRevision(fresh, namespace, expectedRevision);
-  const preserved = storedOrder(fresh.registry, namespace).filter((id) => {
+  const preserved = storedOrder(context.registry, namespace).filter((id) => {
     if (order.includes(id)) return false;
-    const plan = fresh.plans.find((item) => item.id === id);
+    const plan = context.plans.find((item) => item.id === id);
     return !plan || (plan.lifecycle === "backlog" && !plan.namespace);
   });
-  const namespaces = { ...fresh.registry.namespaces };
+  const namespaces = { ...context.registry.namespaces };
   const entry = [...order, ...preserved];
   if (entry.length) namespaces[namespace] = entry;
   else delete namespaces[namespace];
-  writeRegistry(context.root, namespaces, livePins(fresh.config, fresh.registry));
-  return { order, moves, written: true, revision: namespaceRevision(orderingContext(context.root, context.records), namespace) };
+  const after = { ...context, registry: { ...context.registry, namespaces } };
+  return {
+    files: { [PLANS_ORDER_RELATIVE_PATH]: registryText(namespaces, livePins(context.config, context.registry)) },
+    message: `Order plan namespace ${namespace}`,
+    result: { order, moves, written: true, revision: namespaceRevision(after, namespace) },
+  };
 }
 
-// Every write goes through here. The rename is what makes it atomic: a reader sees the old file or
-// the new one. `pinned` is left out when empty, so a repo that never pins keeps the plain file.
-function writeRegistry(root, namespaces, pinned) {
-  const file = path.join(root, PLANS_ORDER_RELATIVE_PATH);
-  const temporary = path.join(path.dirname(file), `.plans-order.${process.pid}.tmp`);
-  try {
-    fs.writeFileSync(temporary, `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, ...(pinned.length ? { pinned } : {}), namespaces }, null, 2)}\n`);
-    fs.renameSync(temporary, file);
-  } catch (err) {
-    // A cleanup failure must not replace the error below, whose message is safe to show in the browser.
-    try { fs.rmSync(temporary, { force: true }); } catch { /* the write failure is what gets reported */ }
-    throw domainError("ORDER_WRITE_FAILED", `${PLANS_ORDER_RELATIVE_PATH} could not be written (${pathFreeFileError(err)}).`, {
-      resolution: "Check that the file and its folder are writable, then save again.",
-    });
-  }
+// `pinned` is left out when empty, so a repo that never pins keeps the plain file.
+function registryText(namespaces, pinned) {
+  return `${JSON.stringify({ schemaVersion: SCHEMA_VERSION, ...(pinned.length ? { pinned } : {}), namespaces }, null, 2)}\n`;
 }
