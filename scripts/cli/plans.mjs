@@ -69,7 +69,10 @@ export function loadCachedPlansSnapshot() {
   const registry = loadRegistry({ stateRoot });
   const fingerprint = planSnapshotFingerprint({ registry });
   if (!cachedSnapshot || cachedSnapshotIsMock || fingerprint !== cachedFingerprint) rebuildSnapshot(registry, fingerprint);
-  return publicSnapshot(cachedSnapshot);
+  // Home offers each plan's file path to copy, as it already does each checkout's. /api/plans does not.
+  const paths = new Map(cachedSnapshot.plans.map((record) => [record.key, record.absolutePath]));
+  const snapshot = publicSnapshot(cachedSnapshot);
+  return { ...snapshot, plans: snapshot.plans.map((record) => ({ ...record, absolutePath: paths.get(record.key) })) };
 }
 
 export function loadPlanDocument({ key }) {

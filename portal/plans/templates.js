@@ -83,7 +83,7 @@ export function plansOnboardingState(snapshot, step, onManage, scope = null) {
     }
     : {
       title: scope ? `No plans yet found in ${subject}` : `No plans found in ${subject}`,
-      body: "Plans looks for Markdown files under docs/plans in every checkout of each known repo.",
+      body: "Plans reads Markdown files from each known repo's plans branch.",
     };
   const node = fill(tpl("tpl-empty-state"), { ...fills, action: scope ? "View All Repos" : "Manage Repos" });
   node.classList.add("empty-state--with-action");
@@ -189,11 +189,6 @@ export function drawerContent(doc, drawerActions) {
       dtdd("repository", doc.plan.repository.name),
       dtdd("lifecycle", lifecycleLabel(plan.lifecycle)),
       ...(plan.nextAction ? [dtdd("next action", plan.nextAction)] : []),
-      // An active or review plan's assigned worktree holds its authoritative copy; say so, since the
-      // path above is the same in every checkout. During review the primary copy has already moved,
-      // so the worktree's copy can sit at an older path; name the primary one too.
-      ...(plan.authority?.source === "worktree" ? [dtdd("read from", `From worktree ${plan.authority.worktree}`)] : []),
-      ...(plan.primaryRelativePath ? [dtdd("primary copy", plan.primaryRelativePath)] : []),
       dtdd("plan freshness", FRESHNESS_LABELS[plan.reviewState] || plan.reviewState),
     ],
     warnings: plan.validation.warnings,

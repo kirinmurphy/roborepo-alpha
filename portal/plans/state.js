@@ -175,7 +175,7 @@ export function sortForLifecycle(lifecycle) {
 }
 
 export function repositoryContext(record) {
-  return `Review the plan at \`${record.plan.relativePath}\` in this repository.\n\nFocus on:\n- the current next action\n- unresolved tasks\n- blockers\n- whether the plan still matches the implementation\n\nDo not assume the document is current. Verify relevant claims against the repository.`;
+  return `Review the plan \`${record.plan.relativePath}\`. Read it with \`roborepo plans show ${record.plan.id || record.plan.relativePath}\`.\n\nFocus on:\n- the current next action\n- unresolved tasks\n- blockers\n- whether the plan still matches the implementation\n\nDo not assume the document is current. Verify relevant claims against the repository.`;
 }
 
 export function formatDate(value) {

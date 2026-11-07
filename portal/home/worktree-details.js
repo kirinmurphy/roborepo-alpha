@@ -11,7 +11,7 @@ const WORKTREE_PATH_MAX_LENGTH = 50;
 // matched plan row has no other identity for the worktree; an unclaimed worktree row also keeps its
 // branch label and checkout tooltip. Stop Server and Delete Worktree sit at the foot of the panel, so
 // neither is ever the row's most prominent action.
-export function worktreeDetailsButton(plan, checkout, { mainCheckouts = [], onStopServers = null, onDelete = null } = {}) {
+export function worktreeDetailsButton(plan, checkout, { onStopServers = null, onDelete = null } = {}) {
   const button = document.createElement("portal-menu-button");
   button.setAttribute("icon", "tree");
   // The same size as the icons inside its panel.
@@ -23,16 +23,16 @@ export function worktreeDetailsButton(plan, checkout, { mainCheckouts = [], onSt
     button.close();
     action();
   });
-  button.panelContent = worktreeDetailsPanel(plan, checkout, mainCheckouts, { onStopServers: closing(onStopServers), onDelete: closing(onDelete) });
+  button.panelContent = worktreeDetailsPanel(plan, checkout, { onStopServers: closing(onStopServers), onDelete: closing(onDelete) });
   return button;
 }
 
-function worktreeDetailsPanel(plan, checkout, mainCheckouts, actions) {
+function worktreeDetailsPanel(plan, checkout, actions) {
   const panel = tpl("tpl-worktree-details");
   // The shared menu button closes on any document click; copying a value must leave it open so the
   // in-place Copied confirmation is visible.
   panel.addEventListener("click", (event) => event.stopPropagation());
-  panel.querySelector("[data-slot=identity]").append(...identityRows(plan, checkout, mainCheckouts).map(detailRow));
+  panel.querySelector("[data-slot=identity]").append(...identityRows(plan, checkout).map(detailRow));
   const facts = panel.querySelector("[data-slot=facts]");
   facts.append(...summaryFacts(checkout).map(factItem));
   facts.hidden = !facts.childElementCount;
@@ -53,7 +53,7 @@ export function isRunning(checkout) {
   return checkout.worktreeRunning ?? checkout.worktreeState === "running";
 }
 
-function identityRows(plan, checkout, mainCheckouts) {
+function identityRows(plan, checkout) {
   const git = checkout.git;
   const rows = [];
   if (git?.detached) {
@@ -68,25 +68,12 @@ function identityRows(plan, checkout, mainCheckouts) {
   rows.push(path
     ? { icon: "tree", value: portalMiddleEllipsis(path, WORKTREE_PATH_MAX_LENGTH), title: path, copy: path, label: "Copy worktree path" }
     : { icon: "tree", value: checkout.worktreeName });
-  // The plan file inside this worktree while the plan is worked on there; once the branch has merged,
-  // the worktree's copy is left behind, so the main checkout's copy is the one to open.
-  const planRoot = checkout.worktreeState === "landed" ? mainCheckoutRoot(mainCheckouts, checkout.mergedInto) : path;
-  const planPath = planRoot && plan?.relativePath ? joinPath(planRoot, plan.relativePath) : null;
+  // The plan's one file lives in the plans worktree, whichever checkout it is worked on from.
+  const planPath = plan?.planPath;
   if (planPath) rows.push({ icon: "plans", value: portalMiddleEllipsis(planPath, WORKTREE_PATH_MAX_LENGTH), title: planPath, copy: planPath, label: "Copy plan path" });
   return rows;
 }
 
-// The main checkout on the branch the worktree merged into, else any main checkout with a path.
-function mainCheckoutRoot(mainCheckouts, mergedInto) {
-  const rooted = mainCheckouts.filter((main) => main.projectRoot);
-  return (rooted.find((main) => mergedInto && main.git?.branch === mergedInto) || rooted[0])?.projectRoot || null;
-}
-
-// Joins with the separator the checkout path already uses, so a Windows path stays backslashed.
-function joinPath(root, relativePath) {
-  const separator = root.includes("\\") && !root.includes("/") ? "\\" : "/";
-  return `${root.replace(/[\\/]+$/, "")}${separator}${relativePath.replace(/[\\/]/g, separator)}`;
-}
 
 function detailRow({ icon, value, title, copy, label }) {
   const row = fill(tpl("tpl-worktree-detail-row"), { icon: { name: icon }, value });

@@ -1668,8 +1668,8 @@ test.describe("repository-first portal Home", () => {
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
     const panel = card.locator(".worktree-details");
     // The worktree is identified by its path alone; its name was the path's last segment repeated.
-    // The plan path points at the plan's copy inside that worktree.
-    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/wt/feature-a/docs/plans/active/plan-a.md"]);
+    // The plan path points at the plan's file in the plans worktree, not inside this one.
+    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/wt/repo_plans/plans/active/plan-a.md"]);
     await expect(panel.getByRole("list", { name: "Worktree status" }).getByRole("listitem")).toHaveText([
       "dirty · 0 ahead", "3 behind remote",
     ]);
@@ -1689,7 +1689,7 @@ test.describe("repository-first portal Home", () => {
     await expect(row.locator("portal-copy-button[copied]")).toHaveCount(0, { timeout: 8_000 });
 
     await panel.getByRole("button", { name: "Copy plan path" }).click();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/feature-a/docs/plans/active/plan-a.md");
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/wt/repo_plans/plans/active/plan-a.md");
 
     // Closing the panel mid-confirmation resets the button, so reopening shows an idle copy button,
     // not a stuck confirmation.
@@ -1703,35 +1703,19 @@ test.describe("repository-first portal Home", () => {
 
     await page.keyboard.press("Escape");
     await card.getByRole("button", { name: "Worktree details for Plan B" }).click();
-    // Without a resolved worktree path there is no plan path to build, so that row is left out.
-    await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/b", "feature-b"]);
+    // An unresolved worktree path does not hide the plan's file, which does not live there.
+    await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/b", "feature-b", "/private/wt/repo_plans/plans/active/plan-b.md"]);
     await expect(card.locator(".worktree-details").getByRole("list", { name: "Worktree status" })).toBeHidden();
   });
 
-  test("once a plan's worktree has merged, the plan path points at the main checkout's copy", async ({ page }) => {
-    await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
-    await planFixture(page, (repository) => {
-      const checkouts = repository.domains.runtime.data.checkouts;
-      checkouts.find((checkout) => checkout.rootId === "main").projectRoot = "/private/repo";
-      Object.assign(checkouts.find((checkout) => checkout.rootId === "matched"), { worktreeState: "landed", mergedInto: "main" });
-    });
-    await page.goto("/");
-    const card = roboRepoCard(page);
-    await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
-    const panel = card.locator(".worktree-details");
-    await expect(panel.locator(".worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/repo/docs/plans/active/plan-a.md"]);
-    await panel.getByRole("button", { name: "Copy plan path" }).click();
-    expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("/private/repo/docs/plans/active/plan-a.md");
-  });
-
-  test("a merged worktree with no main checkout path shows no plan path rather than the stale worktree copy", async ({ page }) => {
+  test("once a plan's worktree has merged, the plan path is unchanged", async ({ page }) => {
     await planFixture(page, (repository) => {
       Object.assign(repository.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched"), { worktreeState: "landed", mergedInto: "main" });
     });
     await page.goto("/");
     const card = roboRepoCard(page);
     await card.getByRole("button", { name: "Worktree details for Plan A" }).click();
-    await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a"]);
+    await expect(card.locator(".worktree-details .worktree-detail-value")).toHaveText(["feature/a", "/private/wt/feature-a", "/private/wt/repo_plans/plans/active/plan-a.md"]);
   });
 
   test("a long worktree path is middle-truncated to 50 characters, and copies and titles in full", async ({ page }) => {
@@ -2824,8 +2808,8 @@ async function planFixture(page, adjust) {
     repository.domains.plans = { status: "available", data: {
       counts: { active: 4, backlog: 5 },
       active: [
-        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", relativePath: "docs/plans/active/plan-a.md", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
-        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", relativePath: "docs/plans/active/plan-b.md", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
+        { id: "a", key: "a", title: "Plan A", worktree: "feature-a", planPath: "/private/wt/repo_plans/plans/active/plan-a.md", checkoutRootId: "matched", taskCounts: { total: 4, complete: 2 } },
+        { id: "b", key: "b", title: "Plan B", worktree: "feature-b", planPath: "/private/wt/repo_plans/plans/active/plan-b.md", checkoutRootId: "no-app", taskCounts: { total: 3, complete: 3 } },
         { id: "c", key: "c", title: "Plan C", worktree: "", taskCounts: { total: 0, complete: 0 } },
         { id: "d", key: "d", title: "Plan D", worktree: "gone", worktreeState: "missing", taskCounts: { total: 2, complete: 0 } },
       ],
