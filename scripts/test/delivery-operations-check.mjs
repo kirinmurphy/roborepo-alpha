@@ -52,13 +52,14 @@ try {
     console.log("skip: fake gh executable checks require a POSIX executable fixture");
   } else {
     const gh = createFakeGh();
-    const runDelivery = (args, prs = [pr], workflow = run) => {
+    const runDelivery = (args, prs = [pr], workflow = run, configChange = null) => {
       fs.writeFileSync(gh.log, "");
       return delivery(checkout, args, {
         PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`,
         FAKE_GH_LOG: gh.log,
         FAKE_GH_PRS: JSON.stringify(prs),
         FAKE_GH_RUN: JSON.stringify(workflow),
+        FAKE_GH_CONFIG_CHANGE: JSON.stringify(configChange),
       });
     };
     const calls = () => fs.readFileSync(gh.log, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
@@ -93,6 +94,20 @@ try {
     for (const args of [["pr-ready", "42"], ["pr-body", bodyFile, "--title"], ["retry-ci", "--failed"], ["retry-ci", "73", "--debug"]]) {
       refused(runDelivery(args), /usage/i);
       assert.deepEqual(calls(), []);
+    }
+
+    git(checkout, "remote", "add", "replacement", "git@github.com:example/project.git");
+    for (const [key, changed, original] of [
+      ["remote.origin.url", "https://github.com/example/project.git", "git@github.com:example/project.git"],
+      ["remote.origin.pushurl", "https://github.com/example/project.git", null],
+      ["branch.feature/check.remote", "replacement", "origin"],
+      ["branch.feature/check.merge", "refs/heads/another-branch", "refs/heads/feature/check"],
+    ]) {
+      const result = runDelivery(["pr-ready"], [pr], run, [key, changed]);
+      assert.equal(result.status, 1, result.stderr || result.stdout);
+      assert.equal(calls().length, 2, "changed upstream configuration stops before mutation");
+      if (original === null) git(checkout, "config", "--unset", key);
+      else git(checkout, "config", key, original);
     }
 
     git(checkout, "remote", "set-url", "origin", "file://github.com/example/project.git");
@@ -142,7 +157,15 @@ const args = process.argv.slice(2);
 const input = args.includes("--body-file") ? fs.readFileSync(0, "utf8") : "";
 fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ args, input }) + "\\n");
 if (args[0] === "repo" && args[1] === "view") process.stdout.write(JSON.stringify({ defaultBranchRef: { name: "main" }, nameWithOwner: "example/project", url: "https://github.com/example/project" }));
-if (args[0] === "pr" && args[1] === "list") process.stdout.write(process.env.FAKE_GH_PRS);
+if (args[0] === "pr" && args[1] === "list") {
+  const change = JSON.parse(process.env.FAKE_GH_CONFIG_CHANGE || "null");
+  if (change) {
+    const { spawnSync } = require("node:child_process");
+    const result = spawnSync("git", ["config", ...change], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(result.stderr);
+  }
+  process.stdout.write(process.env.FAKE_GH_PRS);
+}
 if (args[0] === "run" && args[1] === "view") process.stdout.write(process.env.FAKE_GH_RUN);
 `, { mode: 0o755 });
   return { dir, log };

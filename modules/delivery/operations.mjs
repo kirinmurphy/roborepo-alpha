@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { isDeepStrictEqual, promisify } from "node:util";
 import { runGitProcess } from "../repositories/git-exec.mjs";
 import { normalizeGitRemote } from "../repositories/identity.mjs";
 import { GIT_NETWORK_TIMEOUT_MS } from "../repositories/git-remote-operations.mjs";
@@ -44,7 +44,7 @@ async function gh(cwd, args, input = "") {
   return result.stdout;
 }
 
-async function currentPullRequest(cwd) {
+async function localDeliveryTarget(cwd) {
   const branch = await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
   const head = await git(cwd, ["rev-parse", "--verify", "HEAD"]);
   const remote = await git(cwd, ["config", "--get", `branch.${branch}.remote`]);
@@ -61,6 +61,12 @@ async function currentPullRequest(cwd) {
     throw new Error("Remote must resolve to one matching GitHub fetch and push repository");
   }
   const repo = repository.slice(4);
+  return { branch, head, remote, upstream, fetchUrls, pushUrls, repo };
+}
+
+async function currentPullRequest(cwd) {
+  const target = await localDeliveryTarget(cwd);
+  const { repo, branch, head } = target;
   const repoInfo = JSON.parse(await gh(cwd, [
     "repo", "view", repo, "--json", "defaultBranchRef,nameWithOwner,url",
   ]));
@@ -79,7 +85,7 @@ async function currentPullRequest(cwd) {
     || !pr.baseRefName || pr.baseRefName === branch || pr.url?.toLowerCase() !== `https://${repo}/pull/${pr.number}`) {
     throw new Error("Pull request repository, branch, or pushed head does not match the current feature branch");
   }
-  return { pr, repo, branch, head };
+  return { pr, target };
 }
 
 export async function updatePullRequest(cwd, operation, value) {
@@ -88,7 +94,8 @@ export async function updatePullRequest(cwd, operation, value) {
     throw new Error("Expected a numeric workflow run ID");
   }
   if (operation === "pr-body" && typeof value !== "string") throw new Error("Expected a UTF-8 pull request body");
-  const { pr, repo, branch, head } = await currentPullRequest(cwd);
+  const { pr, target } = await currentPullRequest(cwd);
+  const { repo, branch, head } = target;
   if (operation === "retry-ci") {
     const run = JSON.parse(await gh(cwd, [
       "run", "view", value, "--repo", repo,
@@ -100,10 +107,9 @@ export async function updatePullRequest(cwd, operation, value) {
       throw new Error("Workflow run must be a failed completed run for this repository and current PR head");
     }
   }
-  // Re-read the local target after network validation, before making the external mutation.
-  if (await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]) !== branch
-    || await git(cwd, ["rev-parse", "--verify", "HEAD"]) !== head) {
-    throw new Error("Current branch or head changed during pull request validation");
+  // GitHub reads can take long enough for another session to change the selected repository.
+  if (!isDeepStrictEqual(await localDeliveryTarget(cwd), target)) {
+    throw new Error("Current branch, head, or upstream configuration changed during pull request validation");
   }
   if (operation === "pr-body") {
     await gh(cwd, ["pr", "edit", String(pr.number), "--repo", repo, "--body-file", "-"], value);

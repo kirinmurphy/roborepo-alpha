@@ -336,8 +336,16 @@ describe the distinction between ordinary merges and owner access.
 
 ### Findings
 
+- [ ] Recheck upstream configuration before a GitHub mutation. The first independent validator
+      reproduced changing the remote during PR discovery, followed by a mutation on the old
+      target. Fix compares a fresh local delivery target, including upstream remote, merge ref,
+      fetch URL, and push URL, and adds four refusal regressions.
+
 ### Verification
 
+- Validation pass 1 (fresh-context subagent) found one fix, upstream configuration freshness,
+  and classified the existing CLI cleanup failure as base. No documentation violations were
+  found against the technical-writing rubric.
 - Passed `node scripts/test/plan-suite-skills-check.mjs`,
   `node scripts/test/codex-command-permission-check.mjs`,
   `node scripts/test/agent-run-coverage-check.mjs`,
@@ -364,5 +372,10 @@ describe the distinction between ordinary merges and owner access.
 - Public GitHub run 42334175526 completed successfully at 5cb80dbacd3cf670eae7a54bdfd1ebccfe58aaf0.
   Its job names were verified as `check (ubuntu-latest)`, `check (macos-latest)`,
   and `windows-installer`.
+- `node scripts/test/permissions-render-live-characterization-check.mjs` was attempted and
+  blocked by EPERM at its first temporary-directory cleanup.
+- The deterministic plan validator reports only five unconfirmed Not tested advisories.
+  Completion preflight passed all six structural checks, but required verification remains
+  blocked, so the implementation is kept active.
 - No server was needed for this CLI and policy change. The actual CLI help and command fixtures
   exercise the normal entry point.
