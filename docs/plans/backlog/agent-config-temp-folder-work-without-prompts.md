@@ -1,6 +1,6 @@
 ---
 id: uvzskd7z
-next_action: In a fresh Claude desktop session, test whether a PreToolUse allow from a hook clears a Bash ask rule such as `Bash(rm:*)`, and whether Codex's sandbox can write to the temp folders, before writing any hook code.
+next_action: Check whether a hook clears Claude's Bash ask rule and whether Codex can create and remove a directory under its temp roots.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "permva27"]
@@ -68,6 +68,8 @@ also act on the repository and only log to temp, for example `npm run check > /p
 ## Goals
 
 - A temp-only shell command runs without a prompt in Claude and Codex.
+- Codex creates throwaway working directories under an approved temp root, even when the session
+  starts in a repo or linked worktree.
 - A repository command that already has an allow rule stays free when its only temp involvement is an
   output redirect.
 - Agents can work inside a scratch clone from any session without a prompt.
@@ -201,6 +203,17 @@ Each hook runs as a copy under the harness home, so it resolves the app root the
 | Claude | `tool_input.workdir`, then `cwd`, as `protected-branch-push.mjs` reads them | New `globals/harnesses/claude/hooks/temp-folder-work.mjs` on `PreToolUse` with matcher `Bash`, emitting `allow`. `repo-write-scope.mjs` treats a scratch clone as scratch |
 | Codex | The same order, with `permission-check.mjs`'s existing `exec_command` payload handling | `globals/harnesses/codex/hooks/permission-check.mjs` emits `allow` on `PreToolUse`. At `PermissionRequest` it approves only a `temp-only` command that requests no filesystem or network escalation |
 
+### Codex guidance for throwaway work
+
+Create directories for probes, test fixtures, temporary scripts, and disposable clones with
+`mktemp -d` under the OS temp directory or another approved temp root. Use the returned path for
+the work. If the temp root is unavailable, report the restriction and keep throwaway directories
+out of the repo and its linked worktrees. Create directories that are part of the requested
+project changes in the appropriate checkout.
+
+This instruction belongs in the Codex-specific rules. The permission hooks still evaluate the
+resolved paths and the sandbox still governs filesystem access.
+
 ## Implementation plan
 
 ### Phase 1: confirm the mechanisms
@@ -214,10 +227,14 @@ Each hook runs as a copy under the harness home, so it resolves the app root the
       `delete-files` and `switch-branches` while `temp-folder-work` is `allow`: a command the hook does
       not approve then prompts by default, including when the hook fails. Record the choice in the
       Decision Log, since it changes how user-facing buckets are enforced.
-- [ ] Codex: outside any other sandbox, run writes to `/tmp`, `$TMPDIR`, and a home-folder control under
-      the `managed-workspace` profile. If temp is not writable, render writable temp entries from the
-      new behavior in `scripts/harnesses/permissions-render.mjs`. A November 6 probe from inside a
-      Claude session exited 71 for every path, temp and home alike, so it could not tell them apart.
+- [ ] In a fresh Codex session outside any other sandbox, use the `managed-workspace` profile to
+      create a scratch directory under each of `/tmp` and `$TMPDIR`, write a harmless file, and remove
+      the directory. Verify that each directory is gone and record prompts separately from permission
+      errors. Keep the home-folder write control. If temp is not writable, render writable temp entries
+      from the new behavior in `scripts/harnesses/permissions-render.mjs`. If creation succeeds and
+      deletion is denied, record a failed filesystem removal check. An approval hook cannot clear
+      that denial. A November 6 probe from inside a Claude session exited 71 for every path, temp
+      and home alike.
 - [ ] Codex: confirm the `PermissionRequest` payload shows whether a request is a filesystem or network
       escalation. If it does not, leave prompt-rule commands such as `rm` prompting on Codex and record
       that.
@@ -248,6 +265,8 @@ Each hook runs as a copy under the harness home, so it resolves the app root the
       the setting on and still expects `ask` with it off, and a linked checkout still expects `ask`.
 - [ ] Codex: extend `permission-check.mjs` and `scripts/test/codex-command-permission-check.mjs`,
       including cases proving filesystem and network escalations are not approved.
+- [ ] Add the throwaway-directory instruction to `globals/system/rules/codex/90-codex-specific.md`
+      and regenerate the tracked rules with `scripts/build/render-rules.sh`.
 
 ## Validation
 
@@ -258,6 +277,10 @@ Each hook runs as a copy under the harness home, so it resolves the app root the
   `git init` and a commit in that folder, running a script there, and `rm -rf` of it.
 - In the same session, `rm -rf /tmp/x <repo-file>` and `cd /tmp/x && git push` still prompt.
 - The same checks pass in a live Codex session.
+- In a live Codex session started in a linked worktree, ask for a throwaway probe without specifying
+  a location. Confirm the new directory resolves under an approved temp root and is gone after
+  cleanup. In a separate task, confirm Codex can create a requested project directory in the
+  worktree. Run `scripts/build/render-rules.sh --check` to verify the generated rules.
 - With `temp-folder-work` set to `ask`, the same temp commands prompt as they do today.
 - Replay the shell commands in recent Claude transcripts through `scratch-command.mjs` with a throwaway
   script, and record how many of the temp-mentioning commands no longer return `defer`.
@@ -269,7 +292,7 @@ Each hook runs as a copy under the harness home, so it resolves the app root the
 | Doc | Update |
 | --- | --- |
 | `docs/user/reference/claude-hooks.md` | Add a `PreToolUse` row for the new hook and its setting |
-| `docs/user/reference/codex-hooks.md` | Describe the temp-only approval in the permission hook |
+| `docs/user/reference/codex-hooks.md` | Describe the temp-only approval and the separate Codex instruction for choosing a temp location |
 | `docs/user/reference/config-control-panel.md` | Add the setting, and note that scratch clones are an exception to its "Anywhere else" write row |
 | `docs/internal/hooks-internals.md` | Describe the check, its results, the allow list, and the adapters |
 | `docs/internal/harnesses-explained.md` | Add the `temp-scope` kind and that Gemini has no equivalent |
