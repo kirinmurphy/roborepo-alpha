@@ -21,13 +21,13 @@ Resolve:
 - relevant installed code-style and language skills;
 - current Git state;
 - existing branches and worktrees;
-- `docs/plans/plans-config.json` when present.
+- `plans/plans-config.json` from the plans worktree, for `worktreeRoot` and `worktreeRepoName`.
 
 The existing plan is the implementation contract. Verify it against the current repository before relying on it.
 
 ## Where the plan is
 
-Read the plan's folder in the primary checkout first; it decides what this run does. A command never
+Read the plan with `roborepo plans show <plan>` first; its folder decides what this run does. A command never
 repeats a transition that has already happened: it continues from the state it finds.
 
 | Folder | This run |
@@ -57,7 +57,7 @@ Load these by subject matter while implementing; do not wait to be asked for the
 
 Each row is its own optional package, so check it before loading it. Run this check in Preflight,
 for every row the plan's subject matter calls for, before the start transition: it is a pre-run gate
-like the `worktreeRoot` confirmation, so the no-questions run mode is unaffected.
+before any work starts, so the no-questions run mode is unaffected.
 
 1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
 2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
@@ -80,8 +80,8 @@ done or blocked by an open question or external blocker.
   next one, not to report.
 - Do not ask the user anything during implementation. Questions go into the Open Questions queue
   (see Blocker Policy) and are asked together, once, at the end.
-- The exceptions are the gates that come before implementation can start at all: the first-run
-  `worktreeRoot` confirmation in Preflight and a refused start transition. With no worktree, no task
+- The exceptions are the gates that come before implementation can start at all: a repository with
+  no plan store and a refused start transition. With no worktree, no task
   is unblocked, so these stop and ask immediately.
 - When the user answers the batched questions, each answer unblocks its tasks and the run resumes in
   this same mode: record the answer in the Decision Log, continue until no unblocked tasks remain,
@@ -97,16 +97,9 @@ done or blocked by an open question or external blocker.
    the repository's canonical plan validator for the deterministic document findings; it does not check the
    plan's claims against code, so step 2 still applies.
 4. Run the paired-skill check in Paired Skills for every row the plan's subject matter calls for.
-5. Read `docs/plans/plans-config.json` when present. If it declares a `worktreeRoot` (an absolute
-   path, a `~`-relative path, or a path relative to the repository root), that is the configured
-   worktree policy; resolve new worktrees under `<worktreeRoot>/<repo-name>/<branch>` without asking.
-   If the key is absent, this is a first-time-per-repository decision, not routine implementation
-   detail: propose the default `~/.worktrees` (expand `~` via the platform home directory, e.g.
-   `os.homedir()` in Node, not a literal string), state the exact resolved path, and wait for the
-   user to confirm or override before running `git worktree add`. On confirmation, write the
-   resulting path (confirmed default or override) into `plans-config.json` as `worktreeRoot` so every
-   later run on this repository resolves silently from then on — this is a one-time gate per
-   repository, not a prompt on every `plan-execute` invocation.
+5. Read `plans/plans-config.json` from the plans worktree. New worktrees resolve under
+   `<worktreeRoot>/<worktreeRepoName>/<branch>`, without asking. A repository with no plan store is
+   not set up: refusals name `roborepo plans init`, and `/plan-suite-init` runs it.
 6. Resolve the worktree policy.
 7. Inspect existing worktrees before creating another one.
 8. Reuse a worktree only when it clearly matches the repository and intended branch and is safe to continue.
@@ -121,13 +114,9 @@ done or blocked by an open question or external blocker.
     - branch;
     - base branch;
     - starting commit.
-14. Resolve the primary checkout with `git worktree list --porcelain`. The first `worktree` entry
-    is the main checkout for the shared `.git` directory. Every lifecycle transition runs there, and
-    from `APPROVED` on, the worktree's copy is the plan: it is the authoritative copy, the one the
-    portal shows. Every plan update after that, including Decision Log, Open Questions, and `## Not tested`
-    entries, goes to the worktree's copy and nowhere else. Never copy plan updates to the primary
-    checkout; Git carries the worktree's plan to the base branch when the branch merges, and an edit
-    to the primary copy in the meantime is reported as an outside edit.
+14. Update the plan only through `roborepo plans save`, by the "Plan store" rule in `/plan-write`'s
+    `references/plan-schema.md`, from whichever checkout you are in. That includes Decision Log, Open
+    Questions, and `## Not tested` entries. The plan is never a file on the feature branch.
 
 When deterministic repository commands exist for an operation, use them instead of reconstructing the mutation manually.
 
@@ -137,38 +126,34 @@ Only a plan in `ready/` takes this step. Read `references/start-validation.md` b
 transition. It describes what the start transition command does, the validator checks it runs, and
 how to act on a refusal.
 
-Run the transition from the primary checkout, after the target worktree is resolved and before any
-implementation:
+Run the transition after the target worktree is resolved and before any implementation:
 
-1. The primary checkout must be on the base branch, and the plan's own path must have no
-   uncommitted changes; the command refuses otherwise, and that refusal is a reason to stop and ask
-   the user. Unrelated work elsewhere in the primary checkout does not block it and is never
-   committed. On a repository's first run, commit the `worktreeRoot` that Preflight just wrote to
-   `docs/plans/plans-config.json` alone first, as a configuration-only commit, then continue.
-2. Resolve the target's Git administrative worktree name — not the checkout directory's basename,
+1. Resolve the target's Git administrative worktree name — not the checkout directory's basename,
    and never a branch name or absolute path.
-3. Run the repository's canonical start transition command for `<plan>` with worktree `<name>`. It
-   writes `worktree: <name>` into the primary checkout's copy of the plan, moves it from `ready/` to
-   `active/` with `git mv` (keeping its filename and `id`), stages only the old and new plan paths,
-   and commits the plan-only start transition on the base branch. Do not push.
-4. The same command then runs the start validator against fresh disk and Git state.
-5. Enter the implementation worktree only after the validator returns `APPROVED`. Apply each failed
+2. Run `roborepo plans start <plan> --worktree <name> --json`, from any checkout. It writes
+   `worktree: <name>` into the plan, moves it from `ready/` to `active/` (keeping its filename and
+   `id`), commits only the old and new plan paths to the plans branch, and pushes. A refusal is a
+   reason to stop and ask the user.
+3. The same command then runs the start validator against fresh disk and Git state.
+4. Enter the implementation worktree only after the validator returns `APPROVED`. Apply each failed
    check's `fix` and rerun; the validator gets at most three correction passes, and a final refusal
    blocks this plan and is reported, never worked around.
-6. Repository links the result lists under `staleLinks` still name the old `ready/` path. Fix them
-   in the implementation worktree, never on the base branch.
+5. Plan links the result lists under `staleLinks` still name the old `ready/` path. Fix them with
+   `roborepo plans save`.
+6. `synchronized: false` in the result means the remote could not be reached. The commit is kept and
+   the next store command pushes it, so continue, and mention it in the final report.
 
 ## Enter the Worktree
 
 Before the first edit, make the worktree the session's working directory. Writes are allowed without
-a prompt only inside the checkout the session is working in, so a session still rooted in the
-primary checkout asks for permission on every file it edits in the worktree.
+a prompt only inside the checkout the session is working in, so a session still rooted in another
+checkout asks for permission on every file it edits in the worktree.
 
 - If the execution environment requires explicit access to a linked worktree, request that access
   once using the environment's standard mechanism, then make the worktree the session's working
   directory. Follow repository-local access instructions when they exist.
 
-This is part of the pre-implementation gate, like the `worktreeRoot` confirmation: one approval,
+This is part of the pre-implementation gate: one approval,
 then the run proceeds without questions.
 
 ## Implementation Workflow
@@ -209,8 +194,8 @@ then the run proceeds without questions.
 12. Run completion-level verification, including manual verification against the started
     environment when applicable. Apply the behavioral evidence handoff below before committing.
 13. Re-read Git status and the implementation diff in the target worktree, then commit the
-    completed implementation changes there with a descriptive message, including the run's plan
-    updates in the worktree's copy. Do not leave completed code
+    completed implementation changes there with a descriptive message, saving the run's plan
+    updates with `roborepo plans save`. Do not leave completed code
     uncommitted. If the run made no implementation changes because the work was already complete,
     report that no implementation commit was needed. Never create this commit on the primary
     checkout or base branch.
@@ -265,10 +250,9 @@ human accepted it.
    validator apart from unconfirmed Not tested entries.
 3. **Incomplete, blocked, or not yet validated:** the plan stays in `active/`. This includes a
    Validation Loop that left `escalate` findings open; their unchecked findings fail the preflight.
-   Record the remaining tasks, findings, or blockers, set an actionable `next_action`, and commit the plan in the worktree. A later `/plan-execute` resumes from there.
-4. **Complete:** from the primary checkout, run the repository's canonical submit transition
-   command for `<plan>`. It reruns the preflight and commits the plan-only move from `active/` to
-   `review/` on the base branch. Do not push the base branch. Then push the feature branch (below)
+   Record the remaining tasks, findings, or blockers, set an actionable `next_action`, and save the plan. A later `/plan-execute` resumes from there.
+4. **Complete:** run `roborepo plans submit <plan> --json`. It reruns the preflight, then commits and
+   pushes the move from `active/` to `review/` on the plans branch. Then push the feature branch (below)
    and report that the plan awaits `/plan-review`.
 
 Genuinely unverified manual checks stay under `## Not tested`; they do not block completion, and
@@ -280,7 +264,7 @@ Work ready for review is pushed so CI runs the full gate before `/plan-review` s
 after the submit transition succeeds, or after Review Findings commits its fixes:
 
 1. Re-read the worktree's branch and Git status. Push only the plan's feature branch, never the base
-   branch or any other protected branch; the start and submit commits on the base branch stay local.
+   branch or any other protected branch. Lifecycle commits are already on the plans branch.
 2. From the worktree, run `git push -u <remote> <branch>`, where `<remote>` is the branch's upstream
    remote, or the repository's only remote when none is set. Never force-push.
 3. With no remote, or when the push is refused (a permission prompt declined, a hook, a rejected
@@ -291,7 +275,7 @@ after the submit transition succeeds, or after Review Findings commits its fixes
 
 A plan in `review/` returns here only to fix what review recorded.
 
-1. Read `## Review` in the worktree's copy. The unchecked items under `### Findings` are the work;
+1. Read `## Review` in the plan. The unchecked items under `### Findings` are the work;
    nothing else is in scope. `/plan-review` fixes every finding whose fix is clear in its own
    session, so what reaches here is what the user chose to send to a separate session, usually after
    deciding an escalated question. A finding marked `fixed in review` is already resolved; leave it
@@ -304,13 +288,13 @@ A plan in `review/` returns here only to fix what review recorded.
 4. A finding that needs the requirements or acceptance criteria to change is not fixable here.
    Leave it unchecked, record why in Open Questions, and tell the user it needs `/plan-review`,
    which decides on the scope change.
-5. Commit the fixes and the plan update in the worktree. The plan stays in `review/`; never run a
+5. Commit the fixes in the worktree and save the plan update. The plan stays in `review/`; never run a
    lifecycle transition in this mode. Push the feature branch (see Push the feature branch), then
    report that `/plan-review` should run again.
 
 ## Not Tested
 
-Built work that no test covers goes in the worktree copy's `## Not tested` section the moment the
+Built work that no test covers goes in the plan's `## Not tested` section the moment the
 gap is known: a check that was skipped, an assumption never exercised, a claim resting on indirect
 evidence. Each entry is an unchecked checkbox stating what to check and why a test cannot:
 
@@ -363,8 +347,8 @@ trivial:
 
 ### Decision Log
 
-Log every non-trivial decision made autonomously in a `## Decision Log` section of the worktree's
-copy of the plan, so the user can review it later. Each entry states:
+Log every non-trivial decision made autonomously in a `## Decision Log` section of the
+plan, so the user can review it later. Each entry states:
 
 - the decision;
 - the alternatives considered;
@@ -379,7 +363,7 @@ Policy refused to make or external obstacles such as a failing dependency or a m
 
 When blocked:
 
-1. Add an entry to the `## Open Questions` section of the worktree's copy of the plan:
+1. Add an entry to the plan's `## Open Questions` section:
    - the question or obstacle, with evidence;
    - for a decision: the options, their pros and cons, and a recommendation when there is one;
    - why it was blocked rather than decided;
@@ -444,7 +428,7 @@ Completion does not authorize:
 - guessing through consequential product decisions;
 - pushing anything but the plan's feature branch at review handoff, or merging, publishing, or
   deleting worktrees, without explicit permission or repository policy;
-- any commit on the base branch other than the start and submit transitions;
+- any commit on the base branch;
 - leaving completed implementation changes uncommitted in the target worktree.
 
 ## Final Report

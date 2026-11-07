@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { withInvalidatedApproval } from "../../modules/plan-suite/plan-writes.mjs";
 import { createPlanFixture, planDoc } from "./lib/plan-git-fixture.mjs";
 
 const fx = createPlanFixture("roborepo-plan-store-");
@@ -106,6 +107,8 @@ try {
   assert.match(approved, new RegExp(`### Approval\\n- Decision: approved\\n- Reviewed implementation commit: ${tip}\\n- Confirmed by: human`));
   const fresh = roborepo(["plans", "approval", "alpha001", "--json"], { cwd: root });
   assert.equal(json(fresh, "approval").state, "fresh");
+  assert.match(withInvalidatedApproval(approved), new RegExp(`### Approval\\n- Decision: invalidated\\n- Reviewed implementation commit: ${tip}`), "invalidating keeps the record as history");
+  assert.equal(withInvalidatedApproval("# No review\n"), "# No review\n", "a plan with no approval is left alone");
   ok(run(root, "save", source("test-alpha.md", approved.replace("The thing is done.", "The thing is done. A later note."))), "a plan-only save after approval");
   assert.equal(json(roborepo(["plans", "approval", "alpha001", "--json"], { cwd: root }), "approval").state, "fresh", "a plans commit leaves the approval fresh");
 

@@ -19,7 +19,7 @@
         {
           "type": "slash-command",
           "name": "plan-suite-init",
-          "description": "Set up docs/plans folders and plans-config.json namespaces in a repo.",
+          "description": "Set up the plan store and its namespaces in a repo.",
           "harnesses": [
             "claude",
             "codex",

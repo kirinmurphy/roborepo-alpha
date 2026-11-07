@@ -53,15 +53,10 @@ const SKILLS = {
       "perform closeout or merge orchestration",
       "invoke another plan command",
     ],
-    // Worktree-root resolution has no executable code path, so these phrases are the only
-    // enforcement that the gate survives future edits: propose-and-wait on first use, then persist
-    // so later runs on the same repository do not re-prompt.
+    // The root is confirmed once by /plan-suite-init; this skill only reads the result.
     worktreeRootPhrases: [
       "worktreeRoot",
-      "~/.worktrees",
-      "wait for the user to confirm or override",
-      "write the resulting path",
-      "one-time gate per",
+      "worktreeRepoName",
     ],
   },
   "plan-review": {
@@ -69,7 +64,7 @@ const SKILLS = {
     boundaryPhrases: [
       "fix a finding that chooses between real alternatives, changes requirements, or changes a contract",
       "infer, assume, or record approval without the human's explicit answer",
-      "merge the feature branch into the base branch, push, open or merge pull requests",
+      "merge the feature branch into the base branch, push code, open or merge pull requests",
       "move a plan back to `ready/`",
     ],
   },
@@ -134,8 +129,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   const transition = skill.slice(order[0], order[1]);
   let cursor = -1;
   for (const step of [
-    "writes `worktree: <name>` into the primary checkout's copy of the plan",
-    "from `ready/` to `active/` with `git mv`",
+    "writes `worktree: <name>` into the plan",
+    "from `ready/` to `active/`",
     "only the old and new plan paths",
     "runs the start validator against fresh disk and Git state",
     "Enter the implementation worktree only after the validator returns `APPROVED`",
@@ -144,18 +139,15 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     assert.ok(at > cursor, `plan-execute: start transition step missing or out of order: "${step}"`);
     cursor = at;
   }
-  includesAll("plan-execute transition", transition, ["Do not push", "at most three correction passes", "not the checkout directory's basename", "configuration-only commit", "Unrelated work elsewhere in the primary checkout does not block it"]);
+  includesAll("plan-execute transition", transition, ["at most three correction passes", "not the checkout directory's basename"]);
   includesAll("start-validation.md", reference, [
     "rev-parse --absolute-git-dir",
-    "Never fold it into the transition commit",
-    "Do not push",
     "at most three correction passes",
     "do not enter the target worktree",
     "reads every fact fresh",
-    "lists only the plan's rename (`R`) or modification (`M`)",
+    "lists only the plan's move or modification",
     "status --porcelain -- <old path> <new path>",
-    "Execution is still in the primary checkout",
-    "stop and ask the user",
+    "The plans worktree is on `repo-plans`",
     "a `backlog/` plan is refused with a pointer to `/plan-promote`",
   ]);
 
@@ -197,7 +189,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "has passed the Validation Loop",
     "canonical completion preflight command",
     "the plan stays in `active/`",
-    "canonical submit transition command",
+    "`roborepo plans submit <plan> --json`",
   ]);
   assert.ok(skill.slice(order[5]).includes("then run the Validation Loop over the result"), "plan-execute: fixes made in review mode are validated too");
   includesAll("plan-execute review findings", skill.slice(order[5]), [
@@ -245,36 +237,20 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   for (const text of [execute, startReference]) {
     assert.ok(!/mirror|canonical copy|Plan status updates still go|synchronized in the matching plan document/i.test(text), "plan-execute: no instruction to copy plan updates to the primary checkout");
   }
-  assert.ok(execute.includes("Never copy plan updates to the primary checkout"), "plan-execute: plan updates stay in the worktree's copy");
-  assert.ok(startReference.includes("never a copy to the primary checkout"), "plan-execute: start-validation.md hands the plan to the worktree");
+  assert.ok(execute.includes("The plan is never a file on the feature branch"), "plan-execute: plan updates go through the store");
+  assert.ok(startReference.includes("never a file on the feature branch"), "plan-execute: start-validation.md keeps the plan on the plans branch");
 
   const schema = readPackageFile("plan-suite/skills/plan-write/references/plan-schema.md");
-  includesAll("plan-schema.md", schema, ["## Plan authority", "PLAN_EDITED_OUTSIDE_WORKTREE", "PLAN_WORKTREE_COPY_UNAVAILABLE", "never copy plan content between checkouts", "`active/` or `review/`"]);
+  includesAll("plan-schema.md", schema, ["## Plan store", "`roborepo plans save <file.md>`", "`synchronized: false`", "Never write to `repo_plans` directly"]);
   const write = readSkill("plan-write");
-  assert.ok(write.includes("resolve its authoritative copy by the \"Plan authority\" rule"), "plan-write: resolves the authoritative copy before editing");
-  assert.ok(write.includes("ask for write access to the worktree rather than editing the primary copy"), "plan-write: never falls back to the primary copy for access");
+  assert.ok(write.includes("Change a plan only through `roborepo plans save`"), "plan-write: writes through the store, not before editing");
 
   const close = readSkill("plan-close");
-  const integration = close.indexOf("### 0. Confirm the worktree's plan copy is integrated");
-  assert.ok(integration > 0 && integration < close.indexOf("### 1. Run the tests"), "plan-close: the integration check runs before step 1");
-  includesAll("plan-close integration", close, [
-    "plan: not integrated",
-    "make no plan edits",
-    "Never copy the worktree's version into the primary checkout",
-    "goes to the primary copy, including the notes of a later refusal",
-    "Never edit the worktree's copy",
-    "in `docs/plans/active/` or `docs/plans/review/`",
-    "the worktree's plan state was not available",
-  ]);
+  assert.ok(!close.includes("### 0."), "plan-close: there is one copy, so nothing reconciles copies before the tests");
 
   const archive = readSkill("plan-archive");
-  includesAll("plan-archive copy table", archive, [
-    "canonical archive transition command",
-    "Refuses with `conflicting copies`",
-    "Writes the worktree copy's content into the primary copy",
-    "the worktree's plan state was not available",
-    "once, one way, at the archive transition",
-    "Never merge two edited copies",
+  includesAll("plan-archive", archive, [
+    "`roborepo plans archive <plan> --reason <text> --json`",
     "Archiving never removes a worktree or a branch",
   ]);
 }
@@ -314,8 +290,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "### Result",
     "- Status: pending",
     "- Base commit: <full base commit id>",
-    "canonical completion preflight command",
-    "canonical submit transition command",
+    "`roborepo plans preflight <plan> --json`",
+    "`roborepo plans submit <plan> --json`",
     "canonical base synchronization command",
     "never discard work and never pick a side blindly",
     "Never merge the feature branch into the base branch",
@@ -328,8 +304,9 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "- Reviewed implementation commit: <full commit id>",
     "- Confirmed by: human",
     "An agent cannot approve, and passing tests are not approval",
-    "canonical approval check",
-    "canonical reopen transition command",
+    "`roborepo plans approval <plan> --json`",
+    "`roborepo plans approve <plan> --commit <full reviewed commit id> --confirmed-by <who>`",
+    "`roborepo plans reopen <plan> --json`",
     "never returns to `ready/`",
     "Do not invoke either command yourself",
     "`/plan-close` never synchronizes",
@@ -342,11 +319,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Approval only",
     "review.baseChangedPaths",
     "Record the existing answer immediately",
-    "Do not edit, synchronize, or commit",
-    "Primary precursor blob:",
-    "Worktree precursor blob:",
-    "A retry reuses identical committed evidence",
-    "it does not close, merge, push, or waive tests",
+    "it does not close, merge, or waive tests",
   ]);
 }
 
@@ -354,7 +327,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 {
   const promote = readSkill("plan-promote");
   includesAll("plan-promote", promote, [
-    "canonical promote transition command",
+    "`roborepo plans promote <plan> --json`",
     "refuses, with the findings and a repair prompt",
     "/plan-execute <plan document file>",
     "Never invoke `/plan-execute` yourself",
@@ -373,7 +346,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
       const report = id === "plan-execute"
         ? readPackageFile("plan-suite/skills/plan-execute/references/final-report.md")
         : skill;
-      includesAll(`${id} report names the plan`, report, ['- Plan: "<title>" (<id>), <repository-relative path>']);
+      includesAll(`${id} report names the plan`, report, ['- Plan: "<title>" (<id>), <store-relative path>']);
     }
   }
 
@@ -382,7 +355,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     .map((heading) => close.indexOf(heading));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-close: tests, verdict, Not tested, approval, landed, close, stop servers, then cleanup, in that order");
   for (const phrase of [
-    "Close from docs/plans/review/",
+    "Close from the store's review/ folder",
     "### Idempotent retries",
     "Do not rerun tests, seek another approval, edit the plan, or make another closure commit",
     "`- Absorbing commit: <full commit id>`",
@@ -400,8 +373,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "landed: unconfirmed",
     "UNCONFIRMED_NOT_TESTED",
     "canonical landed check",
-    "canonical approval check",
-    "canonical close transition command",
+    "`roborepo plans approval <plan> --json`",
+    "`roborepo plans close <plan> --json`",
     "direct the user to `/plan-archive`",
     "never as passed",
     "add a missing regression test",
@@ -427,17 +400,17 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   }
 }
 
-// --- plans-config.json stays valid JSON and, when present, worktreeRoot is a well-formed string ---
-// worktreeRoot is optional (a user can remove it to re-trigger plan-execute's first-time
-// confirmation gate), so this only asserts the shape when the key exists rather than requiring it.
+// --- plan-suite-init confirms the worktree root once, and reconnects without asking ---
+// This gate has no executable code path, so these phrases are its only enforcement.
 {
-  const configPath = path.join(repoRoot, "docs/plans/plans-config.json");
-  assert.ok(fs.existsSync(configPath), `plans-config.json missing at ${configPath}`);
-  const config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-  if ("worktreeRoot" in config) {
-    assert.equal(typeof config.worktreeRoot, "string", "worktreeRoot must be a string when present");
-    assert.ok(config.worktreeRoot.trim().length > 0, "worktreeRoot must not be an empty string when present");
-  }
+  includesAll("plan-suite-init", readSkill("plan-suite-init"), [
+    "~/.worktrees",
+    "wait for the user to confirm or override",
+    "This is asked once per repository",
+    "Leave out `--worktree-root` when the branch already exists",
+    "roborepo plans config namespaces <file.json> --json",
+    "run `roborepo update`",
+  ]);
 }
 
 // --- package.config.json loads and validates through the real catalog ---

@@ -88,20 +88,36 @@ The six commands were once six packages (`plan-write`, `plan-promote`, and so on
 any of the six plan skills were installed, the update keeps them and turns on `plan-suite`, which
 installs all six.
 
-## Where Lifecycle Moves Happen
+## Where Plans Live
 
-Every move between lifecycle folders is one commit in the repository's main checkout, on the base
-branch, made by a `roborepo plans` command that the suite commands run. The commit contains only
-the plan's old and new paths, so other work in the main checkout, staged or not, stays where it is.
-Archiving also clears the plan from the prerequisites of unfinished plans, in the same commit.
-Its message names the plan by its filename, for example
-`Submit plan plan-lifecycle-review-and-ship-workflow for review`, so `git log` reads without
-looking up ids. The suite commands' reports and questions name a plan by its title, with its id in
-parentheses once. A refused move changes nothing, running a move again after it succeeded commits nothing, and
-the base branch is never pushed.
+Plans live under `plans/` on the remote branch `origin/repo-plans`, which never merges into a code
+branch. RoboRepo keeps a reserved, locked worktree of it at
+`<worktreeRoot>/<worktreeRepoName>/repo_plans`. That checkout can always be rebuilt: on a new machine,
+run `/plan-suite-init` after cloning.
 
-While a plan is `active` or in `review`, its worktree's copy is the plan: every progress note,
-finding, and approval is written there and reaches the base branch when you merge.
+Plan files change only through named `roborepo plans` commands, from any checkout. Each change is one
+commit, pushed automatically. A lifecycle move's commit message names the plan by its filename, for
+example `Submit plan plan-lifecycle-review-and-ship-workflow for review`. The suite commands' reports
+and questions name a plan by its title, with its id in parentheses once. A refused move changes
+nothing, and running a move again after it succeeded commits nothing.
+
+If the remote can't be reached, the commit stays local and the command reports **not synchronized**.
+The next command or portal Refresh that reaches the remote pushes it. If another machine changed the
+same plan, the command refuses rather than overwriting.
+
+Direct writes to `repo_plans` are prevented differently per harness. In Claude, Write and Edit follow
+your write-outside-the-repo setting, since that worktree is outside your checkout. In Codex a direct
+write is technically possible, because the CLI runs inside the sandbox and needs that access; the
+skills forbid it, and the next store command refuses uncommitted edits. Neither protects against a
+process with unrestricted shell access deleting local files, which is why the remote is the source
+of truth.
+
+### Protect the plans branch
+
+Where your Git host offers branch rules, add one for `repo-plans` that disallows force pushes and
+branch deletion and still permits direct pushes, including from any agent bot account. RoboRepo never
+force-pushes this branch. Pushes to it start no CI runs as long as your CI, like RoboRepo's, is limited
+to `main` and pull requests.
 
 ## `/plan-write`
 

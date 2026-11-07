@@ -198,6 +198,13 @@ function approvalBounds(markdown) {
   return { lines, start, end, reviewStart, reviewEnd };
 }
 
+// Marks an existing approval decision as invalidated, leaving the rest of the record as history.
+export function withInvalidatedApproval(markdown) {
+  const { lines, start, end } = approvalBounds(markdown);
+  if (start < 0) return markdown;
+  return lines.map((line, index) => (index > start && index < end ? line.replace(/^(\s*-\s*Decision:\s*).*$/, "$1invalidated") : line)).join("\n");
+}
+
 function withApproval(markdown, { commit, confirmedBy }) {
   const block = ["### Approval", "- Decision: approved", `- Reviewed implementation commit: ${commit}`, `- Confirmed by: ${confirmedBy}`, ""];
   const { lines, start, end, reviewStart, reviewEnd } = approvalBounds(markdown);

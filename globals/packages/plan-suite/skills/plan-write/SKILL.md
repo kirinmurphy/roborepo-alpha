@@ -1,15 +1,15 @@
 ---
 name: plan-write
-description: Use when creating a repository plan document under docs/plans, or revising or syncing an existing one — revising follows the user's intent to change scope or design; syncing follows repository evidence to tick finished tasks and refresh next_action and reviewed_commit. Trigger on explicit /plan-write or requests to create a durable implementation plan, revise a plan, sync this plan, or update a plan after work. Do not use for preparing a plan for development (plan-promote), implementing a plan (plan-execute), reviewing an implementation (plan-review), closing a finished plan (plan-close), archiving a plan (plan-archive), ending a session (session-close), brief answers, PR descriptions, ordinary implementation without plan-document management, casual checklists, or routine lifecycle records owned by another plan skill.
+description: Use when creating a repository plan document in the plan store, or revising or syncing an existing one — revising follows the user's intent to change scope or design; syncing follows repository evidence to tick finished tasks and refresh next_action and reviewed_commit. Trigger on explicit /plan-write or requests to create a durable implementation plan, revise a plan, sync this plan, or update a plan after work. Do not use for preparing a plan for development (plan-promote), implementing a plan (plan-execute), reviewing an implementation (plan-review), closing a finished plan (plan-close), archiving a plan (plan-archive), ending a session (session-close), brief answers, PR descriptions, ordinary implementation without plan-document management, casual checklists, or routine lifecycle records owned by another plan skill.
 ---
 
 # Plan Write
 
-Use this skill to write managed repository plans stored as Markdown under `docs/plans`: create a new
-one, or update an existing one.
+Use this skill to write managed repository plans stored as Markdown under `plans/` on the
+`repo-plans` branch: create a new one, or update an existing one.
 
 This skill owns plan content, frontmatter, and the required-section schema for plan documents.
-Lifecycle moves belong to other suite commands, each committed in the primary checkout:
+Lifecycle moves belong to other suite commands:
 `/plan-promote` moves a plan into `ready/`, `/plan-execute` into `active/` and then `review/`,
 `/plan-review` back to `active/` on a scope change, `/plan-close` to `completed/`, and
 `/plan-archive` to `archived/`. `/plan-write` writes a new plan's initial checklist; `/plan-promote`
@@ -17,13 +17,13 @@ refines it. Prose quality and implementation correctness come from the paired sk
 
 ## Prerequisite: Initialized Repository
 
-Before any create, revise, or sync work, check that `docs/plans/plans-config.json` exists and has a
-`namespaces` key; that key is what `/plan-suite-init` writes, so its presence means the repository
-is set up. File existence alone is not enough, because `/plan-execute` can create the file holding
-only `worktreeRoot`. If the key is missing, say so, run the `/plan-suite-init` workflow (its
+Before any create, revise, or sync work, run `roborepo plans validate --json`. A refusal naming
+`roborepo plans init` means the repository has no plan store. Then read `plans/plans-config.json`
+from the plans worktree, which `git worktree list` shows on branch `repo-plans`, and check that it
+has a `namespaces` key; `/plan-suite-init` writes that key, so its presence means the repository is
+set up. If the store or the key is missing, say so, run the `/plan-suite-init` workflow (its
 `SKILL.md` sits beside this skill's folder, at `../plan-suite-init/SKILL.md`), and continue here
-only after it reports the repository initialized. Do not write the config yourself. Lifecycle
-folders need no check: create `docs/plans/backlog/` when writing a new plan if it is missing.
+only after it reports the repository initialized. Do not write the config yourself.
 
 ## Paired Skills
 
@@ -88,7 +88,7 @@ Read the references for the situation:
 These conditions must hold before a new plan can be called created. The full rules live in
 `references/plan-schema.md`; these are the ones whose absence makes the artifact invalid.
 
-- **Resolve the plan identity before drafting body content.** Read `docs/plans/plans-config.json`
+- **Resolve the plan identity before drafting body content.** Read `plans/plans-config.json`
   and choose the namespace from it; a project namespace wins over a universal one whenever it is
   the more specific fit. Form `<namespace>-<slug>.md` from that namespace, and pair it with a
   reader-facing H1 that names the outcome rather than restating the filename. A missing config is
@@ -99,10 +99,10 @@ These conditions must hold before a new plan can be called created. The full rul
   `related`, `reviewed_commit`, and `worktree`. A new plan leaves `worktree:` empty; `/plan-execute`
   fills it when implementation begins in a linked worktree. Do not add `status`, `validated`,
   `created_at`, `updated_at`, `owner`, `percent_complete`, `estimated_hours`, `tags`, `priority`, or
-  `namespace` — order lives in `docs/plans/plans-order.json` and the namespace is the filename's
+  `namespace` — order lives in `plans/plans-order.json` and the namespace is the filename's
   prefix — changing
   the schema is its own decision, made first.
-- **Lifecycle is the folder, never a field.** New plans are written to `docs/plans/backlog/`.
+- **Lifecycle is the folder, never a field.** `roborepo plans save` puts a new plan in `backlog/`.
 - **Never encode lifecycle, status, dates, or versions in the filename.**
 - **Load `technical-writing` before drafting, without being asked.**
 - **Run both validation layers before delivering.** The repository's plan validator covers schema,
@@ -118,17 +118,12 @@ These conditions must hold before a new plan can be called created. The full rul
   to a substantive revision of scope or design.
 - **Creation ends in backlog.** If the user also asked to start the work, deliver the validated
   backlog plan and hand off to `/plan-promote`, which moves the same stable `id` into
-  `docs/plans/ready/` for `/plan-execute` to start.
+  `ready/` for `/plan-execute` to start.
 
 ## Common Rules
 
-- Resolve the repository root and inspect `docs/plans` before changing plan files.
-- Before editing an existing plan, resolve its authoritative copy by the "Plan authority" rule in
-  `references/plan-schema.md`, and edit only that copy. An active or review plan assigned to a linked
-  worktree is edited in that worktree, even when the session started in the primary checkout; ask for write
-  access to the worktree rather than editing the primary copy. When the rule falls back to the
-  primary copy because the worktree's copy is unavailable, or the primary copy already holds an
-  outside edit, report it, and still edit only the authoritative copy.
+- Change a plan only through `roborepo plans save`, by the "Plan store" rule in
+  `references/plan-schema.md`. Never write to the plans worktree directly or run Git in it.
 - Use repository files, tests, config, and Git state as evidence.
 - Keep Markdown files as source of truth; do not invent a task database.
 - Never move a plan between lifecycle folders; each move belongs to the suite command that owns it.

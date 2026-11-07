@@ -11,6 +11,7 @@
 //                              reader recognizes in git log where the opaque id says nothing
 import { domainError, writeFrontmatterField } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
+import { withInvalidatedApproval } from "./plan-writes.mjs";
 import { approvalFreshness, completionPreflight } from "./review-gates.mjs";
 import { planLanding } from "./landing-gate.mjs";
 
@@ -38,7 +39,9 @@ export const TRANSITION_RULES = {
     message: (name) => `Submit plan ${name} for review`,
   },
   reopen: {
-    bodyUnchanged: true,
+    // Reopening means the requirements changed, which an implementation comparison cannot see, and
+    // `plans save` refuses approval edits, so the move itself retires any approval.
+    prepare: ({ content }) => ({ content: withInvalidatedApproval(content) }),
     message: (name) => `Reopen plan ${name} for implementation`,
   },
   close: {

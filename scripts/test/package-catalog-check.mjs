@@ -354,6 +354,8 @@ try {
   // appRoot, mirroring the real npm package layout (scripts/cli/ ships under the install root) — so
   // a spawned CLI subprocess under a fake appRoot needs scripts/ too, not just manifests/.
   fs.cpSync(path.resolve("scripts"), path.join(devRoot, "scripts"), { recursive: true });
+  // scripts/harnesses reads the plans store from modules/, which the npm package ships beside scripts/.
+  fs.cpSync(path.resolve("modules"), path.join(devRoot, "modules"), { recursive: true });
   // package-catalog.mjs resolves harnesses through scripts/harnesses/registry.mjs, whose Claude
   // and Codex provider modules read their manifest from globals/harnesses/<id>/provider.json —
   // needed here too, same gap test-cli.sh sandboxes have.

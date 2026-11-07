@@ -5,7 +5,7 @@
       "match": [
         "create an implementation plan for package reconciliation",
         "sync this plan with what we just changed",
-        "/plan-write docs/plans/backlog/example.md"
+        "/plan-write plans/backlog/example.md"
       ],
       "nearMiss": [
         "write a quick PR summary",
@@ -32,7 +32,7 @@
       "skill": "plan-promote",
       "match": [
         "I need help reviewing and preparing an existing repository implementation plan before we start coding",
-        "please reconcile stale assumptions and validate readiness on docs/plans/backlog/example.md"
+        "please reconcile stale assumptions and validate readiness on plans/backlog/example.md"
       ],
       "nearMiss": [
         "create an implementation plan for package reconciliation",
@@ -54,7 +54,7 @@
     {
       "skill": "plan-execute",
       "match": [
-        "help me with starting, resuming, or fixing the implementation of a prepared repository plan, docs/plans/ready/example.md",
+        "help me with starting, resuming, or fixing the implementation of a prepared repository plan, plans/ready/example.md",
         "please create or safely reuse an isolated worktree and implement this plan"
       ],
       "nearMiss": [
@@ -76,7 +76,7 @@
     {
       "skill": "plan-review",
       "match": [
-        "/plan-review docs/plans/review/example.md",
+        "/plan-review plans/review/example.md",
         "run the human review of this finished plan before I merge it",
         "record explicit human approval for this plan's implementation"
       ],
@@ -100,7 +100,7 @@
     {
       "skill": "plan-close",
       "match": [
-        "/plan-close docs/plans/review/example.md",
+        "/plan-close plans/review/example.md",
         "the work merged, so close this plan and move it to completed",
         "the pull request merged, please close this plan now that it has merged"
       ],
@@ -123,7 +123,7 @@
     {
       "skill": "plan-archive",
       "match": [
-        "/plan-archive docs/plans/backlog/example.md",
+        "/plan-archive plans/backlog/example.md",
         "archive this plan, we are not doing it anymore",
         "this plan is superseded, retire this plan"
       ],

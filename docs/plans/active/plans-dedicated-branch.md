@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Update the plan-suite skills and rules to the store and regenerate generated/packages/plan-suite (Agent permissions), add branch protection guidance, then Portal, One-time migration, Tests and docs.
+next_action: Portal (not-set-up notice, + button, upload modal), then One-time migration, then Tests and docs (fixture moves, test-cli.sh store check, docs of record), then the Validation Loop and submit.
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
@@ -252,7 +252,7 @@ The modal validates and previews the title, plan ID, filename, and target folder
 - [x] **Canonical plan access:** Redirect scanning, snapshot fingerprinting, validation, ordering, transitions, review records, and CLI reads/writes to the new `plans/` paths. Remove copy authority, its findings and API fields, and `docs/plans/` behavior. Add `plans show`, `plans save`, `plans approve`, and `plans config namespaces`.
 - [x] **Lifecycle and code separation:** Preserve review, approval, landing, and close gates while evaluating code commits independently of plans commits. Drop the primary-checkout and base-branch requirement from plan commits, the start fast-forward, and sync-base plan-rename handling.
 - [x] **Outside consumers:** Update worktree cleanup (fail closed, exclude and lock `repo_plans`, refuse it in `plans start`), Codex workspace roots, repo discovery, and packaging. Remove the real-tree CI check.
-- [ ] **Agent permissions:** Update plan-suite skills and `manifests/inventory/agent-permissions.json` to permit named plan CLI operations, and regenerate outputs under `generated/packages/plan-suite/`. Add remote branch protection guidance.
+- [x] **Agent permissions:** Update plan-suite skills and `manifests/inventory/agent-permissions.json` to permit named plan CLI operations, and regenerate outputs under `generated/packages/plan-suite/`. Add remote branch protection guidance.
 - [ ] **Portal:** Add the not-set-up notice, the `+` button after Filters, modal `.md` upload with repo selection, validation/preview, diff confirmation for updates, and push feedback through the shared save path.
 - [ ] **One-time migration:** Deliver the disposable helper, including worktree-bound plans. Verify remote persistence, and document code-branch cleanup and the rollout order. Do not retain migration logic in the product.
 - [ ] **Tests and docs:** Move plan fixtures in `scripts/test/` to the new layout, and add a store check to `scripts/test/test-cli.sh` covering the Validation list. Update the documents under Documentation impact. Run focused suite checks, `npm run test:portal-ui`, `npm run pack:dry-run`, and `npm run check`.
@@ -325,8 +325,8 @@ State of the work (what the checklist's unchecked items still need):
 | Outside consumers | Cleanup reads the store and fails closed, reserved branch guarded, discovery is `.git` only, `package.json`, naming check deleted, worktree and discovery fixtures moved | Nothing |
 | Canonical access | All readers moved. Home's plan path comes from the store (`planPath`); the drawer lost its authority rows | Nothing |
 | Lifecycle | Gates read the store and compare code without exclusions; sync-base lost rename handling, and nothing reads its `resolved` | Nothing |
-| Agent permissions | `plan-store-commands` behavior in the manifest, generated rules rendered | Skills and their generated outputs, branch protection guidance |
-| Portal, migration, tests, docs | | All of it. Dependencies are installed in this worktree (`npm ci`), so `npm run test:portal-ui` works. `/plan-suite-init` must tell a Codex user to run `roborepo update` after `plans init`, since the grants render from the repo the update runs in |
+| Agent permissions | Manifest behavior, skills, rules, triggers, generated outputs, branch protection guidance in the user guide | Nothing |
+| Portal, migration, tests, docs | Guide's "Where Plans Live" section | All the rest. Dependencies are installed in this worktree (`npm ci`), so `npm run test:portal-ui` works. `/plan-suite-init` must tell a Codex user to run `roborepo update` after `plans init`, since the grants render from the repo the update runs in |
 
 Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and are in `scripts/test/check-groups.json`; `test-cli.sh` still needs the store check. `scripts/test/lib/plan-store-fixture.mjs` adds a read-only store for checks that need no remote. `scripts/test/lib/plan-git-fixture.mjs` now builds a bare origin and a store: keys under `plans/` go to the store, others to `main`. Existing fixtures still using `docs/plans/` fail until moved; `plan-authority-check`, `plan-suite-authority-*`, `plan-landed-recovery-check`, and `plan-close-integration-check` test removed modules and are deleted or rewritten. Those mechanical moves suit Sonnet subagents.
 
@@ -348,6 +348,9 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 - **Home keeps treating a repo with no store as not scanned.** Its plain worktree rows and missing counts are already right, and Home never shows the domain's message. The set-up notice belongs on the Plans page. Alternative: a Home-specific notice, which repeats it on a page whose job is not setup.
 - **Home's plan path is the store file's absolute path, passed only to Home.** `loadCachedPlansSnapshot` keeps `absolutePath` and the summary exposes `planPath`; `/api/plans` stays path-free. Home already carries each checkout's absolute path. Alternative: dropping the row, which removes a working copy action.
 - **The named plan commands, including `plans approve` and `plans close`, are allowed unattended.** The plan calls for allowing named commands, and an agent could already record approval by editing and committing, so this weakens nothing; `/plan-review` and `/plan-close` still require a person's words. `sync-base` and `stop-servers` stay out: they touch the code branch and running processes, not plans.
+- **`plans reopen` marks an approval `invalidated`.** Reopening means the requirements changed, which an implementation comparison can't see, and `plans save` refuses approval edits, so the skill's old manual step had no way to happen. Alternative: letting `plans save` accept this one change, which opens the field the command exists to guard.
+- **Post-merge approval recovery becomes plain `plans approve`.** The `### Post-merge recovery` provenance existed to reconcile two copies; with one copy on the plans branch, recording approval touches nothing on the code branch.
+- **Skills name the `roborepo plans` commands directly** where they said "the repository's canonical command". The store has one interface, and agents get allow rules for exactly those commands.
 - **`branchIsUnoccupied` refuses the reserved branch directly.** Hiding the store from inventory made `repo-plans` look like an unoccupied branch to branch retirement. The refusal sits where every retirement path passes, and the branch also leaves the candidate list.
 
 ## Not tested
