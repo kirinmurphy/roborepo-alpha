@@ -3,7 +3,7 @@ id: w7vls1yk
 next_action: Create the bot account and classic token (Phase 2), then run the checks that need them, including the Codex sandbox checks
 blocked_by: []
 depends_on: []
-related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z"]
+related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7"]
 reviewed_commit:
 worktree:
 ---
@@ -42,6 +42,8 @@ is not an option for this repo (see Context).
 - The user's terminal, `gh`, and SSH pushes keep the user's identity and admin bypass.
 - No token value appears in a tracked file, a generated file, or a rendered config.
 - GitHub-specific pieces sit in one place that is tagged as belonging to the GitHub host.
+- Once the plans branch (`pvgx8oh7`) exists, a plan save from Codex reaches `origin/repo-plans` from
+  inside the sandbox, without waiting for a later save.
 
 ## Non-goals
 
@@ -251,6 +253,22 @@ The cost of this exception is that every sandboxed Codex command, not only a pus
 two hosts without a token. Commands that do use the bot's token stay limited by its collaborator
 role and the remaining deny list.
 
+### Plan saves from Codex
+
+"Store plans on a dedicated Git branch" (`pvgx8oh7`) moves plans to `origin/repo-plans`, and every plan save and lifecycle move fetches and pushes that branch. That plan was not built when this section was written. Until this identity is on, a Codex save commits locally, reports "not synchronized", and waits for the next save or portal Refresh that can reach GitHub. With both plans in place, a Codex save reaches the remote itself and reports "synchronized". The identity alone does not get there:
+
+| Gap | Why it blocks a Codex save | Change |
+| --- | --- | --- |
+| The shared Git wrapper drops the identity settings | `gitEnvironment` in `modules/repositories/git-exec.mjs` strips `GIT_CONFIG_COUNT`, and that plan's store runs through this wrapper. Its push would go to SSH, which the sandbox blocks. Under Claude it would push with the user's SSH key instead of as the bot | Add an explicit option that keeps the `GIT_CONFIG_COUNT` pairs, and use it only for the store's `fetch` and `push`. Polling keeps today's stripped environment |
+| Fetches stay on SSH | The store fetches before each write, and `pushInsteadOf` leaves fetches on SSH. Every Codex save would treat that failure as "remote unreachable" and report "not synchronized" | Open question 4's `insteadOf`. Plan saves make this required for Codex, not only useful |
+| No rule covers `repo-plans` | `no-push-to-main` does not apply to this branch, so the bot's token could delete it or force-push it | Add a ruleset on `repo-plans` that blocks deletion and force pushes and still allows the bot's direct pushes |
+
+The store's Git commands run with `-c core.hooksPath=/dev/null`, so the `pre-push` backstop does not run on them. That is safe because the store pushes one explicit refspec for `repo-plans` and never `main`. The `-c` value also wins over the hook path in the identity's `GIT_CONFIG_*` pairs, so keeping those pairs does not turn hooks back on.
+
+Portal saves are unchanged by this plan: a portal started from the user's terminal has none of the agent settings, so its pushes keep the user's identity.
+
+Once the plans branch lands, plan-lifecycle commits stop going to `main`. The admin bypass then has no lifecycle commits left to carry, and the "plan-lifecycle commit to `main`" check under Validation no longer applies.
+
 ### Moving `gh api` off the deny list
 
 | Piece | Change |
@@ -333,6 +351,12 @@ The remaining checks need the bot account, which only a person can create.
 - [ ] Update the `go-online` description in `agent-permissions.json` to name the exception.
 - [ ] Update the isolated browser testing plan ([[8bjltk2n]]), whose goal of strict host networking
       needs to name the GitHub hosts as the exception once this lands.
+- [ ] Add the `repo-plans` ruleset to the owner's GitHub setup steps, with the bot allowed to push
+      directly.
+- [ ] Connect plan saves, as described in "Plan saves from Codex". If the plans branch (`pvgx8oh7`)
+      has landed, add the `git-exec.mjs` option, use it for the store's `fetch` and `push`, and run
+      the Validation checks for plan saves. If it has not landed, add these same items to that
+      plan's checklist instead, so whichever plan lands second does them.
 
 ### Phase 4: Permissions
 
@@ -360,6 +384,8 @@ Automated:
   rendered Codex config for both states. Identity off: `enabled = false`, no GitHub domains.
   Identity on: `enabled = true`, both GitHub domains, existing domains kept, `~/.ssh/**` still
   denied, and `allow_local_binding` not `true`.
+- Once the plans branch has landed, a `git-exec.mjs` test shows the new option keeps the
+  `GIT_CONFIG_COUNT` pairs and the default still strips them.
 - `npm run check` passes before the PR.
 
 Manual, on the real repo, after Phase 3:
@@ -369,6 +395,8 @@ Manual, on the real repo, after Phase 3:
 | The user, in a terminal with the agent environment exported (`GH_CONFIG_DIR` and the `GIT_CONFIG_*` pairs), runs `git push --no-verify origin HEAD:main`, so that only GitHub decides | GitHub rejects it with a ruleset error naming `no-push-to-main` |
 | From an agent shell: push a feature branch and open a PR | Push succeeds; the PR and commits show the bot login |
 | In an interactive Codex session and in `codex exec`: push a feature branch and open a PR | Both succeed as the bot, with no prompt and no sandbox escalation |
+| Once the plans branch has landed, in an interactive Codex session and in `codex exec`: `roborepo plans save` on a plan | Reports "synchronized"; the commit is on `origin/repo-plans`, pushed with the bot's token, with no prompt and no sandbox escalation |
+| Once the plans branch has landed: save from Codex with the identity off, turn it on, then save again | The first save reports "not synchronized"; the second pushes both commits |
 | In a Codex session: `git push origin HEAD:main`, and `git push --no-verify origin HEAD:main` | The hook denies both before they reach GitHub |
 | In a Codex session: reach a host not on the allowlist, read `~/.ssh/known_hosts`, and bind a wildcard listener | All three are refused |
 | In a Codex session with the identity off: `git push --dry-run` to a feature branch | Fails on the network, as it does today |
@@ -387,6 +415,7 @@ Manual, on the real repo, after Phase 3:
 | `docs/user/guides/setup-and-daily-use.md` | One-time bot setup: account, collaborator invite, token, `gh auth login` under the agent config dir, ruleset change |
 | `docs/user/reference/roborepo-cli.md` | The new doctor check |
 | `docs/internal/docs-map.md` | Add `modules/forge/` |
+| `docs/user/guides/plan/lifecycle/plan-suite.md` | Once the plans branch has landed: Codex saves push directly with the identity on, and report "not synchronized" without it |
 
 ## Risks
 
@@ -407,6 +436,11 @@ Manual, on the real repo, after Phase 3:
   hosts, is off without the identity, and the bot's role limits what its token can change. It does
   not stop data leaving through GitHub.
 
+- **An expired bot token looks like a network problem.** Once plan saves use the identity, an
+  expired token turns Codex saves into "not synchronized" rather than an error, and the commits
+  wait locally. Mitigation: the doctor check's login line must fail on an expired token, with that
+  case added to its fake-`gh` test.
+
 ## Open questions
 
 1. **How is the identity turned on?** Recommended: an optional package, so installs without a bot
@@ -423,8 +457,8 @@ Manual, on the real repo, after Phase 3:
    fails inside Codex's sandbox on the `~/.ssh/**` deny, so a Codex `git fetch` or `git pull` keeps
    failing even with the identity on. Replacing `pushInsteadOf` with `url.https://github.com/.insteadOf`
    moves both over HTTPS as the bot, with no extra settings. It also changes Claude's fetches, and
-   would make question 3's hardening possible later. Recommended: use `insteadOf` for both harnesses
-   if Phase 2 shows fetch works this way.
+   would make question 3's hardening possible later. Plan saves also need it: see "Plan saves from
+   Codex". Recommended: use `insteadOf` for both harnesses if Phase 2 shows fetch works this way.
 
 ## Decision Log
 
@@ -433,6 +467,9 @@ Manual, on the real repo, after Phase 3:
   exception to the strict host networking in the credential protection plan. `~/.ssh` stays denied.
   The work lives in this plan because it needs the bot's token: without the bot, GitHub would not
   reject a push to `main`.
+- November 6, 2026: the user asked this plan to carry the work that lets Codex plan saves push
+  directly, once the bot identity and the plans branch (`pvgx8oh7`) both exist. Neither plan depends
+  on the other: before then, Codex saves commit locally and push later.
 
 ## Future work
 
