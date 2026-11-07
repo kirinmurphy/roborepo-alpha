@@ -240,7 +240,9 @@ from `worktreeRoot` in `docs/plans/plans-config.json`, or the folder confirmed i
 compare both local layers against one historical base commit, including plan lifecycle moves,
 within 500 first-parent commits and a 30-second budget. Unsupported Git behavior or unavailable
 history keeps the worktree. No backup or snapshot is created.
-Non-disposable empty directories remain as leftovers because Git trees cannot preserve them.
+Empty directories do not block cleanup once the worktree has landed. If the final inventory finds
+a new file outside the recognized disposable artifacts below, cleanup keeps the worktree for
+reassessment.
 
 | Preservation result | Outcome | Next action |
 | --- | --- | --- |

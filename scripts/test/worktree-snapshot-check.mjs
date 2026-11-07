@@ -64,7 +64,7 @@ try {
   const cleanProof = await assessWorktreePreservation(work, { branch: "feature" });
   assert.equal(cleanProof.state, "preserved", JSON.stringify(cleanProof));
   {
-    fs.mkdirSync(path.join(work, "directory-only"));
+    fs.mkdirSync(path.join(work, "empty"));
     const before = (await inventoryWorktree(work)).fingerprint;
     let hashes = 0;
     let merges = 0;
@@ -73,20 +73,18 @@ try {
       if (args[0] === "merge-tree") merges++;
       return runGitProcess(cwd, args, options);
     } });
-    assert.equal(proof.state, "remaining", JSON.stringify(proof));
-    assert.equal(proof.hasLocalContent, true, "empty directories still require preservation");
-    assert.deepEqual(proof.remainingPaths, ["directory-only"]);
+    assert.equal(proof.state, "preserved", JSON.stringify(proof));
+    assert.equal(proof.hasLocalContent, false, "empty directories alone do not require preservation");
+    assert.deepEqual(proof.remainingPaths, []);
     assert.ok(merges >= 1, "committed landing is still checked");
     assert.equal(hashes, 0, "unchanged filesystem blobs already exist in the assessed trees");
     assert.equal((await inventoryWorktree(work)).fingerprint, before, "assessment does not change local state");
-    fs.rmdirSync(path.join(work, "directory-only"));
   }
   write(work, "code", "staged\n"); git(work, "add", "code"); write(work, "code", "unstaged\n");
   write(work, "binary", Buffer.from([0, 255, 254, 10]));
   write(work, "large-binary", Buffer.alloc(2 * 1024 * 1024, 0xff));
   write(work, ".gitignore", "valuable/\nnode_modules/\n");
   write(work, "valuable/secret", "private bytes\n"); write(work, "node_modules/disposable", "excluded\n");
-  fs.mkdirSync(path.join(work, "empty"));
   fs.symlinkSync("/outside/target", path.join(work, "link"));
   const rawLinkTarget = Buffer.from([0x66, 0x80]);
   fs.symlinkSync(rawLinkTarget, path.join(work, "raw-link"));
@@ -203,13 +201,15 @@ try {
     }
     else { write(checkout, "code", fs.readFileSync(path.join(repo, "code"))); git(checkout, "add", "code"); }
     if (shape === "conflict") { write(checkout, "code", "conflicting local work\n"); git(checkout, "add", "code"); }
+    if (shape === "concurrent-file") fs.mkdirSync(path.join(checkout, "empty"));
     const proof = await assessWorktreePreservation(checkout, { branch: "feature" });
     if (shape === "directory-only") {
       const [row] = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, "directory-only-cleanup-state"), discover: async () => ({ instances: [] }) });
-      assert.equal(proof.state, "remaining", JSON.stringify(proof));
-      assert.deepEqual(row.remainingPaths, ["generated/packages/__char_test_pkg__/claude"]);
-      assert.equal(row.action, "kept", JSON.stringify(row));
-      assert.equal(fs.statSync(path.join(checkout, row.remainingPaths[0])).isDirectory(), true);
+      assert.equal(proof.state, "preserved", JSON.stringify(proof));
+      assert.deepEqual(row.remainingPaths, []);
+      assert.equal(row.action, "removed", JSON.stringify(row));
+      assert.equal(fs.existsSync(checkout), false);
+      assert.equal(git(repo, "branch", "--list", "feature"), "");
       continue;
     }
     if (!explicitMergeBase) { assert.equal(proof.state, "unknown", JSON.stringify(proof)); assert.match(proof.reason, /merge-base|unknown option/); continue; }
@@ -221,7 +221,7 @@ try {
       let surveys = 0;
       const rows = await cleanupWorktrees({ cwd: repo, apply: true, stateRoot: path.join(root, `${shape}-state`), discover: async () => {
         if (++surveys === 2) {
-          if (shape === "concurrent-file") write(checkout, "code", "new local work\n");
+          if (shape === "concurrent-file") write(checkout, "empty/new-file", "new local work\n");
           if (shape === "concurrent-index") {
             const content = path.join(root, "unique-index-content"); fs.writeFileSync(content, "unique staged work\n");
             const blob = git(checkout, "hash-object", "-w", content);
