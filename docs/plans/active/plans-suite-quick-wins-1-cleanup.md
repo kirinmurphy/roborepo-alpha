@@ -344,6 +344,10 @@ describe the distinction between ordinary merges and owner access.
 
 ### Verification
 
+- Validation pass 2 was clean at 13da1f95 (fresh-context subagent). It checked all nine
+  validation criteria and the technical-writing rubric, confirmed the upstream freshness fix
+  and four refusal regressions, and found no fix or new escalate findings. A separate fetch
+  probe confirmed symbolic tracking refs preserve local branch values.
 - Validation pass 1 (fresh-context subagent) found one fix, upstream configuration freshness,
   and classified the existing CLI cleanup failure as base. No documentation violations were
   found against the technical-writing rubric.
@@ -364,6 +368,9 @@ describe the distinction between ordinary merges and owner access.
   The CLI catalog check fails at temporary-directory cleanup on both this branch and main.
 - `npm run check` was run once after registering the new test suite. Doctor passed, then
   the existing CLI suite failed rollback assertions and could not remove a fixture directory.
+  Its built-in-package refusal assertion also requires an empty skill diff, while this run
+  executed before the skill changes were committed. That source diff is now clean. The other
+  assertion failure causes have not been independently established.
   The full gate is blocked and did not reach the later suites.
 - Disposable rule walkthrough assertions passed for approved feature switching, keeping unrelated
   staged and untracked edits local, and detecting unpublished base commits before publishing.
