@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
-import { addRepositorySource, patchHomeOverview, removeRepositorySources, roboRepoCard } from "./helpers.mjs";
+import { removeFixtureContents, addRepositorySource, patchHomeOverview, removeRepositorySources, roboRepoCard } from "./helpers.mjs";
 
 // Unique per worker: a retried worker registers fresh folders, and removing a source never forgets
 // the repositories it found, so fixed names would collide with the previous worker's records.
@@ -27,7 +27,7 @@ test.beforeAll(() => {
     ].join("\n")])));
   }
 });
-test.afterAll(() => fx.cleanup());
+test.afterAll(() => removeFixtureContents(fx));
 test.beforeEach(async ({ page }) => {
   for (const name of [ALPHA, BETA]) await addRepositorySource(page, path.join(fx.tmp, name));
   // The board only shows once plan-suite is enabled; the hermetic machine has no packages. Matched

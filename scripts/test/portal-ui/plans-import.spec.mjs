@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { createPlanFixture, planDoc } from "../lib/plan-git-fixture.mjs";
-import { addRepositorySource, enablePlanBoard, removeRepositorySources } from "./helpers.mjs";
+import { removeFixtureContents, addRepositorySource, enablePlanBoard, removeRepositorySources } from "./helpers.mjs";
 
 test.describe("Import Plan", () => {
   test.describe.configure({ mode: "serial" });
@@ -42,7 +42,7 @@ test.describe("Import Plan", () => {
   test.afterEach(({ page }) => page.unrouteAll({ behavior: "ignoreErrors" }));
 
   test.afterAll(async () => {
-    fx.cleanup();
+    removeFixtureContents(fx);
     fs.rmSync(uploads, { recursive: true, force: true });
   });
 

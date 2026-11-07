@@ -3,7 +3,7 @@ import http from "node:http";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
-import { backlogUrlFor } from "./helpers.mjs";
+import { removeFixtureContents, backlogUrlFor } from "./helpers.mjs";
 import { codexHookGuidance } from "../../harnesses/codex/hook-guidance.mjs";
 import { buildBehaviorView } from "../../cli/config.mjs";
 
@@ -2236,7 +2236,7 @@ test.describe("shared plan drawer", () => {
       ].join("\n"),
     });
   });
-  test.afterAll(() => fx.cleanup());
+  test.afterAll(() => removeFixtureContents(fx));
   test.beforeEach(async ({ page }) => addRepositorySource(page, planRoot));
   test.afterEach(async ({ page }) => removeRepositorySources(page));
 
@@ -2350,7 +2350,7 @@ test.describe("Plans card commands", () => {
     });
     store = fx.storePath(planRoot);
   });
-  test.afterAll(() => fx.cleanup());
+  test.afterAll(() => removeFixtureContents(fx));
   test.beforeEach(async ({ page }) => {
     await addRepositorySource(page, planRoot);
     await page.route(/\/api\/plans(\?|$)/, async (route) => {

@@ -5,6 +5,7 @@
 import { test, expect } from "@playwright/test";
 import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
 import {
+  removeFixtureContents,
   addRepositorySource,
   backlogUrlFor,
   enablePlanBoard,
@@ -67,7 +68,7 @@ test.describe("Plans card status", () => {
           frontmatter: ['blocked_by: [stblkr01, "upstream: vendor API is not ready"]'] }),
     });
   });
-  test.afterAll(() => fx.cleanup());
+  test.afterAll(() => removeFixtureContents(fx));
   test.beforeEach(async ({ page }) => {
     await addRepositorySource(page, planRoot);
     await enablePlanBoard(page);

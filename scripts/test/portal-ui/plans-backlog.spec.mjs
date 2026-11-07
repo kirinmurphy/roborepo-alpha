@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
-import { addRepositorySource, enablePlanBoard, portalToken, removeRepositorySources } from "./helpers.mjs";
+import { removeFixtureContents, addRepositorySource, enablePlanBoard, portalToken, removeRepositorySources } from "./helpers.mjs";
 
 const document = ({ id, title, deps = [], summary = `Purpose of ${title}.` }) => [
   "---", `id: ${id}`, "next_action: Do it", `depends_on: [${deps.join(", ")}]`, "---", "",
@@ -96,7 +96,7 @@ test.describe("Backlog directory and ordering", () => {
     bare = fx.repository(bareName, { "plans/backlog/anything.md": document({ id: "barepl08", title: "Unconfigured plan" }) });
   });
 
-  test.afterAll(() => fx.cleanup());
+  test.afterAll(() => removeFixtureContents(fx));
 
   test.beforeEach(async ({ page }) => {
     setOrder(["alphaa01", "alphab02", "alphax03"]);
