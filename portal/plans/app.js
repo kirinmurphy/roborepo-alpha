@@ -420,7 +420,7 @@ function render() {
   const cardActions = {
     plans: snapshot.plans,
     onOpen: openPlan,
-    onCopyPath: copyText,
+    onCopyPath: (record) => api.fetchPlanDocument(record.key).then((doc) => copyText(doc.absolutePath)),
     onCopyContext: (record) => copyText(repositoryContext(record)),
     onPlanAction: (key, command) => copyPrompt(command, [key], "repository-aware"),
     mergeFor: (key) => state.mergedPlans.get(key) || null,

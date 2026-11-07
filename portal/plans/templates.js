@@ -173,7 +173,7 @@ export function drawerContent(doc, drawerActions) {
     skillModal: drawerActions.skillModal,
     onError: drawerActions.onError,
     onEnablePackage: drawerActions.onEnablePackage,
-    copyPath: () => drawerActions.onCopyPath(plan.relativePath.split("/").pop()),
+    copyPath: () => drawerActions.onCopyPath(doc.absolutePath),
     copyPrompt: (command) => drawerActions.onPlanAction(key, command),
     copyRepoPrompt: () => drawerActions.onCopyRepoContext(doc.plan),
   });
@@ -218,7 +218,7 @@ export function cardActionMenu(record, cardActions) {
     skillModal: cardActions.skillModal,
     onError: cardActions.onError,
     onEnablePackage: cardActions.onEnablePackage,
-    copyPath: () => cardActions.onCopyPath(plan.relativePath.split("/").pop()),
+    copyPath: () => cardActions.onCopyPath(record),
     copyPrompt: (command) => cardActions.onPlanAction(record.key, command),
     copyRepoPrompt: () => cardActions.onCopyContext(record),
   });
@@ -344,7 +344,7 @@ function menuItem({ label, run }) {
   return item;
 }
 
-// Cards and the drawer share the lifecycle prompt menu, followed by the document filename.
+// Cards and the drawer share the lifecycle prompt menu, followed by the document path.
 // Update is omitted here; the plan-write command remains available outside the portal.
 // Without plan-suite, offer repository context and the enable-skill banner instead.
 //
@@ -380,7 +380,7 @@ function planMenuBody(api) {
   }
 
   wrap.querySelector("[data-slot=copy-path]").append(
-    menuItem({ label: "Copy Document Filename", run: run(() => api.copyPath()) }),
+    menuItem({ label: "Copy file path", run: run(() => api.copyPath()) }),
   );
 
   if (api.installed === false && api.planSuitePackage) {

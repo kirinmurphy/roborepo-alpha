@@ -2509,7 +2509,7 @@ test.describe("Plans card commands", () => {
     expect(await background(metadata)).toBe(mainBefore);
   });
 
-  test("copy menus show compact labels and separate the document filename", async ({ page }, testInfo) => {
+  test("copy menus show compact labels and copy the absolute file path", async ({ page }, testInfo) => {
     for (const lifecycle of ["backlog", "ready", "active", "review"]) {
       await page.goto(lifecycle === "backlog" ? await backlogUrlFor(page, "Backlog card plan") : `/plans?lifecycle=${lifecycle}`);
       const card = page.locator("plan-card").first();
@@ -2524,20 +2524,20 @@ test.describe("Plans card commands", () => {
       expect(await menu.evaluate((node) => getComputedStyle(node).rowGap)).toBe("0px");
       expect(await menu.locator(".plan-menu-filename").evaluate((node) => getComputedStyle(node).paddingTop)).toBe("0px");
       await expect(menu.locator(".menu-button-item-desc")).toHaveCount(0);
-      const filename = menu.getByRole("button", { name: "Copy Document Filename", exact: true });
-      await expect(filename).toBeVisible();
-      expect(await filename.evaluate((node) => getComputedStyle(node.parentElement).borderTopWidth)).toBe("1px");
-      expect(await filename.evaluate((node) => getComputedStyle(node).fontSize)).toBe("15px");
+      const filePath = menu.getByRole("button", { name: "Copy file path", exact: true });
+      await expect(filePath).toBeVisible();
+      expect(await filePath.evaluate((node) => getComputedStyle(node.parentElement).borderTopWidth)).toBe("1px");
+      expect(await filePath.evaluate((node) => getComputedStyle(node).fontSize)).toBe("15px");
       if (lifecycle === "backlog") await page.screenshot({ path: testInfo.outputPath("copy-menu.png") });
-      await filename.click();
-      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^[^/\\]+\.md$/);
+      await filePath.click();
+      await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^\/.*\.md$/);
       if (lifecycle === "backlog") {
         await card.getByRole("button", { name: "Plan actions", exact: true }).click();
         await card.getByRole("button", { name: /Backlog card plan/ }).first().click();
         const drawer = page.locator("dialog#drawer");
         await drawer.getByRole("button", { name: "Plan actions", exact: true }).click();
         const drawerMenu = drawer.getByRole("group", { name: "Copy options", exact: true });
-        await expect(drawerMenu.getByRole("button", { name: "Copy Document Filename", exact: true })).toBeVisible();
+        await expect(drawerMenu.getByRole("button", { name: "Copy file path", exact: true })).toBeVisible();
         await expect(drawerMenu.getByRole("button", { name: "Update", exact: true })).toHaveCount(0);
         await expect(drawerMenu.locator('portal-icon[name="copy"]')).toHaveCount(await drawerMenu.getByRole("button").count());
       }
