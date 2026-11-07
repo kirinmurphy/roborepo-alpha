@@ -254,10 +254,10 @@ describe the distinction between ordinary merges and owner access.
 
 - [ ] Rerun `node scripts/test/delivery-operations-check.mjs`,
       `node scripts/test/repositories-branch-sync-check.mjs`,
-      `node scripts/test/cli-command-catalog-check.mjs`, and `npm run check` in a session
-      that permits removal of disposable directories. The delivered-operation assertions
-      completed, but directory cleanup failed with EPERM. The same catalog check fails on
-      unchanged main. Escalated directory removal also failed in this session.
+      `node scripts/test/cli-command-catalog-check.mjs`,
+      `node scripts/test/permissions-render-live-characterization-check.mjs`, and
+      `npm run check` in a session that permits removal of disposable directories.
+      Scoped reruns still exit with EPERM during cleanup. The full gate stops in the CLI suite.
 - [ ] Exercise GitHub mutations with authenticated credentials against an authorized feature PR.
       Disposable Git repositories and a fake GitHub CLI covered success and refusal behavior.
       The local GitHub login reports an invalid token. Native Codex policy assertions passed
@@ -327,6 +327,8 @@ describe the distinction between ordinary merges and owner access.
   The same existing CLI catalog check fails on unchanged main at its cleanup step. Required
   full and scoped checks must be rerun after the session restriction is resolved. This blocks
   completion and submission, so the plan stays active.
+  On the resumed run, directory removal also failed in the linked worktree, and Docker
+  socket access was denied even with expanded permissions.
 - The owner must confirm or configure Always allow bypass, retain the existing one-approval
   review policy, and add the three required checks with up-to-date enforcement off.
   After confirmation, read the ruleset again and verify ordinary merge blocking and the next
@@ -344,6 +346,15 @@ describe the distinction between ordinary merges and owner access.
 
 ### Verification
 
+- On the resumed run, delivery and branch-sync assertions reached their success messages
+  before exiting at fixture cleanup. The catalog and live permissions checks also stopped
+  at fixture cleanup. The standalone directory removal probe returned EPERM with expanded
+  permissions.
+- The full gate rerun passed doctor (98 checks). Its CLI suite then reported three package
+  rollback assertion failures and a cleanup error. Running that CLI suite on unchanged
+  main reproduced all three assertion failures and the cleanup error.
+- The plan validator reported zero blocking findings, and the structural preflight passed.
+  The GitHub CLI still reported an invalid login token.
 - Validation pass 2 was clean at 13da1f95 (fresh-context subagent). It checked all nine
   validation criteria and the technical-writing rubric, confirmed the upstream freshness fix
   and four refusal regressions, and found no fix or new escalate findings. A separate fetch
