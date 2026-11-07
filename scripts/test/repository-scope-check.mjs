@@ -41,12 +41,16 @@ assert.deepEqual(listedRepositoryIds(registry).sort(), [ALPHA, BETA].sort(), "hi
 const handlers = {
   resolveRepositoryScope: (value, options) => resolveRepositoryScope(registry, value, options),
   loadPlans: (params) => ({ scopedTo: params.repositoryId }),
-  refreshPlans: (params) => ({ refreshedFor: params.repositoryId }),
+  refreshPlans: async (params) => ({ refreshedFor: params.repositoryId }),
   loadAnalysisJson: (window, harness, extra) => JSON.stringify({ scope: extra.scope, extraKeys: Object.keys(extra).sort() }),
 };
-function request(routes, urlPath, qs, method = "GET") {
+function dispatch(routes, urlPath, qs, method) {
   const res = { statusCode: null, body: null, writeHead(code) { this.statusCode = code; }, end(body) { this.body = body; } };
   assert.equal(dispatchRoutes([routes], { method }, res, urlPath, qs, handlers), true, `${urlPath}?${qs} is routed`);
+  return res;
+}
+function request(routes, urlPath, qs, method = "GET") {
+  const res = dispatch(routes, urlPath, qs, method);
   return { status: res.statusCode, json: JSON.parse(res.body) };
 }
 const UNAVAILABLE = { status: 404, code: "REPOSITORY_SCOPE_UNAVAILABLE" };
@@ -54,7 +58,10 @@ const unavailable = (response) => ({ status: response.status, code: response.jso
 
 assert.deepEqual(request(plansRoutes, "/api/plans", "").json, { scopedTo: null });
 assert.deepEqual(request(plansRoutes, "/api/plans", `repo=${alphaKey}`).json, { scopedTo: ALPHA });
-assert.deepEqual(request(plansRoutes, "/api/plans/refresh", `repo=${betaKey}`, "POST").json, { refreshedFor: BETA });
+// Refresh fetches from the remote, so its route answers after the handler's promise settles.
+const refreshResponse = dispatch(plansRoutes, "/api/plans/refresh", `repo=${betaKey}`, "POST");
+await new Promise(setImmediate);
+assert.deepEqual(JSON.parse(refreshResponse.body), { refreshedFor: BETA });
 for (const value of ["nope", hiddenKey, "Bad%20Key", "_other", encodeURIComponent(ALPHA)]) {
   assert.deepEqual(unavailable(request(plansRoutes, "/api/plans", `repo=${value}`)), UNAVAILABLE, `/api/plans?repo=${value}`);
 }
