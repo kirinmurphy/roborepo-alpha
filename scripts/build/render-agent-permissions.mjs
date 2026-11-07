@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadPermissionManifest, loadPermissionWorkspaceRoots } from "../cli/permissions-render.mjs";
+import { loadPermissionManifest } from "../cli/permissions-render.mjs";
 import { renderCodexRules } from "../harnesses/permissions-render.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import { GENERATED_POLICY_FILENAME } from "../harnesses/gemini/policy-toml.mjs";
@@ -56,7 +56,6 @@ for (let i = 2; i < process.argv.length; i += 1) {
 }
 
 const manifest = loadPermissionManifest();
-const workspaceRoots = loadPermissionWorkspaceRoots();
 
 function checkOrWrite(target, rendered, label) {
   const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
@@ -80,10 +79,7 @@ try {
     if (!provider.manifest.capabilities.includes("permissions")) continue;
     const target = generatedPermissionsPath(provider);
     const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : "";
-    const rendered = provider.adapters.permissions.render(current, manifest, {}, target, {
-      ...generatedRenderOptions,
-      workspaceRoots,
-    });
+    const rendered = provider.adapters.permissions.render(current, manifest, {}, target, generatedRenderOptions);
     ok = checkOrWrite(target, rendered, path.relative(repoRoot, target)) && ok;
   }
 

@@ -25,6 +25,7 @@ import { withCleanupLock } from "../../modules/repositories/worktree-cleanup-loc
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mjs";
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
+import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
 
 // Injected filesystem failures below are simulations, not native permission evidence.
 {
@@ -259,8 +260,8 @@ try {
     const { main, worktree } = repository("squash");
     commit(worktree, ".gitattributes", "* text=auto eol=lf\n");
     commit(worktree, "feature.txt", "feature\n");
-    fs.mkdirSync(path.join(worktree, "docs/plans/active"), { recursive: true });
-    commit(worktree, "docs/plans/active/story.md", "---\nid: story\n---\n");
+    fs.mkdirSync(path.join(worktree, "notes/active"), { recursive: true });
+    commit(worktree, "notes/active/story.md", "---\nid: story\n---\n");
     assert.equal((await inspectBranchLanding(main, "feature")).landed, false);
     git(main, "merge", "--squash", "feature");
     git(main, "commit", "-qm", "squash feature");
@@ -280,9 +281,9 @@ try {
       withoutGh = await cleanupWorktrees(candidateOptions);
     } finally { process.env.PATH = originalPath; }
     assert.deepEqual(withoutGh, withNormalPath, "gh availability cannot change the candidate list");
-    fs.mkdirSync(path.join(main, "docs/plans/completed"), { recursive: true });
-    git(main, "mv", "docs/plans/active/story.md", "docs/plans/completed/story.md");
-    git(main, "commit", "-qm", "close story");
+    fs.mkdirSync(path.join(main, "notes/completed"), { recursive: true });
+    git(main, "mv", "notes/active/story.md", "notes/completed/story.md");
+    git(main, "commit", "-qm", "move story");
     commit(main, "feature.txt", "later edit\n");
     assert.equal((await inspectBranchLanding(main, "feature")).landed, true, "a later base edit cannot undo landing");
     commit(worktree, "extra.txt", "new branch work\n");
@@ -373,9 +374,7 @@ try {
   {
     const { main, worktree } = repository("cleanup");
     const stateRoot = path.join(root, "cleanup-state");
-    fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
-    fs.writeFileSync(path.join(main, "docs/plans/plans-config.json"), JSON.stringify({ worktreeRoot: root }));
-    fs.writeFileSync(path.join(main, "docs/plans/active/story.md"), "---\nid: story1\nworktree: cleanup-work\n---\n");
+    const store = addPlansStore(main, { "plans-config.json": JSON.stringify({ worktreeRoot: root }), "active/story.md": "---\nid: story1\nworktree: cleanup-work\n---\n" });
     commit(worktree, "feature.txt", "feature\n");
     git(main, "merge", "--squash", "feature");
     git(main, "commit", "-qm", "landed feature");
@@ -383,10 +382,10 @@ try {
     await assert.rejects(cleanupWorktrees({ ...options, apply: true, discover: async () => { throw new Error("discovery failed"); } }), /discovery failed/);
     let rows = await cleanupWorktrees(options);
     assert.equal(rows.find((row) => row.branch === "feature").reason, "plan not closed");
-    fs.mkdirSync(path.join(main, "docs/plans/completed"), { recursive: true });
-    fs.renameSync(path.join(main, "docs/plans/active/story.md"), path.join(main, "docs/plans/completed/story.md"));
+    fs.mkdirSync(path.join(store, "plans/completed"), { recursive: true });
+    fs.renameSync(path.join(store, "plans/active/story.md"), path.join(store, "plans/completed/story.md"));
     assert.equal(rows.find((row) => row.branch === "feature").landingEvidence, "scanned");
-    fs.appendFileSync(path.join(main, "docs/plans/completed/story.md"), `\n## Verification\n\n- Absorbing commit: ${git(main, "rev-parse", "HEAD")}\n`);
+    fs.appendFileSync(path.join(store, "plans/completed/story.md"), `\n## Verification\n\n- Absorbing commit: ${git(main, "rev-parse", "HEAD")}\n`);
     rows = await cleanupWorktrees({ ...options, plan: "story1", apply: true });
     assert.equal(rows[0].action, "removed", rows[0].reason);
     assert.equal(rows[0].landingEvidence, "reused", "plan-scoped cleanup verifies the plan's recorded absorbing commit");
@@ -408,12 +407,11 @@ try {
     git(main, "push", "-q", "-u", "origin", "main");
     git(main, "remote", "set-head", "origin", "main");
     const stateRoot = path.join(root, "unpushed-close-state");
-    fs.mkdirSync(path.join(main, "docs/plans/completed"), { recursive: true });
-    fs.writeFileSync(path.join(main, "docs/plans/plans-config.json"), JSON.stringify({ worktreeRoot: root }));
+    const store = addPlansStore(main, { "plans-config.json": JSON.stringify({ worktreeRoot: root }) });
     commit(worktree, "feature.txt", "feature\n");
     git(main, "merge", "--squash", "feature");
     git(main, "commit", "-qm", "landed feature");
-    fs.writeFileSync(path.join(main, "docs/plans/completed/story.md"), `---\nid: unpushed1\nworktree: unpushed-close-work\n---\n\n## Verification\n\n- Absorbing commit: ${git(main, "rev-parse", "HEAD")}\n`);
+    writePlansFiles(store, { "completed/story.md": `---\nid: unpushed1\nworktree: unpushed-close-work\n---\n\n## Verification\n\n- Absorbing commit: ${git(main, "rev-parse", "HEAD")}\n` });
     const options = { cwd: main, stateRoot, discover: async () => ({ instances: [] }) };
     const unscoped = await cleanupWorktrees(options);
     assert.equal(unscoped.find((row) => row.branch === "feature").state, "not landed", "unscoped cleanup still checks origin/HEAD");
@@ -551,17 +549,13 @@ try {
     const { main } = repository("hook-pull-seed");
     const remote = path.join(root, "hook-pull-remote.git");
     git(root, "init", "-q", "--bare", remote);
-    fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
-    fs.writeFileSync(path.join(main, "docs/plans/plans-config.json"), JSON.stringify({ worktreeRoot: root }));
-    fs.writeFileSync(path.join(main, "docs/plans/active/story.md"), "---\nid: hookstory\nworktree: hook-pull-feature\n---\n");
-    git(main, "add", "docs/plans");
-    git(main, "commit", "-qm", "plan");
     git(main, "remote", "add", "origin", remote);
     git(main, "push", "-q", "-u", "origin", "main");
     const receiver = path.join(root, "hook-pull-receiver");
     const sender = path.join(root, "hook-pull-sender");
     git(root, "clone", "-q", "-b", "main", remote, receiver);
     git(root, "clone", "-q", "-b", "main", remote, sender);
+    const store = addPlansStore(receiver, { "plans-config.json": JSON.stringify({ worktreeRoot: root }), "active/story.md": "---\nid: hookstory\nworktree: hook-pull-feature\n---\n" });
     const feature = path.join(root, "hook-pull-feature");
     git(receiver, "worktree", "add", "-q", "-b", "feature", feature);
     commit(feature, "feature.txt", "feature\n");
@@ -584,9 +578,8 @@ try {
     await waitFor(() => fs.existsSync(log) && fs.readFileSync(log, "utf8").includes("plan not closed") && fs.readFileSync(log, "utf8").includes("free: removed"));
     assert.equal(fs.existsSync(feature), true, "an active plan keeps its landed worktree");
     assert.equal(fs.existsSync(free), false, "the hook removes landed work without an active plan");
-    fs.mkdirSync(path.join(receiver, "docs/plans/completed"), { recursive: true });
-    git(receiver, "mv", "docs/plans/active/story.md", "docs/plans/completed/story.md");
-    git(receiver, "commit", "-qm", "close plan");
+    fs.mkdirSync(path.join(store, "plans/completed"), { recursive: true });
+    fs.renameSync(path.join(store, "plans/active/story.md"), path.join(store, "plans/completed/story.md"));
     const rows = await cleanupWorktrees({ cwd: receiver, stateRoot, plan: "hookstory", apply: true, discover: async () => ({ instances: [] }) });
     assert.equal(rows[0].action, "removed", rows[0].reason);
     assert.equal(fs.existsSync(feature), false);
@@ -597,8 +590,7 @@ try {
     // A relative core.hooksPath resolves inside whichever working tree runs the hook, so the hook
     // installed for the main checkout fires for merges there and never for merges in a linked one.
     const { main, worktree } = repository("relative-hooks");
-    fs.mkdirSync(path.join(main, "docs/plans"), { recursive: true });
-    fs.writeFileSync(path.join(main, "docs/plans/plans-config.json"), JSON.stringify({ worktreeRoot: root }));
+    addPlansStore(main, { "plans-config.json": JSON.stringify({ worktreeRoot: root }) });
     const done = path.join(root, "relative-hooks-done");
     git(main, "worktree", "add", "-q", "-b", "done", done);
     commit(done, "done.txt", "done\n");
@@ -641,8 +633,7 @@ try {
     // Git exports GIT_DIR to a hook running in a linked worktree; the cleanup it starts must still
     // read each candidate worktree's own status.
     const { main, worktree } = repository("linked-hook");
-    fs.mkdirSync(path.join(main, "docs/plans"), { recursive: true });
-    fs.writeFileSync(path.join(main, "docs/plans/plans-config.json"), JSON.stringify({ worktreeRoot: root }));
+    addPlansStore(main, { "plans-config.json": JSON.stringify({ worktreeRoot: root }) });
     const done = path.join(root, "linked-hook-done");
     git(main, "worktree", "add", "-q", "-b", "done", done);
     commit(done, "done.txt", "done\n");
@@ -724,15 +715,39 @@ try {
   }
   {
     const { main } = repository("quoted-plan");
-    fs.mkdirSync(path.join(main, "docs/plans/active"), { recursive: true });
-    fs.writeFileSync(path.join(main, "docs/plans/active/story.md"), "---\nid: quoted\nworktree: \"quoted-plan-work\"\n---\n");
+    const store = addPlansStore(main, { "active/story.md": "---\nid: quoted\nworktree: \"quoted-plan-work\"\n---\n" });
     assert.equal(activeWorktreeNames(main).has("quoted-plan-work"), true, "a quoted worktree field still protects its worktree");
-    fs.mkdirSync(path.join(main, "docs/plans/review"), { recursive: true });
-    fs.mkdirSync(path.join(main, "docs/plans/completed"), { recursive: true });
-    fs.writeFileSync(path.join(main, "docs/plans/review/awaiting.md"), "---\nid: awaiting\nworktree: under-review\n---\n");
-    fs.writeFileSync(path.join(main, "docs/plans/completed/done.md"), "---\nid: done\nworktree: finished-work\n---\n");
+    writePlansFiles(store, { "review/awaiting.md": "---\nid: awaiting\nworktree: under-review\n---\n", "completed/done.md": "---\nid: done\nworktree: finished-work\n---\n" });
     assert.equal(activeWorktreeNames(main).has("under-review"), true, "a plan under review keeps its worktree");
     assert.equal(activeWorktreeNames(main).has("finished-work"), false, "a completed plan releases its worktree");
+  }
+  {
+    // The reserved plans worktree is out of every cleanup path, and an unreadable store stops automatic removal.
+    const { main, worktree } = repository("reserved-store");
+    const store = addPlansStore(main, { "plans-config.json": JSON.stringify({ worktreeRoot: root }) });
+    commit(worktree, "feature.txt", "feature\n");
+    git(main, "merge", "--squash", "feature");
+    git(main, "commit", "-qm", "landed feature");
+    const options = { cwd: main, stateRoot: path.join(root, "reserved-store-state"), discover: async () => ({ instances: [] }) };
+    assert.equal(linkedWorktrees(path.join(main, ".git")).some((item) => item.branch === "repo-plans"), false, "inventory leaves the store out");
+    const reserved = linkedWorktrees(path.join(main, ".git"), { includeReserved: true }).find((item) => item.branch === "repo-plans");
+    const guard = await checkWorktreeRemoval({ worktree: reserved, kind: "confirmed", consent: true, mainPath: main, currentPath: main });
+    assert.deepEqual([guard.ok, guard.reason], [false, "reserved plans worktree"]);
+    const [named] = await cleanupWorktrees({ ...options, remove: "repo-plans", confirm: true, apply: true });
+    assert.equal(named.action, "kept", "cleanup cannot target the store by name");
+
+    let rows = await cleanupWorktrees({ ...options, apply: false });
+    assert.equal(rows.some((row) => row.branch === "repo-plans"), false, "the plans branch is never a retirement candidate");
+    assert.equal(rows.find((row) => row.branch === "feature").eligible, true, rows.find((row) => row.branch === "feature").reason);
+    fs.rmSync(path.join(store, "plans/active"), { recursive: true, force: true });
+    fs.writeFileSync(path.join(store, "plans/active"), "not a folder");
+    assert.equal(activeWorktreeNames(main).unreadable, true);
+    rows = await cleanupWorktrees({ ...options, apply: true });
+    const row = rows.find((item) => item.branch === "feature");
+    assert.deepEqual([row.action, row.reason], ["kept", "plans store unreadable"]);
+    assert.equal(fs.existsSync(worktree), true, "an unreadable store removes nothing automatically");
+    assert.equal(fs.existsSync(store), true);
+    assert.equal(git(main, "rev-parse", "--verify", "refs/heads/repo-plans").length > 0, true, "the plans branch survives cleanup");
   }
   {
     assert.equal(proposedWorktreeFolder([

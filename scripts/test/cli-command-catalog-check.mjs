@@ -245,10 +245,10 @@ assert.ok(catalog.nodes.package.children.dev, "package dev is a separate namespa
       /default_permissions = "managed-workspace"/,
       "package-mode config permissions writes Codex live permissions",
     );
-    assert.match(
+    assert.doesNotMatch(
       fs.readFileSync(path.join(home, ".codex", "config.toml"), "utf8"),
-      /"~\/\.worktrees\/roborepo" = true/,
-      "package-mode config permissions includes appRoot plans-config workspace root from an arbitrary cwd",
+      /workspace_roots/,
+      "package-mode config permissions adds no worktree root outside a repo with a plans store",
     );
     assert.match(
       fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"),

@@ -212,11 +212,15 @@ async function connectWorktree({ run, primary, commonDir }) {
   return { recovered, path: existing.root };
 }
 
-export function storeDestination(config, primary) {
+// The configured worktree folder as an absolute path.
+export function storeRootFolder(config, primary) {
   const raw = typeof config?.worktreeRoot === "string" && config.worktreeRoot.trim() ? config.worktreeRoot.trim() : "~/.worktrees";
-  const root = raw === "~" ? os.homedir() : raw.startsWith("~/") ? path.join(os.homedir(), raw.slice(2)) : path.resolve(primary, raw);
+  return raw === "~" ? os.homedir() : raw.startsWith("~/") ? path.join(os.homedir(), raw.slice(2)) : path.resolve(primary, raw);
+}
+
+export function storeDestination(config, primary) {
   const name = typeof config?.worktreeRepoName === "string" && config.worktreeRepoName.trim() ? config.worktreeRepoName.trim() : path.basename(primary);
-  return path.join(root, name, PLANS_WORKTREE_NAME);
+  return path.join(storeRootFolder(config, primary), name, PLANS_WORKTREE_NAME);
 }
 
 // This repository's own worktree was already matched by branch, so anything at the path now belongs

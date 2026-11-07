@@ -650,7 +650,7 @@ Prose before the subsections.
 
 // Real filenames from this repository's plans, frozen as fixtures. The test guards naming.mjs
 // against false positives on names people actually write (hyphenated namespaces, ordinal series,
-// milestones). plan-tree-naming-check.mjs is what scans the live plans folder; this one stays frozen
+// milestones). `plans save` and the transitions enforce the rule on real plans; this list stays frozen
 // so a false positive in the rule is told apart from a badly named plan. Add a filename here when it
 // exposes a false positive.
 function testRepositoryPlansProduceNoNamingFindings() {

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { isolateGitConfig } from "./lib/git-config.mjs";
+import { addPlansStore } from "./lib/plan-store-fixture.mjs";
 import { inventoryWorktree } from "../../modules/repositories/worktree-snapshot.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
@@ -67,8 +68,9 @@ try {
   console.log("worktree artifacts: passed");
   fixture("cleanup-main");
   const main = cwd;
-  write("docs/plans/plans-config.json", JSON.stringify({ worktreeRoot: root }));
+  write("policy.txt", "worktree policy\n");
   git("add", "."); git("commit", "-qm", "worktree policy");
+  addPlansStore(main, { "plans-config.json": JSON.stringify({ worktreeRoot: root }) });
   const checkout = path.join(root, "artifact-cleanup-work");
   git("worktree", "add", "-qb", "artifact-cleanup", checkout);
   cwd = checkout;

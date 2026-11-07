@@ -264,9 +264,9 @@ function packageSkillSources() {
 // push-code — or arbitrary, user-added) is independently deny/ask/allow. Personal choices
 // live in commandOverridesPath (state-paths.mjs), layered on top of the repo-tracked manifest's
 // defaults at render time, so `roborepo update` re-rendering the manifest never wipes them.
-// The write itself is global harness config. When the command is run from a repo that has
-// docs/plans/plans-config.json, Codex receives that repo family's concrete worktree root because
-// Codex permission profiles cannot express dynamic "current repo" roots.
+// The write itself is global harness config. When the command is run from a repo with a plans store,
+// Codex receives that repo family's concrete worktree root and plans-store Git paths, because Codex
+// permission profiles cannot express dynamic "current repo" roots.
 
 // Deny/ask/allow are the only valid buckets a behavior/command can be set to. No "looser" concept
 // remains — each behavior is independently reversible with the same three states, so there is no

@@ -5,8 +5,9 @@ import { rootId } from "../../modules/repositories/identity.mjs";
 import { parseFrontmatter } from "../../modules/plan-suite/index.mjs";
 import { LIFECYCLE_MODEL } from "../../modules/plan-suite/lifecycle-manifest.mjs";
 import { recordedAbsorbingCommit } from "../../modules/plan-suite/landing-gate.mjs";
+import { PLANS_DIR, locateStore, readStoreConfig, storeRootFolder } from "../../modules/plan-suite/plan-store.mjs";
 
-// What a repository's own files and its registry record say cleanup may touch: the worktree folder
+// What a repository's plans store and its registry record say cleanup may touch: the worktree folder
 // automatic removal stays inside, and the worktrees active plans still claim.
 
 // The folder automatic removal may act in. A repository's plans config names it for plan-suite
@@ -16,15 +17,11 @@ export function worktreeFolder(mainPath, record = null) {
 }
 
 export function configuredRoot(mainPath) {
-  try {
-    const config = JSON.parse(fs.readFileSync(path.join(mainPath, "docs/plans/plans-config.json"), "utf8"));
-    const raw = config.worktreeRoot;
-    if (typeof raw !== "string" || !raw) return null;
-    const resolved = raw === "~" ? os.homedir()
-      : raw.startsWith(`~${path.sep}`) ? path.join(os.homedir(), raw.slice(2))
-        : path.resolve(mainPath, raw);
-    return fs.realpathSync(resolved);
-  } catch { return null; }
+  const store = locateStore(mainPath);
+  if (!store || store.missing) return null;
+  const config = readStoreConfig(store.root);
+  if (typeof config?.worktreeRoot !== "string" || !config.worktreeRoot) return null;
+  try { return fs.realpathSync(storeRootFolder(config, store.primary)); } catch { return null; }
 }
 
 function recordedRoot(record) {
@@ -63,28 +60,43 @@ export function repositoryRecordFor(registry, mainPath) {
 }
 
 // The Plans parser, so a quoted `worktree: "name"` still joins and keeps its worktree protected.
+// A file that cannot be read throws, because a caller protecting worktrees must not read it as no claim.
 function planFields(file) {
+  const content = fs.readFileSync(file, "utf8");
   try {
-    const { frontmatter } = parseFrontmatter(fs.readFileSync(file, "utf8"));
+    const { frontmatter } = parseFrontmatter(content);
     const field = (key) => typeof frontmatter[key] === "string" ? frontmatter[key].trim() : "";
     return { id: field("id"), worktree: field("worktree") };
   } catch { return {}; }
 }
 
-function planFiles(mainPath, lifecycle) {
-  const dir = path.join(mainPath, "docs/plans", lifecycle);
+function planFiles(storeRoot, lifecycle) {
+  const dir = path.join(storeRoot, PLANS_DIR, lifecycle);
   try { return fs.readdirSync(dir).filter((file) => file.endsWith(".md")).map((file) => path.join(dir, file)); }
-  catch { return []; }
+  catch (err) {
+    if (err?.code === "ENOENT") return [];
+    throw err;
+  }
 }
+
+// Stands in for the claimed set when the store cannot be read: every worktree reads as claimed, so
+// automatic removal stops, because it cannot tell which worktrees active plans still need.
+const UNREADABLE_CLAIMS = Object.freeze({ has: () => true, unreadable: true });
 
 // Worktrees a plan in a worktree-bound stage (Active or Review) still claims. A plan under review
-// keeps its worktree until /plan-close or /plan-archive releases it.
+// keeps its worktree until /plan-close or /plan-archive releases it. A repository with no store has
+// no plans, so nothing is claimed.
 export function activeWorktreeNames(mainPath) {
-  const folders = [...LIFECYCLE_MODEL.worktreeBound];
-  return new Set(folders.flatMap((lifecycle) => planFiles(mainPath, lifecycle)).map((file) => planFields(file).worktree).filter(Boolean));
+  const store = locateStore(mainPath);
+  if (!store) return new Set();
+  try {
+    if (store.missing || !fs.statSync(path.join(store.root, PLANS_DIR)).isDirectory()) return UNREADABLE_CLAIMS;
+    const folders = [...LIFECYCLE_MODEL.worktreeBound];
+    return new Set(folders.flatMap((lifecycle) => planFiles(store.root, lifecycle)).map((file) => planFields(file).worktree).filter(Boolean));
+  } catch { return UNREADABLE_CLAIMS; }
 }
 
-// The worktree a plan names, found by id, path, or file name in any lifecycle folder.
+// The worktree a plan names, found by id, store-relative path, or file name in any lifecycle folder.
 export function findPlanWorktree(mainPath, plan, { completed = false } = {}) {
   const record = findPlan(mainPath, plan);
   if (completed && record && record.lifecycle !== "completed") throw new Error("plan must be completed before discarding leftovers");
@@ -101,10 +113,15 @@ export function findPlanAbsorbingCommit(mainPath, plan) {
 }
 
 function findPlan(mainPath, plan) {
+  const store = locateStore(mainPath);
+  if (!store || store.missing) return null;
   for (const lifecycle of LIFECYCLE_MODEL.folders) {
-    for (const file of planFiles(mainPath, lifecycle)) {
-      const fields = planFields(file);
-      if (fields.id === plan || file === path.resolve(plan) || path.basename(file) === plan) return { file, lifecycle, worktree: fields.worktree };
+    let files;
+    try { files = planFiles(store.root, lifecycle); } catch { continue; }
+    for (const file of files) {
+      let fields;
+      try { fields = planFields(file); } catch { continue; }
+      if (fields.id === plan || file === path.join(store.root, plan) || file === path.resolve(plan) || path.basename(file) === plan) return { file, lifecycle, worktree: fields.worktree };
     }
   }
   return null;
