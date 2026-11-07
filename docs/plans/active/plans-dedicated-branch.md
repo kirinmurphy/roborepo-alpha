@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Tests and docs (fixture moves, test-cli.sh store check, docs of record), then the Validation Loop and submit.
+next_action: Finish the Tests and docs item from the state table (lifecycle transitions check, portal specs, docs of record), run its gates, then the Validation Loop and submit.
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
@@ -328,9 +328,10 @@ State of the work (what the checklist's unchecked items still need):
 | Agent permissions | Manifest behavior, skills, rules, triggers, generated outputs, branch protection guidance in the user guide | Nothing |
 | Portal | Not-set-up notice (empty state when scoped or alone, warning line under All repos), `+` after Filters, `plan-import-dialog.js`, `/api/plans/import` and `/preview`, `plans-import.spec.mjs` | Nothing |
 | Migration | `scripts/dev/migrate-plans-once.mjs`, rollout order in its header, `migrate-plans-once-check.mjs` in the CI group; deleted after rollout with its check | Nothing |
-| Tests, docs | Guide's "Where Plans Live" section | All the rest. Dependencies are installed in this worktree (`npm ci`), so `npm run test:portal-ui` works. `/plan-suite-init` must tell a Codex user to run `roborepo update` after `plans init`, since the grants render from the repo the update runs in |
+| Tests | Removed-module checks deleted. `plan-store-check` and `migrate-plans-once-check` in `test-cli.sh`. Fixtures moved and passing: `plan-suite-check`, `plan-suite-commands-check`, `plan-suite-canonical-check`, `plan-suite-repair-check`, `plan-suite-findings-check`, `plans-portal-state-check`, `plan-lifecycle-manifest-check`. Moved, recheck: `plan-transition-commit-paths-check`, `plan-sync-base-check`, `backlog-order-check` | `plan-lifecycle-transitions-check` not moved (56 old paths), and needs an assertion that reopen marks an approval `invalidated` and `plans approval` then isn't fresh. Portal specs were stopped mid-move: `plans-backlog.spec` and `plans-status.spec` partly converted and unverified; `repository-scope.spec` and the plan fixtures in `portal-ui.spec` (including what seeds "Findings card plan") not started. `lib/comment-scan.mjs` and `plan-citation-comments-check` should also flag `plans/<lifecycle>/` citations. Confirm a real reftable repo works: the one probe's clone came out in `files` format, so it proved nothing |
+| Docs | Guide's "Where Plans Live" section | Everything else under Documentation impact. `plans-portal-internals.md`, `code-style-audit.md`, and `plans-portal.md` still name removed modules. The guide's lower sections, including Plan File Layout, still describe `docs/plans`. Dependencies are installed in this worktree (`npm ci`), so `npm run test:portal-ui` works. `/plan-suite-init` tells a Codex user to run `roborepo update` after `plans init` |
 
-Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and are in `scripts/test/check-groups.json`; `test-cli.sh` still needs the store check. `scripts/test/lib/plan-store-fixture.mjs` adds a read-only store for checks that need no remote. `scripts/test/lib/plan-git-fixture.mjs` now builds a bare origin and a store: keys under `plans/` go to the store, others to `main`. Existing fixtures still using `docs/plans/` fail until moved; `plan-authority-check`, `plan-suite-authority-*`, `plan-landed-recovery-check`, and `plan-close-integration-check` test removed modules and are deleted or rewritten. Those mechanical moves suit Sonnet subagents.
+Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and are in `scripts/test/check-groups.json`. `scripts/test/lib/plan-store-fixture.mjs` adds a read-only store for checks that need no remote. `scripts/test/lib/plan-git-fixture.mjs` now builds a bare origin and a store: keys under `plans/` go to the store, others to `main`.
 
 ## Decision Log
 
@@ -355,6 +356,7 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 - **Skills name the `roborepo plans` commands directly** where they said "the repository's canonical command". The store has one interface, and agents get allow rules for exactly those commands.
 - **A portal upload shows Git's unified diff.** `git diff --no-index` over two temporary files needs no new dependency, and the headers that name those files are dropped. Alternative: a client-side diff library.
 - **Upload routes carry their own 4 MB body limit.** Other portal control routes stay at 64 KB, and a plan can exceed that once JSON-escaped.
+- **The review record no longer parses `recovery`.** The post-merge provenance it read is gone with the second copy, so the findings check drops that field.
 - **`branchIsUnoccupied` refuses the reserved branch directly.** Hiding the store from inventory made `repo-plans` look like an unoccupied branch to branch retirement. The refusal sits where every retirement path passes, and the branch also leaves the candidate list.
 
 ## Not tested

@@ -7,6 +7,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
+import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
 import { addRepositorySource, enablePlanBoard, portalToken, removeRepositorySources } from "./helpers.mjs";
 
 const document = ({ id, title, deps = [], summary = `Purpose of ${title}.` }) => [
@@ -35,44 +36,58 @@ const contrastRatio = (node) => {
 };
 
 test.describe("Backlog directory and ordering", () => {
+  let fx;
   let repo;
   let bare;
+  let store;
   let repoName;
   let bareName;
   let orderFile;
+  // Fixture edits are committed in the plans store and pushed, so a portal write to the same path
+  // starts from a clean tree.
+  const syncStore = (message = "fixture edit") => {
+    fx.git(store, "add", "-A", "--", ".");
+    if (fx.tryGit(store, "diff", "--cached", "--quiet").status === 0) return;
+    fx.git(store, "commit", "--quiet", "-m", message);
+    fx.git(store, "push", "--quiet", "origin", "repo-plans:repo-plans");
+    fx.git(store, "update-ref", "refs/remotes/origin/repo-plans", "HEAD");
+  };
   const write = (relative, content) => {
-    const file = path.join(repo, relative);
+    const file = path.join(store, relative);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, content);
+    syncStore();
+  };
+  const remove = (relative) => {
+    remove(relative);
+    syncStore();
   };
   const savedOrder = () => JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.alpha;
-  const setOrder = (ids) => fs.writeFileSync(orderFile, `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ids } }, null, 2)}\n`);
+  const setOrder = (ids) => write("plans/plans-order.json", `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ids } }, null, 2)}\n`);
 
   test.beforeAll(() => {
     // Each build gets names of its own: a failed test restarts the worker and rebuilds this fixture,
     // and a removed source's repository stays registered under its name.
-    repo = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-backlog-"));
-    bare = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-bare-"));
-    repoName = path.basename(repo);
-    bareName = path.basename(bare);
-    fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
-    fs.mkdirSync(path.join(bare, ".git"), { recursive: true });
-    orderFile = path.join(repo, "docs/plans/plans-order.json");
-    write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
-    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
-    write("docs/plans/backlog/alpha-retrieval.md", document({ id: "alphab02", title: "Retrieval", deps: ["alphaa01"] }));
-    write("docs/plans/backlog/alpha-diagnostics.md", document({ id: "alphax03", title: "Diagnostics" }));
-    write("docs/plans/backlog/alpha-traces.md", document({ id: "alphan04", title: "Traces" }));
-    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
-    write("docs/plans/backlog/wrong-prefix.md", document({ id: "wrong006", title: "Misfiled plan" }));
-    write("docs/plans/active/alpha-working.md", document({ id: "alphaw07", title: "Working plan" }));
-    fs.mkdirSync(path.join(bare, "docs/plans/backlog"), { recursive: true });
-    fs.writeFileSync(path.join(bare, "docs/plans/backlog/anything.md"), document({ id: "barepl08", title: "Unconfigured plan" }));
+    const suffix = Math.random().toString(36).slice(2, 8);
+    repoName = `backlog-${suffix}`;
+    bareName = `bare-${suffix}`;
+    fx = createPlanFixture("portal-ui-backlog-store-");
+    repo = fx.repository(repoName, {
+      "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }),
+      "plans/backlog/alpha-storage.md": document({ id: "alphaa01", title: "Storage" }),
+      "plans/backlog/alpha-retrieval.md": document({ id: "alphab02", title: "Retrieval", deps: ["alphaa01"] }),
+      "plans/backlog/alpha-diagnostics.md": document({ id: "alphax03", title: "Diagnostics" }),
+      "plans/backlog/alpha-traces.md": document({ id: "alphan04", title: "Traces" }),
+      "plans/backlog/beta-one.md": document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }),
+      "plans/backlog/wrong-prefix.md": document({ id: "wrong006", title: "Misfiled plan" }),
+      "plans/active/alpha-working.md": document({ id: "alphaw07", title: "Working plan" }),
+    });
+    store = fx.storePath(repo);
+    orderFile = path.join(store, "plans/plans-order.json");
+    bare = fx.repository(bareName, { "plans/backlog/anything.md": document({ id: "barepl08", title: "Unconfigured plan" }) });
   });
 
-  test.afterAll(() => {
-    for (const root of [repo, bare]) fs.rmSync(root, { recursive: true, force: true });
-  });
+  test.afterAll(() => fx.cleanup());
 
   test.beforeEach(async ({ page }) => {
     setOrder(["alphaa01", "alphab02", "alphax03"]);
@@ -175,8 +190,8 @@ test.describe("Backlog directory and ordering", () => {
   test("Prioritize draws dependencies as a tree, with the implied link collapsed", async ({ page }, testInfo) => {
     // Joins needs Storage and Diagnostics; Finale needs Storage and Joins, which already implies Storage.
     const files = {
-      "docs/plans/backlog/alpha-joins.md": document({ id: "alphaj10", title: "Joins", deps: ["alphaa01", "alphax03"] }),
-      "docs/plans/backlog/alpha-finale.md": document({ id: "alphaf11", title: "Finale", deps: ["alphaa01", "alphaj10"] }),
+      "plans/backlog/alpha-joins.md": document({ id: "alphaj10", title: "Joins", deps: ["alphaa01", "alphax03"] }),
+      "plans/backlog/alpha-finale.md": document({ id: "alphaf11", title: "Finale", deps: ["alphaa01", "alphaj10"] }),
     };
     try {
       for (const [file, content] of Object.entries(files)) write(file, content);
@@ -205,7 +220,7 @@ test.describe("Backlog directory and ordering", () => {
       });
       expect(edges).toEqual({ left: 1, top: 1, bottom: 1 });
     } finally {
-      for (const file of Object.keys(files)) fs.rmSync(path.join(repo, file), { force: true });
+      for (const file of Object.keys(files)) remove(file);
     }
   });
 
@@ -230,7 +245,7 @@ test.describe("Backlog directory and ordering", () => {
 
   test("a sustained hover reads the description on over the page, with nothing moving", async ({ page }) => {
     const summary = Array.from({ length: 80 }, (_, index) => `word${index}`).join(" ");
-    const file = "docs/plans/backlog/alpha-long.md";
+    const file = "plans/backlog/alpha-long.md";
     write(file, document({ id: "alphal09", title: "Long" }).replace("Purpose of Long.", summary));
     setOrder(["alphal09", "alphaa01", "alphab02", "alphax03"]);
     // Where every line of the preview sits, so a line that re-wraps or shifts fails the comparison.
@@ -286,7 +301,7 @@ test.describe("Backlog directory and ordering", () => {
       await rowDescription.click();
       await expect(drawerHeading(page, "Long")).toBeVisible();
     } finally {
-      fs.rmSync(path.join(repo, file), { force: true });
+      remove(file);
     }
   });
 
@@ -322,7 +337,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("Waiting on starts level with the card's menu button, however many prerequisites it lists", async ({ page }) => {
-    const file = "docs/plans/backlog/alpha-retrieval.md";
+    const file = "plans/backlog/alpha-retrieval.md";
     const centers = async () => {
       const card = page.locator("plan-card", { hasText: "Retrieval" });
       const middle = (box) => box.y + box.height / 2;
@@ -550,7 +565,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("the sustained-hover panel is the default in every lifecycle", async ({ page }) => {
-    write("docs/plans/active/alpha-long-active.md", [
+    write("plans/active/alpha-long-active.md", [
       "---", "id: alphaz11", "next_action: Do it", "depends_on: []", "---", "",
       "# Long active plan", "", "## Summary", "", "word ".repeat(90).trim(), "",
     ].join("\n"));
@@ -573,7 +588,7 @@ test.describe("Backlog directory and ordering", () => {
       await page.mouse.move(0, 0);
       await expect(region).not.toHaveClass(/is-excerpt-expanded/);
     } finally {
-      fs.rmSync(path.join(repo, "docs/plans/active/alpha-long-active.md"));
+      remove("plans/active/alpha-long-active.md");
     }
   });
 
@@ -584,16 +599,16 @@ test.describe("Backlog directory and ordering", () => {
       fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
       fs.writeFileSync(path.join(root, relative), content);
     };
-    const dependent = path.join(root, "docs/plans/backlog/beta-after.md");
+    const dependent = path.join(root, "plans/backlog/beta-after.md");
     const lock = path.join(root, ".git/index.lock");
     try {
       git("init", "-q", "-b", "main");
       git("config", "user.name", "Portal Test");
       git("config", "user.email", "portal@example.invalid");
-      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
-      put("docs/plans/backlog/alpha-free.md", document({ id: "failfree1", title: "Free one" }));
-      put("docs/plans/backlog/alpha-other.md", document({ id: "failother", title: "Other one" }));
-      put("docs/plans/backlog/beta-after.md", document({ id: "failafter", title: "Waits elsewhere", deps: ["failfree1"] }));
+      put("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
+      put("plans/backlog/alpha-free.md", document({ id: "failfree1", title: "Free one" }));
+      put("plans/backlog/alpha-other.md", document({ id: "failother", title: "Other one" }));
+      put("plans/backlog/beta-after.md", document({ id: "failafter", title: "Waits elsewhere", deps: ["failfree1"] }));
       git("add", ".");
       git("commit", "-q", "-m", "fixture");
       await addRepositorySource(page, root);
@@ -608,7 +623,7 @@ test.describe("Backlog directory and ordering", () => {
         return { status: response.status(), text: await response.text() };
       };
       const expectUnchanged = () => {
-        expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
+        expect(fs.existsSync(path.join(root, "plans/backlog/alpha-free.md"))).toBe(true);
         expect(git("status", "--porcelain")).toBe("");
       };
 
@@ -633,7 +648,7 @@ test.describe("Backlog directory and ordering", () => {
       }
 
       // A file where the archive folder belongs raises a raw filesystem error, whose message has the path.
-      const blocker = path.join(root, "docs/plans/archived");
+      const blocker = path.join(root, "plans/archived");
       fs.rmSync(blocker, { recursive: true, force: true });
       fs.writeFileSync(blocker, "");
       const blocked = await archive();
@@ -733,7 +748,7 @@ test.describe("Backlog directory and ordering", () => {
       await expect(archiveFreeOne).toBeEnabled();
 
       expect((await archive()).status).toBe(200);
-      expect(fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
+      expect(fs.existsSync(path.join(root, "plans/archived/alpha-free.md"))).toBe(true);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -746,21 +761,21 @@ test.describe("Backlog directory and ordering", () => {
       fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
       fs.writeFileSync(path.join(root, relative), content);
     };
-    const moved = (name) => path.join(root, "docs/plans/archived", name);
+    const moved = (name) => path.join(root, "plans/archived", name);
     try {
       git("init", "-q", "-b", "main");
       git("config", "user.name", "Portal Test");
       git("config", "user.email", "portal@example.invalid");
-      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
-      put("docs/plans/backlog/alpha-ranked.md", document({ id: "arkranked", title: "Ranked one" }));
-      put("docs/plans/backlog/alpha-free.md", document({ id: "arkfree01", title: "Free one" }));
-      put("docs/plans/backlog/alpha-long.md", document({ id: "arklong01", title: "Long one", summary: "A description long enough to need the sustained hover. ".repeat(10) }));
-      put("docs/plans/backlog/alpha-root.md", document({ id: "arkroot01", title: "Chain root" }));
-      put("docs/plans/backlog/alpha-leaf.md", document({ id: "arkleaf01", title: "Chain leaf", deps: ["arkroot01"] }));
-      put("docs/plans/backlog/beta-after.md", document({ id: "arkafter1", title: "Waits elsewhere", deps: ["arkfree01"] }));
+      put("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
+      put("plans/backlog/alpha-ranked.md", document({ id: "arkranked", title: "Ranked one" }));
+      put("plans/backlog/alpha-free.md", document({ id: "arkfree01", title: "Free one" }));
+      put("plans/backlog/alpha-long.md", document({ id: "arklong01", title: "Long one", summary: "A description long enough to need the sustained hover. ".repeat(10) }));
+      put("plans/backlog/alpha-root.md", document({ id: "arkroot01", title: "Chain root" }));
+      put("plans/backlog/alpha-leaf.md", document({ id: "arkleaf01", title: "Chain leaf", deps: ["arkroot01"] }));
+      put("plans/backlog/beta-after.md", document({ id: "arkafter1", title: "Waits elsewhere", deps: ["arkfree01"] }));
       git("add", ".");
       git("commit", "-q", "-m", "fixture");
-      put("docs/plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["arkranked"] } }));
+      put("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["arkranked"] } }));
       await addRepositorySource(page, root);
 
       const { backlog } = await (await page.request.get("/api/plans")).json();
@@ -817,7 +832,7 @@ test.describe("Backlog directory and ordering", () => {
       await expect(second).toContainText("No longer depending on it: Waits elsewhere.");
       await second.getByRole("button", { name: "Cancel" }).click();
       await expect(second).toBeHidden();
-      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
+      expect(fs.existsSync(path.join(root, "plans/backlog/alpha-free.md"))).toBe(true);
 
       await archive("Free one").click();
       await expect(first.getByRole("textbox")).toHaveValue("");
@@ -825,13 +840,13 @@ test.describe("Backlog directory and ordering", () => {
       await first.getByRole("button", { name: "Continue" }).dblclick();
       // The final button can land under the cursor, so a double-click must not answer both questions.
       await expect(second.getByRole("button", { name: "Archive Plan" })).toBeDisabled();
-      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
+      expect(fs.existsSync(path.join(root, "plans/backlog/alpha-free.md"))).toBe(true);
       await second.getByRole("button", { name: "Archive Plan" }).click();
       await expect(second).toBeHidden();
       await expect(blockFor(page, "Free one")).toHaveCount(0);
       expect(fs.readFileSync(moved("alpha-free.md"), "utf8")).toContain("Superseded by the ranked plan.");
-      expect(git("show", "--no-renames", "--name-only", "--format=", "HEAD").trim().split("\n").sort()).toEqual(["docs/plans/archived/alpha-free.md", "docs/plans/backlog/alpha-free.md", "docs/plans/backlog/beta-after.md"]);
-      expect(fs.readFileSync(path.join(root, "docs/plans/backlog/beta-after.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
+      expect(git("show", "--no-renames", "--name-only", "--format=", "HEAD").trim().split("\n").sort()).toEqual(["plans/archived/alpha-free.md", "plans/backlog/alpha-free.md", "plans/backlog/beta-after.md"]);
+      expect(fs.readFileSync(path.join(root, "plans/backlog/beta-after.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
       expect(git("status", "--porcelain").trim()).toBe("?? docs/plans/plans-order.json");
 
       // One plan of a linked block goes alone; the survivor stops depending on it and stays.
@@ -844,7 +859,7 @@ test.describe("Backlog directory and ordering", () => {
       await expect(second).toBeHidden();
       expect(fs.existsSync(moved("alpha-root.md"))).toBe(true);
       await expect(archive("Chain leaf")).toBeEnabled();
-      expect(fs.readFileSync(path.join(root, "docs/plans/backlog/alpha-leaf.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
+      expect(fs.readFileSync(path.join(root, "plans/backlog/alpha-leaf.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
 
       // The route itself refuses a ranked plan, whatever a page sends.
       const refused = await page.evaluate(async (repositoryId) => {
@@ -852,7 +867,7 @@ test.describe("Backlog directory and ordering", () => {
         return portalPostJson("/api/plans/archive", { repositoryId, id: "arkranked", reason: "No." }).catch((err) => err.message);
       }, entry.repositoryId);
       expect(refused).toContain("Only unprioritized Backlog plans");
-      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-ranked.md"))).toBe(true);
+      expect(fs.existsSync(path.join(root, "plans/backlog/alpha-ranked.md"))).toBe(true);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -869,9 +884,9 @@ test.describe("Backlog directory and ordering", () => {
       git("init", "-q", "-b", "trunk");
       git("config", "user.name", "Portal Test");
       git("config", "user.email", "portal@example.invalid");
-      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A" } }));
-      put("docs/plans/backlog/alpha-free.md", document({ id: "trkfree01", title: "Free one" }));
-      put("docs/plans/backlog/alpha-next.md", document({ id: "trknext01", title: "Next one" }));
+      put("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A" } }));
+      put("plans/backlog/alpha-free.md", document({ id: "trkfree01", title: "Free one" }));
+      put("plans/backlog/alpha-next.md", document({ id: "trknext01", title: "Next one" }));
       git("add", ".");
       git("commit", "-q", "-m", "fixture");
       git("update-ref", "refs/remotes/origin/trunk", "HEAD");
@@ -894,7 +909,7 @@ test.describe("Backlog directory and ordering", () => {
 
       const release = await holdRefresh(page);
       const dialog = await archiveThrough("Free one");
-      await expect.poll(() => fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
+      await expect.poll(() => fs.existsSync(path.join(root, "plans/archived/alpha-free.md"))).toBe(true);
       await expect(dialog).toBeVisible();
       release();
       await expect(dialog).toBeHidden();
@@ -907,7 +922,7 @@ test.describe("Backlog directory and ordering", () => {
       git("switch", "-qc", "feature");
       const refused = await archiveThrough("Next one");
       await expect(refused.getByText(/on feature, not trunk/)).toBeVisible();
-      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-next.md"))).toBe(true);
+      expect(fs.existsSync(path.join(root, "plans/backlog/alpha-next.md"))).toBe(true);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -932,7 +947,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a prerequisite in another namespace shows its badge and title, and opens", async ({ page }) => {
-    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betaon05"] } }));
+    write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betaon05"] } }));
     await openNamespace(page, "beta");
     const card = page.locator("plan-card");
     await expect(card).toContainText("Waiting on:");
@@ -945,7 +960,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a Waiting on namespace badge on a card opens that namespace, from Details and Next up", async ({ page }) => {
-    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphax03"], beta: ["betaon05"] } }));
+    write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphax03"], beta: ["betaon05"] } }));
     const location = page.getByRole("navigation", { name: "Backlog location" });
     await openNamespace(page, "beta");
     await waitingOn(page.locator("plan-card")).getByRole("link", { name: "alpha", exact: true }).click();
@@ -953,14 +968,14 @@ test.describe("Backlog directory and ordering", () => {
     expect(new URL(page.url()).searchParams.get("namespace")).toBe("alpha");
 
     // Beta one is held up by Storage, which is unprioritized Backlog work, so make it wait on Active work to reach Next up.
-    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaw07"] }));
+    write("plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaw07"] }));
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       const nextUpCard = page.getByRole("region", { name: "Next up" }).locator("plan-card", { hasText: "Beta one" });
       await waitingOn(nextUpCard).getByRole("link", { name: "alpha", exact: true }).click();
       await expect(location).toContainText("ALPHA");
     } finally {
-      write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
+      write("plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
     }
   });
 
@@ -1036,8 +1051,8 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("pinning a namespace lifts it and its plan to the top, and survives a reload", async ({ page }) => {
-    write("docs/plans/backlog/beta-free.md", document({ id: "betafr09", title: "Beta free" }));
-    fs.writeFileSync(orderFile, `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betafr09"] } }, null, 2)}\n`);
+    write("plans/backlog/beta-free.md", document({ id: "betafr09", title: "Beta free" }));
+    write("plans/plans-order.json", `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betafr09"] } }, null, 2)}\n`);
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       const labels = page.getByRole("group", { name: "Backlog directory" }).locator(".backlog-directory-label");
@@ -1063,7 +1078,7 @@ test.describe("Backlog directory and ordering", () => {
       await expect(labels).toHaveText(["ALPHA", "BETA", "No namespace"]);
       expect(JSON.parse(fs.readFileSync(orderFile, "utf8"))).not.toHaveProperty("pinned");
     } finally {
-      fs.rmSync(path.join(repo, "docs/plans/backlog/beta-free.md"));
+      remove("plans/backlog/beta-free.md");
     }
   });
 
@@ -1087,14 +1102,14 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("Next up keeps a plan waiting only on work underway, and shows what it waits on", async ({ page }) => {
-    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
+    write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       const card = page.getByRole("region", { name: "Next up" }).locator("plan-card");
       await expect(card.locator(".title-link")).toHaveText(["Storage"]);
       await expect(waitingOn(card)).toHaveText(/^\s*Working plan\s+\(Active\)\s*$/);
     } finally {
-      write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
+      write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
     }
   });
 
@@ -1127,9 +1142,9 @@ test.describe("Backlog directory and ordering", () => {
 
   test("Next up shows only on a selected repo's screen", async ({ page }) => {
     const nextUp = page.getByRole("region", { name: "Next up" });
-    const bareOrder = path.join(bare, "docs/plans/plans-order.json");
+    const bareStore = fx.storePath(bare);
     // A ranked entry gives the no-config repo the one thing that could otherwise qualify it.
-    fs.writeFileSync(bareOrder, JSON.stringify({ schemaVersion: 1, namespaces: { anything: ["barepl08"] } }));
+    write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { anything: ["barepl08"] } }), bareStore);
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       await expect(nextUp).toBeVisible();
@@ -1146,14 +1161,14 @@ test.describe("Backlog directory and ordering", () => {
       await expect(directoryRows(page)).toContainText("No namespace");
       await expect(nextUp).toHaveCount(0);
     } finally {
-      fs.rmSync(bareOrder, { force: true });
+      remove("plans/plans-order.json", bareStore);
     }
   });
 
   test("the drawer opens another namespace's prerequisite, and Prioritize numbers blocks, not plans", async ({ page }) => {
     // Diagnostics follows the two-plan Storage block, so it is the second block but the third plan.
-    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphax03"] }));
-    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betaon05"] } }));
+    write("plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphax03"] }));
+    write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betaon05"] } }));
     try {
       await openNamespace(page, "beta");
       await page.locator("plan-card").getByText("Beta one", { exact: true }).click();
@@ -1166,12 +1181,12 @@ test.describe("Backlog directory and ordering", () => {
       await openOrdering(page);
       await expect(blockFor(page, "Diagnostics").getByText("2", { exact: true })).toBeVisible();
     } finally {
-      write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
+      write("plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
     }
   });
 
   test("Home's drawer shows a prerequisite with a styled namespace badge", async ({ page }) => {
-    const file = "docs/plans/active/alpha-blocked.md";
+    const file = "plans/active/alpha-blocked.md";
     write(file, document({ id: "alphabk9", title: "Blocked active" }).replace("depends_on: []", "blocked_by: [betaon05]\ndepends_on: []"));
     try {
       await page.goto("/");
@@ -1184,15 +1199,15 @@ test.describe("Backlog directory and ordering", () => {
       const badge = prerequisiteBadge(drawer, "alpha");
       expect(await badge.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
     } finally {
-      fs.rmSync(path.join(repo, file), { force: true });
+      remove(file);
     }
   });
 
   test("a Waiting on namespace badge in Prioritize changes namespace, asking first over unsaved changes", async ({ page }) => {
-    const file = "docs/plans/backlog/beta-two.md";
-    const activeOnly = "docs/plans/active/gamma-running.md";
+    const file = "plans/backlog/beta-two.md";
+    const activeOnly = "plans/active/gamma-running.md";
     try {
-      write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B", gamma: "G" } }));
+      write("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B", gamma: "G" } }));
       write(activeOnly, document({ id: "gammar11", title: "Running elsewhere" }));
       write(file, document({ id: "betatw10", title: "Beta two", deps: ["alphaa01", "gammar11"] }));
       await openNamespace(page, "beta");
@@ -1212,13 +1227,13 @@ test.describe("Backlog directory and ordering", () => {
       await expect(page.getByRole("navigation", { name: "Backlog location" })).toContainText("ALPHA");
       expect(new URL(page.url()).searchParams.get("namespace")).toBe("alpha");
     } finally {
-      write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
-      for (const item of [file, activeOnly]) fs.rmSync(path.join(repo, item), { force: true });
+      write("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
+      for (const item of [file, activeOnly]) remove(item);
     }
   });
 
   test("opening a Waiting on link keeps a dirty draft and its unsaved state", async ({ page }) => {
-    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
+    write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
     try {
       await openOrdering(page);
       await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
@@ -1239,13 +1254,13 @@ test.describe("Backlog directory and ordering", () => {
       await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
       expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
     } finally {
-      write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
+      write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
     }
   });
 
   test("a long unbroken title does not scroll Details, Prioritize, or the drawer sideways at phone width", async ({ page }) => {
     const unbroken = "x".repeat(89);
-    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: unbroken }));
+    write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: unbroken }));
     try {
       await page.setViewportSize({ width: 390, height: 800 });
       await openNamespace(page);
@@ -1260,14 +1275,14 @@ test.describe("Backlog directory and ordering", () => {
       await expect(drawerHeading(page, unbroken)).toBeVisible();
       expect(await scrollsSideways(page)).toBe(false);
     } finally {
-      write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
+      write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
     }
   });
 
   test.describe("a Next up card with both badges and a long title at phone width", () => {
     const LONG_TITLE = "Storage engine rewrite with a title long enough that it cannot share one line with two badges on a phone";
-    test.beforeEach(() => write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: LONG_TITLE, deps: ["alphaw07"] })));
-    test.afterEach(() => write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" })));
+    test.beforeEach(() => write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: LONG_TITLE, deps: ["alphaw07"] })));
+    test.afterEach(() => write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" })));
 
     for (const theme of ["dark", "light"]) {
       test(`stays readable without sideways scroll in the ${theme} theme`, async ({ page }, testInfo) => {
@@ -1482,12 +1497,12 @@ test.describe("Backlog directory and ordering", () => {
   test.describe("config edits", () => {
     let config;
     let original;
-    const writeNamespaces = (namespaces) => fs.writeFileSync(config, JSON.stringify({ schemaVersion: 1, namespaces }));
+    const writeNamespaces = (namespaces) => write("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces }));
     test.beforeEach(() => {
-      config = path.join(repo, "docs/plans/plans-config.json");
+      config = path.join(store, "plans/plans-config.json");
       original = fs.readFileSync(config, "utf8");
     });
-    test.afterEach(() => fs.writeFileSync(config, original));
+    test.afterEach(() => write("plans/plans-config.json", original));
 
     test("adding, removing, and renaming a namespace reach an open directory at Refresh", async ({ page }) => {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
@@ -1521,9 +1536,9 @@ test.describe("Backlog directory and ordering", () => {
 
     test("an unreadable config is an error, and no plan disappears", async ({ page }) => {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
-      fs.writeFileSync(config, "{ nope");
+      write("plans/plans-config.json", "{ nope");
       await page.getByRole("button", { name: "Refresh", exact: true }).click();
-      await expect(page.getByText("docs/plans/plans-config.json cannot be read")).toBeVisible();
+      await expect(page.getByText("plans/plans-config.json cannot be read")).toBeVisible();
       await expect(directoryRows(page)).toHaveCount(1);
       await expect(directoryRows(page)).toContainText("6 total");
     });
@@ -1594,7 +1609,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a plan with a duplicate id is shown with its reason and no controls", async ({ page }) => {
-    const copies = ["docs/plans/backlog/alpha-twin-one.md", "docs/plans/backlog/alpha-twin-two.md"];
+    const copies = ["plans/backlog/alpha-twin-one.md", "plans/backlog/alpha-twin-two.md"];
     try {
       for (const [index, file] of copies.entries()) write(file, document({ id: "twinplan", title: `Twin ${index}`, deps: ["alphax03"] }));
       await openOrdering(page);
@@ -1602,14 +1617,14 @@ test.describe("Backlog directory and ordering", () => {
       await expect(page.locator("backlog-block", { hasText: "Twin" })).toHaveCount(0);
       await expect(page.getByRole("list", { name: "Waiting on", exact: true }).filter({ hasText: "Diagnostics" })).toHaveCount(2);
     } finally {
-      for (const file of copies) fs.rmSync(path.join(repo, file), { force: true });
+      for (const file of copies) remove(file);
     }
   });
 
   test("an unparseable order file locks Prioritize and says why, and is left alone", async ({ page }) => {
-    fs.writeFileSync(orderFile, "{ nope");
+    write("plans/plans-order.json", "{ nope");
     await openOrdering(page);
-    await expect(page.getByText("docs/plans/plans-order.json cannot be read")).toBeVisible();
+    await expect(page.getByText("plans/plans-order.json cannot be read")).toBeVisible();
     await expect(page.getByRole("button", { name: "Move to bottom" })).toHaveCount(0);
     await expect(page.locator("backlog-block").first()).toContainText("blocked");
     expect(fs.readFileSync(orderFile, "utf8")).toBe("{ nope");
@@ -1817,7 +1832,7 @@ test.describe("Backlog directory and ordering", () => {
     try {
       await page.getByRole("button", { name: "Save", exact: true }).click();
       const status = page.getByRole("group", { name: "Unsaved order" }).getByRole("status");
-      await expect(status).toContainText("docs/plans/plans-order.json could not be written (EACCES).");
+      await expect(status).toContainText("plans/plans-order.json could not be written (EACCES).");
       await expect(status).not.toContainText(repo);
       expect(fs.readFileSync(orderFile, "utf8")).toBe(held);
     } finally {
@@ -1862,7 +1877,7 @@ test.describe("Backlog directory and ordering", () => {
 
   test("No namespace keeps a long filename readable at phone width", async ({ page }) => {
     const stem = "x".repeat(96);
-    const file = `docs/plans/backlog/${stem}.md`;
+    const file = `plans/backlog/${stem}.md`;
     write(file, document({ id: "longname", title: "Long filename plan" }));
     try {
       await page.setViewportSize({ width: 390, height: 800 });
@@ -1873,7 +1888,7 @@ test.describe("Backlog directory and ordering", () => {
       const rights = await page.getByText(stem).evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right));
       expect(Math.max(...rights)).toBeLessThanOrEqual(390);
     } finally {
-      fs.rmSync(path.join(repo, file), { force: true });
+      remove(file);
     }
   });
 
@@ -1884,7 +1899,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.getByText("Copied the /plan-write prompt.")).toBeVisible();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     expect(copied).toContain("/plan-write");
-    expect(copied).toContain("docs/plans/backlog/wrong-prefix.md");
+    expect(copied).toContain("plans/backlog/wrong-prefix.md");
   });
 
   test("a repo with no config shows one No namespace row and a notice, no per-file findings", async ({ page }) => {
@@ -1913,7 +1928,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a broken dependency graph locks ordering and says why", async ({ page }) => {
-    const file = "docs/plans/backlog/alpha-diagnostics.md";
+    const file = "plans/backlog/alpha-diagnostics.md";
     try {
       write(file, document({ id: "alphax03", title: "Diagnostics", deps: ["missing9"] }));
       await openNamespace(page);

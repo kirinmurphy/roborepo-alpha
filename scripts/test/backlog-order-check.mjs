@@ -3,22 +3,22 @@
 // contract names, then the registry's read, write, and refusal rules against real files, and the
 // `roborepo plans order place` command and validation gates in a real Git repository.
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { deriveGroups, findDependencyCycles, proposeOrder } from "../../modules/plan-suite/backlog-order.mjs";
 import { buildBacklogIndex, placePlan, readOrderRegistry, saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
+import { buildRepositoryPlanSnapshot } from "../../modules/plan-suite/index.mjs";
 import { readProjectNamespaces, resolvePlanNamespace, validatePlanNaming } from "../../modules/plan-suite/naming.mjs";
 import { repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
+import { locateStore } from "../../modules/plan-suite/plan-store.mjs";
+import { createPlanFixture } from "./lib/plan-git-fixture.mjs";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NS = "agents";
 
 // A plan shaped as the calculations read it. deps are its depends_on ids.
 function plan(id, deps = [], overrides = {}) {
-  return { id, namespace: NS, lifecycle: "backlog", dependencies: deps, relativePath: `docs/plans/backlog/agents-${id}.md`, title: `Plan ${id}`, ...overrides };
+  return { id, namespace: NS, lifecycle: "backlog", dependencies: deps, relativePath: `plans/backlog/agents-${id}.md`, title: `Plan ${id}`, ...overrides };
 }
 function groupsOf(plans) {
   return deriveGroups(plans).groups.map((group) => group.ids);
@@ -149,43 +149,58 @@ function orderOf(saved, plans, change = null) {
   assert.ok(elapsed < 250, `5000 resolutions took ${elapsed.toFixed(1)}ms`);
 }
 
-// ---- Files: a real repository ----
-const root = fs.mkdtempSync(path.join(os.tmpdir(), "backlog-order-"));
+// ---- Files: a real repository with a plans store ----
+const fx = createPlanFixture("backlog-order-");
+const root = fx.tmp;
 const run = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-const roborepo = (cwd, ...args) => spawnSync(path.join(repoRoot, "bin", "roborepo"), ["plans", ...args], { cwd, encoding: "utf8", env: { ...process.env, ROBOREPO_STATE_ROOT: path.join(root, "state"), HOME: root } });
+const roborepo = (cwd, ...args) => fx.roborepo(["plans", ...args], { cwd });
 function document({ id, deps = [], title = id }) {
   return `---\nid: ${id}\nnext_action: Do it\ndepends_on: [${deps.join(", ")}]\n---\n\n# ${title}\n\n## Summary\n\nx\n\n## Goals\n\nx\n\n## Context\n\nx\n\n## Proposed design\n\nx\n\n## Validation\n\nx\n`;
 }
+// Plans are written only through commits to the plans branch, so a file edited here is committed at once.
+function planStore(checkout) {
+  const storeRoot = fx.storePath(checkout);
+  const commit = (message) => {
+    fx.git(storeRoot, "add", "-A", "--", "plans");
+    if (fx.tryGit(storeRoot, "diff", "--cached", "--quiet").status !== 0) fx.git(storeRoot, "commit", "--quiet", "-m", message);
+  };
+  return {
+    root: storeRoot,
+    store: locateStore(storeRoot),
+    commit,
+    write: (relative, content) => {
+      fs.mkdirSync(path.dirname(path.join(storeRoot, relative)), { recursive: true });
+      fs.writeFileSync(path.join(storeRoot, relative), content);
+      commit(`Write ${relative}`);
+    },
+    remove: (relative) => {
+      fs.rmSync(path.join(storeRoot, relative));
+      commit(`Remove ${relative}`);
+    },
+    records: () => buildRepositoryPlanSnapshot({ cwd: storeRoot }).plans,
+    index: () => buildBacklogIndex(storeRoot, buildRepositoryPlanSnapshot({ cwd: storeRoot }).plans),
+  };
+}
+const viewOf = (index, namespace) => index.namespaces.find((view) => view.namespace === namespace);
 try {
-  const repo = path.join(root, "repo");
-  const write = (relative, content) => {
-    fs.mkdirSync(path.dirname(path.join(repo, relative)), { recursive: true });
-    fs.writeFileSync(path.join(repo, relative), content);
-  };
-  const config = (namespaces) => write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces }));
-  fs.mkdirSync(repo);
-  run(repo, "init", "-q", "-b", "main");
-  run(repo, "config", "user.email", "t@example.com");
-  run(repo, "config", "user.name", "t");
-  config({ agents: "x", other: "y" });
-  write("docs/plans/backlog/agents-a.md", document({ id: "aaaaaa11" }));
-  write("docs/plans/backlog/agents-b.md", document({ id: "bbbbbb22", deps: ["aaaaaa11"] }));
-  write("docs/plans/backlog/agents-x.md", document({ id: "xxxxxx33" }));
-  write("docs/plans/backlog/other-q.md", document({ id: "qqqqqq44" }));
-  write("docs/plans/backlog/nosuch-z.md", document({ id: "zzzzzz55" }));
-  write("docs/plans/active/agents-gone.md", document({ id: "gggggg66" }));
-  run(repo, "add", ".");
-  run(repo, "commit", "-qm", "seed");
-  const orderFile = path.join(repo, "docs/plans/plans-order.json");
-
-  // Records as the CLI and the portal read them.
-  const records = async () => {
-    const { primaryCheckoutRecords } = await import("../../modules/plan-suite/repository-validation.mjs");
-    return primaryCheckoutRecords(fs.realpathSync(repo));
-  };
-  const indexed = async () => buildBacklogIndex(fs.realpathSync(repo), await records());
-  const realRepo = fs.realpathSync(repo);
-  const viewOf = (index, namespace) => index.namespaces.find((view) => view.namespace === namespace);
+  const repo = fx.repository("repo", {
+    "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { agents: "x", other: "y" } }),
+    "plans/backlog/agents-a.md": document({ id: "aaaaaa11" }),
+    "plans/backlog/agents-b.md": document({ id: "bbbbbb22", deps: ["aaaaaa11"] }),
+    "plans/backlog/agents-x.md": document({ id: "xxxxxx33" }),
+    "plans/backlog/other-q.md": document({ id: "qqqqqq44" }),
+    "plans/backlog/nosuch-z.md": document({ id: "zzzzzz55" }),
+    "plans/active/agents-gone.md": document({ id: "gggggg66" }),
+  });
+  const main = planStore(repo);
+  const { store, write } = main;
+  const realRepo = main.root;
+  const config = (namespaces) => write("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces }));
+  const orderFile = path.join(main.root, "plans/plans-order.json");
+  // `plans init` scaffolds an empty registry; the missing-file state is still readable, so start there.
+  main.remove("plans/plans-order.json");
+  const indexed = async () => main.index();
+  const records = async () => main.records();
 
   // Missing file: everything is unprioritized, and a read writes nothing.
   let index = await indexed();
@@ -199,11 +214,11 @@ try {
 
   // Save: atomic, whole-namespace, and refused when stale.
   const revision = viewOf(index, "agents").revision;
-  const saved = saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["xxxxxx33", "aaaaaa11", "bbbbbb22"], revision });
+  const saved = await saveNamespaceOrder({ store, namespace: "agents", order: ["xxxxxx33", "aaaaaa11", "bbbbbb22"], revision });
   assert.deepEqual(saved.order, ["xxxxxx33", "aaaaaa11", "bbbbbb22"]);
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")), { schemaVersion: 1, namespaces: { agents: ["xxxxxx33", "aaaaaa11", "bbbbbb22"] } });
   assert.deepEqual(fs.readdirSync(path.dirname(orderFile)).filter((name) => name.includes("tmp")), [], "no temp file is left behind");
-  assert.throws(() => saveNamespaceOrder({ root: realRepo, records: [], namespace: "agents", order: [], revision }), { code: "STALE_ORDER" }, "an old revision is refused");
+  await assert.rejects(async () => saveNamespaceOrder({ store, namespace: "agents", order: [], revision }), { code: "STALE_ORDER" }, "an old revision is refused");
   index = await indexed();
   assert.deepEqual(viewOf(index, "agents").ordered.map((block) => block.ids), [["xxxxxx33"], ["aaaaaa11", "bbbbbb22"]]);
   assert.deepEqual(viewOf(index, "agents").needsPrioritization, []);
@@ -211,34 +226,34 @@ try {
   // Returning a plan takes it out of the file and back to Needs prioritization, and only when named.
   const beforeReturn = viewOf(index, "agents").revision;
   const beforeReturnRecords = await records();
-  assert.throws(() => saveNamespaceOrder({ root: realRepo, records: beforeReturnRecords, namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], revision: beforeReturn }), { code: "INVALID_CHANGE" }, "an unnamed omission is still refused");
-  assert.throws(() => saveNamespaceOrder({ root: realRepo, records: beforeReturnRecords, namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], unprioritized: "xxxxxx33", revision: beforeReturn }), { code: "INVALID_CHANGE" });
-  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], unprioritized: ["xxxxxx33"], revision: beforeReturn });
+  await assert.rejects(async () => saveNamespaceOrder({ store, namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], revision: beforeReturn }), { code: "INVALID_CHANGE" }, "an unnamed omission is still refused");
+  await assert.rejects(async () => saveNamespaceOrder({ store, namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], unprioritized: "xxxxxx33", revision: beforeReturn }), { code: "INVALID_CHANGE" });
+  await saveNamespaceOrder({ store, namespace: "agents", order: ["aaaaaa11", "bbbbbb22"], unprioritized: ["xxxxxx33"], revision: beforeReturn });
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.agents, ["aaaaaa11", "bbbbbb22"]);
   index = await indexed();
   assert.deepEqual(viewOf(index, "agents").needsPrioritization.map((block) => block.ids), [["xxxxxx33"]]);
-  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["xxxxxx33", "aaaaaa11", "bbbbbb22"], revision: viewOf(index, "agents").revision });
+  await saveNamespaceOrder({ store, namespace: "agents", order: ["xxxxxx33", "aaaaaa11", "bbbbbb22"], revision: viewOf(index, "agents").revision });
   index = await indexed();
 
   // A dependency edit changes the revision, regroups on read, and writes nothing.
   const before = fs.readFileSync(orderFile, "utf8");
-  write("docs/plans/backlog/agents-x.md", document({ id: "xxxxxx33", deps: ["bbbbbb22"] }));
+  write("plans/backlog/agents-x.md", document({ id: "xxxxxx33", deps: ["bbbbbb22"] }));
   index = await indexed();
   assert.deepEqual(viewOf(index, "agents").ordered.map((block) => block.ids), [["aaaaaa11", "bbbbbb22", "xxxxxx33"]], "the new edge regroups the effective order");
   assert.deepEqual(viewOf(index, "agents").moves.map((move) => move.kind), ["moved"], "and the move is visible");
   assert.notEqual(viewOf(index, "agents").revision, revision);
   assert.equal(fs.readFileSync(orderFile, "utf8"), before, "read purity: the registry is untouched");
-  write("docs/plans/backlog/agents-x.md", document({ id: "xxxxxx33" }));
+  write("plans/backlog/agents-x.md", document({ id: "xxxxxx33" }));
 
   // A plan outside Backlog is pruned at the next write; an unknown id and another namespace stay.
-  fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: {
+  write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: {
     agents: ["gggggg66", "ghost123", "xxxxxx33", "aaaaaa11", "bbbbbb22", "zzzzzz55"],
     removed: ["kept1234"],
   } }));
   index = await indexed();
   assert.deepEqual(index.findings.map((item) => item.code).sort(), ["ORDER_UNAPPROVED_NAMESPACE", "ORDER_UNKNOWN_PLAN"], "unknown ids and unapproved namespaces are findings; a plan outside Backlog is not");
   assert.deepEqual(viewOf(index, "agents").moves, [], "an ignored id is not a move");
-  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["aaaaaa11", "bbbbbb22", "xxxxxx33"], revision: viewOf(index, "agents").revision });
+  await saveNamespaceOrder({ store, namespace: "agents", order: ["aaaaaa11", "bbbbbb22", "xxxxxx33"], revision: viewOf(index, "agents").revision });
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces, {
     agents: ["aaaaaa11", "bbbbbb22", "xxxxxx33", "ghost123", "zzzzzz55"],
     removed: ["kept1234"],
@@ -246,75 +261,56 @@ try {
 
   // Pins lift a namespace above alphabetical order, first pinned first, and leave every order alone.
   const orderBeforePins = JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces;
-  setNamespacePinned({ root: realRepo, namespace: "other", pinned: true });
+  await setNamespacePinned({ store, namespace: "other", pinned: true });
   index = await indexed();
   assert.deepEqual(index.namespaces.map((view) => [view.namespace, view.pinned]), [["other", true], ["agents", false]], "a pinned namespace comes first");
-  setNamespacePinned({ root: realRepo, namespace: "agents", pinned: true });
-  setNamespacePinned({ root: realRepo, namespace: "agents", pinned: true });
+  await setNamespacePinned({ store, namespace: "agents", pinned: true });
+  await setNamespacePinned({ store, namespace: "agents", pinned: true });
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).pinned, ["other", "agents"], "pinning twice records it once, in pin order");
   assert.deepEqual((await indexed()).namespaces.map((view) => view.namespace), ["other", "agents"], "pin order beats alphabetical");
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces, orderBeforePins, "pinning changes no plan's order");
-  assert.throws(() => setNamespacePinned({ root: realRepo, namespace: "nonsense", pinned: true }), /not an approved namespace/);
+  await assert.rejects(async () => setNamespacePinned({ store, namespace: "nonsense", pinned: true }), /not an approved namespace/);
   // A Save keeps the pins.
   index = await indexed();
-  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["aaaaaa11", "bbbbbb22", "xxxxxx33"], revision: viewOf(index, "agents").revision });
+  await saveNamespaceOrder({ store, namespace: "agents", order: ["aaaaaa11", "bbbbbb22", "xxxxxx33"], revision: viewOf(index, "agents").revision });
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).pinned, ["other", "agents"], "a Save preserves pins");
   // A pin on a namespace removed from the config is ignored on read and pruned at the next write.
   const pinnedFile = JSON.parse(fs.readFileSync(orderFile, "utf8"));
-  fs.writeFileSync(orderFile, JSON.stringify({ ...pinnedFile, pinned: ["gone", "agents"] }));
+  write("plans/plans-order.json", JSON.stringify({ ...pinnedFile, pinned: ["gone", "agents"] }));
   const pinsRaw = fs.readFileSync(orderFile, "utf8");
   index = await indexed();
   assert.deepEqual(index.namespaces.map((view) => [view.namespace, view.pinned]), [["agents", true], ["other", false]], "a removed namespace's pin has no effect");
   assert.equal(fs.readFileSync(orderFile, "utf8"), pinsRaw, "reading does not prune");
   assert.equal(index.findings.some((item) => /gone/.test(item.message || "")), false, "a stale pin is not a finding");
-  saveNamespaceOrder({ root: realRepo, records: await records(), namespace: "agents", order: ["aaaaaa11", "bbbbbb22", "xxxxxx33"], revision: viewOf(index, "agents").revision });
+  await saveNamespaceOrder({ store, namespace: "agents", order: ["aaaaaa11", "bbbbbb22", "xxxxxx33"], revision: viewOf(index, "agents").revision });
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).pinned, ["agents"], "the next Save prunes it");
-  setNamespacePinned({ root: realRepo, namespace: "agents", pinned: false });
+  await setNamespacePinned({ store, namespace: "agents", pinned: false });
   assert.equal("pinned" in JSON.parse(fs.readFileSync(orderFile, "utf8")), false, "with no pins the key is left out");
-  fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, pinned: "agents", namespaces: {} }));
+  write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, pinned: "agents", namespaces: {} }));
   assert.equal(readOrderRegistry(realRepo).state, "invalid", "a malformed pin list is an invalid registry");
-  assert.throws(() => setNamespacePinned({ root: realRepo, namespace: "agents", pinned: true }), /was not overwritten/);
-  fs.writeFileSync(orderFile, `${JSON.stringify({ schemaVersion: 1, namespaces: orderBeforePins }, null, 2)}\n`);
+  await assert.rejects(async () => setNamespacePinned({ store, namespace: "agents", pinned: true }), /was not overwritten/);
+  write("plans/plans-order.json", `${JSON.stringify({ schemaVersion: 1, namespaces: orderBeforePins }, null, 2)}\n`);
 
   // An invalid order is refused and writes nothing.
   index = await indexed();
-  assert.throws(() => saveNamespaceOrder({ root: realRepo, records: [], namespace: "other", order: [], revision: "x" }), { code: "STALE_ORDER" });
+  await assert.rejects(async () => saveNamespaceOrder({ store, namespace: "other", order: [], revision: "x" }), { code: "STALE_ORDER" });
   const held = fs.readFileSync(orderFile, "utf8");
   const current = await records();
-  assert.throws(() => saveNamespaceOrder({ root: realRepo, records: current, namespace: "agents", order: ["bbbbbb22", "aaaaaa11", "xxxxxx33"], revision: viewOf(index, "agents").revision }), /prerequisite/);
+  await assert.rejects(async () => saveNamespaceOrder({ store, namespace: "agents", order: ["bbbbbb22", "aaaaaa11", "xxxxxx33"], revision: viewOf(index, "agents").revision }), /prerequisite/);
   assert.equal(fs.readFileSync(orderFile, "utf8"), held);
 
-  // A failed write reaches the browser, so it carries the code and never an absolute path, and it
-  // leaves neither a temp file nor a changed registry. Stubbed because a root user ignores file modes.
-  const realRename = fs.renameSync;
-  fs.renameSync = () => {
-    throw Object.assign(new Error(`EACCES: permission denied, rename '${orderFile}'`), { code: "EACCES" });
-  };
-  try {
-    assert.throws(() => saveNamespaceOrder({ root: realRepo, records: current, namespace: "agents", order: ["xxxxxx33", "aaaaaa11", "bbbbbb22"], revision: viewOf(index, "agents").revision }), (err) => {
-      assert.equal(err.code, "ORDER_WRITE_FAILED");
-      assert.equal(err.status, 500);
-      assert.equal(err.message, "docs/plans/plans-order.json could not be written (EACCES).");
-      return true;
-    });
-  } finally {
-    fs.renameSync = realRename;
-  }
-  assert.deepEqual(fs.readdirSync(path.dirname(orderFile)).filter((name) => name.includes("tmp")), [], "a failed write removes its temp file");
-  assert.equal(fs.readFileSync(orderFile, "utf8"), held, "a failed write leaves the registry as it was");
-
   // An unparseable registry reads as unprioritized and refuses every write.
-  fs.writeFileSync(orderFile, "{ not json");
+  write("plans/plans-order.json", "{ not json");
   index = await indexed();
   assert.equal(index.registry.state, "invalid");
   assert.deepEqual(viewOf(index, "agents").ordered, []);
   assert.equal(viewOf(index, "agents").writable, false);
   assert.ok(index.findings.some((item) => item.code === "INVALID_ORDER_REGISTRY"));
-  assert.throws(() => saveNamespaceOrder({ root: realRepo, records: current, namespace: "agents", order: [], revision: viewOf(index, "agents").revision }), /was not overwritten/);
+  await assert.rejects(async () => saveNamespaceOrder({ store, namespace: "agents", order: [], revision: viewOf(index, "agents").revision }), /was not overwritten/);
   assert.equal(fs.readFileSync(orderFile, "utf8"), "{ not json", "the file a person can repair is left alone");
-  fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 2, namespaces: {} }));
+  write("plans/plans-order.json", JSON.stringify({ schemaVersion: 2, namespaces: {} }));
   assert.equal(readOrderRegistry(realRepo).state, "invalid", "an unknown schema is not guessed at");
-  fs.rmSync(orderFile);
+  main.remove("plans/plans-order.json");
 
   // The command: unprioritized by default, explicit placement, automatic attachment.
   const place = (...args) => {
@@ -331,12 +327,12 @@ try {
   const text = roborepo(repo, "order", "place", "aaaaaa11");
   assert.match(text.stdout, /namespace agents: already ranked\n/);
   assert.doesNotMatch(text.stdout, /automatic/);
-  write("docs/plans/backlog/agents-c.md", document({ id: "cccccc77", deps: ["bbbbbb22"] }));
+  write("plans/backlog/agents-c.md", document({ id: "cccccc77", deps: ["bbbbbb22"] }));
   const attached = place("cccccc77", "--bottom");
   assert.equal(attached.placed, "attached");
   assert.equal(attached.ignoredPosition, "bottom", "a dependent stays with its group whatever the flag says");
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.agents, ["aaaaaa11", "bbbbbb22", "cccccc77", "xxxxxx33"]);
-  fs.rmSync(path.join(repo, "docs/plans/backlog/agents-c.md"));
+  main.remove("plans/backlog/agents-c.md");
   const refused = roborepo(repo, "order", "place", "zzzzzz55", "--top");
   assert.equal(refused.status, 1, "a plan with no namespace cannot be ordered");
   assert.match(refused.stderr, /no approved namespace/);
@@ -345,8 +341,8 @@ try {
 
   // A broken graph: the finding blocks validation, and every write to that namespace is refused.
   const unbroken = fs.readFileSync(orderFile, "utf8");
-  write("docs/plans/backlog/agents-cycle-one.md", document({ id: "cycle111", deps: ["cycle222"] }));
-  write("docs/plans/backlog/agents-cycle-two.md", document({ id: "cycle222", deps: ["cycle111"] }));
+  write("plans/backlog/agents-cycle-one.md", document({ id: "cycle111", deps: ["cycle222"] }));
+  write("plans/backlog/agents-cycle-two.md", document({ id: "cycle222", deps: ["cycle111"] }));
   const cycleReport = roborepo(repo, "validate", "cycle111", "--json");
   assert.equal(cycleReport.status, 1, "a dependency cycle fails validation");
   const cycleFinding = JSON.parse(cycleReport.stdout).plans[0].findings.find((item) => item.code === "DEPENDENCY_CYCLE");
@@ -359,27 +355,26 @@ try {
     const lockedIndex = await indexed();
     assert.equal(viewOf(lockedIndex, "agents").locked, true);
     const lockedRecords = await records();
-    assert.throws(() => saveNamespaceOrder({ root: realRepo, records: lockedRecords, namespace: "agents", order: [], revision: viewOf(lockedIndex, "agents").revision }), /needs repair before/, `${label}: Save is refused`);
+    await assert.rejects(async () => saveNamespaceOrder({ store, namespace: "agents", order: [], revision: viewOf(lockedIndex, "agents").revision }), /needs repair before/, `${label}: Save is refused`);
     assert.equal(fs.readFileSync(orderFile, "utf8"), unbroken, `${label}: nothing is written`);
   };
   await assertLocked("a cycle");
-  fs.rmSync(path.join(repo, "docs/plans/backlog/agents-cycle-one.md"));
-  fs.rmSync(path.join(repo, "docs/plans/backlog/agents-cycle-two.md"));
-  write("docs/plans/backlog/agents-missing.md", document({ id: "miss1111", deps: ["nosuchid"] }));
+  main.remove("plans/backlog/agents-cycle-one.md");
+  main.remove("plans/backlog/agents-cycle-two.md");
+  write("plans/backlog/agents-missing.md", document({ id: "miss1111", deps: ["nosuchid"] }));
   await assertLocked("a missing prerequisite");
-  fs.rmSync(path.join(repo, "docs/plans/backlog/agents-missing.md"));
+  main.remove("plans/backlog/agents-missing.md");
 
-  // A plan that exists only in a linked worktree ranks like any other, and its place is stored in the
-  // primary checkout, never in the worktree it was run from.
+  // A place recorded from a linked worktree is stored in the plans worktree, never in the worktree
+  // it was run from.
   const linked = path.join(root, "linked");
   run(repo, "worktree", "add", "-q", "-b", "feat/linked", linked);
-  fs.writeFileSync(path.join(linked, "docs/plans/backlog/agents-new.md"), document({ id: "nnnnnn88" }));
-  const fromWorktree = roborepo(linked, "order", "place", "nnnnnn88", "--bottom", "--json");
+  const fromWorktree = roborepo(linked, "order", "place", "xxxxxx33", "--bottom", "--json");
   assert.equal(fromWorktree.status, 0, fromWorktree.stdout + fromWorktree.stderr);
-  assert.ok(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.agents.includes("nnnnnn88"), "written to the primary checkout");
-  assert.equal(fs.existsSync(path.join(linked, "docs/plans/plans-order.json")), false, "not to the worktree");
+  assert.ok(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.agents.includes("xxxxxx33"), "written to the plans worktree");
+  assert.equal(fs.existsSync(path.join(linked, "plans/plans-order.json")), false, "not to the worktree");
   run(repo, "worktree", "remove", "--force", linked);
-  fs.writeFileSync(orderFile, beforeTransition);
+  write("plans/plans-order.json", beforeTransition);
 
   // Naming gates: validate exits 1, promote refuses, and the file stays visible.
   const validated = roborepo(repo, "validate", "--json");
@@ -391,9 +386,7 @@ try {
   assert.ok(JSON.parse(promote.stdout).error.findings.some((item) => item.code === "UNKNOWN_PLAN_NAMESPACE"), "promote refuses a bad prefix");
 
   // Start applies the same gate, to a plan that reached Ready with a bad name.
-  write("docs/plans/ready/nosuch-ready.md", document({ id: "yyyyyy99" }));
-  run(repo, "add", "docs/plans/ready/nosuch-ready.md");
-  run(repo, "commit", "-qm", "misnamed ready plan");
+  write("plans/ready/nosuch-ready.md", document({ id: "yyyyyy99" }));
   const gateTree = path.join(root, "gate-tree");
   run(repo, "worktree", "add", "-q", "-b", "feat/gate", gateTree);
   const started = roborepo(repo, "start", "yyyyyy99", "--worktree", "gate-tree", "--json");
@@ -401,10 +394,10 @@ try {
   assert.ok(JSON.parse(started.stdout).error.findings.some((item) => item.code === "UNKNOWN_PLAN_NAMESPACE"), "start refuses a bad prefix");
 
   // A transition commits only the plan's paths and leaves the registry for the next write.
-  write("docs/plans/backlog/agents-a.md", document({ id: "aaaaaa11" }));
+  write("plans/backlog/agents-a.md", document({ id: "aaaaaa11" }));
   const promoted = roborepo(repo, "promote", "aaaaaa11", "--json");
   assert.equal(promoted.status, 0, promoted.stdout + promoted.stderr);
-  assert.deepEqual(run(repo, "show", "--no-renames", "--name-only", "--format=", "HEAD").trim().split("\n").sort(), ["docs/plans/backlog/agents-a.md", "docs/plans/ready/agents-a.md"]);
+  assert.deepEqual(run(main.root, "show", "--no-renames", "--name-only", "--format=", "HEAD").trim().split("\n").sort(), ["plans/backlog/agents-a.md", "plans/ready/agents-a.md"]);
   assert.equal(fs.readFileSync(orderFile, "utf8"), beforeTransition, "lifecycle commits never touch the registry");
   index = await indexed();
   assert.deepEqual(viewOf(index, "agents").ordered.map((block) => block.ids), [["bbbbbb22"], ["xxxxxx33"]], "a group splits without losing its rank");
@@ -418,7 +411,7 @@ try {
   assert.deepEqual(JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.agents.length, 4, "their order is preserved");
   config({ agents: "x", other: "y" });
 
-  write("docs/plans/plans-config.json", "{ nope");
+  write("plans/plans-config.json", "{ nope");
   assert.ok(readProjectNamespaces(realRepo).error, "malformed config is an error, not 'not configured'");
   index = await indexed();
   assert.equal(index.config.state, "invalid");
@@ -434,88 +427,66 @@ try {
   assert.ok(JSON.parse(gatedStart.stdout).error.findings.some((item) => item.code === "INVALID_PLANS_CONFIG"));
 
   // A read failure reaches /api/plans, so it carries its code and never the file's absolute path.
-  const configFile = path.join(repo, "docs/plans/plans-config.json");
+  const configFile = path.join(main.root, "plans/plans-config.json");
   fs.rmSync(configFile);
   fs.mkdirSync(configFile);
   assert.equal(readProjectNamespaces(realRepo).error, "EISDIR");
   fs.rmdirSync(configFile);
-  write("docs/plans/plans-config.json", "{ nope");
+  write("plans/plans-config.json", "{ nope");
   const orderBeforeLoop = fs.readFileSync(orderFile, "utf8");
   fs.rmSync(orderFile);
   fs.symlinkSync(orderFile, orderFile);
   assert.deepEqual(readOrderRegistry(realRepo), { state: "invalid", namespaces: {}, pinned: [], raw: "", error: "ELOOP" });
   fs.rmSync(orderFile);
-  fs.writeFileSync(orderFile, orderBeforeLoop);
+  write("plans/plans-order.json", orderBeforeLoop);
 
   // No config at all: the convention is inert.
-  fs.rmSync(path.join(repo, "docs/plans/plans-config.json"));
+  main.remove("plans/plans-config.json");
   index = await indexed();
   assert.equal(index.config.state, "none");
   assert.equal(index.namespaces.length, 0);
   assert.deepEqual(validatePlanNaming({ filename: "whatever.md", lifecycle: "backlog", projectNamespaces: [] }), [], "no config, no per-file findings");
 
-  // A branch switch changes the config on disk: each read follows the checked-out vocabulary, and the
-  // uncommitted registry stays as it was.
-  const switching = path.join(root, "switching");
-  const writeSwitching = (relative, content) => {
-    fs.mkdirSync(path.dirname(path.join(switching, relative)), { recursive: true });
-    fs.writeFileSync(path.join(switching, relative), content);
-  };
-  fs.mkdirSync(switching);
-  run(switching, "init", "-q", "-b", "main");
-  run(switching, "config", "user.email", "t@example.com");
-  run(switching, "config", "user.name", "t");
-  writeSwitching("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { agents: "x" } }));
-  writeSwitching("docs/plans/backlog/agents-a.md", document({ id: "aaaaaa11" }));
-  writeSwitching("docs/plans/backlog/other-q.md", document({ id: "qqqqqq44" }));
-  run(switching, "add", ".");
-  run(switching, "commit", "-qm", "narrow config");
-  run(switching, "switch", "-qc", "wider");
-  writeSwitching("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { agents: "x", other: "y" } }));
-  run(switching, "add", ".");
-  run(switching, "commit", "-qm", "wider config");
-  const registryJson = JSON.stringify({ schemaVersion: 1, namespaces: { other: ["qqqqqq44"] } });
-  writeSwitching("docs/plans/plans-order.json", registryJson);
-  const realSwitching = fs.realpathSync(switching);
-  const indexAfterSwitch = async (branch) => {
+  // Switching the code checkout between branches changes nothing a read sees: the vocabulary and the
+  // order come from the plans worktree, and the registry stays as it was.
+  const switching = fx.repository("switching", {
+    "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { agents: "x", other: "y" } }),
+    "plans/backlog/agents-a.md": document({ id: "aaaaaa11" }),
+    "plans/backlog/other-q.md": document({ id: "qqqqqq44" }),
+    "plans/plans-order.json": JSON.stringify({ schemaVersion: 1, namespaces: { other: ["qqqqqq44"] } }),
+  });
+  const switchingStore = planStore(switching);
+  const registryJson = fs.readFileSync(path.join(switchingStore.root, "plans/plans-order.json"), "utf8");
+  run(switching, "branch", "wider");
+  const indexAfterSwitch = (branch) => {
     run(switching, "switch", "-q", branch);
-    const { primaryCheckoutRecords } = await import("../../modules/plan-suite/repository-validation.mjs");
-    return buildBacklogIndex(realSwitching, primaryCheckoutRecords(realSwitching));
+    return buildBacklogIndex(switchingStore.root, buildRepositoryPlanSnapshot({ cwd: switching }).plans);
   };
   for (let round = 0; round < 5; round += 1) {
-    const narrow = await indexAfterSwitch("main");
-    assert.deepEqual(narrow.namespaces.map((view) => view.namespace), ["agents"], `round ${round}: main has one namespace`);
-    assert.equal(narrow.noNamespace.length, 1, `round ${round}: main has no namespace for the other plan`);
-    assert.ok(narrow.findings.some((item) => item.code === "ORDER_UNAPPROVED_NAMESPACE"), `round ${round}: main reports the saved order it cannot use`);
-    const wider = await indexAfterSwitch("wider");
-    assert.deepEqual(wider.namespaces.map((view) => view.namespace), ["agents", "other"], `round ${round}: the branch adds a namespace`);
-    assert.equal(wider.noNamespace.length, 0, `round ${round}: the branch places every plan`);
-    assert.deepEqual(viewOf(wider, "other").ordered.map((block) => block.ids), [["qqqqqq44"]], `round ${round}: the saved order applies again`);
+    for (const branch of ["main", "wider"]) {
+      const view = indexAfterSwitch(branch);
+      assert.deepEqual(view.namespaces.map((entry) => entry.namespace), ["agents", "other"], `round ${round}, ${branch}: both namespaces are approved`);
+      assert.equal(view.noNamespace.length, 0, `round ${round}, ${branch}: every plan is placed`);
+      assert.deepEqual(viewOf(view, "other").ordered.map((block) => block.ids), [["qqqqqq44"]], `round ${round}, ${branch}: the saved order applies`);
+    }
   }
-  assert.equal(fs.readFileSync(path.join(switching, "docs/plans/plans-order.json"), "utf8"), registryJson, "switching branches writes nothing to the registry");
+  assert.equal(fs.readFileSync(path.join(switchingStore.root, "plans/plans-order.json"), "utf8"), registryJson, "switching branches writes nothing to the registry");
 
   // A namespace may be named like an Object.prototype property, and a registry that has no entry for
   // it must read as empty, not as the inherited property.
-  const inherited = path.join(root, "inherited");
-  fs.mkdirSync(path.join(inherited, "docs/plans/backlog"), { recursive: true });
-  run(inherited, "init", "-q", "-b", "main");
-  const writeInherited = (relative, content) => fs.writeFileSync(path.join(inherited, relative), content);
-  writeInherited("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { constructor: "x", other: "y" } }));
-  writeInherited("docs/plans/backlog/constructor-one.md", document({ id: "cccccc11" }));
-  writeInherited("docs/plans/backlog/other-one.md", document({ id: "oooooo22" }));
-  writeInherited("docs/plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { other: ["oooooo22"] } }));
-  const realInherited = fs.realpathSync(inherited);
-  const inheritedRecords = async () => {
-    const { primaryCheckoutRecords } = await import("../../modules/plan-suite/repository-validation.mjs");
-    return primaryCheckoutRecords(realInherited);
-  };
-  const inheritedIndex = buildBacklogIndex(realInherited, await inheritedRecords());
+  const inherited = planStore(fx.repository("inherited", {
+    "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { constructor: "x", other: "y" } }),
+    "plans/backlog/constructor-one.md": document({ id: "cccccc11" }),
+    "plans/backlog/other-one.md": document({ id: "oooooo22" }),
+    "plans/plans-order.json": JSON.stringify({ schemaVersion: 1, namespaces: { other: ["oooooo22"] } }),
+  }));
+  const inheritedIndex = inherited.index();
   const constructorView = viewOf(inheritedIndex, "constructor");
   assert.deepEqual(constructorView.ordered, [], "an inherited property is not a saved order");
   assert.deepEqual(constructorView.needsPrioritization.map((block) => block.ids), [["cccccc11"]]);
-  const placedInherited = saveNamespaceOrder({ root: realInherited, records: await inheritedRecords(), namespace: "constructor", order: ["cccccc11"], revision: constructorView.revision });
+  const placedInherited = await saveNamespaceOrder({ store: inherited.store, namespace: "constructor", order: ["cccccc11"], revision: constructorView.revision });
   assert.deepEqual(placedInherited.order, ["cccccc11"], "Save writes a namespace with no entry yet");
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(inherited, "docs/plans/plans-order.json"), "utf8")).namespaces, { other: ["oooooo22"], constructor: ["cccccc11"] });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(inherited.root, "plans/plans-order.json"), "utf8")).namespaces, { other: ["oooooo22"], constructor: ["cccccc11"] });
 
   // The base branch comes from the repo, never from what happens to be checked out.
   const based = path.join(root, "based");
@@ -537,39 +508,32 @@ try {
   assert.equal(repositoryBaseBranch(based), "master", "or a local master");
 
   // A draft goes stale only for what can change its own namespace's Save, and a Save keeps the rest.
-  const scoped = path.join(root, "scoped");
-  fs.mkdirSync(path.join(scoped, "docs/plans/backlog"), { recursive: true });
-  run(scoped, "init", "-q", "-b", "main");
-  const writeScoped = (relative, content) => fs.writeFileSync(path.join(scoped, relative), content);
-  writeScoped("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { one: "x", two: "y" } }));
-  writeScoped("docs/plans/backlog/one-a.md", document({ id: "onea1111" }));
-  writeScoped("docs/plans/backlog/one-b.md", document({ id: "oneb2222" }));
-  writeScoped("docs/plans/backlog/two-a.md", document({ id: "twoa3333" }));
-  writeScoped("docs/plans/backlog/two-b.md", document({ id: "twob4444" }));
-  writeScoped("docs/plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { one: ["onea1111", "oneb2222"], two: ["twoa3333"] } }));
-  const realScoped = fs.realpathSync(scoped);
-  const scopedRecords = async () => {
-    const { primaryCheckoutRecords } = await import("../../modules/plan-suite/repository-validation.mjs");
-    return primaryCheckoutRecords(realScoped);
-  };
-  const scopedView = async (namespace) => viewOf(buildBacklogIndex(realScoped, await scopedRecords()), namespace);
-  const scopedFile = () => JSON.parse(fs.readFileSync(path.join(scoped, "docs/plans/plans-order.json"), "utf8"));
+  const scoped = planStore(fx.repository("scoped", {
+    "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { one: "x", two: "y" } }),
+    "plans/backlog/one-a.md": document({ id: "onea1111" }),
+    "plans/backlog/one-b.md": document({ id: "oneb2222" }),
+    "plans/backlog/two-a.md": document({ id: "twoa3333" }),
+    "plans/backlog/two-b.md": document({ id: "twob4444" }),
+    "plans/plans-order.json": JSON.stringify({ schemaVersion: 1, namespaces: { one: ["onea1111", "oneb2222"], two: ["twoa3333"] } }),
+  }));
+  const scopedView = async (namespace) => viewOf(scoped.index(), namespace);
+  const scopedFile = () => JSON.parse(fs.readFileSync(path.join(scoped.root, "plans/plans-order.json"), "utf8"));
   const draftRevision = (await scopedView("one")).revision;
-  setNamespacePinned({ root: realScoped, namespace: "two", pinned: true });
+  await setNamespacePinned({ store: scoped.store, namespace: "two", pinned: true });
   assert.equal((await scopedView("one")).revision, draftRevision, "pinning another namespace leaves this draft's revision alone");
-  saveNamespaceOrder({ root: realScoped, records: await scopedRecords(), namespace: "two", order: ["twob4444", "twoa3333"], revision: (await scopedView("two")).revision });
+  await saveNamespaceOrder({ store: scoped.store, namespace: "two", order: ["twob4444", "twoa3333"], revision: (await scopedView("two")).revision });
   assert.equal((await scopedView("one")).revision, draftRevision, "saving another namespace leaves this draft's revision alone");
-  saveNamespaceOrder({ root: realScoped, records: await scopedRecords(), namespace: "one", order: ["oneb2222", "onea1111"], revision: draftRevision });
+  await saveNamespaceOrder({ store: scoped.store, namespace: "one", order: ["oneb2222", "onea1111"], revision: draftRevision });
   assert.deepEqual(scopedFile(), { schemaVersion: 1, pinned: ["two"], namespaces: { one: ["oneb2222", "onea1111"], two: ["twob4444", "twoa3333"] } }, "the Save keeps the other namespace's order and pin");
-  assert.throws(() => saveNamespaceOrder({ root: realScoped, records: [], namespace: "one", order: [], revision: draftRevision }), { code: "STALE_ORDER" }, "a change to this namespace's own order still goes stale");
+  await assert.rejects(async () => saveNamespaceOrder({ store: scoped.store, namespace: "one", order: [], revision: draftRevision }), { code: "STALE_ORDER" }, "a change to this namespace's own order still goes stale");
   const beforeConfig = (await scopedView("one")).revision;
-  writeScoped("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { one: "x", two: "y", three: "z" } }));
+  scoped.write("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { one: "x", two: "y", three: "z" } }));
   assert.notEqual((await scopedView("one")).revision, beforeConfig, "a config edit still goes stale");
   const beforeDependency = (await scopedView("one")).revision;
-  writeScoped("docs/plans/backlog/one-a.md", document({ id: "onea1111", deps: ["oneb2222"] }));
+  scoped.write("plans/backlog/one-a.md", document({ id: "onea1111", deps: ["oneb2222"] }));
   assert.notEqual((await scopedView("one")).revision, beforeDependency, "a dependency edit in this namespace still goes stale");
 } finally {
-  fs.rmSync(root, { recursive: true, force: true });
+  fx.cleanup();
 }
 
 console.log("backlog order: gallery, registry, command, and gates ok");

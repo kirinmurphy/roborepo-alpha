@@ -9,6 +9,7 @@ import { SECTION_SYNONYMS, SECTION_FINDING_CODES } from "../../modules/plan-suit
 import { buildRepairPrompt } from "../../modules/plan-suite/repair-prompt.mjs";
 import { parsePlanMarkdown } from "../../modules/plan-suite/index.mjs";
 import { classifyPlanId, generatePlanId, isValidPlanId } from "../../modules/plan-suite/plan-id.mjs";
+import { createPlanFixture } from "./lib/plan-git-fixture.mjs";
 import { validatePlanNaming, readProjectNamespaces, UNIVERSAL_NAMESPACES } from "../../modules/plan-suite/naming.mjs";
 
 // The validation layer is pure — it reads a parsed document and returns findings, touching no
@@ -58,7 +59,7 @@ testForbiddenSuffixesAreReported();
 testOrdinalSeriesIsNotMistakenForAVersion();
 testNamingFindingsCarryTheirFilename();
 testRepositoryPlansProduceNoNamingFindings();
-testAuthorityFindingsExplainThemselves();
+testCopyFindingsAreGone();
 testReadyAndReviewDestinationRules();
 testReviewRecordParsing();
 console.log("ok: plan docs findings and lifecycle policy checks passed");
@@ -167,35 +168,11 @@ function testMessagesOfProjectsMessages() {
     "messagesOf must project exactly the message field, in order");
 }
 
-// The three findings about which copy of an active plan is shown are what the drawer prints, so
-// each names its worktree, says what happened in words, and offers the Git-native way out.
-function testAuthorityFindingsExplainThemselves() {
-  assert.ok(!FINDING_CODES.includes("PLAN_DIFFERS_IN_WORKTREE"), "the old divergence finding is gone");
-
-  const edited = (committed) => finding("PLAN_EDITED_OUTSIDE_WORKTREE", { meta: { worktree: "wt", committed } });
-  assert.match(edited(true).message, /^Edited outside worktree wt: .*a committed change/);
-  assert.match(edited(false).message, /an uncommitted change/);
-  assert.match(edited(false).resolution, /Merge the base branch into the worktree/);
-  assert.match(edited(false).resolution, /merges nothing/);
-
-  const reasons = {
-    "worktree-missing": "the worktree no longer exists",
-    "copy-missing": "the worktree has no readable copy of this plan",
-    "copy-not-active": "the worktree's copy is not in active/ or review/",
-    "copy-other-worktree": "the worktree's copy names a different worktree",
-    "something-new": "it could not be used",
-  };
-  for (const [reason, words] of Object.entries(reasons)) {
-    const unavailable = finding("PLAN_WORKTREE_COPY_UNAVAILABLE", { meta: { worktree: "wt", reason } });
-    assert.equal(unavailable.message, `Worktree wt's copy is unavailable: ${words}.`, reason);
-    assert.match(unavailable.resolution, /clear `worktree`/);
+// A plan has one copy, in the plans store, so no finding is about which copy of it is shown.
+function testCopyFindingsAreGone() {
+  for (const code of ["PLAN_DIFFERS_IN_WORKTREE", "PLAN_EDITED_OUTSIDE_WORKTREE", "PLAN_WORKTREE_COPY_UNAVAILABLE", "PLAN_AUTHORITY_UNCHECKED"]) {
+    assert.ok(!FINDING_CODES.includes(code), `${code} is gone`);
   }
-
-  const unchecked = finding("PLAN_AUTHORITY_UNCHECKED", { meta: { worktree: "wt", reason: "the worktree's HEAD is detached" } });
-  assert.equal(unchecked.message, "Outside edits not checked for worktree wt: the worktree's HEAD is detached.");
-  assert.match(unchecked.resolution, /Showing the worktree's copy/);
-
-  for (const item of [edited(true), unchecked]) assert.equal(item.severity, "advisory", `${item.code} never blocks`);
 }
 
 function testSortBySeverityPutsBlockingFirst() {
@@ -359,7 +336,7 @@ function repository() {
 }
 
 function planRecord() {
-  return { id: "my-plan", title: "My Plan", relativePath: "docs/plans/active/my-plan.md" };
+  return { id: "my-plan", title: "My Plan", relativePath: "plans/active/my-plan.md" };
 }
 
 function promptFor(parsed, { source = "active", destination = "completed" } = {}) {
@@ -385,7 +362,7 @@ function testRepairPromptCarriesIdentityAndLifecycles() {
   assert.match(prompt, /^\/plan-write\n/, "the prompt opens with the slash command that scopes the work, with no mode");
   assert.ok(prompt.includes("sample-repo"), "the prompt names the repository");
   assert.ok(prompt.includes("my-plan"), "the prompt names the stable plan id");
-  assert.ok(prompt.includes("docs/plans/active/my-plan.md"), "the prompt gives the repository-relative path");
+  assert.ok(prompt.includes("plans/active/my-plan.md"), "the prompt gives the repository-relative path");
   assert.ok(prompt.includes("Current lifecycle: Active"), "the prompt states where the plan is now");
   assert.ok(prompt.includes("Requested lifecycle: Completed"), "the prompt states where it was headed");
 }
@@ -406,10 +383,10 @@ function testRepairPromptListsEveryFindingAndResolution() {
 function testRepairPromptCarriesRequiredInstructions() {
   const prompt = promptFor(blockedDoc());
   assert.ok(prompt.includes("`/plan-write`"), "instructs the agent to work through /plan-write");
-  assert.ok(prompt.includes("Do not move the file"), "instructs the agent not to move the file");
-  assert.ok(prompt.includes("docs/plans/active/"), "names the source folder the file must stay in");
+  assert.ok(prompt.includes("Do not move the plan"), "instructs the agent not to move the plan");
+  assert.ok(prompt.includes("plans/active/"), "names the source folder the file must stay in");
   assert.ok(prompt.includes("Preserve the stable plan ID `my-plan`"), "instructs the agent to keep the id stable");
-  assert.ok(prompt.includes("`roborepo plans validate docs/plans/active/my-plan.md`"), "instructs the agent to validate its own work");
+  assert.ok(prompt.includes("`roborepo plans validate plans/active/my-plan.md`"), "instructs the agent to validate its own work");
 }
 
 // The record this is built from carries an absolute path internally; the caller strips it, and
@@ -445,7 +422,7 @@ function testRepairPromptListsAcceptedHeadings() {
 function testRepairPromptHandlesMissingPlanId() {
   const prompt = buildRepairPrompt({
     repository: repository(),
-    plan: { id: "", title: "Untitled Plan", relativePath: "docs/plans/backlog/untitled.md" },
+    plan: { id: "", title: "Untitled Plan", relativePath: "plans/backlog/untitled.md" },
     sourceLifecycle: "backlog",
     destinationLifecycle: "active",
     findings: validate(doc({ frontmatter: "" }), "active").findings,
@@ -494,7 +471,7 @@ function testNamingAppliesOnlyToNonTerminalLifecycles() {
     "an unclassified file already reports UNCLASSIFIED_LOCATION; its name is not the problem to fix first");
 }
 
-// docs/plans legitimately holds .DS_Store, archives, and nested directories. Reporting those as
+// The plans folder legitimately holds .DS_Store, archives, and nested directories. Reporting those as
 // malformed plans would be noise the reader has to learn to ignore.
 function testNamingSkipsNonMarkdownEntries() {
   for (const entry of [".DS_Store", "roborepo-repository-plans.zip", "roborepo_lifecycle_epic", "notes.txt"]) {
@@ -640,7 +617,6 @@ Prose before the subsections.
     findings: { open: 1, total: 2 },
     result: null,
     approval: { decision: "approved", commit: "abcdef0123", confirmedBy: "human" },
-    recovery: null,
   });
   const fenced = parsePlanMarkdown("---\nid: rev12345\n---\n\n# F\n\n```md\n## Review\n### Approval\n- Decision: approved\n```\n", {});
   assert.deepEqual(fenced.review, { present: false, findings: { open: 0, total: 0 }, result: null, approval: null }, "a fenced example is not a review record");
@@ -676,9 +652,21 @@ function testRepositoryPlansProduceNoNamingFindings() {
     "testing-validation-tiers-and-diff-scoping.md",
   ]);
 
-  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const { configured, namespaces } = readProjectNamespaces(repoRoot);
-  assert.equal(configured, true, "this repository declares plans-config.json; the fixture depends on it");
+  // The vocabulary a repository declares in its plans store's plans-config.json, read through the
+  // same reader the scanner uses.
+  const declared = ["skills", "packages", "agent-config", "harness", "plans", "onboarding", "git", "release", "local-data", "runtime", "telemetry", "session"];
+  const fx = createPlanFixture("roborepo-plan-naming-");
+  let configured;
+  let namespaces;
+  try {
+    const repo = fx.repository("naming", {
+      "plans/plans-config.json": `${JSON.stringify({ schemaVersion: 1, namespaces: Object.fromEntries(declared.map((name) => [name, `The ${name} namespace.`])) }, null, 2)}\n`,
+    });
+    ({ configured, namespaces } = readProjectNamespaces(fx.storePath(repo)));
+  } finally {
+    fx.cleanup();
+  }
+  assert.equal(configured, true, "the repository declares plans/plans-config.json in its plans store; the fixture depends on it");
   assert.ok(namespaces.length >= 10, `expected the declared vocabulary, got ${namespaces.length} namespaces`);
 
   const offenders = [];
