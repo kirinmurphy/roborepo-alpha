@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Fix the three `npm run check` failures in the state table, rerun the gate, tick Tests and docs, then run the Validation Loop and submit.
+next_action: Run the Validation Loop, then submit the plan to review and push the feature branch.
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
@@ -255,7 +255,7 @@ The modal validates and previews the title, plan ID, filename, and target folder
 - [x] **Agent permissions:** Update plan-suite skills and `manifests/inventory/agent-permissions.json` to permit named plan CLI operations, and regenerate outputs under `generated/packages/plan-suite/`. Add remote branch protection guidance.
 - [x] **Portal:** Add the not-set-up notice, the `+` button after Filters, modal `.md` upload with repo selection, validation/preview, diff confirmation for updates, and push feedback through the shared save path.
 - [x] **One-time migration:** Deliver the disposable helper, including worktree-bound plans. Verify remote persistence, and document code-branch cleanup and the rollout order. Do not retain migration logic in the product.
-- [ ] **Tests and docs:** Move plan fixtures in `scripts/test/` to the new layout, and add a store check to `scripts/test/test-cli.sh` covering the Validation list. Update the documents under Documentation impact. Run focused suite checks, `npm run test:portal-ui`, `npm run pack:dry-run`, and `npm run check`.
+- [x] **Tests and docs:** Move plan fixtures in `scripts/test/` to the new layout, and add a store check to `scripts/test/test-cli.sh` covering the Validation list. Update the documents under Documentation impact. Run focused suite checks, `npm run test:portal-ui`, `npm run pack:dry-run`, and `npm run check`.
 
 ## Validation
 
@@ -328,7 +328,7 @@ State of the work (what the checklist's unchecked items still need):
 | Agent permissions | Manifest behavior, skills, rules, triggers, generated outputs, branch protection guidance in the user guide | Nothing |
 | Portal | Not-set-up notice (empty state when scoped or alone, warning line under All repos), `+` after Filters, `plan-import-dialog.js`, `/api/plans/import` and `/preview`, `plans-import.spec.mjs` | Nothing |
 | Migration | `scripts/dev/migrate-plans-once.mjs`, rollout order in its header, `migrate-plans-once-check.mjs` in the CI group; deleted after rollout with its check | Nothing |
-| Tests | Every plan fixture is on the store. Focused checks pass: `plan-lifecycle-transitions-check`, `backlog-order-check`, `plan-store-check` (reftable and portal startup refresh included), `plan-citation-comments-check`. `npm run test:portal-ui` last passed split across runs: 249 of 252 on the full run, then the two specs holding the other 3 passed (115) after fixes. `npm run pack:dry-run` passes | `npm run check` exits 1 in `test-cli.sh`, which stops at the first fatal error, so more may follow: (1) "package mode: version reports package roots" and "setup initializes workspace format" fail on `Cannot find module <pkg-app>/modules/plan-suite/plan-store.mjs`: the script's fake package copy lacks it, and first check whether a real package ships it. (2) "skill triggers: medium-risk trigger fixtures pass": `plan-suite-init` description lost the trigger phrase "plan folders". (3) The `mcp-harness` copy dies on `plan lifecycle manifest could not be read`: `manifests/platform/plan-lifecycle.json` is missing from that copy. Then rerun the full portal suite once |
+| Tests | Every plan fixture is on the store. `npm run check` passes end to end at 54ab2bc2: 427 CLI assertions, 76 of 76 unit suites, package install, clean-machine suites, 252 portal specs. `npm run pack:dry-run` passes | Nothing |
 | Docs | Every document under Documentation impact, plus `docs/architecture/developer-runtime-container-support.md`, `usage-statusline/README.md`, and links to plan files replaced with titles and ids | Nothing known. `rename/manifest.json` still lists `docs/plans/` as an excluded path, which is harmless |
 
 Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and are in `scripts/test/check-groups.json`. `scripts/test/lib/plan-store-fixture.mjs` adds a read-only store for checks that need no remote. `scripts/test/lib/plan-git-fixture.mjs` now builds a bare origin and a store: keys under `plans/` go to the store, others to `main`.
@@ -365,6 +365,9 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 - **The uncommitted-move handling is gone from the portal.** The store restores files when a commit fails, so `MOVE_NOT_COMMITTED` no longer exists, and neither does the dialog's "Close" path for it.
 - **Reftable worktrees resolve HEAD through Git.** Every HEAD file in a reftable repository holds `ref: refs/heads/.invalid`, so `linkedWorktrees` could not find the store. It now asks Git for those worktrees only, caching on the worktree's `tables.list`, so pollers on `files` repositories stay free of subprocesses. Alternative: reading reftable's binary format, which is far more code for the same answer.
 
+- **Portal specs empty a fixture rather than delete its root.** A registered checkout whose parent is gone reads as unreadable, and Home keeps listing it, which put a stale repo ahead of the card the keyboard focus spec expects. `removeFixtureContents` leaves an empty folder in the temp directory per fixture. Alternative: changing the focus spec's expectation, which would hide stale repos from every later spec's Home only in that one test.
+- **The remote-sync menu flake stays out of this plan.** `cli-surface-integration-check.mjs` fails intermittently on the same assertion on `main` (2 of 6 runs) and on this branch; this branch does not touch that flow.
+
 ## Open Questions
 
 - **Codex in a reftable repository.** A reftable repo keeps every ref in `<common>/reftable/`, so the exact-path grants in `scripts/harnesses/codex/plans-store-grants.mjs` do not cover a store commit there. By reading the code, not measured: a Codex save would fail on the ref update. Options: grant `<common>/reftable/**` when the repo uses reftable, which lets a Codex session move any branch and goes against the grant decision above; or leave it, so Codex can't save plans in reftable repos until someone needs that. Recommendation: leave it, since this repo uses `files`. Blocked because it changes a sandbox permission. Blocks no checklist task; Claude and the portal work in reftable repos (`plan-store-check.mjs`).
@@ -372,6 +375,15 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 ## Not tested
 
 - [ ] A real Codex session with the rendered profile saves a plan. The grant list was measured with `codex exec` by hand and `codex-plans-store-grants-check.mjs` pins the rendered list, but no automated check runs Codex, which needs its login and a model call.
+
+## Review
+
+### Findings
+
+### Verification
+
+- Gate: `npm run check` passed end to end at 54ab2bc2 (427 CLI assertions, 76 of 76 unit suites, package install, four clean-machine suites, 252 portal specs). Windows installer parity skipped: `pwsh` unavailable.
+- Base failure: `scripts/test/cli-surface-integration-check.mjs` fails intermittently on `main` too, on `single-repo refresh should leave other cached ahead repos in the main list` (2 of 6 runs on an export of `main`).
 
 ## Follow-up task
 
