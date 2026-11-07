@@ -4,7 +4,7 @@
 
 An audit of the plan suite set a long-term goal: an approved plan reaches a green, mergeable pull
 request without babysitting. Clear agent friction (`vzgsx5vz`) and Deliver finished plans as a
-watched pull request ([`i5mnkm7z`](../plans/backlog/plans-suite-quick-wins-2-git-delivery.md)) cover work that can use the existing lifecycle moves.
+watched pull request (`i5mnkm7z`) cover work that can use the existing lifecycle moves.
 
 This document records what the audit recommended and those plans left out, why, and what would
 unblock each topic, so a later scoping pass does not have to repeat the audit. None of it has been
@@ -49,7 +49,7 @@ execute and spend more tokens per plan, so measure it on a real plan before tuni
 | Not tested timing | Required in prose at approval, tolerated by code through review, enforced only at close | Settle it before approval |
 | Close changing code | `/plan-close` may fix gaps with code or tests, which land on `main` with no CI and no push | Stop close from changing code. Depends on where close commits land |
 | Validator proof | The preflight cannot tell whether the validation loop actually ran | Make it prove the loop ran |
-| Approval across base merges | A clean base merge makes approval stale | Owned by [`d9ywaa8d`](../plans/backlog/plans-approval-survives-clean-base-merges.md) |
+| Approval across base merges | A clean base merge makes approval stale | Owned by `d9ywaa8d` |
 | Review on active plans | The portal menu offers Review on active plans, which lets a plan skip execute's finish | Offer finishing execution until the delivery gate passes. Needs that gate to exist as computed state |
 
 ## Validator loop
@@ -65,7 +65,7 @@ validation or record bookkeeping. The cap is now eight passes.
 
 | Topic | Recommendation | Unblocked by |
 | --- | --- | --- |
-| `roborepo plans status` | Compute it from the folder, worktree, pull request, CI, and review record. Store only what cannot be derived, such as a run marker | The GitHub host module from [`w7vls1yk`](../plans/backlog/git-github-01-agent-identity.md) |
+| `roborepo plans status` | Compute it from the folder, worktree, pull request, CI, and review record. Store only what cannot be derived, such as a run marker | The GitHub host module from `w7vls1yk` |
 | Portal "Waiting on" chip, stepper line | Show the same computed state on the page and at each skill stop | `plans status` |
 | Stall detection, notifications | Detect stalled runs, likely with a Stop hook. Notify only on entering a "waiting on you" state. RoboRepo has no notification code today | `plans status` |
 | Scheduled job | A cheap script that spends no tokens until it starts a session. Begin with execute-to-review only, opt in per plan or repo | `plans status`, the guardrails below |
@@ -93,7 +93,7 @@ position against a watcher, and session launching is still a stub.
 
 | Topic | Note |
 | --- | --- |
-| Paired-skill check | Settle required skills at `/plan-promote`, while the user is present. Build on [`ejsc769o`](../plans/backlog/skills-required-and-recommended.md) |
-| End-to-end evals | Add the full plan flow to [`0jped168`](../plans/backlog/skills-agent-behavior-evals.md), since text pins cannot prove it works |
-| Worktree-entry hook | Added to [`46qth5z8`](../plans/backlog/harness-claude-worktree-entry-and-provider-leaks.md) only if agents keep using `change_directory` after the rule change |
+| Paired-skill check | Settle required skills at `/plan-promote`, while the user is present. Build on `ejsc769o` |
+| End-to-end evals | Add the full plan flow to `0jped168`, since text pins cannot prove it works |
+| Worktree-entry hook | Added to `46qth5z8` only if agents keep using `change_directory` after the rule change |
 | `/session-close` no-push rule | Left as is, because the user does not use the command. Revisit if it conflicts with the delivery rule in practice |

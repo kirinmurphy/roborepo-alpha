@@ -4,10 +4,9 @@
 // repositories action row, and Home's scoped Token Warnings link. Two throwaway repositories with
 // real plan files run through the real hermetic server.
 import crypto from "node:crypto";
-import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
+import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
 import { addRepositorySource, patchHomeOverview, removeRepositorySources, roboRepoCard } from "./helpers.mjs";
 
 // Unique per worker: a retried worker registers fresh folders, and removing a source never forgets
@@ -15,27 +14,22 @@ import { addRepositorySource, patchHomeOverview, removeRepositorySources, roboRe
 // Lowercase hex keeps each folder name equal to its urlKey.
 let ALPHA;
 let BETA;
-let fixtureRoot;
+let fx;
 test.beforeAll(() => {
   const suffix = crypto.randomBytes(3).toString("hex");
   ALPHA = `alpha-${suffix}`;
   BETA = `beta-${suffix}`;
-  fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-scope-"));
+  fx = createPlanFixture("portal-ui-scope-");
   for (const [name, title] of [[ALPHA, "Alpha"], [BETA, "Beta"]]) {
-    const repo = path.join(fixtureRoot, name);
-    fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
-    fs.mkdirSync(path.join(repo, "docs", "plans", "active"), { recursive: true });
-    for (const level of ["high", "low"]) {
-      fs.writeFileSync(path.join(repo, "docs", "plans", "active", `${level}.md`), [
-        "---", `id: ${name}-${level}`, "next_action: Check the scope", "---", "",
-        `# ${title} ${level} plan`, "", "## Summary", "", "Scope fixture.", "",
-      ].join("\n"));
-    }
+    fx.repository(name, Object.fromEntries(["high", "low"].map((level) => [`plans/active/${level}.md`, [
+      "---", `id: ${name}-${level}`, "next_action: Check the scope", "---", "",
+      `# ${title} ${level} plan`, "", "## Summary", "", "Scope fixture.", "",
+    ].join("\n")])));
   }
 });
-test.afterAll(() => fs.rmSync(fixtureRoot, { recursive: true, force: true }));
+test.afterAll(() => fx.cleanup());
 test.beforeEach(async ({ page }) => {
-  for (const name of [ALPHA, BETA]) await addRepositorySource(page, path.join(fixtureRoot, name));
+  for (const name of [ALPHA, BETA]) await addRepositorySource(page, path.join(fx.tmp, name));
   // The board only shows once plan-suite is enabled; the hermetic machine has no packages. Matched
   // by path so scoped requests (?repo=) are patched too.
   await page.route((url) => url.pathname === "/api/plans", async (route) => {
@@ -318,11 +312,13 @@ test("Plans filters draft in a popup: Update stays disabled until something chan
   await page.goto("/plans");
   await expect(page.getByText("Alpha high plan")).toBeVisible();
   await expect(page.getByText("Monitoring")).toHaveCount(0);
-  // Filters is the right-most element of the lifecycle row, with Refresh beside the title; no row of
-  // their own above it.
+  // Filters and Import Plan end the lifecycle row, with Refresh beside the title; no row of their own
+  // above it.
   const bar = await page.locator("#lifecycle-bar").boundingBox();
   const toggle = await page.locator("#filters-toggle").boundingBox();
-  expect(Math.abs(toggle.x + toggle.width - bar.x - bar.width)).toBeLessThanOrEqual(1);
+  const add = await page.locator("#plan-import-toggle").boundingBox();
+  expect(toggle.x + toggle.width).toBeLessThanOrEqual(add.x);
+  expect(Math.abs(add.x + add.width - bar.x - bar.width)).toBeLessThanOrEqual(1);
   await expect(page.locator("#control-bar")).toHaveCount(0);
 
   const dialog = page.locator("#filters-dialog");

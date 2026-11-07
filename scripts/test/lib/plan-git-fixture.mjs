@@ -113,7 +113,8 @@ export function createPlanFixture(prefix) {
     return git(cwd, "rev-parse", "HEAD");
   };
 
-  const cleanup = () => fs.rmSync(tmp, { recursive: true, force: true });
+  // A portal under test can still be writing in a store when a suite ends.
+  const cleanup = () => fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   return { tmp, env, git, tryGit, roborepo, json, repository, initStore, storePath, clone, worktree, commit, cleanup };
 }
 

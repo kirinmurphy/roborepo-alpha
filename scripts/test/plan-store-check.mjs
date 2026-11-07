@@ -4,6 +4,9 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { addRepositorySource } from "../cli/repository-sources.mjs";
+import { startHermeticPortal } from "./lib/portal-cleanup.mjs";
 import { withInvalidatedApproval } from "../../modules/plan-suite/plan-writes.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { createPlanFixture, planDoc } from "./lib/plan-git-fixture.mjs";
@@ -217,6 +220,27 @@ try {
     assert.ok(remoteHas(reftable, "plans/active/test-table.md"), "the moves reached the remote");
   } else {
     console.log("plan-store-check: reftable section skipped; this Git cannot create reftable repositories");
+  }
+
+  // ---- the portal fetches at startup, so a plan pushed from another machine appears without a Refresh
+  const portalRepo = repository("portal-start", { "plans/backlog/test-here.md": planDoc({ id: "here0001" }) });
+  const portalMachine = clone(portalRepo, "portal-start-b");
+  git(portalMachine, "checkout", "--quiet", "-b", "repo-plans", "origin/repo-plans");
+  fx.commit(portalMachine, "A plan from elsewhere", { "plans/backlog/test-elsewhere.md": planDoc({ id: "else0001" }) });
+  git(portalMachine, "push", "--quiet", "origin", "repo-plans");
+  const portalStore = storePath(portalRepo);
+  assert.equal(fs.existsSync(path.join(portalStore, "plans/backlog/test-elsewhere.md")), false);
+  const portalState = path.join(tmp, "portal-state");
+  addRepositorySource({ path: portalRepo, stateRoot: portalState });
+  const portal = await startHermeticPortal({ env: { ...fx.env, ROBOREPO_STATE_ROOT: portalState }, readyFile: path.join(tmp, "portal.ready") });
+  try {
+    const deadline = Date.now() + 30_000;
+    while (!fs.existsSync(path.join(portalStore, "plans/backlog/test-elsewhere.md"))) {
+      assert.ok(Date.now() < deadline, "the portal's startup refresh brought in the other machine's plan");
+      await delay(200);
+    }
+  } finally {
+    await portal.stop();
   }
 
   console.log("plan-store-check: ok");

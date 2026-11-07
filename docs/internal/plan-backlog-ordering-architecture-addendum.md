@@ -11,17 +11,17 @@ Keep plan documents as Markdown, preserve existing stable IDs and real dependenc
 
 The published `plan-write` schema currently establishes:
 
-- `docs/plans/<lifecycle>/<namespace>-<slug>.md`; the directory determines lifecycle.
+- `plans/<lifecycle>/<namespace>-<slug>.md`; the directory determines lifecycle.
 - An opaque, immutable, repository-local `id` (normally 6–8 lowercase base36 characters).
 - `depends_on` as an array of plan IDs, supporting more than one prerequisite.
-- Approved project namespaces from `docs/plans/plans-config.json`, supplemented by plan-suite universal namespaces.
+- Approved project namespaces from `plans/plans-config.json`, supplemented by plan-suite universal namespaces.
 
 See the repository's `plan-write/SKILL.md` and `references/plan-schema.md`. `docs/user/reference/plans-portal.md` describes the behavior as implemented; this note records the design and the UI contract.
 
 ## Proposed storage layout
 
 ```text
-docs/plans/
+plans/
   plans-config.json
   plans-order.json
   backlog/
@@ -72,7 +72,7 @@ worktree:
 
 ### 2. Repository namespace vocabulary
 
-`docs/plans/plans-config.json` remains the authority for project namespaces. The plan-suite universal namespaces remain permitted under the existing rules.
+`plans/plans-config.json` remains the authority for project namespaces. The plan-suite universal namespaces remain permitted under the existing rules.
 
 A reader resolves the namespace using the **longest valid namespace prefix followed by `-`**. This matters when both `plan` and `plan-lifecycle` are legal prefixes. `plan-lifecycle-foo.md` must resolve to `plan-lifecycle`, not `plan`.
 
@@ -85,7 +85,7 @@ A reader resolves the namespace using the **longest valid namespace prefix follo
 
 ### 2a. Observing `plans-config.json` changes
 
-Namespace classification is a derived index keyed by **repository, approved namespace vocabulary revision, and plan filename**. The resolver must not cache a vocabulary indefinitely. Watch or invalidate on `docs/plans/plans-config.json` create/edit/delete, repository/branch switch, and plan snapshot refresh; verify the config revision on Backlog load and again before committing an Ordering draft. Use the existing repository observation mechanism when available; watcher notifications alone are not a correctness guarantee.
+Namespace classification is a derived index keyed by **repository, approved namespace vocabulary revision, and plan filename**. The resolver must not cache a vocabulary indefinitely. Watch or invalidate on `plans/plans-config.json` create/edit/delete, repository/branch switch, and plan snapshot refresh; verify the config revision on Backlog load and again before committing an Ordering draft. Use the existing repository observation mechanism when available; watcher notifications alone are not a correctness guarantee.
 
 | Event | Classification / UI | Ordering registry |
 | --- | --- | --- |

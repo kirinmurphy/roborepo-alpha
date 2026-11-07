@@ -11,7 +11,8 @@ How the `/plans` page is built, for people changing it. User-facing behavior is 
 The page uses:
 
 - `modules/plan-suite/index.mjs` for parsing, validation, Git metadata, rendering, and prompt generation
-- `modules/plan-suite/canonical-scan.mjs` and `checkouts.mjs` for the snapshot: every checkout of each visible registry repository, merged by plan `id` with the main checkout canonical
+- `modules/plan-suite/plan-store.mjs` for the one copy of a repository's plans: locating the reserved worktree, the lock, and fetch, commit, and push (see below)
+- `modules/plan-suite/canonical-scan.mjs` and `checkouts.mjs` for the snapshot: each visible registry repository's plans worktree, plus its checkouts for Home and worktree joins
 - `modules/repositories/discovery-walk.mjs` for the bounded folder walk that `roborepo plans repair` uses
 - `manifests/platform/plan-lifecycle.json` and `modules/plan-suite/lifecycle-manifest.mjs` for the lifecycle model (see below)
 - `modules/plan-suite/transition.mjs` for every committed lifecycle move (see below)
@@ -24,13 +25,36 @@ The page uses:
   header, navigation, active-page state, updated-at text, theme toggle, and shared hidden-element
   behavior
 
-The portal writes `plans-order.json` under `docs/plans/`: `POST /api/plans/order` saves a namespace's
-Backlog order and `POST /api/plans/namespace-pin` sets its pin (see "Backlog ordering" below). Its one
-lifecycle change is `POST /api/plans/archive`, which retires one unprioritized Backlog plan through the same
-`transitionPlan` as `roborepo plans archive`, committing on the base branch. Every other lifecycle
-change is made by the plan suite's commands. Which
+Every portal write goes through the store: `POST /api/plans/order` saves a namespace's Backlog order
+and `POST /api/plans/namespace-pin` sets its pin (see "Backlog ordering" below). `POST /api/plans/archive`
+retires one unprioritized Backlog plan through the same `transitionPlan` as `roborepo plans archive`.
+`POST /api/plans/import` saves an uploaded plan through the same `savePlan` as `roborepo plans save`.
+Every other lifecycle change is made by the plan suite's commands. Which
 repositories Plans reads is decided by the repository registry and its sources
 (`scripts/cli/repository-sources.mjs`), not by Plans.
+
+## Plan Store
+
+`plan-store.mjs` owns `origin/repo-plans` and its reserved worktree. It knows nothing about what a plan
+means. `locateStore` finds the worktree by its checked-out branch through `linkedWorktrees`, which reads
+Git's administrative files so the portal's fingerprint poll spawns nothing; only a reftable repository,
+whose HEAD files hold a placeholder, asks Git, and caches the answer on `tables.list`.
+
+`mutateStore({ store, operation })` holds a repository-level lock, fetches and fast-forwards, runs the
+operation, commits only the paths it returned, and pushes. The operation reads the fresh tree and returns
+`{ files, message, result }` without writing, so a rejected push can re-run it and `plans-order.json` is
+recomputed rather than merged. A remote change to the same plan refuses with `PLAN_STORE_CONFLICT`. An
+unreachable remote keeps the commit and returns `synchronized: false`; `refreshStore`, which portal
+startup and Refresh call, or the next mutation that reaches the remote, pushes pending commits first. Content identical to the file commits
+nothing. A failed write or commit restores every touched file.
+
+Store commands run with hooks disabled, because a repository's code hooks can't pass on a tree holding
+only plans, and network Git gets a longer timeout through `runGitProcess` without blocking the server's
+event loop. `linkedWorktrees` filters the reserved branch out unless the store asks for it, so a new
+consumer can't list it by accident.
+
+`plan-writes.mjs` holds the named writes (`savePlan`, `approvePlan`, `setConfigNamespaces`). `plan-git.mjs`
+holds code-branch helpers only.
 
 ## Scan Cache
 
@@ -55,15 +79,9 @@ becomes a section, a task, or a `## Not tested` entry. Cross-plan relationship f
 to a copy of each cached record's validation, never to the cached record itself, so a rescan reports
 each one once.
 
-`roborepo plans validate` (`repository-validation.mjs`) builds the same records for the one
-repository containing the current directory. From the main checkout it scans that checkout and its
-linked worktrees with `scanCheckout` and `selectRecords`, under one repository identity, so each
-Active or Review plan is validated from its authoritative copy and the CLI and the page report
-identical findings. From a linked worktree it validates that checkout's own copies through
-`buildRepositoryPlanSnapshot`, which is what a suite skill working in the worktree wants. Each result
-names the copy it validated (`validated.source`: `worktree`, `primary`, or `checkout`). The
-transitions also use `buildRepositoryPlanSnapshot`, from the primary checkout, because they move the
-primary copy.
+`roborepo plans validate` (`repository-validation.mjs`) builds the same records for the repository
+containing the current directory through `buildRepositoryPlanSnapshot`, which reads the store, so the
+CLI, the transitions, and the page report identical findings from any checkout.
 
 Lifecycle findings are visible in plan records and through `roborepo plans validate`. The portal has
 no lifecycle mutation route or move dialog; every move goes through the transition operation below.
@@ -72,7 +90,7 @@ no lifecycle mutation route or move dialog; every move goes through the transiti
 
 | Module | Owns |
 | --- | --- |
-| `modules/plan-suite/naming.mjs` | `resolvePlanNamespace`: longest approved prefix. `plan.namespace` is computed in `buildPlanRecord`, then recomputed against the primary checkout's vocabulary in `repositoryPlanRecords` |
+| `modules/plan-suite/naming.mjs` | `resolvePlanNamespace`: longest approved prefix. `plan.namespace` is computed in `buildPlanRecord`, then recomputed against the store's vocabulary in `repositoryPlanRecords` |
 | `modules/plan-suite/backlog-order.mjs` | Pure calculations: `findDependencyCycles`, `deriveGroups`, `proposeOrder` |
 | `modules/plan-suite/backlog-registry.mjs` | The registry file: `buildBacklogIndex` (the snapshot's `backlog` field), `saveNamespaceOrder`, `placePlan`, and the private `applyOrder` both of those end in |
 | `portal/plans/backlog-model.js` | Pure browser model: URL level, directory counts, prerequisite status, Next up, draft moves on whole blocks |
@@ -81,8 +99,7 @@ no lifecycle mutation route or move dialog; every move goes through the transiti
 The index is calculated from the plans, the config, and the registry on every read and never written,
 so a dependency edit regroups on the next load and reaches the file at the next write. A transition
 commits only the plan's own paths (an archive adds the dependents it clears) and never touches the registry; `applyOrder` is where a plan that
-left Backlog is pruned. Registry reads and writes always use the primary checkout, including for a
-worktree-only plan.
+left Backlog is pruned. Registry reads and writes use the store.
 
 A draft carries the namespace's revision: a hash of the config bytes, the namespace's saved order, and
 each namespace plan's id, filename, and `depends_on`. Pins and other namespaces' orders are left out,
@@ -112,7 +129,6 @@ compiles frozen lookups (`LIFECYCLE_MODEL`). The manifest names states and does 
 | `index.mjs` | `LIFECYCLES` (the folders) and `PLAN_SUITE_COMMANDS` (every action's command) |
 | `lifecycle-policy.mjs` | destination validators keyed by state id; `plan-lifecycle-manifest-check.mjs` asserts every folder has one |
 | `naming.mjs` | naming applies to states with an outgoing transition |
-| `plan-authority.mjs` | worktree-bound states, whose assigned worktree holds the authoritative copy |
 | `scripts/cli/worktree-policy.mjs` | worktrees a worktree-bound plan names are never cleaned up automatically |
 | `scripts/cli/repository-overview-sources.mjs` | Home joins worktree-bound plans to their worktree rows |
 | `canonical-scan.mjs` | publishes `lifecycleProjection()` as the snapshot's `lifecycle` field |
@@ -121,39 +137,29 @@ The portal never imports the manifest. `portal/plans/lifecycle.js` holds the pro
 receives in its plans snapshot (`setLifecycleModel`), and tabs, labels, and
 actions (`portal/plans/plan-actions.js`) read it from there.
 
-While a plan is in Review its worktree copy may still be in `active/`. `plan-copies.mjs` reads the
-worktree's copy under the primary copy's stage (`readPlanRecord(..., { lifecycle })`) and records
-`primaryRelativePath` when the paths differ.
-
 ## Lifecycle Transitions
 
 `transition.mjs` is the one operation behind `roborepo plans promote|start|submit|reopen|close|archive`.
-It runs from the primary checkout on the base branch and:
+It runs from any checkout, inside one `mutateStore` operation, which it may re-run on a rejected push:
 
-1. resolves the plan from the primary checkout and checks the move against the manifest;
-2. refuses when the plan's own paths have uncommitted changes, except for transitions that carry
-   the command's own edits (`promote`, `close`); unrelated work never blocks it;
-3. applies the transition's rules from `transition-rules.mjs` — `start` writes `worktree`, `submit`
-   runs the completion preflight, `close` checks integration (`copy-integration.mjs`), approval
-   freshness, and landing (`landing-gate.mjs` over `modules/repositories/worktree-landed.mjs`, which
-   verifies the plan's recorded absorbing commit before scanning), `archive` applies the copy
-   carry and writes the reason, and declares `clearsReferences`, which removes the plan's id from the
-   `depends_on` and `blocked_by` of unfinished plans not bound to a worktree;
-4. validates the content it will commit against the destination (`ready` and `completed` tolerate no
+1. resolves the plan from the fresh store and checks the move against the manifest;
+2. applies the transition's rules from `transition-rules.mjs` — `start` writes `worktree`, `submit`
+   runs the completion preflight, `reopen` invalidates any approval, `close` checks approval
+   freshness and landing (`landing-gate.mjs` over `modules/repositories/worktree-landed.mjs`, which
+   verifies the plan's recorded absorbing commit before scanning) and clears `next_action`, and
+   `archive` writes the reason and declares `clearsReferences`, which removes the plan's id from the
+   `depends_on` and `blocked_by` of unfinished plans;
+3. validates the content it will commit against the destination (`ready` and `completed` tolerate no
    findings, `active` and `review` tolerate `UNCONFIRMED_NOT_TESTED`, `archived` checks only its
    own rules), refusing with the findings and a repair prompt;
-5. `git mv`, writes the content, commits with `--only` the old and new paths plus any cleared dependents, and returns six
-   post-commit checks from `transition-checks.mjs`. If the edits can't be written or staged, the
-   rename and edits are undone and the move fails. If that undo fails too, it raises
-   `MOVE_NOT_COMMITTED` and warns that committing the staged rename would leave the edits out. If the
-   commit itself fails, the whole move stays staged and raises `MOVE_NOT_COMMITTED`, which names the
-   new path and how to finish or undo it.
+4. returns the old and new paths plus any cleared dependents for the store to commit, then returns six
+   post-commit checks from `transition-checks.mjs`. The store refuses when any of those paths has
+   uncommitted edits in the plans worktree.
 
-A plan already at the destination returns `alreadyRecorded` without rerunning the gates; for
-`promote` and `close` it commits the command's pending edits to the plan, if any. If the plan's move
-was never committed, the transition refuses with `MOVE_NOT_COMMITTED` instead. It can't tell which
-failure left the move staged, so it says when committing is safe and what restoring discards. Git access for these
-modules is in `plan-git.mjs`.
+A plan already at the destination returns `alreadyRecorded` without rerunning the gates. `--base` names
+the code branch the gates compare against. `landing-gate.mjs` accepts a reachable branch tip for Review
+and Completed plans, because a fast-forward merge reads as "no own work" to the generic branch check and
+the completion preflight already proved the branch had commits.
 
 ## API
 
@@ -167,7 +173,9 @@ All routes are served by the loopback-only portal server.
 | `/api/plans/order` | POST | save one namespace's whole Backlog order, guarded by its revision |
 | `/api/plans/namespace-pin` | POST | pin or unpin one namespace in `plans-order.json` |
 | `/api/plans/archive` | POST | archive one unprioritized Backlog plan with a reason; refuses a ranked plan |
-| `/api/plans/refresh` | POST | rebuild the in-memory snapshot |
+| `/api/plans/import/preview` | POST | what an uploaded plan would do, with a diff for an existing id; writes nothing |
+| `/api/plans/import` | POST | save an uploaded plan through `savePlan`; 4 MB body limit |
+| `/api/plans/refresh` | POST | fetch each store, push pending commits, and rebuild the in-memory snapshot |
 
 POST routes require the same origin and per-server mutation token protections as other portal
 mutations.
@@ -185,7 +193,8 @@ current snapshot and rechecks repository boundaries before reading document cont
 - `modules/plan-suite/index.mjs`
 - `modules/plan-suite/lifecycle-manifest.mjs`
 - `modules/plan-suite/transition.mjs`, `transition-rules.mjs`, `transition-checks.mjs`
-- `modules/plan-suite/review-gates.mjs`, `review-record.mjs`, `copy-integration.mjs`, `sync-base.mjs`
+- `modules/plan-suite/review-gates.mjs`, `review-record.mjs`, `sync-base.mjs`
+- `modules/plan-suite/plan-store.mjs`, `plan-writes.mjs`, `plan-git.mjs`
 - `scripts/cli/plans.mjs`, `plans-command.mjs`
 - `scripts/cli/package-status.mjs`
 - `scripts/cli/portal-server.mjs`
@@ -196,7 +205,7 @@ current snapshot and rechecks repository boundaries before reading document cont
 - `portal/plans/lifecycle.js`, `portal/plans/plan-actions.js`
 - `portal/plans/styles.css`
 - `globals/packages/plan-suite/` (the six plan skills and the Code Outlives Plans rules fragment), `globals/packages/session-close/`
-- `scripts/test/plan-suite-check.mjs`, `plan-suite-findings-check.mjs`, `plan-suite-commands-check.mjs`
+- `scripts/test/plan-store-check.mjs`, `plan-suite-check.mjs`, `plan-suite-findings-check.mjs`, `plan-suite-commands-check.mjs`
 - `scripts/test/plan-lifecycle-manifest-check.mjs`, `plan-lifecycle-transitions-check.mjs`, `plan-sync-base-check.mjs`
 
 ## Checks To Run
@@ -204,6 +213,7 @@ current snapshot and rechecks repository boundaries before reading document cont
 Targeted checks:
 
 ```sh
+node scripts/test/plan-store-check.mjs
 node scripts/test/plan-suite-check.mjs
 node scripts/test/plan-suite-findings-check.mjs
 node scripts/test/plan-suite-commands-check.mjs
@@ -222,16 +232,7 @@ Broad smoke after shared portal or package changes:
 npm test
 ```
 
-## Evidence-only landed recovery
+## Merge Readiness
 
-`landed-recovery.mjs` parses `### Post-merge recovery` under Review and verifies the narrow primary
-evidence exception. The authority scanner, authoritative Markdown reader, approval/review gates,
-and integration checks share that predicate. It checks committed evidence, repository and assigned
-worktree identity, precursor blobs already on base, unchanged requirements/findings/assignment,
-complete review and explicit approval, exact implementation, and the absorbing first-parent base
-commit. Temporary merge objects do not persist. Missing/detached worktrees remain unavailable.
-
-A qualifying record retains primary authority and reason `verified-landed-recovery`; evidence
-selection grants no general primary write authority. Base refs, including refs not checked out anywhere, participate
-in snapshot invalidation. `mergeReadiness` additionally requires a committed packet, clean index
-and filesystem, and a current reviewed base implementation before merging.
+`mergeReadiness` requires a committed review packet, a clean index and filesystem, and a current
+reviewed base implementation before merging.

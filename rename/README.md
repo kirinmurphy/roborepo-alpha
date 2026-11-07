@@ -39,7 +39,7 @@ npm run check && npm test               # full gate
 
 ## What the tool will NOT do (by design)
 
-- `docs/plans/`, `sketches/`, `portal/mockups/` — historical/design artifacts stay as-written
+- plans on the `repo-plans` branch, `sketches/`, `portal/mockups/` — historical/design artifacts stay as-written
 - `generated/` — regenerate from source instead (or `--include-generated`)
 - `.git`, `node_modules`, binaries, lockfile data, `rename/` itself
 - Ambiguous case mixes (`RoBoRePo`) without `--ack`

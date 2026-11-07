@@ -19,7 +19,7 @@ import { saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite
 import { plannableRepositories } from "../../modules/plan-suite/canonical-scan.mjs";
 import { repositoryCheckouts } from "../../modules/plan-suite/checkouts.mjs";
 import { pathFreeFileError } from "../../modules/plan-suite/naming.mjs";
-import { locateStore, refreshStore } from "../../modules/plan-suite/plan-store.mjs";
+import { PLANS_ORDER_RELATIVE_PATH, locateStore, refreshStore } from "../../modules/plan-suite/plan-store.mjs";
 import { git, repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
 import { SHORT_ID_PATTERN } from "../../modules/plan-suite/plan-id.mjs";
 import { planSaveChange, savePlan } from "../../modules/plan-suite/plan-writes.mjs";
@@ -106,6 +106,8 @@ export async function saveBacklogOrder({ repositoryId, namespace, order, unprior
   if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
   try {
     return await saveNamespaceOrder({ store: locateStore(repository.root), namespace, order, unprioritized, revision });
+  } catch (err) {
+    throw browserSafeOrderError(err);
   } finally {
     cachedSnapshot = null;
   }
@@ -118,6 +120,8 @@ export async function setBacklogNamespacePinned({ repositoryId, namespace, pinne
   if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
   try {
     return await setNamespacePinned({ store: locateStore(repository.root), namespace, pinned });
+  } catch (err) {
+    throw browserSafeOrderError(err);
   } finally {
     cachedSnapshot = null;
   }
@@ -198,6 +202,13 @@ function browserSafeArchiveError(err) {
   const detail = err.syscall ? pathFreeFileError(err) : err.message;
   return domainError("MOVE_FAILED", `This plan could not be archived: ${detail}`, {
     resolution: "Run `git status` in the repo, resolve what it shows, then try again.",
+  });
+}
+
+function browserSafeOrderError(err) {
+  if (err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) return err;
+  return domainError("PLAN_STORE_FAILED", `${PLANS_ORDER_RELATIVE_PATH} could not be written${err.syscall ? ` (${err.code})` : ""}.`, {
+    resolution: "Press Refresh, then try again. `roborepo plans init` repairs a damaged plans worktree.",
   });
 }
 

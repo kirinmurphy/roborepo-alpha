@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import http from "node:http";
-import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
+import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
 import { backlogUrlFor } from "./helpers.mjs";
 import { codexHookGuidance } from "../../harnesses/codex/hook-guidance.mjs";
 import { buildBehaviorView } from "../../cli/config.mjs";
@@ -1721,8 +1721,10 @@ test.describe("repository-first portal Home", () => {
   test("a long worktree path is middle-truncated to 50 characters, and copies and titles in full", async ({ page }) => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     const longPath = "/Users/someone/.worktrees/roborepo/claude/a-very-long-feature-branch-worktree-name";
+    const planPath = "/Users/someone/.worktrees/roborepo/repo_plans/plans/active/a-very-long-plan-file-name.md";
     await planFixture(page, (repository) => {
       repository.domains.runtime.data.checkouts.find((checkout) => checkout.rootId === "matched").projectRoot = longPath;
+      repository.domains.plans.data.active.find((plan) => plan.id === "a").planPath = planPath;
     });
     await page.goto("/");
     const card = roboRepoCard(page);
@@ -1733,7 +1735,6 @@ test.describe("repository-first portal Home", () => {
     await card.getByRole("button", { name: "Copy worktree path" }).click();
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(longPath);
 
-    const planPath = `${longPath}/docs/plans/active/plan-a.md`;
     const planValue = card.locator(".worktree-details .worktree-detail-value").nth(2);
     await expect(planValue).toHaveText(/^.{50}$/);
     await expect(planValue).toHaveAttribute("title", planPath);
@@ -2184,7 +2185,7 @@ test.describe("repository-first portal Home", () => {
     // Repository names are plain text while the detail page is parked, so the first card control is
     // the provider link (when the repository has one) or the first page shortcut.
     const firstCardControl = await focusSummary(page);
-    expect(["GitHub", "All Plans"]).toContain(firstCardControl.ariaLabel);
+    expect(["GitHub", "All Plans", "Agent Config"]).toContain(firstCardControl.ariaLabel);
     expect(firstCardControl.visible).toBe(true);
     // Home's harness-banner request for /api/settings is never awaited here, so on a slow runner it
     // can still be in flight through the patched route when the test ends.
@@ -2220,21 +2221,22 @@ function focusSummary(page) {
   });
 }
 
-// One real plan through the real plans pipeline: a throwaway repository with a docs/plans file,
+// One real plan through the real plans pipeline: a throwaway repository with a plans store,
 // added as a repository source through the same API the Manage repositories dialog uses.
 test.describe("shared plan drawer", () => {
+  let fx;
   let planRoot;
   test.beforeAll(() => {
-    planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-plans-"));
-    fs.mkdirSync(path.join(planRoot, ".git"));
-    fs.mkdirSync(path.join(planRoot, "docs", "plans", "active"), { recursive: true });
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "drawer-fixture.md"), [
-      "---", "id: drawerfx", "next_action: Check the drawer", "---", "",
-      "# Drawer fixture plan", "", "## Summary", "", "Body text for the drawer.", "",
-      "## Tasks", "", "- [x] First task", "- [ ] Second task", "",
-    ].join("\n"));
+    fx = createPlanFixture("portal-ui-plans-");
+    planRoot = fx.repository(`drawer-${Math.random().toString(36).slice(2, 8)}`, {
+      "plans/active/drawer-fixture.md": [
+        "---", "id: drawerfx", "next_action: Check the drawer", "---", "",
+        "# Drawer fixture plan", "", "## Summary", "", "Body text for the drawer.", "",
+        "## Tasks", "", "- [x] First task", "- [ ] Second task", "",
+      ].join("\n"),
+    });
   });
-  test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
+  test.afterAll(() => fx.cleanup());
   test.beforeEach(async ({ page }) => addRepositorySource(page, planRoot));
   test.afterEach(async ({ page }) => removeRepositorySources(page));
 
@@ -2285,23 +2287,6 @@ test.describe("shared plan drawer", () => {
     await expect(toast).toBeVisible();
   });
 
-  test("the drawer says when an active plan is read from its worktree", async ({ page }) => {
-    await page.route("**/api/plans", async (route) => {
-      const data = await (await route.fetch()).json();
-      data.planSuitePackage = { ...data.planSuitePackage, available: true, enabled: true };
-      await route.fulfill({ json: data });
-    });
-    await page.route("**/api/plans/document?*", async (route) => {
-      const doc = await (await route.fetch()).json();
-      doc.plan.plan.authority = { source: "worktree", worktree: "feature-x" };
-      await route.fulfill({ json: doc });
-    });
-    await page.goto("/plans");
-    await page.getByText("Drawer fixture plan").first().click();
-    const drawer = page.locator("dialog#drawer");
-    await expect(drawer.locator("#drawer-meta")).toContainText("From worktree feature-x");
-  });
-
   test("a Home plan title opens the same drawer, read-only, without leaving Home", async ({ page }) => {
     const plans = await (await page.request.get("/api/plans")).json();
     const record = plans.plans.find((item) => item.plan.title === "Drawer fixture plan");
@@ -2345,24 +2330,27 @@ test.describe("shared plan drawer", () => {
 
 test.describe("Plans card commands", () => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
+  let fx;
+  let store;
   let planRoot;
   const plan = (id, title, tasks) => [
     "---", `id: ${id}`, "next_action: Do the next thing", "---", "",
     `# ${title}`, "", "## Summary", "", "Body.", "", "## Tasks", "", tasks, "",
   ].join("\n");
   test.beforeAll(() => {
-    planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-commands-"));
-    fs.mkdirSync(path.join(planRoot, ".git"));
-    for (const lifecycle of ["backlog", "ready", "active", "review"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "card-backlog.md"), plan("cardbk01", "Backlog card plan", "- [ ] Todo"));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "ready", "card-ready.md"), plan("cardrd01", "Ready card plan", "- [ ] Todo"));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "card-done.md"), plan("cardac01", "Finished card plan", "- [x] Done"));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "card-findings.md"),
-      plan("cardrv01", "Findings card plan", "- [x] Done\n\n## Review\n\n### Findings\n\n- [ ] Missing retry test"));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "card-approved.md"),
-      plan("cardrv02", "Approved card plan", "- [x] Done\n\n## Review\n\n### Approval\n\n- Decision: approved\n- Reviewed implementation commit: 0123456789abcdef0123456789abcdef01234567\n- Confirmed by: human"));
+    fx = createPlanFixture("portal-ui-commands-");
+    planRoot = fx.repository(`commands-${Math.random().toString(36).slice(2, 8)}`, {
+      "plans/backlog/card-backlog.md": plan("cardbk01", "Backlog card plan", "- [ ] Todo"),
+      "plans/ready/card-ready.md": plan("cardrd01", "Ready card plan", "- [ ] Todo"),
+      "plans/active/card-done.md": plan("cardac01", "Finished card plan", "- [x] Done"),
+      "plans/review/card-findings.md":
+        plan("cardrv01", "Findings card plan", "- [x] Done\n\n## Review\n\n### Findings\n\n- [ ] Missing retry test"),
+      "plans/review/card-approved.md":
+        plan("cardrv02", "Approved card plan", "- [x] Done\n\n## Review\n\n### Approval\n\n- Decision: approved\n- Reviewed implementation commit: 0123456789abcdef0123456789abcdef01234567\n- Confirmed by: human"),
+    });
+    store = fx.storePath(planRoot);
   });
-  test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
+  test.afterAll(() => fx.cleanup());
   test.beforeEach(async ({ page }) => {
     await addRepositorySource(page, planRoot);
     await page.route(/\/api\/plans(\?|$)/, async (route) => {
@@ -2398,7 +2386,7 @@ test.describe("Plans card commands", () => {
       await expect(page.locator("#toast")).toContainText(`Copied the /${command} prompt`);
       expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(new RegExp(`^/${command}\\n`));
       if (tab === "Review") await expect(card.getByRole("button", { name: "Archive" })).toHaveCount(0);
-      expect(fs.existsSync(path.join(planRoot, "docs", "plans", folder)), `${folder} stays where it was`).toBe(true);
+      expect(fs.existsSync(path.join(store, "plans", folder)), `${folder} stays where it was`).toBe(true);
       if (tab === "Backlog" || tab === "Ready") {
         await card.getByRole("button", { name: title, exact: false }).first().click();
         const drawer = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
