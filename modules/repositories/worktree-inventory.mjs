@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { runGitProcessSync } from "./git-exec.mjs";
 import { mainCheckoutPath, resolveGitDir } from "./identity.mjs";
 import { checkoutRootsFor } from "./registry.mjs";
 
@@ -19,9 +20,14 @@ export function repositoryWorktrees(registry, repositoryId, options = {}) {
 // it is never a cleanup candidate, a Home worktree, or a place a plan can be implemented.
 export const RESERVED_PLANS_BRANCH = "repo-plans";
 
+// A reftable repository keeps refs in binary tables and leaves this placeholder in every HEAD file.
+const REFTABLE_HEAD_PLACEHOLDER = "ref: refs/heads/.invalid";
+const reftableHeads = new Map();
+
 // Git keeps one administrative directory per linked worktree. Read it directly so inventory does
-// not spawn a Git process for every checkout during a Runtime refresh. The reserved plans worktree is
-// left out unless the caller is the plan store.
+// not spawn a Git process for every checkout during a Runtime refresh. Only a reftable worktree needs
+// Git, and only when its table list changed. The reserved plans worktree is left out unless the
+// caller is the plan store.
 export function linkedWorktrees(commonDir, { fsApi = fs, includeReserved = false } = {}) {
   let names;
   try {
@@ -41,7 +47,8 @@ export function linkedWorktrees(commonDir, { fsApi = fs, includeReserved = false
     const checkoutPath = path.dirname(path.resolve(adminDir, gitFile));
     const root = realpathOrNull(checkoutPath, fsApi);
     const prunable = !root || !isDirectory(root, fsApi);
-    const head = readOrNull(path.join(adminDir, "HEAD"), fsApi)?.trim() || null;
+    const headFile = readOrNull(path.join(adminDir, "HEAD"), fsApi)?.trim() || null;
+    const head = headFile === REFTABLE_HEAD_PLACEHOLDER ? reftableHead(adminDir, fsApi) : headFile;
     const branch = head?.startsWith("ref: refs/heads/") ? head.slice("ref: refs/heads/".length) : null;
     if (branch === RESERVED_PLANS_BRANCH && !includeReserved) continue;
     worktrees.push({
@@ -55,6 +62,18 @@ export function linkedWorktrees(commonDir, { fsApi = fs, includeReserved = false
     });
   }
   return worktrees;
+}
+
+// HEAD as its file would read in the files format: `ref: <branch>`, or the commit id when detached.
+function reftableHead(adminDir, fsApi) {
+  const tables = readOrNull(path.join(adminDir, "reftable", "tables.list"), fsApi);
+  const cached = reftableHeads.get(adminDir);
+  if (cached && tables !== null && cached.tables === tables) return cached.head;
+  const symbolic = runGitProcessSync(adminDir, ["symbolic-ref", "--quiet", "HEAD"]);
+  const direct = symbolic.ok ? null : runGitProcessSync(adminDir, ["rev-parse", "--verify", "-q", "HEAD"]);
+  const head = symbolic.ok ? `ref: ${symbolic.stdout.trim()}` : (direct.ok ? direct.stdout.trim() : null);
+  if (tables !== null) reftableHeads.set(adminDir, { tables, head });
+  return head;
 }
 
 function readOrNull(file, fsApi) {

@@ -63,7 +63,8 @@ export const TRANSITION_RULES = {
         refuseWith(`landed: unconfirmed (${landing.reason}).`,
           `Merge ${approval.branch} into ${base} through its pull request and update the local ${base}, then close again.`, { landing });
       }
-      return { content, evidence: { approval, landing } };
+      // Review requires a next action and Completed forbids one, so no save can clear it; the move does.
+      return { content: writeFrontmatterField(content, "next_action", ""), evidence: { approval, landing } };
     },
     message: (name) => `Close plan ${name}`,
   },

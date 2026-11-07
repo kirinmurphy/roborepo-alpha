@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { withInvalidatedApproval } from "../../modules/plan-suite/plan-writes.mjs";
+import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { createPlanFixture, planDoc } from "./lib/plan-git-fixture.mjs";
 
 const fx = createPlanFixture("roborepo-plan-store-");
@@ -195,6 +196,28 @@ try {
   refused(run(rebuilt, "validate"), "a missing checkout", /plans init/);
   assert.equal(initStore(rebuilt, "rebuilt").state, "recovered");
   ok(run(rebuilt, "show", "kept0001"), "the plan is back");
+
+  // ---- a reftable repository: refs live in binary tables, and every HEAD file holds a placeholder
+  if (fx.tryGit(tmp, "init", "--quiet", "--ref-format=reftable", path.join(tmp, "reftable-probe")).status === 0) {
+    const reftable = repository("reftable", { "plans/backlog/test-table.md": planDoc({ id: "table001" }) }, { refFormat: "reftable" });
+    assert.equal(git(reftable, "rev-parse", "--show-ref-format"), "reftable");
+    const tableStore = storePath(reftable);
+    assert.equal(git(tableStore, "rev-parse", "--show-ref-format"), "reftable");
+    assert.equal(initStore(reftable).changed, false, "init finds its worktree again");
+    const tableWt = worktree(reftable, "feat/table");
+    assert.equal(linkedWorktrees(path.join(reftable, ".git")).map((item) => item.branch).join(), "feat/table", "the store stays hidden, and the code branch reads correctly");
+    ok(run(tableWt.path, "promote", "table001"), "promote in a reftable repository");
+    assert.equal(ok(run(tableWt.path, "start", "table001", "--worktree", tableWt.name), "start in a reftable repository").synchronized, true);
+    fx.commit(tableWt.path, "implement", { "src/table.txt": "table\n" });
+    git(tableWt.path, "checkout", "--quiet", "--detach");
+    assert.equal(linkedWorktrees(path.join(reftable, ".git"))[0].detached, true, "a moved HEAD is read again, not from the cache");
+    git(tableWt.path, "checkout", "--quiet", "feat/table");
+    ok(run(reftable, "approve", "table001", "--commit", git(tableWt.path, "rev-parse", "HEAD"), "--confirmed-by", "human"), "approve in a reftable repository");
+    assert.equal(json(roborepo(["plans", "approval", "table001", "--json"], { cwd: reftable }), "approval").state, "fresh");
+    assert.ok(remoteHas(reftable, "plans/active/test-table.md"), "the moves reached the remote");
+  } else {
+    console.log("plan-store-check: reftable section skipped; this Git cannot create reftable repositories");
+  }
 
   console.log("plan-store-check: ok");
 } finally {

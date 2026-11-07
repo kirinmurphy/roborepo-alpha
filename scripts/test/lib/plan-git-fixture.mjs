@@ -49,13 +49,15 @@ export function createPlanFixture(prefix) {
 
   // A repository with a bare `origin`, a primary checkout on main holding the code files, and a plans
   // store holding the `plans/...` files, set up through the real `roborepo plans init`. Pass
-  // { store: false } for a repository that has not run it. `clone(root, name)` adds a second machine.
-  const repository = (name, files = {}, { store = true } = {}) => {
+  // { store: false } for a repository that has not run it, or { refFormat: "reftable" } for that ref
+  // storage. `clone(root, name)` adds a second machine.
+  const repository = (name, files = {}, { store = true, refFormat = null } = {}) => {
+    const format = refFormat ? [`--ref-format=${refFormat}`] : [];
     const origin = path.join(tmp, "remotes", `${name}.git`);
     fs.mkdirSync(path.dirname(origin), { recursive: true });
-    git(tmp, "init", "--quiet", "--bare", "--initial-branch=main", origin);
+    git(tmp, "init", "--quiet", "--bare", "--initial-branch=main", ...format, origin);
     const root = path.join(tmp, name);
-    git(tmp, "clone", "--quiet", origin, root);
+    git(tmp, "clone", "--quiet", ...format, origin, root);
     git(root, "symbolic-ref", "HEAD", "refs/heads/main");
     const code = Object.entries(files).filter(([file]) => !file.startsWith("plans/"));
     const plans = Object.entries(files).filter(([file]) => file.startsWith("plans/"));

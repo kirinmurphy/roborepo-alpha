@@ -50,7 +50,7 @@ export function buildRepositoryPlanSnapshot({ cwd = process.cwd() } = {}) {
   return { repository: publicRepository(repository), root: repository.root, plans };
 }
 
-// Resolves `selector` — a plan id, or a store-relative path such as plans/ready/x.md, a path relative
+// Resolves `selector` — a plan id, or a path relative to the store root (`plans/<lifecycle>/x.md`), a path relative
 // to the current directory, or an absolute one — to one record of a repository snapshot.
 export function selectRepositoryPlan(snapshot, selector, { cwd = process.cwd() } = {}) {
   const byId = snapshot.plans.filter((record) => record.plan.id && record.plan.id === selector);

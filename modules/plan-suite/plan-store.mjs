@@ -441,6 +441,8 @@ async function commitFiles(store, planned, paths) {
       }
     }
     await required(store, ["add", "-A", "--", ...paths]);
+    // An operation that recomputes identical content, such as pinning a pinned namespace, has nothing to commit.
+    if ((await storeGit(store, ["diff", "--cached", "--quiet", "--", ...paths])).ok) return null;
     await required(store, ["commit", "--quiet", "--only", "-m", planned.message, "--", ...paths]);
   } catch (err) {
     await storeGit(store, ["reset", "--quiet", "--", ...paths]);

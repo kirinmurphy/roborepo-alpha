@@ -211,15 +211,15 @@ The full scan, which the canonical check performs and which a repository without
 
 ### 8. Close
 
-Clear `next_action`, add a completion summary, and write a `## Verification`
+Add a completion summary and write a `## Verification`
 section with the evidence: the test command and result, which affected docs of record were checked
 against the landed code, the approved commit, the absorbing commit as
 `- Absorbing commit: <full commit id>`, what else was checked, and anything that could not be
 verified. Later landing checks verify that recorded line instead of rescanning. Record evidence itself, never a path under `/tmp` or another temporary folder: the OS deletes those within days and the plan outlives them. Save these edits with `roborepo plans save`, run `roborepo plans validate <plan> --json`, and resolve
 every finding.
 
-Then run `roborepo plans close <plan> --json`. It re-verifies approval freshness and landing,
-validates the `completed/` requirements, moves the plan from `review/` to `completed/`, commits only
+Then run `roborepo plans close <plan> --json`. It re-verifies approval freshness and landing, clears
+`next_action` (a Review plan must keep one until this move), validates the `completed/` requirements, moves the plan from `review/` to `completed/`, commits only
 the plan's old and new paths to the plans branch, and pushes. Report the commit it made and whether it
 synchronized. If it refuses, report each reason; the closure
 is not durable, so do not proceed with server or worktree cleanup.

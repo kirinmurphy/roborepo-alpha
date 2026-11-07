@@ -42,11 +42,8 @@ function mainAndLinkedCheckouts(main, { fsApi = fs } = {}) {
 // A session once run inside the reserved plans worktree may have registered it as a checkout.
 function isReservedPlansCheckout(git, fsApi) {
   if (!git?.isWorktree) return false;
-  try {
-    return fsApi.readFileSync(path.join(git.gitDir, "HEAD"), "utf8").trim() === `ref: refs/heads/${RESERVED_PLANS_BRANCH}`;
-  } catch {
-    return false;
-  }
+  const name = path.basename(git.gitDir);
+  return linkedWorktrees(git.commonDir, { fsApi, includeReserved: true }).some((worktree) => worktree.name === name && worktree.branch === RESERVED_PLANS_BRANCH);
 }
 
 function realpathOrNull(value, fsApi) {
