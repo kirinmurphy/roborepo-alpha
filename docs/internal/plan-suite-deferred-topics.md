@@ -3,10 +3,8 @@
 ## Purpose
 
 An audit of the plan suite set a long-term goal: an approved plan reaches a green, mergeable pull
-request without babysitting. The first two plans, Clear agent friction
-([`vzgsx5vz`](../plans/backlog/plans-suite-quick-wins-1-cleanup.md)) and Deliver finished plans as a
-watched pull request ([`i5mnkm7z`](../plans/backlog/plans-suite-quick-wins-2-git-delivery.md)), take
-only the work that needs no change to lifecycle file moves.
+request without babysitting. Clear agent friction (`vzgsx5vz`) and Deliver finished plans as a
+watched pull request ([`i5mnkm7z`](../plans/backlog/plans-suite-quick-wins-2-git-delivery.md)) cover work that can use the existing lifecycle moves.
 
 This document records what the audit recommended and those plans left out, why, and what would
 unblock each topic, so a later scoping pass does not have to repeat the audit. None of it has been
@@ -16,8 +14,8 @@ before they justify a change. Skill paths such as `plan-execute/SKILL.md` are un
 
 ## Waiting on the plan-document branch
 
-[Store plans on a dedicated Git branch](../plans/backlog/plans-dedicated-branch.md) (`pvgx8oh7`), still
-being written, moves plan documents to one branch per repo. Re-evaluate these topics after it lands,
+Store plans on a dedicated Git branch (`pvgx8oh7`)
+proposes moving plan documents to one branch per repo. Re-evaluate these topics after it lands,
 because it may remove the problem.
 
 | Topic | Today | Direction when revisited |
