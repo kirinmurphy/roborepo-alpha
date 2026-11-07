@@ -9,10 +9,9 @@ import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards
 import { activeWorktreeNames, configuredRoot, proposedWorktreeFolder, worktreeFolder } from "./worktree-policy.mjs";
 import { inspectWorktreeHook } from "./worktree-hook.mjs";
 
-// One survey feeds Runtime and the cleanup command. Only live admin entries are registered; a
-// prunable entry is shown as a finding but never turned into a new checkout record. A registered
-// worktree that Git no longer lists and whose folder is gone was removed, so its record is dropped;
-// otherwise a repository with nothing running would keep listing it on Home.
+// Only live admin entries are registered. Keep prunable entries in the survey so Runtime can
+// mark their checkout paths absent. Drop a registered worktree once both its Git entry and folder
+// are gone.
 export async function collectKnownWorktrees(registry, { stateRoot, settings, now = new Date(), readGit = async () => null, runningRootIds = new Set(), sessionActivity = new Map() } = {}) {
   const raw = new Map();
   const departed = [];
@@ -55,7 +54,7 @@ export async function collectKnownWorktrees(registry, { stateRoot, settings, now
     const observations = await Promise.all(worktrees.map(async (worktree) => {
       const rootId = computeRootId(worktree.path);
       const root = registry.repositories?.[repositoryId]?.localRoots?.find((item) => item.rootId === rootId);
-      if (worktree.prunable) return { ...worktree, rootId, projectRoot: worktree.path, git: null, state: "stale", reason: "prunable worktree" };
+      if (worktree.prunable) return { ...worktree, rootId, projectRoot: worktree.path, git: null, state: null, reason: "prunable worktree" };
       const [git, landing, lastCommit] = await Promise.all([
         readGit(worktree.path, repositoryId),
         worktree.branch ? inspectBranchLanding(worktree.path, worktree.branch) : Promise.resolve({ landed: false }),
