@@ -336,10 +336,11 @@ describe the distinction between ordinary merges and owner access.
 
 ### Findings
 
-- [ ] Recheck upstream configuration before a GitHub mutation. The first independent validator
+- [x] Recheck upstream configuration before a GitHub mutation — fixed (a7b7977c). The first independent validator
       reproduced changing the remote during PR discovery, followed by a mutation on the old
       target. Fix compares a fresh local delivery target, including upstream remote, merge ref,
-      fetch URL, and push URL, and adds four refusal regressions.
+      fetch URL, and push URL, and adds four refusal regressions. All operation assertions
+      completed after the fix, followed by the same EPERM cleanup blocker.
 
 ### Verification
 
