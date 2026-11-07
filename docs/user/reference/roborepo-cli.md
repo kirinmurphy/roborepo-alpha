@@ -270,3 +270,39 @@ Stop writers before removal. Discard previews exit 0 only with a receipt; apply 
 reports a guarded retry command. The removed `archive-remove` command has no alias.
 Merge readiness is read-only: exit 0 means ready, 1 means refused, and 2 means usage error.
 It identifies assessed branch/base tips without authorizing a merge or checking remote protection.
+
+## Guarded feature delivery
+
+These commands validate the current target before running Git or GitHub CLI. They provide narrow
+permission entries for workflow skills that deliver an already-pushed feature branch.
+
+| Command | Operation |
+| --- | --- |
+| `roborepo delivery fetch <remote>` | Refresh heads under `refs/remotes/<remote>/` using a configured remote name |
+| `roborepo delivery pr-body <body-file>` | Replace the current branch's open PR body with the UTF-8 file |
+| `roborepo delivery pr-ready` | Mark that PR ready for review |
+| `roborepo delivery retry-ci <run-id>` | Rerun failed jobs in a completed, failed run at that PR head |
+
+A normal workflow refreshes the configured remote, pushes the feature branch with its upstream,
+writes the finished PR description to a file, and updates the existing PR.
+
+```sh
+roborepo delivery fetch origin
+roborepo delivery pr-body /tmp/pr-body.md
+roborepo delivery pr-ready
+```
+
+GitHub operations require one matching HTTPS or SSH GitHub fetch and push repository on the
+current branch's configured upstream remote. Its upstream branch must match the current local
+branch. The branch must differ from GitHub's default branch, and exactly one open PR must match
+the local head commit, branch, and repository. Fork PRs fail validation. A retry also verifies the
+run ID, repository URL, branch, head commit, completion state, and failure result.
+
+Fetch accepts a configured remote name that forms a valid tracking-ref namespace. Its
+explicit refspec and empty refmap keep updates within that remote's tracking namespace. Tags
+and local branches retain their existing values. Extra options, URLs, and refspec arguments fail
+validation.
+
+A refusal prints the mismatched target or disallowed operation and exits unsuccessfully.
+Separately authorized raw commands follow their existing permission policy. GitHub login and
+network access remain prerequisites.

@@ -486,6 +486,96 @@ priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
+commandPrefix = "roborepo delivery fetch"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo delivery pr-body"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo delivery pr-ready"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo delivery retry-ci"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans preflight"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans approval"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans merge-readiness"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans landed"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans order place"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans sync-base"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans stop-servers"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans promote"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans start"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans submit"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans reopen"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
 commandPrefix = "npm test"
 decision = "allow"
 priority = 500

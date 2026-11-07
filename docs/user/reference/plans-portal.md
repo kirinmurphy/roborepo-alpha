@@ -379,32 +379,34 @@ Repositories without Git remain browsable.
 
 ## Package Integration
 
-The plan suite is two optional packages: `plan-suite`, which holds the six plan skills and the
-Code Outlives Plans and Plan Records Stay Plan-Specific rules, and `session-close`. The Plans page gates its workflow actions
-on `plan-suite`, and its onboarding banner enables both in one request through the config bulk
-endpoint (`/api/config/packages/bulk`).
+The plan suite uses two optional packages. `plan-suite` holds the seven plan skills, including
+`/plan-suite-init`, and the Code Outlives Plans and Plan Records Stay Plan-Specific rules.
+`session-close` holds the chat handoff skill. The Copy menu gates its workflow actions on
+`plan-suite`, and the onboarding banner enables both packages in one request through
+`/api/config/packages/bulk`.
 
 When `plan-suite` is disabled:
 
 - `/plans` remains available, behind the onboarding banner
 - copying the document filename and repository-aware context remains available
-- workflow prompt actions stay hidden
+- workflow prompt actions stay hidden in the Copy menu
 
 When enabled:
 
-- each of the six plan skills (and `/session-close`, once its own package is enabled) is a manual
+- each of the seven plan skills (and `/session-close`, once its own package is enabled) is a manual
   skill with Markdown command wrappers for Claude,
   Codex, and Gemini. Gemini CLI requires TOML custom commands, so its generated wrappers are not
   usable native slash commands yet
-- `/plans` shows each lifecycle's actions, read from the lifecycle manifest the plans snapshot
-  publishes:
+- the Copy menu uses the lifecycle actions from the plans snapshot. It filters out **Update** and
+  offers these commands
 
   | Lifecycle | Actions |
   | --- | --- |
-  | backlog | Promote, Archive |
-  | ready | Start, Refine, Archive |
-  | active | Continue, Review, Archive |
-  | review | Review, Fix findings, Close, Archive |
+  | Backlog | Promote when prerequisites are complete, Archive |
+  | Ready | Start, Refine, Archive |
+  | Active | Continue, Review, Archive |
+  | Review | Review, Fix findings, Close, Archive |
+  | Completed, Archived, or Unclassified | — |
 
 - backlog cards with unfinished `depends_on` entries show the Copy menu followed by **Waiting on**
   and that list instead of Promote; their card and popup menus omit Promote. IDs resolve within the
@@ -418,10 +420,10 @@ When enabled:
   cards and a row below the description on smaller screens. Modified time uses a clock icon and
   a short age such as **2 hrs**; its tooltip gives the exact date. The bottom row keeps the primary
   action and Copy menu at the left, with blockers, open review findings, and task progress at the right
-- Copy menus use compact labels with copy icons and flush hover backgrounds. Update and Portable Prompt are
-  omitted. **Copy Document Filename** sits below a divider and copies only the filename; the
-  popup header's separate path button still copies the repository-relative path. Shared copy
-  controls confirm with a green check while keeping their original labels
+- Copy menus use compact labels with copy icons and flush hover backgrounds.
+  **Copy Document Filename** sits below a divider. Use the separate path button in the drawer
+  header to copy the absolute path. Shared copy controls confirm with a green check while keeping
+  their original labels
 - an active or review plan whose worktree has merged shows a **merged** completion badge; the same
   status is visible in the detail drawer
 - every action copies a prompt; the page never runs a command or moves a plan for one

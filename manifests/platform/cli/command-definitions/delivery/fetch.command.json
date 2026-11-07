@@ -1,0 +1,19 @@
+{
+  "path": [
+    "delivery",
+    "fetch"
+  ],
+  "kind": "command",
+  "title": "fetch",
+  "description": "Refresh only the configured remote tracking refs",
+  "order": 0,
+  "usage": "roborepo delivery fetch <remote>",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/delivery.mjs",
+    "export": "deliveryCommand",
+    "prependArgs": [
+      "fetch"
+    ]
+  }
+}

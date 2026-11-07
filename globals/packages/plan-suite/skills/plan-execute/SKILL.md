@@ -403,7 +403,7 @@ mechanical edits across many files, bulk renames, or long test runs. The Validat
 procedural slice: it runs on the session's own model, as `references/validation-loop.md` describes.
 Rules for procedural subagents:
 
-- Launch them with `model: sonnet`.
+- Launch them on a cheaper model where the harness offers a choice.
 - Run them in the target worktree. Never pass `isolation: "worktree"` or let one create a branch or
   worktree.
 - Give each subagent a slice with no unmade decisions. A subagent that hits a decision reports it

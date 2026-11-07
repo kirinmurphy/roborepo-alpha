@@ -1,0 +1,19 @@
+{
+  "path": [
+    "delivery",
+    "pr-body"
+  ],
+  "kind": "command",
+  "title": "pr-body",
+  "description": "Update the current feature pull request body",
+  "order": 10,
+  "usage": "roborepo delivery pr-body <body-file>",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/delivery.mjs",
+    "export": "deliveryCommand",
+    "prependArgs": [
+      "pr-body"
+    ]
+  }
+}

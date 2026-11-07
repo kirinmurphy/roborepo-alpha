@@ -74,6 +74,7 @@
     "response-output-rules-check.mjs",
     "browser-lifecycle-check.mjs",
     "browser-playwright-cache-check.mjs",
-    "browser-playwright-cli-check.mjs"
+    "browser-playwright-cli-check.mjs",
+    "delivery-operations-check.mjs"
   ]
 }

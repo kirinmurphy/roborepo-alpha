@@ -604,6 +604,102 @@
       ],
       "bucket": "ask",
       "category": "configuration"
+    },
+    {
+      "id": "guarded-delivery",
+      "label": "Guarded feature delivery",
+      "description": "Refresh a configured remote tracking namespace, update the current feature PR body, mark it ready, or rerun failed jobs for its pushed head. Each command validates its target.",
+      "kind": "commands",
+      "commands": [
+        [
+          "roborepo",
+          "delivery",
+          "fetch"
+        ],
+        [
+          "roborepo",
+          "delivery",
+          "pr-body"
+        ],
+        [
+          "roborepo",
+          "delivery",
+          "pr-ready"
+        ],
+        [
+          "roborepo",
+          "delivery",
+          "retry-ci"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "git"
+    },
+    {
+      "id": "plan-lifecycle",
+      "label": "Run guarded plan lifecycle steps",
+      "description": "Run named plan checks and transitions with their existing guards. Archive and close keep their approval gates.",
+      "kind": "commands",
+      "commands": [
+        [
+          "roborepo",
+          "plans",
+          "preflight"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "approval"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "merge-readiness"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "landed"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "order",
+          "place"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "sync-base"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "stop-servers"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "promote"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "start"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "submit"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "reopen"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "git"
     }
   ],
   "tools": {},

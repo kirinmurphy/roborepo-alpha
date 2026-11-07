@@ -327,38 +327,19 @@ On agreement:
 
 ## Final Report
 
-Name the plan by its H1 title, with its id in parentheses on first mention only. The id is the
-stable reference for commands and frontmatter, not a name a person recognizes; the same goes for
-questions, review packets, and other prose in this run.
+Name the plan by its H1 title, with its id in parentheses on first mention only. Lead with one
+line naming the plan and the outcome, then give the next step and its command when there is one.
 
-```text
-Review result
-- Plan: "<title>" (<id>), <repository-relative path>
-- Resume path: full review | changes since review | approval only | already approved | already closed
-- Completion preflight: passed | failed with <checks> | not run (<resume reason>)
-- Lifecycle change: active -> review | review -> active | none
-- Base synchronization: up-to-date | merged <commit> | conflicts resolved <commit> | refused (<reason>) | not rerun (<resume reason>)
-- Tests: <command> -> pass|fail | reused at <commit> | not rerun (already approved|already closed)
-- Base failures: <checks that fail on the base branch too, or "none">
-- Validator passes: <count>, clean | reached the cap, last fixes not revalidated | reused at <commit> | not rerun (<resume reason>)
-- Findings: <open count> open, <count> fixed in review (<commits>), <count> escalated
-- Not tested entries open: <count>
-- Review result: complete at <commit> | pending | stale | missing
-- Approval: approved at <commit> | requested | not requested (blocked by <open findings and manual checks>) | invalidated
-- Approval freshness: fresh | stale | missing | not-approved | invalid | unavailable
-- Next command: merge the pull request, then /plan-close | /plan-close (already landed) | /plan-review | /plan-execute | none (already closed)
-```
+Include a status detail only when it departs from the expected result or requires action. Show
+behavioral evidence through `feature-verification` where it applies and let the evidence speak
+for itself. Omit passing gates, commit ids, and Git status unless they explain an exception or
+enable the next step. Link to the plan document for the full record.
 
-Also report the evidence behind each finding, the verification commands and results, paired skills
-loaded or skipped, and current Git status in the worktree and the primary checkout.
-Label historical checks as reused. Skills and checks bypassed by an unchanged success path are
-not applicable to this run; never present them as newly performed. Report unavailable worktree
-status as expected after completed cleanup.
-
-The report does not replace the required prompt: a pending, stale, or missing review must end
-with the next actionable question under **Continue until a human decision**, unless the human
-explicitly chose to stop or defer. A complete review awaiting approval must include step 6's
-exact-commit approval question. After explicit approval, record it through step 6a before ending.
+Say which findings or manual checks prevent approval and what decision or action moves the plan
+forward. A pending, stale, or missing review ends with the next actionable question under
+**Continue until a human decision**, unless the human chose to stop or defer. A complete review
+awaiting approval must include step 6's exact-commit approval question. After explicit approval,
+record it through step 6a before ending. Describe reused evidence as historical when it matters.
 
 ## Boundaries
 

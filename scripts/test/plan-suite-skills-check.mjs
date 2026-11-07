@@ -222,7 +222,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "every task that depends on it",
     "present every open entry to the user in one batch",
     "the run resumes in this same mode",
-    "`model: sonnet`",
+    "Launch them on a cheaper model where the harness offers a choice",
     "Never pass `isolation: \"worktree\"`",
     "reports it back instead of choosing",
     "## Not tested",
@@ -333,6 +333,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "never returns to `ready/`",
     "Do not invoke either command yourself",
     "`/plan-close` never synchronizes",
+    "A complete review awaiting approval must include step 6's exact-commit approval question",
   ]);
   const resume = readPackageFile("plan-suite/skills/plan-review/references/resume-review.md");
   includesAll("plan-review resume", resume, [
@@ -369,12 +370,28 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     const skill = readSkill(id);
     includesAll(`${id} paired skills`, skill, ["## Paired Skills", "host's skill/package manager", "Enable it, or skip it for this run?", "never describe a drifted package as loaded"]);
     if (id !== "session-close") includesAll(`${id} plan naming`, skill, ["Name the plan by its H1 title, with its id in parentheses on first mention only"]);
-    if (!["plan-write", "session-close"].includes(id)) {
+    if (["plan-promote", "plan-execute"].includes(id)) {
       const report = id === "plan-execute"
         ? readPackageFile("plan-suite/skills/plan-execute/references/final-report.md")
         : skill;
       includesAll(`${id} report names the plan`, report, ['- Plan: "<title>" (<id>), <repository-relative path>']);
     }
+  }
+
+  for (const id of ["plan-review", "plan-close", "plan-archive"]) {
+    const skill = readSkill(id);
+    const reportStart = skill.indexOf("## Final Report");
+    const boundaries = skill.indexOf("## Boundaries");
+    assert.ok(reportStart >= 0 && boundaries > reportStart, `${id}: final report precedes boundaries`);
+    const report = skill.slice(reportStart, boundaries);
+    includesAll(`${id} outcome-first report`, report, [
+      "Lead with one line naming the plan and the outcome, then give the next step",
+      "Include a status detail only when it departs from the expected result or requires action",
+      "Show behavioral evidence through `feature-verification` where it applies",
+      "Omit passing gates, commit ids, and Git status unless they explain an exception or enable the next step",
+      "Link to the plan document for the full record",
+    ]);
+    assert.ok(!report.includes("```text"), `${id}: final report has no fixed status template`);
   }
 
   const close = readSkill("plan-close");

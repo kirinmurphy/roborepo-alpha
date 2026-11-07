@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Run /plan-execute and begin with guarded fetch and GitHub delivery operations.
+next_action: Resolve the session restriction on removing temporary directories, rerun the blocked checks, and resume /plan-execute.
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7"]
@@ -211,25 +211,24 @@ describe the distinction between ordinary merges and owner access.
 
 ## Implementation plan
 
-- [ ] Implement the guarded operations and test them with disposable Git repositories and a
+- [x] Implement the guarded operations and test them with disposable Git repositories and a
       fake GitHub CLI. Cover successful operations and refusals before changing permission defaults.
-- [ ] Update `manifests/inventory/agent-permissions.json` with the guarded command entries and
+- [x] Update `manifests/inventory/agent-permissions.json` with the guarded command entries and
       named plan lifecycle entries. Add targeted assertions for the affected providers and
       regenerate with `node scripts/build/render-agent-permissions.mjs`. Document the command
       forms for the delivery follow-up.
-- [ ] Update both branch-safety rule copies and the Claude desktop rule. Keep the plan-execute
+- [x] Update both branch-safety rule copies and the Claude desktop rule. Keep the plan-execute
       folder confirmation and the normal approval for moving a checkout.
-- [ ] Add `09-deliver-finished-work.md` to the shared rule fragments and the required-source
+- [x] Add `09-deliver-finished-work.md` to the shared rule fragments and the required-source
       checklist in `manifests/platform/source-files.tsv`. The rule renderer discovers the
       fragment by directory. Regenerate with `bash scripts/build/render-rules.sh`.
-- [ ] Update the validator model wording in `plan-execute/SKILL.md`. Rewrite the Final Report
+- [x] Update the validator model wording in `plan-execute/SKILL.md`. Rewrite the Final Report
       sections of plan-review, plan-close, and plan-archive. Update the affected assertions in
       `scripts/test/plan-suite-skills-check.mjs`.
-- [ ] Correct the docs under Documentation impact. Check the complete lead-button and action
+- [x] Correct the docs under Documentation impact. Check the complete lead-button and action
       tables against the portal and the lifecycle manifest, including the active and review rows.
-- [ ] Give the owner the required-check settings and smoke checks under Needs you. After the owner
-      confirms the GitHub change, read the rules with
-      `gh ruleset view 26185384 --repo kirinmurphy/roborepo-alpha` and record what was verified.
+- [x] Give the owner the required-check settings and smoke checks under Needs you. Owner configuration and read-back remain
+      under Not tested until the owner confirms the change.
 
 ## Validation
 
@@ -252,6 +251,21 @@ describe the distinction between ordinary merges and owner access.
   implementation pull request.
 
 ## Not tested
+
+- [ ] Rerun `node scripts/test/delivery-operations-check.mjs`,
+      `node scripts/test/repositories-branch-sync-check.mjs`,
+      `node scripts/test/cli-command-catalog-check.mjs`, and `npm run check` in a session
+      that permits removal of disposable directories. The delivered-operation assertions
+      completed, but directory cleanup failed with EPERM. The same catalog check fails on
+      unchanged main. Escalated directory removal also failed in this session.
+- [ ] Exercise GitHub mutations with authenticated credentials against an authorized feature PR.
+      Disposable Git repositories and a fake GitHub CLI covered success and refusal behavior.
+      The local GitHub login reports an invalid token. Native Codex policy assertions passed
+      16/16. Claude and Gemini default projections were asserted, while their live command
+      prompt suppression remains unverified.
+- [ ] Exercise the GitHub delivery commands on Windows. The POSIX fake-executable checks
+      skip on Windows, while fetch fixture checks remain cross-platform.
+
 
 - [ ] The owner verifies all three required checks, ordinary merge blocking, and the admin
       bypass on the next authorized lifecycle push.
@@ -286,3 +300,69 @@ describe the distinction between ordinary merges and owner access.
   before running plan lifecycle transitions.
 - **Permission scope.** Allow only the guarded fetch and GitHub operations described above.
   Preserve existing prompts and default handling for the raw commands.
+
+## Decision Log
+
+- Selected `roborepo delivery fetch|pr-body|pr-ready|retry-ci` as the guarded command forms.
+  A separate namespace avoids inheriting the existing broad read-only `roborepo git` permission.
+  Using raw Git and GitHub CLI commands would expand the defaults beyond the agreed guards.
+- Used the existing hardened Git runner and network timeout. Fetch uses an explicit tracking
+  destination, an empty refmap, and disabled tag and prune behavior to preserve local branches
+  and tags even when configured fetch mappings target local branches.
+- PR body input is a UTF-8 file. Its content is passed to GitHub CLI through standard input.
+  This preserves multiline text and keeps it out of shell interpretation and option parsing.
+- GitHub delivery resolves the configured upstream, verifies matching fetch and push repository
+  identities over HTTPS or SSH, excludes the default branch, and validates the published PR
+  head. It refuses fork PRs and ambiguous PR matches. Retry is limited to completed failed runs
+  at that branch and commit.
+- No GitHub ruleset was changed. The owner must confirm Always allow bypass access first.
+  Public read-back lists one required PR approval and no required status checks. The CLI's
+  public “cannot be bypassed” display does not establish owner-only bypass visibility.
+- Procedural rule and doc edits used subagents with the current session model. The named
+  Claude-only cheaper model was unavailable in this harness. The shared wording is now portable.
+
+## Open Questions
+
+- Verification is blocked by directory removal returning EPERM, including after escalation.
+  The same existing CLI catalog check fails on unchanged main at its cleanup step. Required
+  full and scoped checks must be rerun after the session restriction is resolved. This blocks
+  completion and submission, so the plan stays active.
+- The owner must confirm or configure Always allow bypass, retain the existing one-approval
+  review policy, and add the three required checks with up-to-date enforcement off.
+  After confirmation, read the ruleset again and verify ordinary merge blocking and the next
+  authorized lifecycle push. This blocks the live GitHub verification only.
+
+## Review
+
+### Findings
+
+### Verification
+
+- Passed `node scripts/test/plan-suite-skills-check.mjs`,
+  `node scripts/test/codex-command-permission-check.mjs`,
+  `node scripts/test/agent-run-coverage-check.mjs`,
+  `node scripts/test/orphan-test-check.mjs`,
+  `node scripts/test/docs-reference-check.mjs`,
+  `node scripts/build/render-agent-permissions.mjs --check`,
+  `bash scripts/build/render-rules.sh --check`, `bash scripts/doctor.sh --quiet`
+  (98 checks), and `git diff --check`.
+- Native Codex policy evaluator assertions passed 16/16 for guarded allows, retained raw-command
+  prompts/defaults, and merge/API/force-push denials.
+- Disposable Git delivery assertions reached both success messages, covering tracking-ref fetch,
+  branch/tag preservation, PR body contents, PR readiness, failed-only rerun arguments, and
+  mismatched targets. The process then failed during temporary-directory cleanup with EPERM.
+- Existing branch-sync assertions completed before their cleanup failed with the same EPERM.
+  The CLI catalog check fails at temporary-directory cleanup on both this branch and main.
+- `npm run check` was run once after registering the new test suite. Doctor passed, then
+  the existing CLI suite failed rollback assertions and could not remove a fixture directory.
+  The full gate is blocked and did not reach the later suites.
+- Disposable rule walkthrough assertions passed for approved feature switching, keeping unrelated
+  staged and untracked edits local, and detecting unpublished base commits before publishing.
+  These assertions exercise Git behavior behind the prose, not provider autonomous compliance.
+- Portal source assertions covered ten lead-button states, seven lifecycle menu sets, and the
+  package's seven skill resources. The historical six-package migration account was preserved.
+- Public GitHub run 42334175526 completed successfully at 5cb80dbacd3cf670eae7a54bdfd1ebccfe58aaf0.
+  Its job names were verified as `check (ubuntu-latest)`, `check (macos-latest)`,
+  and `windows-installer`.
+- No server was needed for this CLI and policy change. The actual CLI help and command fixtures
+  exercise the normal entry point.
