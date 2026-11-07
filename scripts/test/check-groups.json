@@ -14,6 +14,7 @@
     "backlog-order-check.mjs",
     "backlog-model-check.mjs",
     "plan-store-check.mjs",
+    "migrate-plans-once-check.mjs",
     "codex-plans-store-grants-check.mjs",
     "worktree-lifecycle-check.mjs",
     "worktree-snapshot-check.mjs",
