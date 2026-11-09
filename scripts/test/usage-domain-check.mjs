@@ -182,7 +182,7 @@ for (const c of fixtures.rateLimitSeverity) {
   const res = portalUsage.buildUsageResponse({ now: now + 1000 });
   assert.equal(res.schema, 1);
   assert.equal(res.harnesses.claude.available, true, "claude snapshot surfaces");
-  assert.equal(res.harnesses.claude.usage.context.severity, "caution");
+  assert.equal(res.harnesses.claude.usage.context.severity, "critical", "42% context is past the 40% critical line");
   assert.equal(res.harnesses.claude.usage.weekly.balance.state, "debt", "used 70 ahead of elapsed 60 is debt");
   assert.ok(!JSON.stringify(res).includes("source"), "diagnostics source block never escapes to API");
   assert.ok(!JSON.stringify(res).includes(os.homedir()), "no home paths leak");
