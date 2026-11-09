@@ -99,7 +99,7 @@ Every store command reports whether the result reached the remote:
 | Report | Meaning | Do |
 | --- | --- | --- |
 | `synchronized: true` | The remote accepted the push | Continue |
-| `synchronized: false` | The commit is kept locally because the remote could not be reached | Continue, and say so in your report. The next command that reaches the remote pushes it |
+| `synchronized: false` | The commit is kept locally because the remote could not be reached or refused the push; `reason` says which | Continue, and say so in your report. A later command pushes it once the remote can be reached and accepts it |
 | A refusal naming a same-plan conflict | Another clone changed this plan | Read it again, reapply your edit, and save. For a pending local commit, stop and show the user both versions |
 
 Two saves of one plan from one clone are last-write-wins, so `/plan-execute` and `/plan-review` do

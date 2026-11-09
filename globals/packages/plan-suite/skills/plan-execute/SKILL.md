@@ -140,8 +140,9 @@ Run the transition after the target worktree is resolved and before any implemen
    blocks this plan and is reported, never worked around.
 5. Plan links the result lists under `staleLinks` still name the old `ready/` path. Fix them with
    `roborepo plans save`.
-6. `synchronized: false` in the result means the remote could not be reached. The commit is kept and
-   the next store command pushes it, so continue, and mention it in the final report.
+6. `synchronized: false` in the result means the remote could not be reached or refused the push (a
+   hook or branch rule); `reason` says which. The commit is kept and a later store command pushes it
+   once the remote can be reached and accepts it, so continue, and mention it in the final report.
 
 ## Enter the Worktree
 
