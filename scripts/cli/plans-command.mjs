@@ -285,7 +285,7 @@ function runFromPrimary(selector, run) {
 
 // A commit the remote has not accepted is kept and reported, so a sandboxed run continues.
 function printSyncState(result) {
-  console.log(result.synchronized ? "synchronized" : `not synchronized: ${result.reason || "the remote could not be reached"}. The commit is kept and pushed by the next change that reaches the remote.`);
+  console.log(result.synchronized ? "synchronized" : `not synchronized: ${result.reason || "the remote could not be reached"}. The commit is kept, and the next change or \`roborepo plans init\` pushes it once the remote can be reached and accepts it.`);
 }
 
 async function plansInitCommand(args) {

@@ -100,7 +100,7 @@ export function createPlanImportDialog({ repositories, onSaved }) {
       slot("cancel").textContent = "Done";
       slot("status").textContent = result.synchronized
         ? `Saved ${result.path} and pushed it to the remote.`
-        : `Saved ${result.path} on this machine, but it did not reach the remote. Press Refresh to push it once the remote can be reached.`;
+        : `Saved ${result.path} on this machine, but the remote did not take it${result.reason ? ` (${result.reason})` : ""}. Press Refresh to push it once the remote can be reached and accepts it.`;
       show("status", true);
       await onSaved();
     } catch (err) {

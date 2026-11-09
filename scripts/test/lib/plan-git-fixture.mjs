@@ -29,6 +29,14 @@ export function createPlanFixture(prefix) {
     GIT_COMMITTER_EMAIL: "fixture@example.invalid",
   };
   for (const key of ["ROBOREPO_WORKSPACE_ROOT", "ROBOREPO_APP_ROOT", "GIT_DIR", "GIT_WORK_TREE"]) delete env[key];
+  // An agent shell injects core.hooksPath through GIT_CONFIG_*, which would shadow the hooks a check
+  // installs and hide whether the store skips them.
+  for (const key of Object.keys(env)) {
+    if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) {
+      delete env[key];
+      delete process.env[key];
+    }
+  }
   // In-process plan-suite calls shell out to Git too.
   Object.assign(process.env, { GIT_CONFIG_NOSYSTEM: "1", HOME: home, GIT_AUTHOR_NAME: env.GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL: env.GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME: env.GIT_COMMITTER_NAME, GIT_COMMITTER_EMAIL: env.GIT_COMMITTER_EMAIL });
 

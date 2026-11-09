@@ -89,7 +89,8 @@ try {
   fs.mkdirSync(hooks, { recursive: true });
   for (const hook of ["pre-commit", "pre-push"]) fs.writeFileSync(path.join(hooks, hook), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
   git(root, "config", "core.hooksPath", hooks);
-  ok(run(root, "save", source("test-hooked.md", planDoc({ id: "hook0001" }))), "a save past failing hooks");
+  const hooked = ok(run(root, "save", source("test-hooked.md", planDoc({ id: "hook0001" }))), "a save past failing hooks");
+  assert.equal(hooked.synchronized, true, "the failing pre-push hook did not run either");
   git(root, "config", "--unset", "core.hooksPath");
 
   // ---- lifecycle moves commit to the plans branch and leave code alone

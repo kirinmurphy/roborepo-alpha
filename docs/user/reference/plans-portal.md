@@ -403,7 +403,8 @@ from any checkout of the repository, and takes a plan id or a store-relative pat
 automatically. Each transition (`promote`, `start`, `submit`, `reopen`, `close`, `archive`) exits 1
 when it refuses or a post-commit check fails. With the remote unreachable, or refusing the push
 through a hook or branch rule, a change exits 0, keeps the commit, and reports `synchronized: false`
-with Git's reason; the next change or portal Refresh that reaches the remote pushes it. `--base` names the code branch the gates compare against:
+with Git's reason; the next change or portal Refresh pushes it once the remote can be reached and
+accepts it. `--base` names the code branch the gates compare against:
 
 | Command | What it does |
 | --- | --- |

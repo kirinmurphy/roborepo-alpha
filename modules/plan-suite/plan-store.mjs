@@ -177,7 +177,7 @@ async function createRemoteBranch({ run, primary, worktreeRoot, repoName }) {
     if (!commit.ok) throw initFailure("The plans scaffold could not be committed.", "Set your Git user.name and user.email, then run `roborepo plans init` again.", commit);
     const pushed = await run(["push", "origin", `${commit.stdout.trim()}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
     if (!pushed.ok) {
-      if (isPushRejection(pushed)) {
+      if (isPushRace(pushed)) {
         await fetchInto(run);
         return false;
       }
@@ -340,14 +340,13 @@ async function pushBranch(store) {
     await storeGit(store, ["update-ref", TRACKING_REF, LOCAL_REF]);
     return { state: "pushed", reason: null };
   }
-  // "raced": another machine pushed first, so the change can be re-applied. "not-accepted": the remote
-  // could not be reached or refused the push itself, which a retry would not change.
-  return isPushRejection(pushed) ? { state: "raced", reason: failureReason(pushed) } : { state: "not-accepted", reason: failureReason(pushed) };
+  return isPushRace(pushed) ? { state: "raced", reason: failureReason(pushed) } : { state: "not-accepted", reason: failureReason(pushed) };
 }
 
-// Another machine pushed first, so re-applying the change can succeed. A remote that refuses the
-// push itself ("[remote rejected]", from a hook or a branch rule) would refuse every retry.
-function isPushRejection(result) {
+// Another machine pushed first ("raced"), so re-applying the change can succeed. A remote that
+// refuses the push itself ("[remote rejected]", from a hook or a branch rule) would refuse every
+// retry, so it is "not-accepted" like an unreachable remote.
+function isPushRace(result) {
   const stderr = String(result.stderr || "");
   return !/\[remote rejected\]/i.test(stderr) && /\b(rejected|non-fast-forward|fetch first|stale info)\b/i.test(stderr);
 }
