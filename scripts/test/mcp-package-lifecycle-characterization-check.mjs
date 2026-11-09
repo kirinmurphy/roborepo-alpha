@@ -31,7 +31,7 @@ try {
       assert.match(result.stdout, new RegExp(`skip: mcp fixture-tool \\(SKIP_MCP\\)`), "SKIP_MCP must skip the mcp wiring entirely");
       const after = fs.readFileSync(path.join(home, ".codex", "config.toml"), "utf8");
       // SKIP_MCP only gates the MCP server registration itself -- fixture-tool also ships a
-      // separate codex_tool_approvals resource (a different resource type, its own write path) that
+      // separate mcp-tool-approvals resource (a different resource type, its own write path) that
       // is NOT gated by this env var, so only the [mcp_servers.fixture-tool] block itself is asserted.
       assert.doesNotMatch(after, /\[mcp_servers\.fixture-tool\]/, "the mcp_servers block itself must not appear when SKIP_MCP=1");
     } finally {

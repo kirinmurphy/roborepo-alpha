@@ -40,7 +40,8 @@
       "harness": "codex"
     },
     {
-      "type": "claude-plugin-dir",
+      "type": "plugin-dir",
+      "harness": "claude",
       "source": "claude/context-row"
     }
   ],

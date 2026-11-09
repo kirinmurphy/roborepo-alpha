@@ -8,6 +8,8 @@ import { defineHarnessProvider } from "../contract.mjs";
 import { detectHarnessProvider, selectedHarnessExecutable } from "../discovery.mjs";
 import { resolveHarnessPath } from "../paths.mjs";
 import { stubAdapterGroups } from "../stub-adapter.mjs";
+import { configFileMcpPresetMethods } from "../mcp-config-file-preset.mjs";
+import { codexPackageAdapters } from "./packages.mjs";
 import { isHooksMap, unmergeHooksMap } from "../hooks-merge.mjs";
 import { readCodexHooks } from "./hooks-read.mjs";
 import { mergeCodexHooks } from "./hooks-merge.mjs";
@@ -159,29 +161,66 @@ function unmergeCodexColorScalar(text) {
 // bookkeeping) lives behind paths.mjs's harness-path section too, so a provider adapter calling it
 // directly would recreate the same cycle. The orchestrator (package-harness-config.mjs), which sits
 // above both the provider and paths.mjs in the dependency graph, performs the actual write.
-function mergePackageComponent(pkg, config, { codexConfigPath }) {
+function readConfigText(configPath) {
+  try { return fs.readFileSync(configPath, "utf8"); } catch { return ""; }
+}
+
+function writeIfChanged(io, text, next, verb) {
+  if (next === text) {
+    console.log(`  ok: Codex package config unchanged -> ${io.configPath}`);
+    return;
+  }
+  io.write(next);
+  console.log(`  ${verb}: Codex package config ${verb === "removed" ? "<-" : "->"} ${io.configPath}`);
+}
+
+function mergePackageComponent(pkg, config, io) {
   const tui = config.tui || {};
   const desired = Array.isArray(tui.status_line) ? tui.status_line : [];
   if (desired.length === 0) throw new Error("Codex harness-config needs non-empty tui.status_line");
-  let text = "";
-  try { text = fs.readFileSync(codexConfigPath, "utf8"); } catch {}
+  const text = readConfigText(io.configPath);
   let next = mergeTomlArray(text, "tui", "status_line", desired).text;
   if (typeof tui.status_line_use_colors === "boolean") {
     next = mergeCodexColorScalar(next, tui.status_line_use_colors);
   }
-  return { changed: next !== text, content: next };
+  writeIfChanged(io, text, next, "wired");
 }
 
-function unmergePackageComponent(pkg, config, { codexConfigPath }) {
+function unmergePackageComponent(pkg, config, io) {
   const tui = config.tui || {};
   const owned = Array.isArray(tui.status_line) ? tui.status_line : [];
-  let text = "";
-  try { text = fs.readFileSync(codexConfigPath, "utf8"); } catch {}
+  const text = readConfigText(io.configPath);
   let next = unmergeTomlArray(text, "tui", "status_line", owned);
   if (typeof tui.status_line_use_colors === "boolean") {
     next = unmergeCodexColorScalar(next);
   }
-  return { changed: next !== text, content: next };
+  writeIfChanged(io, text, next, "removed");
+}
+
+// True when [tui] status_line holds `item`. Scoped to the [tui] block so an unrelated array with
+// the same key elsewhere cannot produce a false match.
+export function codexStatusLineIncludes(configText, item) {
+  const match = configText.match(tableBlockPattern("tui"));
+  if (!match) return false;
+  return (parseTomlArray(match[2], "status_line") || []).includes(String(item));
+}
+
+// Present when every status_line item is there and, when the package owns the color scalar, the
+// scalar holds the package's value too: array items alone would read present while an owned
+// scalar silently failed to apply.
+function probePackageComponent(config, { configPath }) {
+  const text = readConfigText(configPath);
+  const itemsPresent = (config.tui?.status_line || []).every((item) => codexStatusLineIncludes(text, item));
+  const wantsColorScalar = typeof config.tui?.status_line_use_colors === "boolean";
+  const scalarPresent = !wantsColorScalar || getTomlScalar(text, "tui", COLORS_KEY) === config.tui.status_line_use_colors;
+  const observed = itemsPresent && scalarPresent;
+  return {
+    observed,
+    owner: observed ? "roborepo" : null,
+    detail: observed
+      ? "Codex status_line contains package fields"
+      : !itemsPresent ? "Codex status_line missing package fields" : "Codex status_line color scalar not applied",
+  };
 }
 
 // Codex stores hooks in a dedicated hooks.json sidecar, whose whole content is { hooks: {...} } —
@@ -317,7 +356,9 @@ export const codexProvider = defineHarnessProvider({
       render: (content) => normalizeRootConfigContent("codex", content),
       mergePackageComponent,
       unmergePackageComponent,
+      probePackageComponent,
     },
+    packages: codexPackageAdapters,
     permissions: {
       workspaceRoots: ({ cwd } = {}) => loadPermissionWorkspaceRootsForCwd(cwd),
       render: (current, manifest, overrides, target, options = {}) => {
@@ -331,6 +372,7 @@ export const codexProvider = defineHarnessProvider({
       addServer: mcpAddServer,
       removeServer: mcpRemoveServer,
       list: mcpList,
+      ...configFileMcpPresetMethods("codex", { addServer: mcpAddServer, removeServer: mcpRemoveServer, list: mcpList }),
     },
   },
 });

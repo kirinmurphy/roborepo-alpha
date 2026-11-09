@@ -104,10 +104,19 @@ speculatively; the current approach is deliberate (see `validatePackageCatalog`)
 ## Resource types
 
 `RESOURCE_TYPES` (package-catalog.mjs): `skill`, `slash-command`, `rules`, `hooks`, `permissions`,
-`codex_tool_approvals`, `mcp`, `plugin`, `service`, `harness-config`, `package-runtime-asset`,
-`claude-plugin-dir`.
-No shipped package uses `mcp` or `codex_tool_approvals` today; the test-only fixture packages in
+`mcp-tool-approvals`, `mcp`, `plugin`, `service`, `harness-config`, `package-runtime-asset`,
+`plugin-dir`.
+No shipped package uses `mcp` or `mcp-tool-approvals` today; the test-only fixture packages in
 `scripts/test/fixtures/packages/` cover them.
+
+**Harness-specific work lives in the provider, never in package code.** Every resource that touches
+a harness's own config goes through a provider capability (`package-permissions`, `package-plugins`,
+`package-plugin-dirs`, `package-tool-approvals`, `package-config`, `mcp`), and the package code
+hands the provider an io object (`providerIO`: its config path and a tracked write). A resource
+with a `harness` targets that provider; one without applies to every provider declaring the
+capability. `scripts/test/package-provider-boundary-check.mjs` fails if `packages.mjs` or any
+`package-*.mjs` names a provider id outside a comment or imports a provider's own folder, so a new
+resource type adds a capability and adapter methods rather than an `if (harness === ...)`.
 
 Validation depth differs by type — know this before assuming everything is checked:
 
@@ -117,14 +126,14 @@ Validation depth differs by type — know this before assuming everything is che
 | `slash-command` | Yes — slug name, source path shape, source file exists on disk, harnesses array shape | rendered via `slash-commands.mjs` |
 | `rules` | Yes — source exists on disk; `harness` is optional (absent = every rules-capable harness) or a registered rules-capable harness | `renderHomeRules()` |
 | `hooks` | Yes — source exists, valid harness, `scripts[]` entries exist on disk if present | `mergeHooksInto`/`unmergeHooksFrom`, `installHookScripts` |
-| `permissions` | Yes — non-empty `.allow` array of non-empty strings | `mergePermissions(path, component.allow)` — expects `.allow: string[]` |
-| `codex_tool_approvals` | Yes — non-empty `.server` string, non-empty `.approvals` object | `mergeCodexToolApprovals` — expects `.server: string`, `.approvals: {toolName: approvalMode}` |
-| `mcp` | Yes — non-empty `.preset` string | `installMcpPreset(component.preset)` — expects `.preset: string` matching `manifests/inventory/mcp-servers.json`/`mcp-presets.json` |
-| `plugin` | Yes — non-empty `.id`, `.marketplace.{name,source}` present | `enablePlugin` — expects `.id`, `.marketplace.{name,source}` |
+| `permissions` | Yes — non-empty `.allow` array of non-empty strings; optional `harness` must declare `package-permissions` | `packages.mergePermissions` on each target provider (today Claude) |
+| `mcp-tool-approvals` | Yes — non-empty `.server` string, non-empty `.approvals` object; optional `harness` must declare `package-tool-approvals` | `packages.mergeToolApprovals` on each target provider (today Codex) — `.approvals: {toolName: approvalMode}` |
+| `mcp` | Yes — non-empty `.preset` string | `mcp.installPreset` on every MCP-capable provider — `.preset` matches `manifests/inventory/mcp-servers.json`/`mcp-presets.json` |
+| `plugin` | Yes — non-empty `.id`, `.marketplace.{name,source}` present; optional `harness` must declare `package-plugins` | `packages.enablePlugin` on each target provider (today Claude) |
 | `service` | Yes — non-empty `.id` | `setService(component.id, ...)` — expects `.id` |
 | `harness-config` | Yes — source exists inside package dir; target is a registered package-config-capable harness | package-managed live harness config merge/unmerge |
 | `package-runtime-asset` | Yes — source exists inside package dir, optional relative `.target` | copied to `~/.roborepo/package-runtime/<package-id>/` and referenced by harness config |
-| `claude-plugin-dir` | Yes — source folder inside package dir holds `.claude-plugin/plugin.json` | folder copied to `~/.roborepo/package-runtime/<package-id>/<folder>/` and added to `env.CLAUDE_CODE_PLUGIN_DIRS` in Claude settings; other entries in that list are preserved |
+| `plugin-dir` | Yes — required `harness` declaring `package-plugin-dirs`; that provider's `validatePluginDir` accepts the source folder (Claude: holds `.claude-plugin/plugin.json`) | folder copied to `~/.roborepo/package-runtime/<package-id>/<folder>/`, then `packages.registerPluginDir` (Claude: added to `env.CLAUDE_CODE_PLUGIN_DIRS`, other entries preserved) |
 
 All resource types get shape-level validation at `roborepo package validate` time, not
 just at enable-time. If you're extending one
@@ -304,7 +313,7 @@ Add these rows to `docs/user/reference/roborepo-cli.md` and to
 ## Apply behavior (already automatic — do not reintroduce a manual step)
 
 `enablePackage`/`disablePackage` in `packages.mjs` mutate live harness state directly as part of
-the same call: permissions merged into `USER_CLAUDE_SETTINGS`, hooks merged via
+the same call: permissions merged through the owning provider, hooks merged via
 `mergeHooksInto`/`unmergeHooksFrom`, rules re-rendered via `renderHomeRules()`, MCP presets
 installed/removed, skill commands installed via `installPackageCommands`. **There is no separate
 apply/sync step required after enable or disable** — this already matches the goal of "package

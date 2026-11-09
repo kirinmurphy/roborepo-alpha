@@ -23,7 +23,7 @@
       "allow": ["mcp__fixture-tool__lookup", "mcp__fixture-tool__register_edit"]
     },
     {
-      "type": "codex_tool_approvals",
+      "type": "mcp-tool-approvals",
       "server": "fixture-tool",
       "approvals": { "register_edit": "auto", "lookup": "approve" }
     }

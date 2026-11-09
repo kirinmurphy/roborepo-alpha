@@ -17,7 +17,8 @@ import { resolveHarnessPath } from "../paths.mjs";
 import { mergeHooksMap } from "../hooks-merge.mjs";
 import { mergeClaudeSettings, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
 import { renderClaudeSettings } from "../permissions-render.mjs";
-import { mcpRemove, mcpAddServer, mcpRemoveServer, mcpList } from "./mcp.mjs";
+import { mcpRemove, mcpAddServer, mcpRemoveServer, mcpList, mcpInstallPreset, mcpRemovePreset, mcpHasServer } from "./mcp.mjs";
+import { claudePackageAdapters } from "./packages.mjs";
 import { hooksWriteRemove } from "./hooks-withdraw.mjs";
 import { transcriptStats } from "../transcript-parse.mjs";
 import { locateTranscript, extractHeavyTurns, transcriptTitle } from "../transcript-locate.mjs";
@@ -50,22 +51,26 @@ function statusLineMatches(existing, desired) {
 // implementation itself. mergePackageComponent/unmergePackageComponent take the already-read
 // component config (not the raw component) so this module never needs package-harness-config.mjs's
 // readHarnessConfig, which depends on paths.mjs -> registry.mjs -> this module — a cycle.
-function mergePackageComponent(pkg, config, { claudeSettingsPath, readSettings, writeSettings }) {
+function readSettingsFile(configPath) {
+  try { return JSON.parse(fs.readFileSync(configPath, "utf8")); } catch { return {}; }
+}
+
+function mergePackageComponent(pkg, config, io) {
   if (!config.statusLine || typeof config.statusLine !== "object") {
     throw new Error(`${pkg.id}: Claude harness-config needs statusLine`);
   }
-  const settings = readSettings(claudeSettingsPath);
+  const settings = readSettingsFile(io.configPath);
   if (settings.statusLine && !statusLineMatches(settings.statusLine, config.statusLine)) {
     console.warn("  conflict: Claude statusLine already exists; leaving unmanaged setting unchanged");
     return;
   }
   settings.statusLine = config.statusLine;
-  writeSettings(claudeSettingsPath, settings);
-  console.log(`  wired: Claude statusLine -> ${claudeSettingsPath}`);
+  io.write(`${JSON.stringify(settings, null, 2)}\n`);
+  console.log(`  wired: Claude statusLine -> ${io.configPath}`);
 }
 
-function unmergePackageComponent(pkg, config, { claudeSettingsPath, readSettings, writeSettings }) {
-  const settings = readSettings(claudeSettingsPath);
+function unmergePackageComponent(pkg, config, io) {
+  const settings = readSettingsFile(io.configPath);
   if (!settings.statusLine) {
     console.log("  ok: Claude statusLine already absent");
     return;
@@ -75,8 +80,18 @@ function unmergePackageComponent(pkg, config, { claudeSettingsPath, readSettings
     return;
   }
   delete settings.statusLine;
-  writeSettings(claudeSettingsPath, settings);
-  console.log(`  removed: Claude statusLine <- ${claudeSettingsPath}`);
+  io.write(`${JSON.stringify(settings, null, 2)}\n`);
+  console.log(`  removed: Claude statusLine <- ${io.configPath}`);
+}
+
+function probePackageComponent(config, { configPath }) {
+  const { statusLine } = readSettingsFile(configPath);
+  const observed = statusLineMatches(statusLine, config.statusLine);
+  return {
+    observed,
+    owner: observed ? "roborepo" : statusLine ? "external" : null,
+    detail: observed ? "Claude statusLine matches package config" : statusLine ? "Claude statusLine is unmanaged" : "Claude statusLine missing",
+  };
 }
 
 // Claude stores hooks nested under settings.json's "hooks" key, alongside permissions etc. — the
@@ -140,6 +155,7 @@ export const claudeProvider = defineHarnessProvider({
       render: (content) => normalizeRootConfigContent("claude", content),
       mergePackageComponent,
       unmergePackageComponent,
+      probePackageComponent,
     },
     mcp: {
       ...stubGroups.mcp,
@@ -147,7 +163,11 @@ export const claudeProvider = defineHarnessProvider({
       addServer: mcpAddServer,
       removeServer: mcpRemoveServer,
       list: mcpList,
+      installPreset: mcpInstallPreset,
+      removePreset: mcpRemovePreset,
+      hasServer: mcpHasServer,
     },
+    packages: claudePackageAdapters,
     hooks: {
       read: hooksRead,
       core: () => readCoreHooksFragment(),

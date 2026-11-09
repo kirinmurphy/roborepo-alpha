@@ -743,11 +743,11 @@ const EXTERNAL_COMPONENT_NOUNS = {
   rules: "rules",
   hooks: "hooks",
   permissions: "permissions",
-  codex_tool_approvals: "Codex tool approvals",
+  "mcp-tool-approvals": "MCP tool approvals",
   // The harness-config probe only compares status line settings, so that is what was found.
   "harness-config": "status line",
   "package-runtime-asset": "script file",
-  "claude-plugin-dir": "Claude plugin folder",
+  "plugin-dir": "plugin folder",
 };
 // Types whose id is a name a person would recognize; the rest carry a source path, so the noun alone reads better.
 const NAMED_COMPONENT_TYPES = new Set(["skill", "mcp", "plugin", "command"]);
