@@ -44,14 +44,16 @@ whose HEAD files hold a placeholder, asks Git, and caches the answer on `tables.
 operation, commits only the paths it returned, and pushes. The operation reads the fresh tree and returns
 `{ files, message, result }` without writing, so a rejected push can re-run it and `plans-order.json` is
 recomputed rather than merged. A remote change to the same plan refuses with `PLAN_STORE_CONFLICT`. An
-unreachable remote keeps the commit and returns `synchronized: false`; `refreshStore`, which portal
+unreachable remote, or one that refuses the push (`[remote rejected]`, from a hook or branch rule), keeps
+the commit and returns `synchronized: false` with Git's reason; a refusal is not retried as a race. `refreshStore`, which portal
 startup and Refresh call, or the next mutation that reaches the remote, pushes pending commits first. Content identical to the file commits
 nothing. A failed write or commit restores every touched file.
 
 Store commands run with hooks disabled, because a repository's code hooks can't pass on a tree holding
 only plans, and network Git gets a longer timeout through `runGitProcess` without blocking the server's
-event loop. `linkedWorktrees` filters the reserved branch out unless the store asks for it, so a new
-consumer can't list it by accident.
+event loop. `linkedWorktrees` filters the reserved worktree out unless the store asks for it, so a new
+consumer can't list it by accident. It recognizes that worktree by its branch, or, while HEAD is off
+the branch, by a rebase's head name or the lock reason the store writes.
 
 `plan-writes.mjs` holds the named writes (`savePlan`, `approvePlan`, `setConfigNamespaces`). `plan-git.mjs`
 holds code-branch helpers only.

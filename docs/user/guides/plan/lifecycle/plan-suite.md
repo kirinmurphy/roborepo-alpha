@@ -101,8 +101,9 @@ example `Submit plan plan-lifecycle-review-and-ship-workflow for review`. The su
 and questions name a plan by its title, with its id in parentheses once. A refused move changes
 nothing, and running a move again after it succeeded commits nothing.
 
-If the remote can't be reached, the commit stays local and the command reports **not synchronized**.
-The next command or portal Refresh that reaches the remote pushes it. If another machine changed the
+If the remote can't be reached, or refuses the push (a hook or branch rule), the commit stays local
+and the command reports **not synchronized** with Git's reason. The next command or portal Refresh
+that reaches the remote pushes it; a refusal keeps recurring until the rule allows the push. If another machine changed the
 same plan, the command refuses rather than overwriting.
 
 Direct writes to `repo_plans` are prevented differently per harness. In Claude, Write and Edit follow

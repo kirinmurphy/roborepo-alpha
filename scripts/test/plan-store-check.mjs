@@ -234,6 +234,7 @@ try {
   git(rebasingStore, "rebase", "--abort");
   git(rebasingStore, "checkout", "--quiet", "--detach");
   refused(run(rebasing, "save", source("test-mid.md", planDoc({ id: "midreb01" }))), "a save on a detached store", /Finish or abort/);
+  refused(run(rebasing, "start", "rebase01", "--worktree", path.basename(rebasingStore)), "start naming a detached store", /reserved plans worktree/);
   assert.deepEqual(linkedWorktrees(path.join(rebasing, ".git")), [], "a detached store stays out of the worktree list");
   git(rebasingStore, "checkout", "--quiet", "repo-plans");
 

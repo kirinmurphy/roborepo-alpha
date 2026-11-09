@@ -7,8 +7,9 @@
 // A mutation holds the lock while it fetches, fast-forwards, runs the operation, commits only the
 // operation's paths, and pushes. A rejected push re-runs the operation on the new remote state,
 // because every operation derives its files from what is on disk, so plans-order.json is recomputed
-// rather than merged. A remote that cannot be reached keeps the commit and reports
-// `synchronized: false`; the next call that reaches it pushes pending commits first.
+// rather than merged. A remote that cannot be reached, or that refuses the push itself (a hook or
+// branch rule), keeps the commit and reports `synchronized: false` with the reason; the next call
+// that reaches it pushes pending commits first.
 //
 // Every Git command runs through runGitProcess, whose hardening sets core.hooksPath=/dev/null. A
 // repository's code hooks cannot pass on a tree that holds only plans, and the explicit refspec
@@ -339,7 +340,9 @@ async function pushBranch(store) {
     await storeGit(store, ["update-ref", TRACKING_REF, LOCAL_REF]);
     return { state: "pushed", reason: null };
   }
-  return isPushRejection(pushed) ? { state: "rejected", reason: failureReason(pushed) } : { state: "unreachable", reason: failureReason(pushed) };
+  // "raced": another machine pushed first, so the change can be re-applied. "not-accepted": the remote
+  // could not be reached or refused the push itself, which a retry would not change.
+  return isPushRejection(pushed) ? { state: "raced", reason: failureReason(pushed) } : { state: "not-accepted", reason: failureReason(pushed) };
 }
 
 // Another machine pushed first, so re-applying the change can succeed. A remote that refuses the
@@ -381,7 +384,7 @@ export async function mutateStore({ cwd = process.cwd(), store = requireStore(cw
       if (!(pendingCommitCount(store) || 0)) return outcome({ synchronized: true, reason: null });
       const pushed = await pushBranch(store);
       if (pushed.state === "pushed") return outcome({ synchronized: true, reason: null });
-      if (pushed.state === "unreachable") return outcome({ synchronized: false, reason: pushed.reason });
+      if (pushed.state === "not-accepted") return outcome({ synchronized: false, reason: pushed.reason });
 
       // Another machine pushed between the fetch and the push. Set this commit aside and re-apply the
       // operation to the new state. `--keep` leaves unrelated local edits alone.

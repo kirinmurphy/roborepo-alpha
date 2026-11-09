@@ -401,13 +401,13 @@ Suite skills run these commands rather than re-deriving the rules they implement
 from any checkout of the repository, and takes a plan id or a store-relative path such as
 `plans/ready/x.md`. Every change to the plans branch is one commit of only the affected paths, pushed
 automatically. Each transition (`promote`, `start`, `submit`, `reopen`, `close`, `archive`) exits 1
-when it refuses or a post-commit check fails. With the remote unreachable a change exits 0, keeps the
-commit, and reports `synchronized: false`; the next change or portal Refresh that reaches the remote
-pushes it. `--base` names the code branch the gates compare against:
+when it refuses or a post-commit check fails. With the remote unreachable, or refusing the push
+through a hook or branch rule, a change exits 0, keeps the commit, and reports `synchronized: false`
+with Git's reason; the next change or portal Refresh that reaches the remote pushes it. `--base` names the code branch the gates compare against:
 
 | Command | What it does |
 | --- | --- |
-| `roborepo plans init [--worktree-root <path>] [--repo-name <name>] [--json]` | Creates or reconnects `origin/repo-plans` and the reserved worktree, recovers a missing local checkout, and pushes pending commits. Never reports a local-only success, and never replaces an occupied path. Running it again changes nothing. |
+| `roborepo plans init [--worktree-root <path>] [--repo-name <name>] [--json]` | Creates or reconnects `origin/repo-plans` and the reserved worktree, recovers a missing local checkout, recreates a deleted remote branch from this clone's copy, and pushes pending commits. Never reports a local-only success, and never replaces an occupied path. Running it again changes nothing. |
 | `roborepo plans show <plan> [--json]` | Refreshes from the remote and prints a plan. |
 | `roborepo plans save <file.md> [--json]` | Validates and commits a plan: a new one enters `backlog/` under the file's name, and an existing `id` keeps its path whatever the file is called. Refuses a change to `id`, `worktree`, or `### Approval`. |
 | `roborepo plans approve <plan> --commit <sha> --confirmed-by <who> [--json]` | Records `### Approval` for one exact implementation commit. |
