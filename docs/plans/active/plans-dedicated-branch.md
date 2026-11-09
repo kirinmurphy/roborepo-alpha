@@ -366,6 +366,8 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 - **Reftable worktrees resolve HEAD through Git.** Every HEAD file in a reftable repository holds `ref: refs/heads/.invalid`, so `linkedWorktrees` could not find the store. It now asks Git for those worktrees only, caching on the worktree's `tables.list`, so pollers on `files` repositories stay free of subprocesses. Alternative: reading reftable's binary format, which is far more code for the same answer.
 
 - **Portal specs empty a fixture rather than delete its root.** A registered checkout whose parent is gone reads as unreadable, and Home keeps listing it, which put a stale repo ahead of the card the keyboard focus spec expects. `removeFixtureContents` leaves an empty folder in the temp directory per fixture. Alternative: changing the focus spec's expectation, which would hide stale repos from every later spec's Home only in that one test.
+- **The reserved worktree is recognized by its rebase head or lock reason when HEAD is off its branch.** Alternative: the admin folder's name, which Git suffixes when `repo_plans` is taken. The lock reason is written only by the store.
+- **A push the remote refuses is a not-synchronized result, like an unreachable remote.** The commit stays and the next reachable mutation retries it, with Git's `[remote rejected]` line as the reason. Alternative: a hard error, which would stop a Codex run for a branch rule a person must change.
 - **The remote-sync menu flake stays out of this plan.** `cli-surface-integration-check.mjs` fails intermittently on the same assertion on `main` (2 of 6 runs) and on this branch; this branch does not touch that flow.
 
 ## Open Questions
@@ -374,15 +376,25 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 
 ## Not tested
 
-- [ ] A real Codex session with the rendered profile saves a plan. The grant list was measured with `codex exec` by hand and `codex-plans-store-grants-check.mjs` pins the rendered list, but no automated check runs Codex, which needs its login and a model call.
+None. The real Codex save was run once by hand (see Verification); no automated check runs Codex, which needs its login and a model call, and `codex-plans-store-grants-check.mjs` pins the rendered grant list.
 
 ## Review
 
 ### Findings
 
+- [x] A store with HEAD off `repo-plans` (mid-rebase, detached) read as no store, and cleanup failed open — fixed (da30cccd)
+- [x] A push the remote refused was retried as a race and reported as busy — fixed (da30cccd)
+- [x] `plans init` could not recreate a deleted remote branch from the local one — fixed (da30cccd)
+- [x] A replayed offline unpin was undone by a union of pins — fixed (da30cccd)
+- [x] Portal order, pin, and import errors carried the plans worktree's absolute path — fixed (da30cccd)
+- [x] A test-cli label still described merging copies by plan id — fixed (da30cccd)
+- [x] The Codex save was listed as untested although an agent can run it — run, see Verification
+
 ### Verification
 
 - Gate: `npm run check` passed end to end at 54ab2bc2 (427 CLI assertions, 76 of 76 unit suites, package install, four clean-machine suites, 252 portal specs). Windows installer parity skipped: `pwsh` unavailable.
+- Validation pass 1 (fresh-context subagent) at 54821b17: 7 fix findings, all fixed above.
+- Codex save, run by `codex exec` (codex-cli 0.166.0) with the profile `renderPermissionsTo` writes for a fixture repo kept outside `/tmp` and `$TMPDIR`, so only the rendered grants made Git writable: `roborepo plans save` exited 0, committed to the store, and reported `synchronized: false` with `! [remote rejected] repo-plans -> repo-plans (unpacker error)`, because the bare origin sat outside the sandbox. A later `plans init` outside Codex pushed it (`synchronized: true`, nothing pending).
 - Base failure: `scripts/test/cli-surface-integration-check.mjs` fails intermittently on `main` too, on `single-repo refresh should leave other cached ahead repos in the main list` (2 of 6 runs on an export of `main`).
 
 ## Follow-up task
