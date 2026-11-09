@@ -138,7 +138,10 @@ if (!result.synchronized) {
 
 // Trust the remote, not the push's exit status: every file must read back byte for byte.
 const fetched = git(store.root, ["fetch", "--quiet", "origin", "refs/heads/repo-plans:refs/remotes/origin/repo-plans"]);
-if (!fetched.ok) stop([`could not read the remote back: ${fetched.stderr}`]);
+if (!fetched.ok) {
+  console.error(`Imported and pushed, but the remote could not be read back to verify it: ${fetched.stderr}. Rerun to verify.`);
+  process.exit(1);
+}
 const mismatched = Object.entries(files).filter(([target, content]) => git(store.root, ["show", `origin/repo-plans:${target}`]).raw !== content).map(([target]) => target);
 if (mismatched.length) {
   console.error(`The remote does not match these files:\n${mismatched.join("\n")}`);

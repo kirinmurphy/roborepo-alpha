@@ -126,6 +126,10 @@ test.describe("Import Plan under All repos", () => {
   });
 
   test("the dialog asks which repo, and the plan lands only in the chosen one", async ({ page }) => {
+    const previews = [];
+    page.on("request", (request) => {
+      if (request.url().includes("/api/plans/import/preview")) previews.push(request);
+    });
     await page.goto("/plans");
     await page.getByRole("button", { name: "Import Plan" }).click();
     const dialog = page.locator("#plan-import-dialog");
@@ -135,11 +139,12 @@ test.describe("Import Plan under All repos", () => {
     const file = path.join(uploads, "picked-import.md");
     fs.writeFileSync(file, planDoc({ id: "pickedi1", title: "Picked repo import" }));
     await dialog.locator("input[type=file]").setInputFiles(file);
-    // No preview runs until a repo is chosen.
     await expect(dialog.getByRole("button", { name: "Add to Backlog" })).toBeDisabled();
-    await expect(dialog.locator("[data-slot=title]")).not.toHaveText("Picked repo import");
+    await page.waitForTimeout(500);
+    expect(previews, "no preview runs until a repo is chosen").toHaveLength(0);
     await repo.selectOption({ label: "import-pick-two" });
     await expect(dialog.locator("[data-slot=title]")).toHaveText("Picked repo import");
+    expect(previews).toHaveLength(1);
     await dialog.getByRole("button", { name: "Add to Backlog" }).click();
     await expect(dialog.locator("[data-slot=status]")).toContainText("pushed it to the remote");
     expect(fx.git(second, "show", "origin/repo-plans:plans/backlog/picked-import.md")).toContain("Picked repo import");

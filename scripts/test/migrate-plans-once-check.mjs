@@ -77,6 +77,22 @@ try {
   assert.equal(result.status, 1, "a disagreeing config stops the helper");
   assert.match(result.stderr, /old config puts the plans worktree at/);
 
+  // An unreachable origin keeps the import local and says so; a rerun pushes it without a new commit.
+  const offline = fx.repository("offline", { "docs/plans/backlog/test-offline.md": doc("offline1") });
+  const offlineStore = fx.storePath(offline);
+  const origin = path.join(fx.tmp, "remotes", "offline.git");
+  fs.renameSync(origin, `${origin}.away`);
+  result = run(offline);
+  fs.renameSync(`${origin}.away`, origin);
+  assert.equal(result.status, 1, "a local-only import stops the helper");
+  assert.match(result.stderr, /Imported on this machine but not pushed/);
+  assert.doesNotMatch(result.stderr, /Nothing was migrated/);
+  const localHead = fx.git(offlineStore, "rev-parse", "HEAD");
+  result = run(offline);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(fx.git(offlineStore, "rev-parse", "HEAD"), localHead, "the rerun commits nothing");
+  assert.ok(fx.git(offline, "show", "origin/repo-plans:plans/backlog/test-offline.md"), "the rerun pushed the import");
+
   console.log("migrate-plans-once-check: ok");
 } finally {
   fx.cleanup();
