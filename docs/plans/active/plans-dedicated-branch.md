@@ -389,11 +389,16 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - [x] Portal order, pin, and import errors carried the plans worktree's absolute path — fixed (da30cccd)
 - [x] A test-cli label still described merging copies by plan id — fixed (da30cccd)
 - [x] The Codex save was listed as untested although an agent can run it — run, see Verification
+- [x] Docs described "not synchronized" only for an unreachable remote, and the reserved-worktree filter only by branch — fixed (5efc953b)
+- [x] A refused push left the store's push state named "unreachable" — fixed (5efc953b)
+- [x] No test covered `start` refusing the store while it is detached — fixed (5efc953b)
 
 ### Verification
 
 - Gate: `npm run check` passed end to end at 54ab2bc2 (427 CLI assertions, 76 of 76 unit suites, package install, four clean-machine suites, 252 portal specs). Windows installer parity skipped: `pwsh` unavailable.
 - Validation pass 1 (fresh-context subagent) at 54821b17: 7 fix findings, all fixed above.
+- Gate: `npm run check` passed end to end again at 8e1ba4c4 (427 CLI assertions, 76 of 76 unit suites, 252 portal specs).
+- Validation pass 2 (fresh-context subagent) at 8e1ba4c4: 3 fix findings, all fixed above.
 - Codex save, run by `codex exec` (codex-cli 0.166.0) with the profile `renderPermissionsTo` writes for a fixture repo kept outside `/tmp` and `$TMPDIR`, so only the rendered grants made Git writable: `roborepo plans save` exited 0, committed to the store, and reported `synchronized: false` with `! [remote rejected] repo-plans -> repo-plans (unpacker error)`, because the bare origin sat outside the sandbox. A later `plans init` outside Codex pushed it (`synchronized: true`, nothing pending).
 - Base failure: `scripts/test/cli-surface-integration-check.mjs` fails intermittently on `main` too, on `single-repo refresh should leave other cached ahead repos in the main list` (2 of 6 runs on an export of `main`).
 
