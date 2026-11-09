@@ -398,6 +398,9 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - [x] The plan-execute skill and plan schema described `synchronized: false` as unreachable only — fixed (d3402fcf)
 - [x] The migration helper printed "Nothing was migrated" after committing the import locally — fixed (52f6241c)
 - [x] No spec covered the import dialog asking which repo under All repos — fixed (52f6241c)
+- [x] The migration helper said "Nothing was migrated" when only the read-back after a push failed — fixed (dad52e4f)
+- [x] No check covered the migration helper's local-only path — fixed (dad52e4f)
+- [x] The import spec's no-preview check could not fail if the guard regressed — fixed (dad52e4f)
 
 ### Verification
 
@@ -408,6 +411,8 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - Validation pass 3 (fresh-context subagent) at bf1f2d88: 3 fix findings, all fixed above.
 - Validation pass 4 (fresh-context subagent) at 51a48a67: 1 fix finding, fixed above.
 - Validation pass 5 (fresh-context subagent) at 79ebea7a: 2 fix findings, fixed above. The gate at 79ebea7a failed one portal spec on an `index.lock` race in the backlog spec's own store staging, which now retries (52f6241c).
+- Validation pass 6 (fresh-context subagent) at 18e5f72d: 3 fix findings, fixed above.
+- Intermittent, outside the diff: the gate at 18e5f72d stopped in `test-cli.sh`'s MCP section on `Claude Code has no validated CLI or desktop runtime`; `test-cli.sh` alone then passed (427 passed, 0 failed), and no MCP or harness code changed since the last passing run.
 - Intermittent, outside the diff: `browser-playwright-check.mjs` failed once in the gate at 51a48a67 (`the mismatch images are evidence`) and passed 3 of 3 reruns; this branch changes no browser code.
 - Codex save, run by `codex exec` (codex-cli 0.166.0) with the profile `renderPermissionsTo` writes for a fixture repo kept outside `/tmp` and `$TMPDIR`, so only the rendered grants made Git writable: `roborepo plans save` exited 0, committed to the store, and reported `synchronized: false` with `! [remote rejected] repo-plans -> repo-plans (unpacker error)`, because the bare origin sat outside the sandbox. A later `plans init` outside Codex pushed it (`synchronized: true`, nothing pending).
 - Base failure: `scripts/test/cli-surface-integration-check.mjs` fails intermittently on `main` too, on `single-repo refresh should leave other cached ahead repos in the main list` (2 of 6 runs on an export of `main`).
