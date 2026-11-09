@@ -2054,7 +2054,7 @@ assert "plans: portal mutation-orchestration helpers" \
   node "${repo_root}/scripts/test/plans-portal-state-check.mjs"
 
 # Every checkout of a repository reads one set of plans from its store.
-assert "plan-suite: every checkout of a repository, merged by plan id" \
+assert "plan-suite: every checkout of a repository reads its one plans store" \
   node "${repo_root}/scripts/test/plan-suite-canonical-check.mjs"
 
 # The plans store end to end: fresh clones, offline saves, two clones, hooks, and the commands that

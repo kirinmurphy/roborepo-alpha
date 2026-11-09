@@ -19,7 +19,7 @@ import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { resolveGitDir } from "../repositories/identity.mjs";
 import { runGitProcess, runGitProcessSync } from "../repositories/git-exec.mjs";
-import { RESERVED_PLANS_BRANCH, linkedWorktrees } from "../repositories/worktree-inventory.mjs";
+import { RESERVED_PLANS_BRANCH, RESERVED_PLANS_LOCK_REASON, linkedWorktrees } from "../repositories/worktree-inventory.mjs";
 import { domainError } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 import { PLANS_CONFIG_RELATIVE_PATH } from "./naming.mjs";
@@ -54,12 +54,12 @@ export function repositoryGitDirs(start, { fsApi = fs } = {}) {
 }
 
 // The reserved worktree of the repository containing `cwd`, or null. Found by its checked-out
-// branch, never by recomputing the path, and read from Git's administrative files so a poller can
+// branch (or, while HEAD is off it, by its rebase or lock), never by recomputing the path, and read from Git's administrative files so a poller can
 // call it without a subprocess. `missing` means Git still records the worktree but its folder is gone.
 export function locateStore(cwd = process.cwd(), { fsApi = fs } = {}) {
   const git = repositoryGitDirs(cwd, { fsApi });
   if (!git) return null;
-  const reserved = linkedWorktrees(git.commonDir, { fsApi, includeReserved: true }).find((worktree) => worktree.branch === PLANS_BRANCH);
+  const reserved = linkedWorktrees(git.commonDir, { fsApi, includeReserved: true }).find((worktree) => worktree.reserved);
   if (!reserved) return null;
   return {
     root: reserved.path,
@@ -121,6 +121,12 @@ export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktr
     await fetchInto(run);
   } else if (!(await run(["rev-parse", "--verify", "-q", LOCAL_REF])).ok) {
     state = (await createRemoteBranch({ run, primary, worktreeRoot, repoName })) ? "created" : "connected";
+  } else {
+    // The remote lost the branch but this clone still has it: the local copy recreates it.
+    const pushed = await run(["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+    if (!pushed.ok) throw initFailure("The plans branch could not be pushed back to `origin`, so nothing was set up.", "Check that you can push to `origin`, then run `roborepo plans init` again.", pushed);
+    await run(["update-ref", TRACKING_REF, LOCAL_REF]);
+    state = "created";
   }
   const { recovered, path: storePath } = await connectWorktree({ run, primary, commonDir: git.commonDir });
   if (recovered && state === "connected") state = "recovered";
@@ -206,7 +212,7 @@ async function connectWorktree({ run, primary, commonDir }) {
   const added = await run(["worktree", "add", "--quiet", destination, PLANS_BRANCH]);
   if (!added.ok) throw initFailure("The plans worktree could not be created.", "Run `git worktree list` in the repo, resolve what it shows, then try again.", added);
   // `git worktree remove` then refuses without a double force.
-  await run(["worktree", "lock", "--reason", "RoboRepo plans store", destination]);
+  await run(["worktree", "lock", "--reason", RESERVED_PLANS_LOCK_REASON, destination]);
   existing = locateStore(primary);
   if (!existing || existing.commonDir !== commonDir) throw initFailure("The plans worktree could not be confirmed.", "Run `git worktree list` in the repo, then try again.", added);
   return { recovered, path: existing.root };
@@ -320,7 +326,9 @@ export function mergeOrder(base, remote, pending) {
     const merged = [...kept, ...mine.filter((id) => !before.includes(id) && !kept.includes(id))];
     if (merged.length) namespaces[namespace] = merged;
   }
-  const pinned = [...new Set([...(remote.pinned || []), ...(pending.pinned || [])])];
+  const unpinned = new Set((base.pinned || []).filter((namespace) => !(pending.pinned || []).includes(namespace)));
+  const keptPins = (remote.pinned || []).filter((namespace) => !unpinned.has(namespace));
+  const pinned = [...keptPins, ...(pending.pinned || []).filter((namespace) => !(base.pinned || []).includes(namespace) && !keptPins.includes(namespace))];
   return { schemaVersion: remote.schemaVersion ?? 1, ...(pinned.length ? { pinned } : {}), namespaces };
 }
 
@@ -334,13 +342,16 @@ async function pushBranch(store) {
   return isPushRejection(pushed) ? { state: "rejected", reason: failureReason(pushed) } : { state: "unreachable", reason: failureReason(pushed) };
 }
 
+// Another machine pushed first, so re-applying the change can succeed. A remote that refuses the
+// push itself ("[remote rejected]", from a hook or a branch rule) would refuse every retry.
 function isPushRejection(result) {
-  return /\b(rejected|non-fast-forward|fetch first|stale info)\b/i.test(String(result.stderr || ""));
+  const stderr = String(result.stderr || "");
+  return !/\[remote rejected\]/i.test(stderr) && /\b(rejected|non-fast-forward|fetch first|stale info)\b/i.test(stderr);
 }
 
 function failureReason(result) {
   const lines = String(result.stderr || result.error || "the remote could not be reached").trim().split("\n");
-  return lines[lines.length - 1].trim();
+  return (lines.find((line) => /\[remote rejected\]/i.test(line)) ?? lines[lines.length - 1]).trim();
 }
 
 // ---------------------------------------------------------------------------- mutation

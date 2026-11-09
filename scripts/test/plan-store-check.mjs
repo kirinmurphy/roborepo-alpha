@@ -8,6 +8,9 @@ import { setTimeout as delay } from "node:timers/promises";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
 import { startHermeticPortal } from "./lib/portal-cleanup.mjs";
 import { withInvalidatedApproval } from "../../modules/plan-suite/plan-writes.mjs";
+import { mergeOrder } from "../../modules/plan-suite/plan-store.mjs";
+import { domainError } from "../../modules/plan-suite/index.mjs";
+import { withoutStorePath } from "../cli/plans.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { createPlanFixture, planDoc } from "./lib/plan-git-fixture.mjs";
 
@@ -221,6 +224,43 @@ try {
   } else {
     console.log("plan-store-check: reftable section skipped; this Git cannot create reftable repositories");
   }
+
+  // ---- a store whose HEAD is off its branch is still the store: mid-rebase, or detached by hand
+  const rebasing = repository("rebasing", { "plans/backlog/test-rebase.md": planDoc({ id: "rebase01" }) });
+  const rebasingStore = storePath(rebasing);
+  assert.notEqual(fx.tryGit(rebasingStore, "-c", "core.hooksPath=/dev/null", "rebase", "--exec", "false", "HEAD~1").status, 0, "the rebase stops");
+  refused(run(rebasing, "save", source("test-mid.md", planDoc({ id: "midreb01" }))), "a save during a rebase", /Finish or abort/);
+  assert.deepEqual(linkedWorktrees(path.join(rebasing, ".git")), [], "a rebasing store stays out of the worktree list");
+  git(rebasingStore, "rebase", "--abort");
+  git(rebasingStore, "checkout", "--quiet", "--detach");
+  refused(run(rebasing, "save", source("test-mid.md", planDoc({ id: "midreb01" }))), "a save on a detached store", /Finish or abort/);
+  assert.deepEqual(linkedWorktrees(path.join(rebasing, ".git")), [], "a detached store stays out of the worktree list");
+  git(rebasingStore, "checkout", "--quiet", "repo-plans");
+
+  // ---- a remote that refuses the push is reported with its reason, not retried as a race
+  const refusing = repository("refusing");
+  fs.writeFileSync(path.join(tmp, "remotes", "refusing.git", "hooks", "pre-receive"), "#!/bin/sh\necho 'plans branch is protected' >&2\nexit 1\n", { mode: 0o755 });
+  const declined = ok(run(refusing, "save", source("test-declined.md", planDoc({ id: "declin01" }))), "a save the remote refuses");
+  assert.equal(declined.synchronized, false);
+  assert.match(declined.reason, /remote rejected/, "the reason is Git's refusal");
+
+  // ---- init recreates a remote branch that was deleted, from this clone's copy
+  const lost = repository("lost", { "plans/backlog/test-lost.md": planDoc({ id: "lost0001" }) });
+  git(path.join(tmp, "remotes", "lost.git"), "update-ref", "-d", "refs/heads/repo-plans");
+  assert.equal(initStore(lost).state, "created");
+  assert.ok(remoteHas(lost, "plans/backlog/test-lost.md"), "the remote has the branch and its plans again");
+
+  // ---- the portal's copy of a store error names no absolute path
+  for (const code of ["PLAN_STORE_DIVERGED", "PLAN_STORE_DIRTY"]) {
+    const sent = withoutStorePath(domainError(code, "Refused.", { resolution: `Resolve it with Git in ${rebasingStore}.` }));
+    assert.doesNotMatch(sent.resolution, /\//, `${code} reaches the browser without a path`);
+    assert.match(sent.resolution, /roborepo plans init/);
+  }
+
+  // ---- a replayed offline order change keeps its unpins and pins over the remote's
+  const pins = (base, remote, pending) => mergeOrder({ pinned: base, namespaces: {} }, { pinned: remote, namespaces: {} }, { pinned: pending, namespaces: {} }).pinned ?? [];
+  assert.deepEqual(pins(["api"], ["api", "web"], []), ["web"], "an offline unpin survives a remote pin");
+  assert.deepEqual(pins(["api"], ["web"], ["api", "cli"]), ["web", "cli"], "the remote's unpin and the pending pin both stand");
 
   // ---- the portal fetches at startup, so a plan pushed from another machine appears without a Refresh
   const portalRepo = repository("portal-start", { "plans/backlog/test-here.md": planDoc({ id: "here0001" }) });

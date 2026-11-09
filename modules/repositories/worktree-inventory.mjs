@@ -19,6 +19,9 @@ export function repositoryWorktrees(registry, repositoryId, options = {}) {
 // The branch checked out in a repository's reserved plans worktree. That worktree holds no code, so
 // it is never a cleanup candidate, a Home worktree, or a place a plan can be implemented.
 export const RESERVED_PLANS_BRANCH = "repo-plans";
+// The lock reason the plan store writes when it creates that worktree. It still names the worktree
+// while HEAD is off the branch, as during a rebase a person runs to resolve a diverged store.
+export const RESERVED_PLANS_LOCK_REASON = "RoboRepo plans store";
 
 // A reftable repository keeps refs in binary tables and leaves this placeholder in every HEAD file.
 const REFTABLE_HEAD_PLACEHOLDER = "ref: refs/heads/.invalid";
@@ -50,14 +53,19 @@ export function linkedWorktrees(commonDir, { fsApi = fs, includeReserved = false
     const headFile = readOrNull(path.join(adminDir, "HEAD"), fsApi)?.trim() || null;
     const head = headFile === REFTABLE_HEAD_PLACEHOLDER ? reftableHead(adminDir, fsApi) : headFile;
     const branch = head?.startsWith("ref: refs/heads/") ? head.slice("ref: refs/heads/".length) : null;
-    if (branch === RESERVED_PLANS_BRANCH && !includeReserved) continue;
+    const lockReason = readOrNull(path.join(adminDir, "locked"), fsApi);
+    const reserved = branch === RESERVED_PLANS_BRANCH
+      || rebasingBranch(adminDir, fsApi) === RESERVED_PLANS_BRANCH
+      || lockReason?.trim() === RESERVED_PLANS_LOCK_REASON;
+    if (reserved && !includeReserved) continue;
     worktrees.push({
       path: root || checkoutPath,
       name,
       branch,
       detachedCommit: head && !branch ? head : null,
       detached: Boolean(head && !branch),
-      locked: exists(path.join(adminDir, "locked"), fsApi),
+      locked: lockReason !== null,
+      reserved,
       prunable,
     });
   }
@@ -74,6 +82,15 @@ function reftableHead(adminDir, fsApi) {
   const head = symbolic.ok ? `ref: ${symbolic.stdout.trim()}` : (direct.ok ? direct.stdout.trim() : null);
   if (tables !== null) reftableHeads.set(adminDir, { tables, head });
   return head;
+}
+
+// The branch a rebase in progress will return to; HEAD is detached until it finishes.
+function rebasingBranch(adminDir, fsApi) {
+  for (const folder of ["rebase-merge", "rebase-apply"]) {
+    const ref = readOrNull(path.join(adminDir, folder, "head-name"), fsApi)?.trim();
+    if (ref?.startsWith("refs/heads/")) return ref.slice("refs/heads/".length);
+  }
+  return null;
 }
 
 function readOrNull(file, fsApi) {

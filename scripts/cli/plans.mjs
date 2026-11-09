@@ -163,7 +163,7 @@ export async function savePlanImport({ repositoryId, filename, markdown, newId }
   try {
     return await savePlan({ store: locateStore(root), filename, markdown, ...(SHORT_ID_PATTERN.test(newId || "") ? { newId } : {}) });
   } catch (err) {
-    if (err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) throw err;
+    if (err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) throw withoutStorePath(err);
     throw domainError("PLAN_STORE_FAILED", "This plan could not be saved.", { resolution: "Press Refresh, then try again. `roborepo plans init` repairs a damaged plans worktree." });
   } finally {
     cachedSnapshot = null;
@@ -205,8 +205,18 @@ function browserSafeArchiveError(err) {
   });
 }
 
+// These store errors' resolutions name the plans worktree's absolute path, for a person at a terminal.
+// The browser gets a next step that finds the same place without it.
+const STORE_ERRORS_NAMING_PATHS = new Set(["PLAN_STORE_DIVERGED", "PLAN_STORE_DIRTY"]);
+export function withoutStorePath(err) {
+  if (STORE_ERRORS_NAMING_PATHS.has(err?.code)) {
+    err.resolution = "Run `roborepo plans init` in a terminal inside this repo. It names the plans worktree to resolve this in.";
+  }
+  return err;
+}
+
 function browserSafeOrderError(err) {
-  if (err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) return err;
+  if (err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) return withoutStorePath(err);
   return domainError("PLAN_STORE_FAILED", `${PLANS_ORDER_RELATIVE_PATH} could not be written${err.syscall ? ` (${err.code})` : ""}.`, {
     resolution: "Press Refresh, then try again. `roborepo plans init` repairs a damaged plans worktree.",
   });

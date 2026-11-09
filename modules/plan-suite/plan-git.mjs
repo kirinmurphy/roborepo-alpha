@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { RESERVED_PLANS_BRANCH } from "../repositories/worktree-inventory.mjs";
+import { RESERVED_PLANS_BRANCH, RESERVED_PLANS_LOCK_REASON } from "../repositories/worktree-inventory.mjs";
 import { domainError } from "./index.mjs";
 
 const GIT_TIMEOUT_MS = 60_000;
@@ -56,7 +56,9 @@ export function linkedWorktreeNamed(primary, name) {
     const worktreePath = /^worktree (.+)$/m.exec(entry)?.[1];
     if (!worktreePath || !fs.existsSync(worktreePath)) continue;
     if (worktreeName(worktreePath) === name) {
-      return { name, path: fs.realpathSync(worktreePath), branch: (/^branch refs\/heads\/(.+)$/m.exec(entry)?.[1]) || null };
+      const branch = (/^branch refs\/heads\/(.+)$/m.exec(entry)?.[1]) || null;
+      const reserved = branch === RESERVED_PLANS_BRANCH || /^locked (.*)$/m.exec(entry)?.[1] === RESERVED_PLANS_LOCK_REASON;
+      return { name, path: fs.realpathSync(worktreePath), branch, reserved };
     }
   }
   return null;
@@ -64,7 +66,7 @@ export function linkedWorktreeNamed(primary, name) {
 
 export function findLinkedWorktree(primary, name) {
   const found = linkedWorktreeNamed(primary, name);
-  if (found?.branch === RESERVED_PLANS_BRANCH) {
+  if (found?.reserved) {
     throw domainError("INVALID_CHANGE", `${name} is the reserved plans worktree, which never implements a plan.`, {
       resolution: "Create a separate worktree for the implementation and pass its name.",
     });

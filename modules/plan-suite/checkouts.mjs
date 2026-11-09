@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { checkoutRootsFor, mainCheckoutPath, resolveGitDir } from "../repositories/index.mjs";
-import { RESERVED_PLANS_BRANCH, linkedWorktrees } from "../repositories/worktree-inventory.mjs";
+import { linkedWorktrees } from "../repositories/worktree-inventory.mjs";
 
 // Returns [{ path, isMain, isWorktree, label, branch }], main first. `label` names a non-main checkout
 // for display: the worktree's administrative name, or a second clone's directory name. `branch` is a
@@ -43,7 +43,7 @@ function mainAndLinkedCheckouts(main, { fsApi = fs } = {}) {
 function isReservedPlansCheckout(git, fsApi) {
   if (!git?.isWorktree) return false;
   const name = path.basename(git.gitDir);
-  return linkedWorktrees(git.commonDir, { fsApi, includeReserved: true }).some((worktree) => worktree.name === name && worktree.branch === RESERVED_PLANS_BRANCH);
+  return linkedWorktrees(git.commonDir, { fsApi, includeReserved: true }).some((worktree) => worktree.name === name && worktree.reserved);
 }
 
 function realpathOrNull(value, fsApi) {
