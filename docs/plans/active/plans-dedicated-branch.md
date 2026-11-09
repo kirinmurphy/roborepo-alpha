@@ -395,6 +395,7 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - [x] The hooks check could not see a pre-push hook run, and an agent shell's GIT_CONFIG_* shadowed its hooks — fixed (5bb19898)
 - [x] CLI, import dialog, and reference copy promised a refused push would go through on the next change — fixed (5bb19898)
 - [x] `isPushRejection` named the opposite of what it detects — fixed (5bb19898)
+- [x] The plan-execute skill and plan schema described `synchronized: false` as unreachable only — fixed (d3402fcf)
 
 ### Verification
 
@@ -403,6 +404,8 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - Gate: `npm run check` passed end to end again at 8e1ba4c4 (427 CLI assertions, 76 of 76 unit suites, 252 portal specs).
 - Validation pass 2 (fresh-context subagent) at 8e1ba4c4: 3 fix findings, all fixed above.
 - Validation pass 3 (fresh-context subagent) at bf1f2d88: 3 fix findings, all fixed above.
+- Validation pass 4 (fresh-context subagent) at 51a48a67: 1 fix finding, fixed above.
+- Intermittent, outside the diff: `browser-playwright-check.mjs` failed once in the gate at 51a48a67 (`the mismatch images are evidence`) and passed 3 of 3 reruns; this branch changes no browser code.
 - Codex save, run by `codex exec` (codex-cli 0.166.0) with the profile `renderPermissionsTo` writes for a fixture repo kept outside `/tmp` and `$TMPDIR`, so only the rendered grants made Git writable: `roborepo plans save` exited 0, committed to the store, and reported `synchronized: false` with `! [remote rejected] repo-plans -> repo-plans (unpacker error)`, because the bare origin sat outside the sandbox. A later `plans init` outside Codex pushed it (`synchronized: true`, nothing pending).
 - Base failure: `scripts/test/cli-surface-integration-check.mjs` fails intermittently on `main` too, on `single-repo refresh should leave other cached ahead repos in the main list` (2 of 6 runs on an export of `main`).
 
