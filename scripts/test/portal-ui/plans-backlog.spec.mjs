@@ -53,7 +53,8 @@ test.describe("Backlog directory and ordering", () => {
     }
   };
   const syncStore = (message = "fixture edit", root = store) => {
-    fx.git(root, "add", "-A", "--", ".");
+    const added = settled(() => fx.tryGit(root, "add", "-A", "--", "."));
+    expect(added.status, added.stderr).toBe(0);
     if (fx.tryGit(root, "diff", "--cached", "--quiet").status === 0) return;
     const committed = settled(() => fx.tryGit(root, "commit", "--quiet", "-m", message));
     expect(committed.status, committed.stderr).toBe(0);

@@ -96,6 +96,65 @@ test.describe("Import Plan", () => {
   });
 });
 
+test.describe("Import Plan under All repos", () => {
+  test.describe.configure({ mode: "serial" });
+  let fx;
+  let first;
+  let second;
+  let uploads;
+
+  test.beforeAll(() => {
+    uploads = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-import-pick-"));
+    fx = createPlanFixture("portal-ui-import-pick-store-");
+    first = fx.repository("import-pick-one", { "plans/backlog/pick-one.md": planDoc({ id: "pickone1", title: "First repo plan" }) });
+    second = fx.repository("import-pick-two", { "plans/backlog/pick-two.md": planDoc({ id: "picktwo1", title: "Second repo plan" }) });
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+    await removeRepositorySources(page);
+    await addRepositorySource(page, first);
+    await addRepositorySource(page, second);
+    await enablePlanBoard(page);
+  });
+
+  test.afterEach(({ page }) => page.unrouteAll({ behavior: "ignoreErrors" }));
+
+  test.afterAll(async () => {
+    removeFixtureContents(fx);
+    fs.rmSync(uploads, { recursive: true, force: true });
+  });
+
+  test("the dialog asks which repo, and the plan lands only in the chosen one", async ({ page }) => {
+    await page.goto("/plans");
+    await page.getByRole("button", { name: "Import Plan" }).click();
+    const dialog = page.locator("#plan-import-dialog");
+    const repo = dialog.getByLabel("Repo");
+    await expect(repo).toBeVisible();
+    await expect(repo).toHaveValue("");
+    const file = path.join(uploads, "picked-import.md");
+    fs.writeFileSync(file, planDoc({ id: "pickedi1", title: "Picked repo import" }));
+    await dialog.locator("input[type=file]").setInputFiles(file);
+    // No preview runs until a repo is chosen.
+    await expect(dialog.getByRole("button", { name: "Add to Backlog" })).toBeDisabled();
+    await expect(dialog.locator("[data-slot=title]")).not.toHaveText("Picked repo import");
+    await repo.selectOption({ label: "import-pick-two" });
+    await expect(dialog.locator("[data-slot=title]")).toHaveText("Picked repo import");
+    await dialog.getByRole("button", { name: "Add to Backlog" }).click();
+    await expect(dialog.locator("[data-slot=status]")).toContainText("pushed it to the remote");
+    expect(fx.git(second, "show", "origin/repo-plans:plans/backlog/picked-import.md")).toContain("Picked repo import");
+    expect(fx.tryGit(first, "cat-file", "-e", "origin/repo-plans:plans/backlog/picked-import.md").status).not.toBe(0);
+  });
+
+  test("a page scoped to one repo does not ask", async ({ page }) => {
+    const { backlog } = await (await page.request.get("/api/plans")).json();
+    const urlKey = backlog.find((entry) => entry.name === "import-pick-one").urlKey;
+    await page.goto(`/plans?repo=${urlKey}`);
+    await page.getByRole("button", { name: "Import Plan" }).click();
+    await expect(page.locator("#plan-import-dialog").getByLabel("Repo")).toBeHidden();
+  });
+});
+
 test.describe("A repo with no plans store", () => {
   let bare;
   test.beforeAll(() => {

@@ -130,7 +130,11 @@ const result = await mutateStore({
   if (err instanceof RefusedImport) stop(err.problems);
   throw err;
 });
-if (!result.synchronized) stop([`the commit is local only and did not reach the remote: ${result.reason}. Fix the remote, then rerun`]);
+if (!result.synchronized) {
+  // The import is already committed on the local plans branch; a rerun commits nothing and pushes it.
+  console.error(`Imported on this machine but not pushed: ${result.reason}. Fix the remote, then rerun to push it.`);
+  process.exit(1);
+}
 
 // Trust the remote, not the push's exit status: every file must read back byte for byte.
 const fetched = git(store.root, ["fetch", "--quiet", "origin", "refs/heads/repo-plans:refs/remotes/origin/repo-plans"]);
