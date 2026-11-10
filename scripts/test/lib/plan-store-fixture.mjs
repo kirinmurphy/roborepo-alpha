@@ -4,12 +4,15 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { LIFECYCLE_MODEL } from "../../../modules/plan-suite/lifecycle-manifest.mjs";
 
 export function addPlansStore(checkout, files = {}) {
   const root = path.join(`${checkout}.plans`, "repo_plans");
   fs.mkdirSync(path.dirname(root), { recursive: true });
   const added = spawnSync("git", ["-C", checkout, "worktree", "add", "-q", "-b", "repo-plans", root, "HEAD"], { encoding: "utf8" });
   if (added.status !== 0) throw new Error(`could not add the plans worktree: ${added.stderr}`);
+  // `plans init` creates every lifecycle folder, and cleanup reads a missing one as a damaged store.
+  for (const folder of LIFECYCLE_MODEL.folders) fs.mkdirSync(path.join(root, "plans", folder), { recursive: true });
   writePlansFiles(root, files);
   return root;
 }

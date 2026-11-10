@@ -720,6 +720,14 @@ try {
     writePlansFiles(store, { "review/awaiting.md": "---\nid: awaiting\nworktree: under-review\n---\n", "completed/done.md": "---\nid: done\nworktree: finished-work\n---\n" });
     assert.equal(activeWorktreeNames(main).has("under-review"), true, "a plan under review keeps its worktree");
     assert.equal(activeWorktreeNames(main).has("finished-work"), false, "a completed plan releases its worktree");
+    writePlansFiles(store, { "active/broken.md": "id: broken\nworktree: broken-work\n" });
+    assert.equal(activeWorktreeNames(main).unreadable, true, "an active plan whose frontmatter cannot be read leaves the claims unknown");
+    writePlansFiles(store, { "active/broken.md": "---\nid: broken\n---\n" });
+    assert.equal(activeWorktreeNames(main).unreadable, true, "an active plan that names no worktree leaves the claims unknown");
+    fs.rmSync(path.join(store, "plans/active/broken.md"));
+    assert.equal(activeWorktreeNames(main).has("quoted-plan-work"), true, "a readable store claims again");
+    fs.rmSync(path.join(store, "plans/review"), { recursive: true, force: true });
+    assert.equal(activeWorktreeNames(main).unreadable, true, "a missing worktree-bound folder leaves the claims unknown");
   }
   {
     // The reserved plans worktree is out of every cleanup path, and an unreadable store stops automatic removal.

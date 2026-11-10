@@ -61,6 +61,7 @@ export function repositoryRecordFor(registry, mainPath) {
 
 // The Plans parser, so a quoted `worktree: "name"` still joins and keeps its worktree protected.
 // A file that cannot be read throws, because a caller protecting worktrees must not read it as no claim.
+// Frontmatter the parser cannot read yields empty fields rather than an error.
 function planFields(file) {
   const content = fs.readFileSync(file, "utf8");
   try {
@@ -70,11 +71,12 @@ function planFields(file) {
   } catch { return {}; }
 }
 
-function planFiles(storeRoot, lifecycle) {
+// `plans init` creates every lifecycle folder, so `required` treats a missing one as a damaged store.
+function planFiles(storeRoot, lifecycle, { required = false } = {}) {
   const dir = path.join(storeRoot, PLANS_DIR, lifecycle);
   try { return fs.readdirSync(dir).filter((file) => file.endsWith(".md")).map((file) => path.join(dir, file)); }
   catch (err) {
-    if (err?.code === "ENOENT") return [];
+    if (err?.code === "ENOENT" && !required) return [];
     throw err;
   }
 }
@@ -85,14 +87,21 @@ const UNREADABLE_CLAIMS = Object.freeze({ has: () => true, unreadable: true });
 
 // Worktrees a plan in a worktree-bound stage (Active or Review) still claims. A plan under review
 // keeps its worktree until /plan-close or /plan-archive releases it. A repository with no store has
-// no plans, so nothing is claimed.
+// no plans, so nothing is claimed. Starting a plan requires a worktree, so a worktree-bound plan
+// without a readable id and worktree, or a missing worktree-bound folder, makes the claims unknown.
 export function activeWorktreeNames(mainPath) {
   const store = locateStore(mainPath);
   if (!store) return new Set();
   try {
     if (store.missing || !fs.statSync(path.join(store.root, PLANS_DIR)).isDirectory()) return UNREADABLE_CLAIMS;
-    const folders = [...LIFECYCLE_MODEL.worktreeBound];
-    return new Set(folders.flatMap((lifecycle) => planFiles(store.root, lifecycle)).map((file) => planFields(file).worktree).filter(Boolean));
+    const files = [...LIFECYCLE_MODEL.worktreeBound].flatMap((lifecycle) => planFiles(store.root, lifecycle, { required: true }));
+    const claims = new Set();
+    for (const file of files) {
+      const { id, worktree } = planFields(file);
+      if (!id || !worktree) return UNREADABLE_CLAIMS;
+      claims.add(worktree);
+    }
+    return claims;
   } catch { return UNREADABLE_CLAIMS; }
 }
 

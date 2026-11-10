@@ -237,8 +237,9 @@ Automatic cleanup can remove worktrees without a plan. An active or review plan 
 worktree keeps it protected. Cleanup requires an unlocked worktree beneath the configured worktree
 folder and proof that committed, staged, and filesystem versions are preserved. The folder comes
 from `worktreeRoot` in `plans/plans-config.json` on the plans branch, or the folder confirmed in Home.
-When the plans worktree can't be read, automatic cleanup removes nothing, because it can't tell which
-worktrees active plans claim. The plans worktree itself is locked, never a cleanup candidate, and
+When the plans worktree can't be read, is missing a lifecycle folder, or holds an active or review
+plan whose frontmatter names no worktree, automatic cleanup removes nothing, because it can't tell
+which worktrees active plans claim. The plans worktree itself is locked, never a cleanup candidate, and
 never listed on Home. Proofs compare both local layers against one historical base commit,
 within 500 first-parent commits and a 30-second budget. Unsupported Git behavior or unavailable
 history keeps the worktree. No backup or snapshot is created.
