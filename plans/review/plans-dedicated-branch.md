@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Record the human's approval of f28de44c, then run /plan-close; before closing, confirm rollout in all three repos and delete scripts/dev/migrate-plans-once.mjs and its check.
+next_action: Run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
@@ -370,6 +370,7 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 - **A push the remote refuses is a not-synchronized result, like an unreachable remote.** The commit stays and the next reachable mutation retries it, with Git's `[remote rejected]` line as the reason. Alternative: a hard error, which would stop a Codex run for a branch rule a person must change.
 - **User decision: Codex gets no reftable grant.** In a reftable repo every ref lives in `<common>/reftable/`, so the exact-path grants in `scripts/harnesses/codex/plans-store-grants.mjs` cannot cover a store commit there, and granting `<common>/reftable/**` would let a Codex session move any branch. Codex therefore cannot save plans in reftable repos; Claude and the portal can. This repo uses the `files` format.
 - **The remote-sync menu flake stays out of this plan.** `cli-surface-integration-check.mjs` fails intermittently on the same assertion on `main` (2 of 6 runs) and on this branch; this branch does not touch that flow.
+- **User decision (2026-11-10, at /plan-close): deleting the migration helper is deferred until the other repos have migrated.** `scripts/dev/migrate-plans-once.mjs` is run from this checkout against each repo, so it must stay on `main` until the last one moves; delete it then, with `scripts/test/migrate-plans-once-check.mjs` and its `scripts/test/check-groups.json` entry, as a small follow-up task. The "Do not retain migration logic" part of the One-time migration task is satisfied by that deferral; the helper is not shipped in the package. Alternative: keep this plan in review until every repo has moved, which would hold a merged, approved plan open on operator work in other repos.
 
 ## Open Questions
 
@@ -448,4 +449,20 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 
 ## Follow-up task
 
+Once every repo has migrated to the plans branch, delete `scripts/dev/migrate-plans-once.mjs`, `scripts/test/migrate-plans-once-check.mjs`, and its `check-groups.json` entry (deferred by user decision; see Decision Log).
+
 After rollout, design same-document concurrent editing: detect a plan changed since an agent read it, display differences, and require user-guided conflict resolution. The initial release only refuses overlapping automatic retries.
+
+## Completion
+
+The plan store shipped in PR #62, merged to `main` as fe75b35f. Plans now live under `plans/` on `repo-plans`, read and written only through named `roborepo plans` commands, and this repo's old `docs/plans/` tree was removed from `main` afterwards (6b2c72e9). Deleting the one-time migration helper waits until the other repos have migrated (see Decision Log and Follow-up task).
+
+## Verification
+
+- Absorbing commit: fe75b35f5ed68062ead0c775ec9fbdf5282a9806
+- Approved commit: f28de44c89504b15ffb998cd6e18b5933bcdfe41 (human approval recorded 2026-11-10; `roborepo plans approval` reports fresh).
+- PR CI at f28de44c passed on macOS, Ubuntu, and the Windows installer (run 42899076690).
+- Main CI at 2cc3d14c (run 42901702978) passed on attempt 2. Attempt 1 failed one macOS portal spec, `global navigation keeps primary pages in the bar and the rest in the ⋮ menu`, on a 30 s click timeout, while Ubuntu passed the same spec. The failed job passed on rerun with no change, so this is a flake.
+- The `docs/plans` grep criterion over `modules/`, `scripts/cli/`, `scripts/harnesses/`, `portal/`, and `globals/packages/plan-suite/` finds nothing on `main` at 2cc3d14c.
+- Docs of record under Documentation impact: reused from the review's Validator pass at d7129473 and the clean pass over 1a875388..f28de44c, which changed only the review record; not re-read at close.
+- Not verified at close: the clean-machine suites (Docker) and Windows installer parity (`pwsh`) did not run locally during review; CI's Windows installer job passed.
