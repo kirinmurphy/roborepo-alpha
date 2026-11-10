@@ -1,46 +1,57 @@
 ---
 name: plan-suite-init
-description: Use to set up plan-suite defaults in a repository that does not have them yet — the docs/plans lifecycle folders and docs/plans/plans-config.json with the project's plan-name namespaces, proposed from the codebase or from the user's description. Idempotent; anything already present is kept and reported, never rewritten. Trigger on explicit /plan-suite-init, requests to initialize or set up the plan suite or plan folders in a repo, or when /plan-write finds plans-config.json missing or without namespaces. Do not use for creating or revising a plan (plan-write), renaming plans, adding one namespace to an existing config, or any lifecycle step.
+description: Use to set up the plan store in a repository that does not have it yet — the remote `repo-plans` branch, its reserved local worktree, and the project's plan-name namespaces, proposed from the codebase or from the user's description — or to reconnect a fresh clone to an existing store. Idempotent; anything already present is kept and reported, never rewritten. Trigger on explicit /plan-suite-init, requests to initialize or set up the plan suite or plan folders in a repo, when a `roborepo plans` command or the Plans portal says the repo is not set up, or when /plan-write finds plans-config.json without namespaces. Do not use for creating or revising a plan (plan-write), renaming plans, adding one namespace to an existing config, or any lifecycle step.
 ---
 
 # Plan Suite Init
 
-Set up the files the plan suite expects in a repository. Each step checks first and does only the
-work still missing, so a rerun on an initialized repository changes nothing and says so.
+Connect a repository to its plan store. Plans live under `plans/` on the remote branch
+`origin/repo-plans`, checked out in a reserved local worktree that only `roborepo plans` commands
+write to. Each step checks first and does only the work still missing, so a rerun on an initialized
+repository changes nothing and says so.
 
-This skill does not write plans, move plans, or commit. It leaves `worktreeRoot` alone: `/plan-execute`
-confirms that with the user on its first run.
+This skill does not write plans or move them.
 
 ## Steps
 
-Resolve the repository root first; every path below is relative to it.
+Run every command from any checkout of the repository.
 
-### 1. Lifecycle folders
+### 1. Find out whether a store exists
 
-The plan suite uses six folders under `docs/plans/`:
+```bash
+git ls-remote --heads origin repo-plans
+```
 
-`backlog/`, `ready/`, `active/`, `review/`, `completed/`, `archived/`
+- **The branch exists:** go to step 2 with no flags. The config on that branch already says where the
+  worktree goes.
+- **The branch does not exist:** propose `~/.worktrees` as the worktree root, state the path it
+  resolves to, and wait for the user to confirm or override it. This is asked once per repository.
+- **No `origin` remote, or the command fails:** stop and report it. The plan suite needs a Git
+  repository with an `origin` it can reach.
 
-Create only the missing ones. Git does not track empty folders, so add an empty `.gitkeep` to each
-folder you create; the plan tools read only `.md` files. Never touch an existing folder or its
-contents.
+### 2. Create or reconnect the store
 
-### 2. Config file
+```bash
+roborepo plans init --worktree-root <confirmed path> --json
+```
 
-`docs/plans/plans-config.json` is initialized when it exists, parses as JSON, and has a `namespaces`
-key. An empty `namespaces` object counts: it records that the user chose no project namespaces.
+Leave out `--worktree-root` when the branch already exists. Pass `--repo-name <name>` only when the
+user asks, or when another repository sharing this root already uses this folder name.
 
-- **Initialized**: skip this step and step 3.
-- **Missing**: run step 3, then write
-  `{ "schemaVersion": 1, "namespaces": { ... } }` with the agreed set.
-- **Present without `namespaces`**: run step 3, then add the `namespaces` key and keep every other
-  key and value as it is.
-- **Not valid JSON**: stop. Report the parse error and ask the user to fix the file; do not
-  overwrite it.
+The command creates the branch with its lifecycle folders, `plans/plans-config.json`, and
+`plans/plans-order.json`, or fetches it; creates or recovers the locked worktree; and pushes any
+pending commits. It never reports a local-only success. On a refusal (no remote, failed credentials,
+a destination that belongs to another repository), report the command's reason and stop. Never
+replace or delete anything at that path.
 
-Keep the file to values. The naming rules live in `/plan-write`, not in per-repository config.
+On Codex, tell the user to run `roborepo update` from this repository next. The sandbox grants for
+the store render from the repository the update runs in, so saves fail until then.
 
 ### 3. Namespaces
+
+Read `plans/plans-config.json` from the worktree the command reported. A `namespaces` key means this
+step is done, even when empty: that records that the user chose no project namespaces. Skip to the
+report.
 
 A plan filename is `<namespace>-<slug>.md`. The universal namespaces (`cli`, `git`, `infra`, `os`,
 `testing`, `docs`, `security`, `perf`) need no declaration; the config holds only the project's own
@@ -51,7 +62,7 @@ Propose an initial set derived from the repository:
 - top-level source directories (`modules/`, `src/`, `packages/`, `apps/`), which usually are the
   domains;
 - CLI command groups, routes, or services the project already exposes;
-- recurring prefixes across existing plan filenames under `docs/plans/`.
+- recurring prefixes across any existing plan filenames in the store.
 
 Show the evidence behind each proposal ("`billing` because `src/billing/` holds the invoice and
 payment modules and two plans already start with it"). Leave out anything a universal namespace
@@ -62,16 +73,24 @@ the project's main areas in a sentence or two, then propose namespaces from that
 
 Either way, **ask the user to refine before writing**. A namespace chosen badly gets copied into
 every future filename. Merge overlapping proposals, use the project's own words, and write only the
-agreed set. If the user wants none, write `"namespaces": {}`.
+agreed set. If the user wants none, write an empty object.
+
+Write the agreed set to a JSON file outside the checkout, then:
+
+```bash
+roborepo plans config namespaces <file.json> --json
+```
+
+Keep the file to values. The naming rules live in `/plan-write`, not in per-repository config.
 
 ## Report
 
-List what this run created and what was already present:
+Say what this run created or reconnected, where the worktree is, and whether the result reached the
+remote:
 
 ```text
-Created: docs/plans/ready/ (with .gitkeep), docs/plans/plans-config.json (3 namespaces)
-Already present: docs/plans/backlog/, docs/plans/active/, ...
+Created: origin/repo-plans, worktree at ~/.worktrees/acme/repo_plans, 3 namespaces (synchronized)
 ```
 
-When nothing was missing, report "Plan suite already initialized; no changes." Leave the new files
-uncommitted and say so. When `/plan-write` invoked this workflow, return to it.
+When nothing was missing, report "Plan suite already initialized; no changes." When `/plan-write`
+invoked this workflow, return to it.

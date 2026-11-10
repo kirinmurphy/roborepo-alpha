@@ -110,7 +110,7 @@ function record({ key = "k1", lifecycle = "backlog", id = "plan-1", repositoryId
       id,
       title: "Plan " + id,
       lifecycle,
-      relativePath: `docs/plans/${lifecycle}/${id}.md`,
+      relativePath: `plans/${lifecycle}/${id}.md`,
       nextAction: "",
       blockers,
       dependencies: [],

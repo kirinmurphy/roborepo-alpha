@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { inventoryWorktree } from "./worktree-snapshot.mjs";
-import { linkedWorktrees } from "./worktree-inventory.mjs";
+import { RESERVED_PLANS_BRANCH, linkedWorktrees } from "./worktree-inventory.mjs";
 import { saveTransaction, readTransaction, deleteTransaction } from "./worktree-transactions.mjs";
 import { withCleanupStoreLock } from "./worktree-cleanup-lock.mjs";
 import { measureLog, findRetentionStore } from "../retention/index.mjs";
@@ -74,6 +74,8 @@ export async function appendRemoval(stateRoot, entry, fsApi = fs) {
 }
 
 async function branchIsUnoccupied(mainPath, branch, runGit) {
+  // Inventory hides the reserved worktree, and the branch outlives a lost checkout of it.
+  if (branch === RESERVED_PLANS_BRANCH) return false;
   const ref = `refs/heads/${branch}`;
   const listed = await runGit(mainPath, ["worktree", "list", "--porcelain"]);
   if (!listed.ok || listed.stdout.split("\n").includes(`branch ${ref}`)) return false;

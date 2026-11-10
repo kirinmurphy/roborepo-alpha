@@ -4,9 +4,6 @@
 //
 // Each rule may define:
 //   requires(options)          returns why the options are incomplete, or null, before anything is read
-//   carriesEdits               the commit may include the plan's own uncommitted edits, made by the
-//                              command (/plan-promote's refinements, /plan-close's verification)
-//                              before it asks for the move
 //   prepare(context)           async; refuses when the move is not allowed yet, and returns
 //                              { content, evidence }: the plan text to commit and what was checked
 //   bodyUnchanged              the post-commit check confirms the document body did not change
@@ -14,13 +11,12 @@
 //                              reader recognizes in git log where the opaque id says nothing
 import { domainError, writeFrontmatterField } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
-import { archiveCarry, worktreeCopyIntegration } from "./copy-integration.mjs";
+import { withInvalidatedApproval } from "./plan-writes.mjs";
 import { approvalFreshness, completionPreflight } from "./review-gates.mjs";
 import { planLanding } from "./landing-gate.mjs";
 
 export const TRANSITION_RULES = {
   promote: {
-    carriesEdits: true,
     message: (name) => `Promote plan ${name} to ready`,
   },
   start: {
@@ -43,17 +39,13 @@ export const TRANSITION_RULES = {
     message: (name) => `Submit plan ${name} for review`,
   },
   reopen: {
-    bodyUnchanged: true,
+    // Reopening means the requirements changed, which an implementation comparison cannot see, and
+    // `plans save` refuses approval edits, so the move itself retires any approval.
+    prepare: ({ content }) => ({ content: withInvalidatedApproval(content) }),
     message: (name) => `Reopen plan ${name} for implementation`,
   },
   close: {
-    carriesEdits: true,
     prepare: async ({ primary, record, content, base }) => {
-      const integration = worktreeCopyIntegration(primary, record);
-      if (integration.state === "not-integrated") {
-        refuseWith(`plan: not integrated. Worktree ${record.plan.worktree} holds a version of the plan the base branch never had.`,
-          "Merge the reviewed branch through its pull request and update the base branch, then run /plan-close again.");
-      }
       const approval = approvalFreshness({ primary, record, base });
       if (approval.state === "unavailable") {
         refuseWith(`The human approval cannot be checked: ${approval.reason}.`,
@@ -71,21 +63,17 @@ export const TRANSITION_RULES = {
         refuseWith(`landed: unconfirmed (${landing.reason}).`,
           `Merge ${approval.branch} into ${base} through its pull request and update the local ${base}, then close again.`, { landing });
       }
-      return { content, evidence: { approval, landing, worktreeCopy: integration.state } };
+      // Review requires a next action and Completed forbids one, so no save can clear it; the move does.
+      return { content: writeFrontmatterField(content, "next_action", ""), evidence: { approval, landing } };
     },
     message: (name) => `Close plan ${name}`,
   },
   archive: {
     clearsReferences: true,
     requires: ({ reason }) => (reason?.trim() ? null : "An archive reason is required (--reason <text>)."),
-    prepare: ({ primary, record, content, options, today }) => {
-      const carry = archiveCarry(primary, record);
-      if (carry.refusal) {
-        refuseWith(`plan: ${carry.refusal}.`,
-          "Merge the base branch into the worktree, or move the edit into the worktree's copy and revert it in the primary checkout, then archive again.");
-      }
-      const base = writeFrontmatterField(carry.carry ?? content, "next_action", "");
-      return { content: `${base.replace(/\s*$/, "")}\n\n## Archived\n\n${today}: ${options.reason.trim()}\n`, evidence: { worktreeCopy: carry.worktreeCopy } };
+    prepare: ({ content, options, today }) => {
+      const base = writeFrontmatterField(content, "next_action", "");
+      return { content: `${base.replace(/\s*$/, "")}\n\n## Archived\n\n${today}: ${options.reason.trim()}\n` };
     },
     message: (name) => `Archive plan ${name}`,
   },

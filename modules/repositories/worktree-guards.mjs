@@ -3,8 +3,10 @@ import path from "node:path";
 import { runGitProcess } from "./git-exec.mjs";
 
 import { discoverWorktreeArtifacts } from "./worktree-artifacts.mjs";
+import { RESERVED_PLANS_BRANCH } from "./worktree-inventory.mjs";
 
 export async function checkWorktreeRemoval({ worktree, kind, landed = false, worktreeRoot = null, mainPath, currentPath, activePlan = false, running = false, consent = false, preservationEvidence = false, runGit = runGitProcess, fsApi = fs }) {
+  if (worktree.reserved || worktree.branch === RESERVED_PLANS_BRANCH) return blocked("reserved plans worktree");
   if (worktree.prunable) return blocked("prunable worktree");
   if (kind === "automatic" && !landed) return blocked("not landed");
   if (kind === "automatic" && (!worktreeRoot || !inside(worktree.path, worktreeRoot))) return blocked("not in worktree folder");

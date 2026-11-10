@@ -79,7 +79,8 @@ Examples:
   into a shared `implementation-review` skill once packages can declare
   required skill dependencies.
   Deterministic plan rules live in `roborepo plans validate`, the lifecycle
-  transitions (`roborepo plans promote|start|submit|reopen|close|archive`), and
+  transitions (`roborepo plans promote|start|submit|reopen|close|archive`),
+  `roborepo plans init|show|save|approve|config namespaces`, and
   `roborepo plans preflight|approval|landed|sync-base`, which the suite skills run
   instead of composing Git commands. The lifecycle itself is declared in
   `manifests/platform/plan-lifecycle.json`.

@@ -2,12 +2,11 @@
 // Prioritize, with order edits held in a draft until Save. The fixture repo has a two-plan chain, an
 // independent ranked plan, and an unprioritized plan in `alpha`, a plan in `beta`, and one file whose
 // prefix is not approved.
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
-import { addRepositorySource, enablePlanBoard, portalToken, removeRepositorySources } from "./helpers.mjs";
+import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
+import { removeFixtureContents, addRepositorySource, enablePlanBoard, portalToken, removeRepositorySources } from "./helpers.mjs";
 
 const document = ({ id, title, deps = [], summary = `Purpose of ${title}.` }) => [
   "---", `id: ${id}`, "next_action: Do it", `depends_on: [${deps.join(", ")}]`, "---", "",
@@ -35,44 +34,70 @@ const contrastRatio = (node) => {
 };
 
 test.describe("Backlog directory and ordering", () => {
+  let fx;
   let repo;
   let bare;
+  let store;
   let repoName;
   let bareName;
   let orderFile;
-  const write = (relative, content) => {
-    const file = path.join(repo, relative);
+  // Fixture edits are committed in the plans store and pushed, so a portal write to the same path
+  // starts from a clean tree.
+  // A portal refresh can be pushing or committing in the same store, so each step gets a few tries;
+  // a push that lost to the portal's has already delivered this commit.
+  const settled = (step) => {
+    for (let attempt = 0; ; attempt += 1) {
+      const result = step();
+      if (result.status === 0 || attempt === 20) return result;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+    }
+  };
+  const syncStore = (message = "fixture edit", root = store) => {
+    const added = settled(() => fx.tryGit(root, "add", "-A", "--", "."));
+    expect(added.status, added.stderr).toBe(0);
+    if (fx.tryGit(root, "diff", "--cached", "--quiet").status === 0) return;
+    const committed = settled(() => fx.tryGit(root, "commit", "--quiet", "-m", message));
+    expect(committed.status, committed.stderr).toBe(0);
+    const pushed = settled(() => fx.tryGit(root, "push", "--quiet", "origin", "repo-plans:repo-plans"));
+    expect(pushed.status, pushed.stderr).toBe(0);
+    fx.git(root, "update-ref", "refs/remotes/origin/repo-plans", "HEAD");
+  };
+  const write = (relative, content, root = store) => {
+    const file = path.join(root, relative);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, content);
+    syncStore("fixture edit", root);
+  };
+  const remove = (relative, root = store) => {
+    fs.rmSync(path.join(root, relative), { recursive: true, force: true });
+    syncStore("fixture edit", root);
   };
   const savedOrder = () => JSON.parse(fs.readFileSync(orderFile, "utf8")).namespaces.alpha;
-  const setOrder = (ids) => fs.writeFileSync(orderFile, `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ids } }, null, 2)}\n`);
+  const setOrder = (ids) => write("plans/plans-order.json", `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ids } }, null, 2)}\n`);
 
   test.beforeAll(() => {
     // Each build gets names of its own: a failed test restarts the worker and rebuilds this fixture,
     // and a removed source's repository stays registered under its name.
-    repo = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-backlog-"));
-    bare = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-bare-"));
-    repoName = path.basename(repo);
-    bareName = path.basename(bare);
-    fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
-    fs.mkdirSync(path.join(bare, ".git"), { recursive: true });
-    orderFile = path.join(repo, "docs/plans/plans-order.json");
-    write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
-    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
-    write("docs/plans/backlog/alpha-retrieval.md", document({ id: "alphab02", title: "Retrieval", deps: ["alphaa01"] }));
-    write("docs/plans/backlog/alpha-diagnostics.md", document({ id: "alphax03", title: "Diagnostics" }));
-    write("docs/plans/backlog/alpha-traces.md", document({ id: "alphan04", title: "Traces" }));
-    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
-    write("docs/plans/backlog/wrong-prefix.md", document({ id: "wrong006", title: "Misfiled plan" }));
-    write("docs/plans/active/alpha-working.md", document({ id: "alphaw07", title: "Working plan" }));
-    fs.mkdirSync(path.join(bare, "docs/plans/backlog"), { recursive: true });
-    fs.writeFileSync(path.join(bare, "docs/plans/backlog/anything.md"), document({ id: "barepl08", title: "Unconfigured plan" }));
+    const suffix = Math.random().toString(36).slice(2, 8);
+    repoName = `backlog-${suffix}`;
+    bareName = `bare-${suffix}`;
+    fx = createPlanFixture("portal-ui-backlog-store-");
+    repo = fx.repository(repoName, {
+      "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }),
+      "plans/backlog/alpha-storage.md": document({ id: "alphaa01", title: "Storage" }),
+      "plans/backlog/alpha-retrieval.md": document({ id: "alphab02", title: "Retrieval", deps: ["alphaa01"] }),
+      "plans/backlog/alpha-diagnostics.md": document({ id: "alphax03", title: "Diagnostics" }),
+      "plans/backlog/alpha-traces.md": document({ id: "alphan04", title: "Traces" }),
+      "plans/backlog/beta-one.md": document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }),
+      "plans/backlog/wrong-prefix.md": document({ id: "wrong006", title: "Misfiled plan" }),
+      "plans/active/alpha-working.md": document({ id: "alphaw07", title: "Working plan" }),
+    });
+    store = fx.storePath(repo);
+    orderFile = path.join(store, "plans/plans-order.json");
+    bare = fx.repository(bareName, { "plans/backlog/anything.md": document({ id: "barepl08", title: "Unconfigured plan" }) });
   });
 
-  test.afterAll(() => {
-    for (const root of [repo, bare]) fs.rmSync(root, { recursive: true, force: true });
-  });
+  test.afterAll(() => removeFixtureContents(fx));
 
   test.beforeEach(async ({ page }) => {
     setOrder(["alphaa01", "alphab02", "alphax03"]);
@@ -80,7 +105,11 @@ test.describe("Backlog directory and ordering", () => {
     await addRepositorySource(page, bare);
     await enablePlanBoard(page);
   });
-  test.afterEach(async ({ page }) => removeRepositorySources(page));
+  test.afterEach(async ({ page }) => {
+    // The page's own reload after a save can still be in flight when a test's assertions finish.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    await removeRepositorySources(page);
+  });
 
   async function repoKey(page, name) {
     const { backlog } = await (await page.request.get("/api/plans")).json();
@@ -175,8 +204,8 @@ test.describe("Backlog directory and ordering", () => {
   test("Prioritize draws dependencies as a tree, with the implied link collapsed", async ({ page }, testInfo) => {
     // Joins needs Storage and Diagnostics; Finale needs Storage and Joins, which already implies Storage.
     const files = {
-      "docs/plans/backlog/alpha-joins.md": document({ id: "alphaj10", title: "Joins", deps: ["alphaa01", "alphax03"] }),
-      "docs/plans/backlog/alpha-finale.md": document({ id: "alphaf11", title: "Finale", deps: ["alphaa01", "alphaj10"] }),
+      "plans/backlog/alpha-joins.md": document({ id: "alphaj10", title: "Joins", deps: ["alphaa01", "alphax03"] }),
+      "plans/backlog/alpha-finale.md": document({ id: "alphaf11", title: "Finale", deps: ["alphaa01", "alphaj10"] }),
     };
     try {
       for (const [file, content] of Object.entries(files)) write(file, content);
@@ -205,7 +234,7 @@ test.describe("Backlog directory and ordering", () => {
       });
       expect(edges).toEqual({ left: 1, top: 1, bottom: 1 });
     } finally {
-      for (const file of Object.keys(files)) fs.rmSync(path.join(repo, file), { force: true });
+      for (const file of Object.keys(files)) remove(file);
     }
   });
 
@@ -230,7 +259,7 @@ test.describe("Backlog directory and ordering", () => {
 
   test("a sustained hover reads the description on over the page, with nothing moving", async ({ page }) => {
     const summary = Array.from({ length: 80 }, (_, index) => `word${index}`).join(" ");
-    const file = "docs/plans/backlog/alpha-long.md";
+    const file = "plans/backlog/alpha-long.md";
     write(file, document({ id: "alphal09", title: "Long" }).replace("Purpose of Long.", summary));
     setOrder(["alphal09", "alphaa01", "alphab02", "alphax03"]);
     // Where every line of the preview sits, so a line that re-wraps or shifts fails the comparison.
@@ -286,7 +315,7 @@ test.describe("Backlog directory and ordering", () => {
       await rowDescription.click();
       await expect(drawerHeading(page, "Long")).toBeVisible();
     } finally {
-      fs.rmSync(path.join(repo, file), { force: true });
+      remove(file);
     }
   });
 
@@ -322,7 +351,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("Waiting on starts level with the card's menu button, however many prerequisites it lists", async ({ page }) => {
-    const file = "docs/plans/backlog/alpha-retrieval.md";
+    const file = "plans/backlog/alpha-retrieval.md";
     const centers = async () => {
       const card = page.locator("plan-card", { hasText: "Retrieval" });
       const middle = (box) => box.y + box.height / 2;
@@ -550,7 +579,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("the sustained-hover panel is the default in every lifecycle", async ({ page }) => {
-    write("docs/plans/active/alpha-long-active.md", [
+    write("plans/active/alpha-long-active.md", [
       "---", "id: alphaz11", "next_action: Do it", "depends_on: []", "---", "",
       "# Long active plan", "", "## Summary", "", "word ".repeat(90).trim(), "",
     ].join("\n"));
@@ -573,344 +602,252 @@ test.describe("Backlog directory and ordering", () => {
       await page.mouse.move(0, 0);
       await expect(region).not.toHaveClass(/is-excerpt-expanded/);
     } finally {
-      fs.rmSync(path.join(repo, "docs/plans/active/alpha-long-active.md"));
+      remove("plans/active/alpha-long-active.md");
     }
   });
 
   test("a failed archive names no absolute path and leaves the plan where it was", async ({ page }) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-archive-failure-"));
-    const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout;
-    const put = (relative, content) => {
-      fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
-      fs.writeFileSync(path.join(root, relative), content);
+    const name = `archive-failure-${Math.random().toString(36).slice(2, 8)}`;
+    const root = fx.repository(name, {
+      "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }),
+      "plans/backlog/alpha-free.md": document({ id: "failfree1", title: "Free one" }),
+      "plans/backlog/alpha-other.md": document({ id: "failother", title: "Other one" }),
+      "plans/backlog/beta-after.md": document({ id: "failafter", title: "Waits elsewhere", deps: ["failfree1"] }),
+    });
+    const planStore = fx.storePath(root);
+    const dependent = path.join(planStore, "plans/backlog/beta-after.md");
+    const indexLock = fx.git(planStore, "rev-parse", "--git-path", "index.lock");
+    const lock = path.isAbsolute(indexLock) ? indexLock : path.join(planStore, indexLock);
+    await addRepositorySource(page, root);
+    const { backlog } = await (await page.request.get("/api/plans")).json();
+    const { repositoryId, urlKey } = backlog.find((item) => item.name === name);
+    const token = await portalToken(page);
+    const archive = async () => {
+      const response = await page.request.post("/api/plans/archive", {
+        headers: { "X-Cli-Portal-Token": token },
+        data: { repositoryId, id: "failfree1", reason: "Abandoned." },
+      });
+      return { status: response.status(), text: await response.text() };
     };
-    const dependent = path.join(root, "docs/plans/backlog/beta-after.md");
-    const lock = path.join(root, ".git/index.lock");
-    try {
-      git("init", "-q", "-b", "main");
-      git("config", "user.name", "Portal Test");
-      git("config", "user.email", "portal@example.invalid");
-      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
-      put("docs/plans/backlog/alpha-free.md", document({ id: "failfree1", title: "Free one" }));
-      put("docs/plans/backlog/alpha-other.md", document({ id: "failother", title: "Other one" }));
-      put("docs/plans/backlog/beta-after.md", document({ id: "failafter", title: "Waits elsewhere", deps: ["failfree1"] }));
-      git("add", ".");
-      git("commit", "-q", "-m", "fixture");
-      await addRepositorySource(page, root);
-      const { backlog } = await (await page.request.get("/api/plans")).json();
-      const { repositoryId, urlKey } = backlog.find((item) => item.name === path.basename(root));
-      const token = await portalToken(page);
-      const archive = async () => {
-        const response = await page.request.post("/api/plans/archive", {
-          headers: { "X-Cli-Portal-Token": token },
-          data: { repositoryId, id: "failfree1", reason: "Abandoned." },
-        });
-        return { status: response.status(), text: await response.text() };
-      };
-      const expectUnchanged = () => {
-        expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
-        expect(git("status", "--porcelain")).toBe("");
-      };
+    const expectUnchanged = () => {
+      expect(fs.existsSync(path.join(planStore, "plans/backlog/alpha-free.md"))).toBe(true);
+      expect(fx.git(planStore, "status", "--porcelain")).toBe("");
+    };
 
-      // Git's own message for a held lock names the lock file's full path.
-      fs.writeFileSync(lock, "");
-      const locked = await archive();
-      fs.rmSync(lock);
-      expect(locked.status).toBe(500);
-      expect(locked.text).toContain("could not be archived");
-      expect(locked.text).not.toContain(path.basename(root));
+    // Git's own message for a held lock names the lock file's full path.
+    fs.writeFileSync(lock, "");
+    const locked = await archive();
+    fs.rmSync(lock);
+    expect(locked.status).toBe(500);
+    expect(locked.text).toContain("could not be archived");
+    expect(locked.text).not.toContain(name);
+    expectUnchanged();
+
+    // Root writes a read-only file anyway, so this case cannot be staged there.
+    if (process.getuid?.() !== 0) {
+      fs.chmodSync(dependent, 0o444);
+      const readOnly = await archive();
+      fs.chmodSync(dependent, 0o644);
+      expect(readOnly.status).toBe(500);
+      expect(readOnly.text).toMatch(/could not be archived: E[A-Z]+/);
+      expect(readOnly.text).not.toContain(name);
       expectUnchanged();
-
-      // Root writes a read-only file anyway, so this case cannot be staged there.
-      if (process.getuid?.() !== 0) {
-        fs.chmodSync(dependent, 0o444);
-        const readOnly = await archive();
-        fs.chmodSync(dependent, 0o644);
-        expect(readOnly.status).toBe(400);
-        expect(readOnly.text).toContain("could not be updated (EACCES)");
-        expect(readOnly.text).not.toContain(path.basename(root));
-        expectUnchanged();
-      }
-
-      // A file where the archive folder belongs raises a raw filesystem error, whose message has the path.
-      const blocker = path.join(root, "docs/plans/archived");
-      fs.rmSync(blocker, { recursive: true, force: true });
-      fs.writeFileSync(blocker, "");
-      const blocked = await archive();
-      fs.rmSync(blocker);
-      expect(blocked.status).toBe(500);
-      expect(blocked.text).toMatch(/could not be archived: E[A-Z]+/);
-      expect(blocked.text).not.toContain(path.basename(root));
-      expectUnchanged();
-
-      // Without its Git directory, the repo's own error text never reaches the browser.
-      const gitDir = path.join(root, ".git");
-      fs.renameSync(gitDir, `${gitDir}-away`);
-      const noGit = await archive();
-      fs.renameSync(`${gitDir}-away`, gitDir);
-      expect(noGit.status).toBe(400);
-      expect(noGit.text).toContain("can't be read as a Git checkout");
-      expect(noGit.text).not.toContain(path.basename(root));
-      expectUnchanged();
-
-      // A refusal's advice to the agent running the command stays out of the dialog's text.
-      git("checkout", "-q", "-b", "feature");
-      const offBase = await archive();
-      git("checkout", "-q", "main");
-      git("branch", "-q", "-D", "feature");
-      expect(offBase.status).toBe(400);
-      expect(offBase.text).toContain("is on feature, not main");
-      expect(offBase.text).not.toContain("Ask the user");
-      expectUnchanged();
-
-      // A bare repo has no checkout to commit from.
-      git("config", "core.bare", "true");
-      const bare = await archive();
-      git("config", "--unset", "core.bare");
-      expect(bare.status).toBe(400);
-      expect(bare.text).toContain("can't be read as a Git checkout");
-      expect(bare.text).not.toContain(path.basename(root));
-      expectUnchanged();
-
-      // A commit that fails after the rename says the plan moved, without git's own text.
-      git("config", "commit.gpgsign", "true");
-      git("config", "gpg.program", "false");
-      const uncommitted = await archive();
-      git("config", "--unset", "commit.gpgsign");
-      git("config", "--unset", "gpg.program");
-      expect(uncommitted.status).toBe(500);
-      expect(uncommitted.text).toContain("moved to docs/plans/archived/alpha-free.md, but the move was not committed");
-      expect(uncommitted.text).not.toContain("gpg failed");
-      expect(uncommitted.text).toContain("Fix what stopped the commit");
-      expect(uncommitted.text).not.toContain(path.basename(root));
-      expect(git("status", "--porcelain")).toContain("R  docs/plans/backlog/alpha-free.md -> docs/plans/archived/alpha-free.md");
-      git("reset", "--quiet", "--hard");
-      expectUnchanged();
-
-      // The dialog gives the reader that way forward, and the list stops offering the moved plan.
-      git("config", "commit.gpgsign", "true");
-      git("config", "gpg.program", "false");
-      const confirmation = page.getByRole("dialog", { name: "Are you sure?" });
-      const archiveFreeOne = page.getByRole("button", { name: "Archive Free one", exact: true });
-      const hitUncommittedMove = async () => {
-        await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
-        await archiveFreeOne.click();
-        await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("textbox").fill("Abandoned.");
-        await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("button", { name: "Continue" }).click();
-        await confirmation.getByRole("button", { name: "Archive Plan" }).click();
-        await expect(confirmation).toContainText("the move was not committed");
-      };
-      await hitUncommittedMove();
-      await expect(confirmation).toContainText("Fix what stopped the commit");
-      await expect(confirmation.getByRole("button", { name: "Archive Plan" })).toBeHidden();
-      await expect(archiveFreeOne).toHaveCount(0);
-      await confirmation.getByRole("button", { name: "Close" }).click();
-      await expect(confirmation).toBeHidden();
-
-      // The next opening starts over, with none of that error's controls left behind.
-      await page.getByRole("button", { name: "Archive Other one", exact: true }).click();
-      const reopened = page.getByRole("dialog", { name: 'Archive "Other one"?' });
-      await expect(reopened.getByRole("button", { name: "Continue" })).toBeVisible();
-      await reopened.getByRole("button", { name: "Cancel" }).click();
-      await expect(reopened).toBeHidden();
-      git("reset", "--quiet", "--hard");
-
-      // A reload that fails can't drop the moved plan from the list, so only its control turns off.
-      const failedReload = /\/api\/plans\/refresh/;
-      await page.route(failedReload, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
-      await hitUncommittedMove();
-      await confirmation.getByRole("button", { name: "Close" }).click();
-      await expect(archiveFreeOne).toBeDisabled();
-      await expect(page.getByRole("button", { name: "Archive Other one", exact: true })).toBeEnabled();
-      await page.unroute(failedReload);
-      git("config", "--unset", "commit.gpgsign");
-      git("config", "--unset", "gpg.program");
-      git("reset", "--quiet", "--hard");
-      expectUnchanged();
-
-      // A later snapshot lifts the hold: the undone plan can be archived again.
-      await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
-      await expect(archiveFreeOne).toBeEnabled();
-
-      expect((await archive()).status).toBe(200);
-      expect(fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
     }
+
+    // A file where the archive folder belongs raises a raw filesystem error, whose message has the path.
+    const blocker = path.join(planStore, "plans/archived");
+    fs.rmSync(blocker, { recursive: true, force: true });
+    fs.writeFileSync(blocker, "");
+    const blocked = await archive();
+    fs.rmSync(blocker);
+    fx.git(planStore, "checkout", "--", "plans/archived");
+    expect(blocked.status).toBe(500);
+    expect(blocked.text).toMatch(/could not be archived: E[A-Z]+/);
+    expect(blocked.text).not.toContain(name);
+    expectUnchanged();
+
+    // A refusal's advice to the agent running the command stays out of the dialog's text.
+    const dependentText = fs.readFileSync(dependent, "utf8");
+    fs.appendFileSync(dependent, "\nA raw edit.\n");
+    const dirty = await archive();
+    fs.writeFileSync(dependent, dependentText);
+    expect(dirty.status).toBe(409);
+    expect(dirty.text).toContain("uncommitted edits");
+    expect(dirty.text).not.toContain("Plans are written only through");
+    expectUnchanged();
+
+    // The dialog says why, and keeps the plan and the way to try again.
+    const confirmation = page.getByRole("dialog", { name: "Are you sure?" });
+    const archiveFreeOne = page.getByRole("button", { name: "Archive Free one", exact: true });
+    await page.goto(`/plans?lifecycle=backlog&repo=${urlKey}&namespace=alpha`);
+    await archiveFreeOne.click();
+    await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("textbox").fill("Abandoned.");
+    await page.getByRole("dialog", { name: 'Archive "Free one"?' }).getByRole("button", { name: "Continue" }).click();
+    fs.writeFileSync(lock, "");
+    await confirmation.getByRole("button", { name: "Archive Plan" }).click();
+    await expect(confirmation).toContainText("could not be archived");
+    fs.rmSync(lock);
+    expectUnchanged();
+    await confirmation.getByRole("button", { name: "Archive Plan" }).click();
+    await expect(confirmation).toBeHidden();
+    await expect(archiveFreeOne).toHaveCount(0);
+    expect(fs.existsSync(path.join(planStore, "plans/archived/alpha-free.md"))).toBe(true);
   });
 
   test("archiving an unprioritized plan asks twice, records the reason, and clears what depended on it", async ({ page }) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-archive-"));
-    const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout;
-    const put = (relative, content) => {
-      fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
-      fs.writeFileSync(path.join(root, relative), content);
-    };
-    const moved = (name) => path.join(root, "docs/plans/archived", name);
-    try {
-      git("init", "-q", "-b", "main");
-      git("config", "user.name", "Portal Test");
-      git("config", "user.email", "portal@example.invalid");
-      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
-      put("docs/plans/backlog/alpha-ranked.md", document({ id: "arkranked", title: "Ranked one" }));
-      put("docs/plans/backlog/alpha-free.md", document({ id: "arkfree01", title: "Free one" }));
-      put("docs/plans/backlog/alpha-long.md", document({ id: "arklong01", title: "Long one", summary: "A description long enough to need the sustained hover. ".repeat(10) }));
-      put("docs/plans/backlog/alpha-root.md", document({ id: "arkroot01", title: "Chain root" }));
-      put("docs/plans/backlog/alpha-leaf.md", document({ id: "arkleaf01", title: "Chain leaf", deps: ["arkroot01"] }));
-      put("docs/plans/backlog/beta-after.md", document({ id: "arkafter1", title: "Waits elsewhere", deps: ["arkfree01"] }));
-      git("add", ".");
-      git("commit", "-q", "-m", "fixture");
-      put("docs/plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["arkranked"] } }));
-      await addRepositorySource(page, root);
+    const name = `archive-${Math.random().toString(36).slice(2, 8)}`;
+    const root = fx.repository(name, {
+      "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }),
+      "plans/plans-order.json": JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["arkranked"] } }),
+      "plans/backlog/alpha-ranked.md": document({ id: "arkranked", title: "Ranked one" }),
+      "plans/backlog/alpha-free.md": document({ id: "arkfree01", title: "Free one" }),
+      "plans/backlog/alpha-long.md": document({ id: "arklong01", title: "Long one", summary: "A description long enough to need the sustained hover. ".repeat(10) }),
+      "plans/backlog/alpha-root.md": document({ id: "arkroot01", title: "Chain root" }),
+      "plans/backlog/alpha-leaf.md": document({ id: "arkleaf01", title: "Chain leaf", deps: ["arkroot01"] }),
+      "plans/backlog/beta-after.md": document({ id: "arkafter1", title: "Waits elsewhere", deps: ["arkfree01"] }),
+    });
+    const planStore = fx.storePath(root);
+    const moved = (file) => path.join(planStore, "plans/archived", file);
+    await addRepositorySource(page, root);
 
-      const { backlog } = await (await page.request.get("/api/plans")).json();
-      const entry = backlog.find((item) => item.name === path.basename(root));
-      await page.goto(`/plans?lifecycle=backlog&repo=${entry.urlKey}&namespace=alpha`);
-      await page.getByRole("button", { name: "Prioritize", exact: true }).click();
+    const { backlog } = await (await page.request.get("/api/plans")).json();
+    const entry = backlog.find((item) => item.name === name);
+    await page.goto(`/plans?lifecycle=backlog&repo=${entry.urlKey}&namespace=alpha`);
+    await page.getByRole("button", { name: "Prioritize", exact: true }).click();
 
-      const archive = (title) => page.getByRole("button", { name: `Archive ${title}`, exact: true });
-      await expect(blockFor(page, "Ranked one").getByRole("button", { name: /^Archive/ })).toHaveCount(0);
-      // A linked block offers one control per plan, and none among its moves.
-      await expect(blockFor(page, "Chain root").getByRole("button", { name: /^Archive/ })).toHaveCount(2);
-      await expect(blockFor(page, "Chain root").getByRole("group", { name: "Move" }).getByRole("button", { name: /^Archive/ })).toHaveCount(0);
+    const archive = (title) => page.getByRole("button", { name: `Archive ${title}`, exact: true });
+    await expect(blockFor(page, "Ranked one").getByRole("button", { name: /^Archive/ })).toHaveCount(0);
+    // A linked block offers one control per plan, and none among its moves.
+    await expect(blockFor(page, "Chain root").getByRole("button", { name: /^Archive/ })).toHaveCount(2);
+    await expect(blockFor(page, "Chain root").getByRole("group", { name: "Move" }).getByRole("button", { name: /^Archive/ })).toHaveCount(0);
 
-      // An unsaved draft would go stale, so the control waits.
-      await blockFor(page, "Chain root").getByRole("button", { name: "Move down" }).click();
-      await expect(archive("Free one")).toBeDisabled();
-      // Disabled, the button still shows no longer text and opens nothing.
-      const disabledRow = page.locator(".backlog-plan-doc", { has: archive("Long one") });
-      const box = await archive("Long one").boundingBox();
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.waitForTimeout(1200);
-      await expect(disabledRow).not.toHaveClass(/is-excerpt-expanded/);
-      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      await expect(page.locator("#drawer")).not.toHaveAttribute("open");
-      await page.mouse.move(0, 0);
-      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+    // An unsaved draft would go stale, so the control waits.
+    await blockFor(page, "Chain root").getByRole("button", { name: "Move down" }).click();
+    await expect(archive("Free one")).toBeDisabled();
+    // Disabled, the button still shows no longer text and opens nothing.
+    const disabledRow = page.locator(".backlog-plan-doc", { has: archive("Long one") });
+    const box = await archive("Long one").boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(1200);
+    await expect(disabledRow).not.toHaveClass(/is-excerpt-expanded/);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(page.locator("#drawer")).not.toHaveAttribute("open");
+    await page.mouse.move(0, 0);
+    await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
-      // The button lives inside the row's opening area, and is not part of it: no drawer, no longer text.
-      const row = page.locator(".backlog-plan-doc", { has: archive("Long one") });
-      await archive("Long one").hover();
-      await page.waitForTimeout(1200);
-      await expect(row).not.toHaveClass(/is-excerpt-expanded/);
-      await archive("Long one").click();
-      await expect(page.getByRole("dialog", { name: 'Archive "Long one"?' })).toBeVisible();
-      await expect(page.locator("#drawer")).not.toHaveAttribute("open");
-      await page.getByRole("dialog", { name: 'Archive "Long one"?' }).getByRole("button", { name: "Cancel" }).click();
-      await row.locator("[data-slot=purpose]").hover();
-      await expect(row).toHaveClass(/is-excerpt-expanded/, { timeout: 3000 });
-      await page.mouse.move(0, 0);
+    // The button lives inside the row's opening area, and is not part of it: no drawer, no longer text.
+    const row = page.locator(".backlog-plan-doc", { has: archive("Long one") });
+    await archive("Long one").hover();
+    await page.waitForTimeout(1200);
+    await expect(row).not.toHaveClass(/is-excerpt-expanded/);
+    await archive("Long one").click();
+    await expect(page.getByRole("dialog", { name: 'Archive "Long one"?' })).toBeVisible();
+    await expect(page.locator("#drawer")).not.toHaveAttribute("open");
+    await page.getByRole("dialog", { name: 'Archive "Long one"?' }).getByRole("button", { name: "Cancel" }).click();
+    await row.locator("[data-slot=purpose]").hover();
+    await expect(row).toHaveClass(/is-excerpt-expanded/, { timeout: 3000 });
+    await page.mouse.move(0, 0);
 
-      const first = page.getByRole("dialog", { name: 'Archive "Free one"?' });
-      const second = page.getByRole("dialog", { name: "Are you sure?" });
-      await archive("Free one").click();
-      await expect(first.getByRole("button", { name: "Continue" })).toBeDisabled();
-      // Actions sit in one row at the right, Cancel first, and the field has room around its text.
-      const cancelBox = await first.getByRole("button", { name: "Cancel" }).boundingBox();
-      const continueBox = await first.getByRole("button", { name: "Continue" }).boundingBox();
-      expect(cancelBox.y).toBe(continueBox.y);
-      expect(cancelBox.x).toBeLessThan(continueBox.x);
-      expect(await first.getByRole("textbox").evaluate((node) => parseFloat(getComputedStyle(node).paddingLeft))).toBeGreaterThanOrEqual(8);
-      await first.getByRole("textbox").fill("Superseded by the ranked plan.");
-      await first.getByRole("button", { name: "Continue" }).click();
-      await expect(second).toContainText("commits the move");
-      await expect(second).toContainText("No longer depending on it: Waits elsewhere.");
-      await second.getByRole("button", { name: "Cancel" }).click();
-      await expect(second).toBeHidden();
-      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
+    const first = page.getByRole("dialog", { name: 'Archive "Free one"?' });
+    const second = page.getByRole("dialog", { name: "Are you sure?" });
+    await archive("Free one").click();
+    await expect(first.getByRole("button", { name: "Continue" })).toBeDisabled();
+    // Actions sit in one row at the right, Cancel first, and the field has room around its text.
+    const cancelBox = await first.getByRole("button", { name: "Cancel" }).boundingBox();
+    const continueBox = await first.getByRole("button", { name: "Continue" }).boundingBox();
+    expect(cancelBox.y).toBe(continueBox.y);
+    expect(cancelBox.x).toBeLessThan(continueBox.x);
+    expect(await first.getByRole("textbox").evaluate((node) => parseFloat(getComputedStyle(node).paddingLeft))).toBeGreaterThanOrEqual(8);
+    await first.getByRole("textbox").fill("Superseded by the ranked plan.");
+    await first.getByRole("button", { name: "Continue" }).click();
+    await expect(second).toContainText("commits the move");
+    await expect(second).toContainText("No longer depending on it: Waits elsewhere.");
+    await second.getByRole("button", { name: "Cancel" }).click();
+    await expect(second).toBeHidden();
+    expect(fs.existsSync(path.join(planStore, "plans/backlog/alpha-free.md"))).toBe(true);
 
-      await archive("Free one").click();
-      await expect(first.getByRole("textbox")).toHaveValue("");
-      await first.getByRole("textbox").fill("Superseded by the ranked plan.");
-      await first.getByRole("button", { name: "Continue" }).dblclick();
-      // The final button can land under the cursor, so a double-click must not answer both questions.
-      await expect(second.getByRole("button", { name: "Archive Plan" })).toBeDisabled();
-      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-free.md"))).toBe(true);
-      await second.getByRole("button", { name: "Archive Plan" }).click();
-      await expect(second).toBeHidden();
-      await expect(blockFor(page, "Free one")).toHaveCount(0);
-      expect(fs.readFileSync(moved("alpha-free.md"), "utf8")).toContain("Superseded by the ranked plan.");
-      expect(git("show", "--no-renames", "--name-only", "--format=", "HEAD").trim().split("\n").sort()).toEqual(["docs/plans/archived/alpha-free.md", "docs/plans/backlog/alpha-free.md", "docs/plans/backlog/beta-after.md"]);
-      expect(fs.readFileSync(path.join(root, "docs/plans/backlog/beta-after.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
-      expect(git("status", "--porcelain").trim()).toBe("?? docs/plans/plans-order.json");
+    await archive("Free one").click();
+    await expect(first.getByRole("textbox")).toHaveValue("");
+    await first.getByRole("textbox").fill("Superseded by the ranked plan.");
+    await first.getByRole("button", { name: "Continue" }).dblclick();
+    // The final button can land under the cursor, so a double-click must not answer both questions.
+    await expect(second.getByRole("button", { name: "Archive Plan" })).toBeDisabled();
+    expect(fs.existsSync(path.join(planStore, "plans/backlog/alpha-free.md"))).toBe(true);
+    await second.getByRole("button", { name: "Archive Plan" }).click();
+    await expect(second).toBeHidden();
+    await expect(blockFor(page, "Free one")).toHaveCount(0);
+    expect(fs.readFileSync(moved("alpha-free.md"), "utf8")).toContain("Superseded by the ranked plan.");
+    expect(fx.git(planStore, "show", "--no-renames", "--name-only", "--format=", "HEAD").split("\n").sort()).toEqual(["plans/archived/alpha-free.md", "plans/backlog/alpha-free.md", "plans/backlog/beta-after.md"]);
+    expect(fs.readFileSync(path.join(planStore, "plans/backlog/beta-after.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
+    expect(fx.git(planStore, "status", "--porcelain")).toBe("");
+    expect(fx.git(root, "show", "origin/repo-plans:plans/archived/alpha-free.md")).toContain("Superseded by the ranked plan.");
 
-      // One plan of a linked block goes alone; the survivor stops depending on it and stays.
-      await archive("Chain root").click();
-      const linked = page.getByRole("dialog", { name: 'Archive "Chain root"?' });
-      await linked.getByRole("textbox").fill("Abandoned.");
-      await linked.getByRole("button", { name: "Continue" }).click();
-      await expect(second).toContainText("No longer depending on it: Chain leaf.");
-      await second.getByRole("button", { name: "Archive Plan" }).click();
-      await expect(second).toBeHidden();
-      expect(fs.existsSync(moved("alpha-root.md"))).toBe(true);
-      await expect(archive("Chain leaf")).toBeEnabled();
-      expect(fs.readFileSync(path.join(root, "docs/plans/backlog/alpha-leaf.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
+    // One plan of a linked block goes alone; the survivor stops depending on it and stays.
+    await archive("Chain root").click();
+    const linked = page.getByRole("dialog", { name: 'Archive "Chain root"?' });
+    await linked.getByRole("textbox").fill("Abandoned.");
+    await linked.getByRole("button", { name: "Continue" }).click();
+    await expect(second).toContainText("No longer depending on it: Chain leaf.");
+    await second.getByRole("button", { name: "Archive Plan" }).click();
+    await expect(second).toBeHidden();
+    expect(fs.existsSync(moved("alpha-root.md"))).toBe(true);
+    await expect(archive("Chain leaf")).toBeEnabled();
+    expect(fs.readFileSync(path.join(planStore, "plans/backlog/alpha-leaf.md"), "utf8")).toMatch(/^depends_on: \[\]$/m);
 
-      // The route itself refuses a ranked plan, whatever a page sends.
-      const refused = await page.evaluate(async (repositoryId) => {
-        const { portalPostJson } = await import("/portal/shared/api.js");
-        return portalPostJson("/api/plans/archive", { repositoryId, id: "arkranked", reason: "No." }).catch((err) => err.message);
-      }, entry.repositoryId);
-      expect(refused).toContain("Only unprioritized Backlog plans");
-      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-ranked.md"))).toBe(true);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    // The route itself refuses a ranked plan, whatever a page sends.
+    const refused = await page.evaluate(async (repositoryId) => {
+      const { portalPostJson } = await import("/portal/shared/api.js");
+      return portalPostJson("/api/plans/archive", { repositoryId, id: "arkranked", reason: "No." }).catch((err) => err.message);
+    }, entry.repositoryId);
+    expect(refused).toContain("Only unprioritized Backlog plans");
+    expect(fs.existsSync(path.join(planStore, "plans/backlog/alpha-ranked.md"))).toBe(true);
   });
 
-  test("archiving works on a repo whose base branch is not main, and waits for the new snapshot", async ({ page }) => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-trunk-"));
-    const git = (...args) => spawnSync("git", args, { cwd: root, encoding: "utf8" }).stdout;
-    const put = (relative, content) => {
-      fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
-      fs.writeFileSync(path.join(root, relative), content);
+  test("archiving works whatever the code checkout is on, and waits for the new snapshot", async ({ page }) => {
+    const name = `trunk-${Math.random().toString(36).slice(2, 8)}`;
+    const root = fx.repository(name, {
+      "plans/plans-config.json": JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A" } }),
+      "plans/backlog/alpha-free.md": document({ id: "trkfree01", title: "Free one" }),
+      "plans/backlog/alpha-next.md": document({ id: "trknext01", title: "Next one" }),
+    });
+    const planStore = fx.storePath(root);
+    fx.git(root, "branch", "-m", "main", "trunk");
+    fx.git(root, "update-ref", "refs/remotes/origin/trunk", "HEAD");
+    fx.git(root, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
+    const trunkHead = fx.git(root, "rev-parse", "trunk");
+    await addRepositorySource(page, root);
+
+    const { backlog } = await (await page.request.get("/api/plans")).json();
+    const entry = backlog.find((item) => item.name === name);
+    await page.goto(`/plans?lifecycle=backlog&repo=${entry.urlKey}&namespace=alpha`);
+    const archiveThrough = async (title) => {
+      await page.getByRole("button", { name: `Archive ${title}`, exact: true }).click();
+      const first = page.getByRole("dialog", { name: `Archive "${title}"?` });
+      await first.getByRole("textbox").fill("Superseded.");
+      await first.getByRole("button", { name: "Continue" }).click();
+      const second = page.getByRole("dialog", { name: "Are you sure?" });
+      await expect(second.getByRole("button", { name: "Archive Plan" })).toBeEnabled();
+      await second.getByRole("button", { name: "Archive Plan" }).click();
+      return second;
     };
-    try {
-      git("init", "-q", "-b", "trunk");
-      git("config", "user.name", "Portal Test");
-      git("config", "user.email", "portal@example.invalid");
-      put("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A" } }));
-      put("docs/plans/backlog/alpha-free.md", document({ id: "trkfree01", title: "Free one" }));
-      put("docs/plans/backlog/alpha-next.md", document({ id: "trknext01", title: "Next one" }));
-      git("add", ".");
-      git("commit", "-q", "-m", "fixture");
-      git("update-ref", "refs/remotes/origin/trunk", "HEAD");
-      git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
-      await addRepositorySource(page, root);
 
-      const { backlog } = await (await page.request.get("/api/plans")).json();
-      const entry = backlog.find((item) => item.name === path.basename(root));
-      await page.goto(`/plans?lifecycle=backlog&repo=${entry.urlKey}&namespace=alpha`);
-      const archiveThrough = async (title) => {
-        await page.getByRole("button", { name: `Archive ${title}`, exact: true }).click();
-        const first = page.getByRole("dialog", { name: `Archive "${title}"?` });
-        await first.getByRole("textbox").fill("Superseded.");
-        await first.getByRole("button", { name: "Continue" }).click();
-        const second = page.getByRole("dialog", { name: "Are you sure?" });
-        await expect(second.getByRole("button", { name: "Archive Plan" })).toBeEnabled();
-        await second.getByRole("button", { name: "Archive Plan" }).click();
-        return second;
-      };
+    const release = await holdRefresh(page);
+    const dialog = await archiveThrough("Free one");
+    await expect.poll(() => fs.existsSync(path.join(planStore, "plans/archived/alpha-free.md"))).toBe(true);
+    await expect(dialog).toBeVisible();
+    release();
+    await expect(dialog).toBeHidden();
+    await expect(blockFor(page, "Free one")).toHaveCount(0);
+    expect(fx.git(root, "rev-parse", "--abbrev-ref", "HEAD")).toBe("trunk");
+    expect(fx.git(root, "rev-parse", "trunk")).toBe(trunkHead);
 
-      const release = await holdRefresh(page);
-      const dialog = await archiveThrough("Free one");
-      await expect.poll(() => fs.existsSync(path.join(root, "docs/plans/archived/alpha-free.md"))).toBe(true);
-      await expect(dialog).toBeVisible();
-      release();
-      await expect(dialog).toBeHidden();
-      await expect(blockFor(page, "Free one")).toHaveCount(0);
-      expect(git("rev-parse", "--abbrev-ref", "HEAD").trim()).toBe("trunk");
-      expect(git("log", "-1", "--format=%s", "trunk").trim()).not.toBe("fixture");
-
-      // The base branch check itself still stands: another branch checked out refuses the move.
-      await page.unrouteAll({ behavior: "ignoreErrors" });
-      git("switch", "-qc", "feature");
-      const refused = await archiveThrough("Next one");
-      await expect(refused.getByText(/on feature, not trunk/)).toBeVisible();
-      expect(fs.existsSync(path.join(root, "docs/plans/backlog/alpha-next.md"))).toBe(true);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
+    // Another branch checked out doesn't matter, since the move never touches a code branch.
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+    fx.git(root, "switch", "-qc", "feature");
+    const next = await archiveThrough("Next one");
+    await expect(next).toBeHidden();
+    expect(fs.existsSync(path.join(planStore, "plans/archived/alpha-next.md"))).toBe(true);
+    expect(fx.git(root, "rev-parse", "--abbrev-ref", "HEAD")).toBe("feature");
   });
 
   test("Prioritize draws linked plans as one block with exact controls and hides Filters", async ({ page }) => {
@@ -932,7 +869,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a prerequisite in another namespace shows its badge and title, and opens", async ({ page }) => {
-    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betaon05"] } }));
+    write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betaon05"] } }));
     await openNamespace(page, "beta");
     const card = page.locator("plan-card");
     await expect(card).toContainText("Waiting on:");
@@ -945,7 +882,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a Waiting on namespace badge on a card opens that namespace, from Details and Next up", async ({ page }) => {
-    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphax03"], beta: ["betaon05"] } }));
+    write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphax03"], beta: ["betaon05"] } }));
     const location = page.getByRole("navigation", { name: "Backlog location" });
     await openNamespace(page, "beta");
     await waitingOn(page.locator("plan-card")).getByRole("link", { name: "alpha", exact: true }).click();
@@ -953,14 +890,14 @@ test.describe("Backlog directory and ordering", () => {
     expect(new URL(page.url()).searchParams.get("namespace")).toBe("alpha");
 
     // Beta one is held up by Storage, which is unprioritized Backlog work, so make it wait on Active work to reach Next up.
-    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaw07"] }));
+    write("plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaw07"] }));
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       const nextUpCard = page.getByRole("region", { name: "Next up" }).locator("plan-card", { hasText: "Beta one" });
       await waitingOn(nextUpCard).getByRole("link", { name: "alpha", exact: true }).click();
       await expect(location).toContainText("ALPHA");
     } finally {
-      write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
+      write("plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
     }
   });
 
@@ -1036,8 +973,8 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("pinning a namespace lifts it and its plan to the top, and survives a reload", async ({ page }) => {
-    write("docs/plans/backlog/beta-free.md", document({ id: "betafr09", title: "Beta free" }));
-    fs.writeFileSync(orderFile, `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betafr09"] } }, null, 2)}\n`);
+    write("plans/backlog/beta-free.md", document({ id: "betafr09", title: "Beta free" }));
+    write("plans/plans-order.json", `${JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betafr09"] } }, null, 2)}\n`);
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       const labels = page.getByRole("group", { name: "Backlog directory" }).locator(".backlog-directory-label");
@@ -1063,7 +1000,7 @@ test.describe("Backlog directory and ordering", () => {
       await expect(labels).toHaveText(["ALPHA", "BETA", "No namespace"]);
       expect(JSON.parse(fs.readFileSync(orderFile, "utf8"))).not.toHaveProperty("pinned");
     } finally {
-      fs.rmSync(path.join(repo, "docs/plans/backlog/beta-free.md"));
+      remove("plans/backlog/beta-free.md");
     }
   });
 
@@ -1087,14 +1024,14 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("Next up keeps a plan waiting only on work underway, and shows what it waits on", async ({ page }) => {
-    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
+    write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       const card = page.getByRole("region", { name: "Next up" }).locator("plan-card");
       await expect(card.locator(".title-link")).toHaveText(["Storage"]);
       await expect(waitingOn(card)).toHaveText(/^\s*Working plan\s+\(Active\)\s*$/);
     } finally {
-      write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
+      write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
     }
   });
 
@@ -1127,9 +1064,9 @@ test.describe("Backlog directory and ordering", () => {
 
   test("Next up shows only on a selected repo's screen", async ({ page }) => {
     const nextUp = page.getByRole("region", { name: "Next up" });
-    const bareOrder = path.join(bare, "docs/plans/plans-order.json");
+    const bareStore = fx.storePath(bare);
     // A ranked entry gives the no-config repo the one thing that could otherwise qualify it.
-    fs.writeFileSync(bareOrder, JSON.stringify({ schemaVersion: 1, namespaces: { anything: ["barepl08"] } }));
+    write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { anything: ["barepl08"] } }), bareStore);
     try {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
       await expect(nextUp).toBeVisible();
@@ -1146,14 +1083,14 @@ test.describe("Backlog directory and ordering", () => {
       await expect(directoryRows(page)).toContainText("No namespace");
       await expect(nextUp).toHaveCount(0);
     } finally {
-      fs.rmSync(bareOrder, { force: true });
+      remove("plans/plans-order.json", bareStore);
     }
   });
 
   test("the drawer opens another namespace's prerequisite, and Prioritize numbers blocks, not plans", async ({ page }) => {
     // Diagnostics follows the two-plan Storage block, so it is the second block but the third plan.
-    write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphax03"] }));
-    fs.writeFileSync(orderFile, JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betaon05"] } }));
+    write("plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphax03"] }));
+    write("plans/plans-order.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: ["alphaa01", "alphab02", "alphax03"], beta: ["betaon05"] } }));
     try {
       await openNamespace(page, "beta");
       await page.locator("plan-card").getByText("Beta one", { exact: true }).click();
@@ -1166,12 +1103,12 @@ test.describe("Backlog directory and ordering", () => {
       await openOrdering(page);
       await expect(blockFor(page, "Diagnostics").getByText("2", { exact: true })).toBeVisible();
     } finally {
-      write("docs/plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
+      write("plans/backlog/beta-one.md", document({ id: "betaon05", title: "Beta one", deps: ["alphaa01"] }));
     }
   });
 
   test("Home's drawer shows a prerequisite with a styled namespace badge", async ({ page }) => {
-    const file = "docs/plans/active/alpha-blocked.md";
+    const file = "plans/active/alpha-blocked.md";
     write(file, document({ id: "alphabk9", title: "Blocked active" }).replace("depends_on: []", "blocked_by: [betaon05]\ndepends_on: []"));
     try {
       await page.goto("/");
@@ -1184,15 +1121,15 @@ test.describe("Backlog directory and ordering", () => {
       const badge = prerequisiteBadge(drawer, "alpha");
       expect(await badge.evaluate((node) => getComputedStyle(node).backgroundColor)).not.toBe("rgba(0, 0, 0, 0)");
     } finally {
-      fs.rmSync(path.join(repo, file), { force: true });
+      remove(file);
     }
   });
 
   test("a Waiting on namespace badge in Prioritize changes namespace, asking first over unsaved changes", async ({ page }) => {
-    const file = "docs/plans/backlog/beta-two.md";
-    const activeOnly = "docs/plans/active/gamma-running.md";
+    const file = "plans/backlog/beta-two.md";
+    const activeOnly = "plans/active/gamma-running.md";
     try {
-      write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B", gamma: "G" } }));
+      write("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B", gamma: "G" } }));
       write(activeOnly, document({ id: "gammar11", title: "Running elsewhere" }));
       write(file, document({ id: "betatw10", title: "Beta two", deps: ["alphaa01", "gammar11"] }));
       await openNamespace(page, "beta");
@@ -1212,13 +1149,13 @@ test.describe("Backlog directory and ordering", () => {
       await expect(page.getByRole("navigation", { name: "Backlog location" })).toContainText("ALPHA");
       expect(new URL(page.url()).searchParams.get("namespace")).toBe("alpha");
     } finally {
-      write("docs/plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
-      for (const item of [file, activeOnly]) fs.rmSync(path.join(repo, item), { force: true });
+      write("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces: { alpha: "A", beta: "B" } }));
+      for (const item of [file, activeOnly]) remove(item);
     }
   });
 
   test("opening a Waiting on link keeps a dirty draft and its unsaved state", async ({ page }) => {
-    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
+    write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage", deps: ["alphaw07"] }));
     try {
       await openOrdering(page);
       await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
@@ -1239,13 +1176,13 @@ test.describe("Backlog directory and ordering", () => {
       await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
       expect(savedOrder()).toEqual(["alphax03", "alphaa01", "alphab02"]);
     } finally {
-      write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
+      write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
     }
   });
 
   test("a long unbroken title does not scroll Details, Prioritize, or the drawer sideways at phone width", async ({ page }) => {
     const unbroken = "x".repeat(89);
-    write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: unbroken }));
+    write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: unbroken }));
     try {
       await page.setViewportSize({ width: 390, height: 800 });
       await openNamespace(page);
@@ -1260,14 +1197,14 @@ test.describe("Backlog directory and ordering", () => {
       await expect(drawerHeading(page, unbroken)).toBeVisible();
       expect(await scrollsSideways(page)).toBe(false);
     } finally {
-      write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
+      write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" }));
     }
   });
 
   test.describe("a Next up card with both badges and a long title at phone width", () => {
     const LONG_TITLE = "Storage engine rewrite with a title long enough that it cannot share one line with two badges on a phone";
-    test.beforeEach(() => write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: LONG_TITLE, deps: ["alphaw07"] })));
-    test.afterEach(() => write("docs/plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" })));
+    test.beforeEach(() => write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: LONG_TITLE, deps: ["alphaw07"] })));
+    test.afterEach(() => write("plans/backlog/alpha-storage.md", document({ id: "alphaa01", title: "Storage" })));
 
     for (const theme of ["dark", "light"]) {
       test(`stays readable without sideways scroll in the ${theme} theme`, async ({ page }, testInfo) => {
@@ -1482,12 +1419,12 @@ test.describe("Backlog directory and ordering", () => {
   test.describe("config edits", () => {
     let config;
     let original;
-    const writeNamespaces = (namespaces) => fs.writeFileSync(config, JSON.stringify({ schemaVersion: 1, namespaces }));
+    const writeNamespaces = (namespaces) => write("plans/plans-config.json", JSON.stringify({ schemaVersion: 1, namespaces }));
     test.beforeEach(() => {
-      config = path.join(repo, "docs/plans/plans-config.json");
+      config = path.join(store, "plans/plans-config.json");
       original = fs.readFileSync(config, "utf8");
     });
-    test.afterEach(() => fs.writeFileSync(config, original));
+    test.afterEach(() => write("plans/plans-config.json", original));
 
     test("adding, removing, and renaming a namespace reach an open directory at Refresh", async ({ page }) => {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
@@ -1521,9 +1458,9 @@ test.describe("Backlog directory and ordering", () => {
 
     test("an unreadable config is an error, and no plan disappears", async ({ page }) => {
       await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
-      fs.writeFileSync(config, "{ nope");
+      write("plans/plans-config.json", "{ nope");
       await page.getByRole("button", { name: "Refresh", exact: true }).click();
-      await expect(page.getByText("docs/plans/plans-config.json cannot be read")).toBeVisible();
+      await expect(page.getByText("plans/plans-config.json cannot be read")).toBeVisible();
       await expect(directoryRows(page)).toHaveCount(1);
       await expect(directoryRows(page)).toContainText("6 total");
     });
@@ -1594,7 +1531,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a plan with a duplicate id is shown with its reason and no controls", async ({ page }) => {
-    const copies = ["docs/plans/backlog/alpha-twin-one.md", "docs/plans/backlog/alpha-twin-two.md"];
+    const copies = ["plans/backlog/alpha-twin-one.md", "plans/backlog/alpha-twin-two.md"];
     try {
       for (const [index, file] of copies.entries()) write(file, document({ id: "twinplan", title: `Twin ${index}`, deps: ["alphax03"] }));
       await openOrdering(page);
@@ -1602,14 +1539,14 @@ test.describe("Backlog directory and ordering", () => {
       await expect(page.locator("backlog-block", { hasText: "Twin" })).toHaveCount(0);
       await expect(page.getByRole("list", { name: "Waiting on", exact: true }).filter({ hasText: "Diagnostics" })).toHaveCount(2);
     } finally {
-      for (const file of copies) fs.rmSync(path.join(repo, file), { force: true });
+      for (const file of copies) remove(file);
     }
   });
 
   test("an unparseable order file locks Prioritize and says why, and is left alone", async ({ page }) => {
-    fs.writeFileSync(orderFile, "{ nope");
+    write("plans/plans-order.json", "{ nope");
     await openOrdering(page);
-    await expect(page.getByText("docs/plans/plans-order.json cannot be read")).toBeVisible();
+    await expect(page.getByText("plans/plans-order.json cannot be read")).toBeVisible();
     await expect(page.getByRole("button", { name: "Move to bottom" })).toHaveCount(0);
     await expect(page.locator("backlog-block").first()).toContainText("blocked");
     expect(fs.readFileSync(orderFile, "utf8")).toBe("{ nope");
@@ -1645,36 +1582,26 @@ test.describe("Backlog directory and ordering", () => {
     expect(errors).toEqual([]);
   });
 
-  for (const uncommitted of [false, true]) {
-    test(`an archive whose refresh fails holds only that plan until a newer snapshot (uncommitted: ${uncommitted})`, async ({ page }) => {
-      setOrder(["alphaa01", "alphab02"]);
-      await openOrdering(page);
-      await page.route("**/api/plans/archive", (route) => route.fulfill({
-        status: uncommitted ? 500 : 200,
-        contentType: "application/json",
-        body: JSON.stringify(uncommitted ? { error: { message: "Move uncommitted", code: "MOVE_NOT_COMMITTED" } } : { ok: true }),
-      }));
-      const failing = /\/api\/plans\/refresh/;
-      await page.route(failing, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
-      const archive = page.getByRole("button", { name: "Archive Traces", exact: true });
-      await archive.click();
-      const dialog = page.getByRole("dialog");
-      await dialog.getByRole("textbox").fill("Superseded.");
-      await dialog.getByRole("button", { name: "Continue", exact: true }).click();
-      await expect(dialog.getByRole("button", { name: "Archive Plan", exact: true })).toBeEnabled();
-      await dialog.getByRole("button", { name: "Archive Plan", exact: true }).click();
-      if (uncommitted) {
-        await expect(dialog.getByText("Move uncommitted")).toBeVisible();
-        await dialog.getByRole("button", { name: "Close", exact: true }).click();
-      }
-      await expect(dialog).toBeHidden();
-      await expect(archive).toBeDisabled();
-      await expect(page.getByRole("button", { name: "Archive Diagnostics", exact: true })).toBeEnabled();
-      await page.unroute(failing);
-      await page.getByRole("button", { name: "Refresh", exact: true }).click();
-      await expect(archive).toBeEnabled();
-    });
-  }
+  test("an archive whose refresh fails holds only that plan until a newer snapshot", async ({ page }) => {
+    setOrder(["alphaa01", "alphab02"]);
+    await openOrdering(page);
+    await page.route("**/api/plans/archive", (route) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) }));
+    const failing = /\/api\/plans\/refresh/;
+    await page.route(failing, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "refresh broke" }) }));
+    const archive = page.getByRole("button", { name: "Archive Traces", exact: true });
+    await archive.click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox").fill("Superseded.");
+    await dialog.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(dialog.getByRole("button", { name: "Archive Plan", exact: true })).toBeEnabled();
+    await dialog.getByRole("button", { name: "Archive Plan", exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect(archive).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Archive Diagnostics", exact: true })).toBeEnabled();
+    await page.unroute(failing);
+    await page.getByRole("button", { name: "Refresh", exact: true }).click();
+    await expect(archive).toBeEnabled();
+  });
 
   test("a Save whose refresh fails keeps the saved order on screen and says the page is out of date", async ({ page }) => {
     await openOrdering(page);
@@ -1808,20 +1735,19 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a Save the filesystem refuses reports the code and no absolute path", async ({ page }) => {
-    test.skip(process.getuid?.() === 0, "root ignores the read-only folder");
-    const plansFolder = path.dirname(orderFile);
+    test.skip(process.getuid?.() === 0, "root ignores a read-only file");
     const held = fs.readFileSync(orderFile, "utf8");
     await openOrdering(page);
     await blockFor(page, "Diagnostics").getByRole("button", { name: "Move to top" }).click();
-    fs.chmodSync(plansFolder, 0o555);
+    fs.chmodSync(orderFile, 0o444);
     try {
       await page.getByRole("button", { name: "Save", exact: true }).click();
       const status = page.getByRole("group", { name: "Unsaved order" }).getByRole("status");
-      await expect(status).toContainText("docs/plans/plans-order.json could not be written (EACCES).");
+      await expect(status).toContainText("plans/plans-order.json could not be written (EACCES).");
       await expect(status).not.toContainText(repo);
       expect(fs.readFileSync(orderFile, "utf8")).toBe(held);
     } finally {
-      fs.chmodSync(plansFolder, 0o755);
+      fs.chmodSync(orderFile, 0o644);
     }
   });
 
@@ -1862,7 +1788,7 @@ test.describe("Backlog directory and ordering", () => {
 
   test("No namespace keeps a long filename readable at phone width", async ({ page }) => {
     const stem = "x".repeat(96);
-    const file = `docs/plans/backlog/${stem}.md`;
+    const file = `plans/backlog/${stem}.md`;
     write(file, document({ id: "longname", title: "Long filename plan" }));
     try {
       await page.setViewportSize({ width: 390, height: 800 });
@@ -1873,7 +1799,7 @@ test.describe("Backlog directory and ordering", () => {
       const rights = await page.getByText(stem).evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right));
       expect(Math.max(...rights)).toBeLessThanOrEqual(390);
     } finally {
-      fs.rmSync(path.join(repo, file), { force: true });
+      remove(file);
     }
   });
 
@@ -1884,7 +1810,7 @@ test.describe("Backlog directory and ordering", () => {
     await expect(page.getByText("Copied the /plan-write prompt.")).toBeVisible();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     expect(copied).toContain("/plan-write");
-    expect(copied).toContain("docs/plans/backlog/wrong-prefix.md");
+    expect(copied).toContain("plans/backlog/wrong-prefix.md");
   });
 
   test("a repo with no config shows one No namespace row and a notice, no per-file findings", async ({ page }) => {
@@ -1913,7 +1839,7 @@ test.describe("Backlog directory and ordering", () => {
   });
 
   test("a broken dependency graph locks ordering and says why", async ({ page }) => {
-    const file = "docs/plans/backlog/alpha-diagnostics.md";
+    const file = "plans/backlog/alpha-diagnostics.md";
     try {
       write(file, document({ id: "alphax03", title: "Diagnostics", deps: ["missing9"] }));
       await openNamespace(page);

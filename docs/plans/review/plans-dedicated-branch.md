@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Verify that Codex's sandbox can commit to the plans worktree, then build the plans store and redirect plan operations to it.
+next_action: Run /plan-review for the human review of the plans store branch.
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
@@ -247,15 +247,15 @@ The modal validates and previews the title, plan ID, filename, and target folder
 
 ## Implementation checklist
 
-- [ ] **Codex sandbox check:** From `codex exec` with the managed profile, run commit-only store operations against a fixture and confirm the sandbox can write `repo_plans` and the repository's common Git directory. If it cannot, make the smallest permission-render change that allows it, or record the blocker before continuing.
-- [ ] **Plan store:** Add `plan-store.mjs` with `origin/repo-plans`, `plans/`-level lifecycle directories/config/order, worktree location by branch, the lock, hook-free fetch/commit/push, bounded retry, pending-commit push, and `plans init` with its path-collision checks. Add a test fixture helper that creates a bare `origin` and clones.
-- [ ] **Canonical plan access:** Redirect scanning, snapshot fingerprinting, validation, ordering, transitions, review records, and CLI reads/writes to the new `plans/` paths. Remove copy authority, its findings and API fields, and `docs/plans/` behavior. Add `plans show`, `plans save`, `plans approve`, and `plans config namespaces`.
-- [ ] **Lifecycle and code separation:** Preserve review, approval, landing, and close gates while evaluating code commits independently of plans commits. Drop the primary-checkout and base-branch requirement from plan commits, the start fast-forward, and sync-base plan-rename handling.
-- [ ] **Outside consumers:** Update worktree cleanup (fail closed, exclude and lock `repo_plans`, refuse it in `plans start`), Codex workspace roots, repo discovery, and packaging. Remove the real-tree CI check.
-- [ ] **Agent permissions:** Update plan-suite skills and `manifests/inventory/agent-permissions.json` to permit named plan CLI operations, and regenerate outputs under `generated/packages/plan-suite/`. Add remote branch protection guidance.
-- [ ] **Portal:** Add the not-set-up notice, the `+` button after Filters, modal `.md` upload with repo selection, validation/preview, diff confirmation for updates, and push feedback through the shared save path.
-- [ ] **One-time migration:** Deliver the disposable helper, including worktree-bound plans. Verify remote persistence, and document code-branch cleanup and the rollout order. Do not retain migration logic in the product.
-- [ ] **Tests and docs:** Move plan fixtures in `scripts/test/` to the new layout, and add a store check to `scripts/test/test-cli.sh` covering the Validation list. Update the documents under Documentation impact. Run focused suite checks, `npm run test:portal-ui`, `npm run pack:dry-run`, and `npm run check`.
+- [x] **Codex sandbox check:** From `codex exec` with the managed profile, run commit-only store operations against a fixture and confirm the sandbox can write `repo_plans` and the repository's common Git directory. If it cannot, make the smallest permission-render change that allows it, or record the blocker before continuing.
+- [x] **Plan store:** Add `plan-store.mjs` with `origin/repo-plans`, `plans/`-level lifecycle directories/config/order, worktree location by branch, the lock, hook-free fetch/commit/push, bounded retry, pending-commit push, and `plans init` with its path-collision checks. Add a test fixture helper that creates a bare `origin` and clones.
+- [x] **Canonical plan access:** Redirect scanning, snapshot fingerprinting, validation, ordering, transitions, review records, and CLI reads/writes to the new `plans/` paths. Remove copy authority, its findings and API fields, and `docs/plans/` behavior. Add `plans show`, `plans save`, `plans approve`, and `plans config namespaces`.
+- [x] **Lifecycle and code separation:** Preserve review, approval, landing, and close gates while evaluating code commits independently of plans commits. Drop the primary-checkout and base-branch requirement from plan commits, the start fast-forward, and sync-base plan-rename handling.
+- [x] **Outside consumers:** Update worktree cleanup (fail closed, exclude and lock `repo_plans`, refuse it in `plans start`), Codex workspace roots, repo discovery, and packaging. Remove the real-tree CI check.
+- [x] **Agent permissions:** Update plan-suite skills and `manifests/inventory/agent-permissions.json` to permit named plan CLI operations, and regenerate outputs under `generated/packages/plan-suite/`. Add remote branch protection guidance.
+- [x] **Portal:** Add the not-set-up notice, the `+` button after Filters, modal `.md` upload with repo selection, validation/preview, diff confirmation for updates, and push feedback through the shared save path.
+- [x] **One-time migration:** Deliver the disposable helper, including worktree-bound plans. Verify remote persistence, and document code-branch cleanup and the rollout order. Do not retain migration logic in the product.
+- [x] **Tests and docs:** Move plan fixtures in `scripts/test/` to the new layout, and add a store check to `scripts/test/test-cli.sh` covering the Validation list. Update the documents under Documentation impact. Run focused suite checks, `npm run test:portal-ui`, `npm run pack:dry-run`, and `npm run check`.
 
 ## Validation
 
@@ -304,6 +304,145 @@ The modal validates and previews the title, plan ID, filename, and target folder
 | `docs/internal/plans-portal-internals.md`, `docs-map.md`, `backlog-review.md`, `plan-suite-deferred-topics.md`, `plan-backlog-ordering-architecture-addendum.md`, `skills-and-commands.md`, `config-panel-internals.md`, `npm-release.md`, `rename-readiness.md`, `rename/` | Replace plan paths and links with titles and IDs. Dated records under `docs/internal/history/` stay as written |
 | `portal/home/index.html` | "Set by" copy for the worktree folder |
 | Migration operator guide, in the helper's header | Rollout order; removed with the helper |
+
+## Execution notes
+
+Standing instructions from the user, for every session working this plan:
+
+- **Hand off at stopping points.** Start a new session at each logical stopping point and continue `/plan-execute` there, so context stays small. Commit and update this plan first. Pass this instruction along in each brief, until the plan is complete.
+- **Harness-specific behavior belongs in the harness provider.** Put it under `scripts/harnesses/<provider>/`; keep the shared adapter and platform code harness-agnostic. Update `docs/internal/harness-provider-interface.md` if that helps.
+
+How to work on this branch:
+
+- The installed `roborepo` runs the old code from the primary checkout, so this plan's own lifecycle stays on `docs/plans/` until rollout: edit this copy in the worktree, and run `roborepo plans submit` from the primary checkout. Test new code with `node scripts/cli/main.mjs plans ...`.
+- `docs/plans/**` stays tracked on this branch; rollout removes it after merge.
+
+State of the work (what the checklist's unchecked items still need):
+
+| Item | Done | Remaining |
+| --- | --- | --- |
+| Codex | Rendered: `permissions.writablePaths` adapter seam, list in `scripts/harnesses/codex/plans-store-grants.mjs`, roots through the store | Nothing |
+| Outside consumers | Cleanup reads the store and fails closed, reserved branch guarded, discovery is `.git` only, `package.json`, naming check deleted, worktree and discovery fixtures moved | Nothing |
+| Canonical access | All readers moved. Home's plan path comes from the store (`planPath`); the drawer lost its authority rows | Nothing |
+| Lifecycle | Gates read the store and compare code without exclusions; sync-base lost rename handling, and nothing reads its `resolved` | Nothing |
+| Agent permissions | Manifest behavior, skills, rules, triggers, generated outputs, branch protection guidance in the user guide | Nothing |
+| Portal | Not-set-up notice (empty state when scoped or alone, warning line under All repos), `+` after Filters, `plan-import-dialog.js`, `/api/plans/import` and `/preview`, `plans-import.spec.mjs` | Nothing |
+| Migration | `scripts/dev/migrate-plans-once.mjs`, rollout order in its header, `migrate-plans-once-check.mjs` in the CI group; deleted after rollout with its check | Nothing |
+| Tests | Every plan fixture is on the store. `npm run check` passes end to end at 54ab2bc2: 427 CLI assertions, 76 of 76 unit suites, package install, clean-machine suites, 252 portal specs. `npm run pack:dry-run` passes | Nothing |
+| Docs | Every document under Documentation impact, plus `docs/architecture/developer-runtime-container-support.md`, `usage-statusline/README.md`, and links to plan files replaced with titles and ids | Nothing known. `rename/manifest.json` still lists `docs/plans/` as an excluded path, which is harmless |
+
+Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and are in `scripts/test/check-groups.json`. `scripts/test/lib/plan-store-fixture.mjs` adds a read-only store for checks that need no remote. `scripts/test/lib/plan-git-fixture.mjs` now builds a bare origin and a store: keys under `plans/` go to the store, others to `main`.
+
+## Decision Log
+
+- **Codex needs an exact-path grant, not the whole Git directory (measured with `codex exec`, codex-cli 0.166.0, on a fixture with the primary outside the workspace roots).** Without a grant, `git add` in `repo_plans` fails on `<common>/worktrees/<name>/index.lock`. Granting write to `<common>/objects/**`, `<common>/worktrees/repo_plans/**`, and the exact paths `refs/heads/repo-plans`, `logs/refs/heads/repo-plans`, `refs/remotes/origin/repo-plans`, `logs/refs/remotes/origin/repo-plans`, each with its `.lock`, lets add, commit, fetch, `reset --keep`, and the lock file exit 0, while `hooks/`, `config`, and other branches stay denied. Alternative: all of `.git/**`, rejected because writing hooks or config runs code outside the sandbox. Codex accepts `write` only on an exact path or trailing `/**`, so the lock paths are listed. Git prints `Unable to create packed-refs.lock` on these commands; every exit status stays 0 and `packed-refs` stays denied, because writing it could move other branches.
+- **Inventory filters the reserved worktree centrally.** `linkedWorktrees` drops the `repo-plans` branch unless the store passes `includeReserved`. Alternative: a filter at each consumer, which a new consumer could forget.
+- **The store is located from Git's administrative files, not `git worktree list`.** The portal's stat-only fingerprint calls it every poll, and the plan's lookup is still by checked-out branch.
+- **Operations return files; the store writes them.** `mutateStore` runs an operation that reads the fresh tree and returns `{ files, message, result }`, so a rejected push re-runs it and `plans-order.json` is recomputed. Alternative: operations writing directly, which could not be re-applied.
+- **A same-plan change from another clone is refused for every operation, and the refusal lets a rerun proceed.** The fetch advances the local store, so a repeat runs against current content. Alternative: exempting transitions, which adds a mode for little benefit.
+- **A pending commit's order change is merged by intent when replayed.** Its closure is gone after an offline save, so it applies the ids it added and removed to the remote's order. Same-plan overlap still stops for a person.
+- **Transition check 6 now confirms the plans worktree is on `repo-plans`.** "Runs from the primary checkout" no longer means anything.
+- **Promote and close no longer carry uncommitted plan edits.** Skills save edits with `plans save`, then run the transition, since a transition reads only the store.
+- **`plans save` refuses every `### Approval` change, including `Decision: requested`.** `/plan-review` loses that placeholder; a plan with no record reads as `missing`. Update the skill to match.
+
+- **The Codex grant is a provider adapter method, not a render option the platform computes.** `permissions.writablePaths({ cwd })` sits beside `workspaceRoots`, and the path list lives in `scripts/harnesses/codex/`. Alternative: computing the list in `scripts/cli/permissions-render.mjs`, which puts one harness's sandbox rules in platform code.
+- **Grants and roots follow the repo `roborepo update` runs in, like workspace roots already did.** A Codex session in another repo gets neither until an update runs there. Alternative: enumerating every registered repo at render time, which widens the sandbox to all of them.
+- **An unreadable store reads as every worktree claimed.** `activeWorktreeNames` returns a set whose `has` is always true, so the automatic path stops at its existing guard and the confirmed path keeps its warning. A repo with no store claims nothing, so cleanup for repos outside plan-suite is unchanged. A repo left unmigrated also claims nothing, so its active plans lose this protection until migrated; automatic removal there still needs landed work inside a confirmed folder.
+- **Home keeps treating a repo with no store as not scanned.** Its plain worktree rows and missing counts are already right, and Home never shows the domain's message. The set-up notice belongs on the Plans page. Alternative: a Home-specific notice, which repeats it on a page whose job is not setup.
+- **Home's plan path is the store file's absolute path, passed only to Home.** `loadCachedPlansSnapshot` keeps `absolutePath` and the summary exposes `planPath`; `/api/plans` stays path-free. Home already carries each checkout's absolute path. Alternative: dropping the row, which removes a working copy action.
+- **The named plan commands, including `plans approve` and `plans close`, are allowed unattended.** The plan calls for allowing named commands, and an agent could already record approval by editing and committing, so this weakens nothing; `/plan-review` and `/plan-close` still require a person's words. `sync-base` and `stop-servers` stay out: they touch the code branch and running processes, not plans.
+- **`plans reopen` marks an approval `invalidated`.** Reopening means the requirements changed, which an implementation comparison can't see, and `plans save` refuses approval edits, so the skill's old manual step had no way to happen. Alternative: letting `plans save` accept this one change, which opens the field the command exists to guard.
+- **Post-merge approval recovery becomes plain `plans approve`.** The `### Post-merge recovery` provenance existed to reconcile two copies; with one copy on the plans branch, recording approval touches nothing on the code branch.
+- **Skills name the `roborepo plans` commands directly** where they said "the repository's canonical command". The store has one interface, and agents get allow rules for exactly those commands.
+- **A portal upload shows Git's unified diff.** `git diff --no-index` over two temporary files needs no new dependency, and the headers that name those files are dropped. Alternative: a client-side diff library.
+- **Upload routes carry their own 4 MB body limit.** Other portal control routes stay at 64 KB, and a plan can exceed that once JSON-escaped.
+- **The review record no longer parses `recovery`.** The post-merge provenance it read is gone with the second copy, so the findings check drops that field.
+- **`branchIsUnoccupied` refuses the reserved branch directly.** Hiding the store from inventory made `repo-plans` look like an unoccupied branch to branch retirement. The refusal sits where every retirement path passes, and the branch also leaves the candidate list.
+- **`plans close` clears `next_action` itself.** Review requires one and Completed forbids one, so the `/plan-close` step of saving a cleared field could never pass. Alternative: letting `plans save` accept an empty one in Review, which weakens the validator for every other save. Archive already works this way.
+- **A plan past the completion preflight accepts a fast-forward as landed.** Lifecycle commits no longer move the base branch, so a branch can now fast-forward into it, which the generic branch check reports as "no own work". The preflight already proved the branch had commits, so `planLanding` falls back to reachability for Review and Completed plans. Alternative: changing `inspectBranchLanding`, which would let branch cleanup treat a branch with no work as landed.
+- **A store mutation that recomputes identical content commits nothing.** Pinning a pinned namespace failed on `git commit`; `commitFiles` now returns no commit.
+- **Order and pin saves get the same browser-safe error as archive and import.** A raw filesystem error from the store carries an absolute path, and the portal's security section promises none. The reader sees the file and the error code.
+- **The uncommitted-move handling is gone from the portal.** The store restores files when a commit fails, so `MOVE_NOT_COMMITTED` no longer exists, and neither does the dialog's "Close" path for it.
+- **Reftable worktrees resolve HEAD through Git.** Every HEAD file in a reftable repository holds `ref: refs/heads/.invalid`, so `linkedWorktrees` could not find the store. It now asks Git for those worktrees only, caching on the worktree's `tables.list`, so pollers on `files` repositories stay free of subprocesses. Alternative: reading reftable's binary format, which is far more code for the same answer.
+
+- **Portal specs empty a fixture rather than delete its root.** A registered checkout whose parent is gone reads as unreadable, and Home keeps listing it, which put a stale repo ahead of the card the keyboard focus spec expects. `removeFixtureContents` leaves an empty folder in the temp directory per fixture. Alternative: changing the focus spec's expectation, which would hide stale repos from every later spec's Home only in that one test.
+- **The reserved worktree is recognized by its rebase head or lock reason when HEAD is off its branch.** Alternative: the admin folder's name, which Git suffixes when `repo_plans` is taken. The lock reason is written only by the store.
+- **A push the remote refuses is a not-synchronized result, like an unreachable remote.** The commit stays and the next reachable mutation retries it, with Git's `[remote rejected]` line as the reason. Alternative: a hard error, which would stop a Codex run for a branch rule a person must change.
+- **User decision: Codex gets no reftable grant.** In a reftable repo every ref lives in `<common>/reftable/`, so the exact-path grants in `scripts/harnesses/codex/plans-store-grants.mjs` cannot cover a store commit there, and granting `<common>/reftable/**` would let a Codex session move any branch. Codex therefore cannot save plans in reftable repos; Claude and the portal can. This repo uses the `files` format.
+- **The remote-sync menu flake stays out of this plan.** `cli-surface-integration-check.mjs` fails intermittently on the same assertion on `main` (2 of 6 runs) and on this branch; this branch does not touch that flow.
+
+## Open Questions
+
+None.
+
+## Not tested
+
+None. The real Codex save was run once by hand (see Verification); no automated check runs Codex, which needs its login and a model call, and `codex-plans-store-grants-check.mjs` pins the rendered grant list.
+
+## Review
+
+### Findings
+
+- [x] A store with HEAD off `repo-plans` (mid-rebase, detached) read as no store, and cleanup failed open — fixed (da30cccd)
+- [x] A push the remote refused was retried as a race and reported as busy — fixed (da30cccd)
+- [x] `plans init` could not recreate a deleted remote branch from the local one — fixed (da30cccd)
+- [x] A replayed offline unpin was undone by a union of pins — fixed (da30cccd)
+- [x] Portal order, pin, and import errors carried the plans worktree's absolute path — fixed (da30cccd)
+- [x] A test-cli label still described merging copies by plan id — fixed (da30cccd)
+- [x] The Codex save was listed as untested although an agent can run it — run, see Verification
+- [x] Docs described "not synchronized" only for an unreachable remote, and the reserved-worktree filter only by branch — fixed (5efc953b)
+- [x] A refused push left the store's push state named "unreachable" — fixed (5efc953b)
+- [x] No test covered `start` refusing the store while it is detached — fixed (5efc953b)
+- [x] The hooks check could not see a pre-push hook run, and an agent shell's GIT_CONFIG_* shadowed its hooks — fixed (5bb19898)
+- [x] CLI, import dialog, and reference copy promised a refused push would go through on the next change — fixed (5bb19898)
+- [x] `isPushRejection` named the opposite of what it detects — fixed (5bb19898)
+- [x] The plan-execute skill and plan schema described `synchronized: false` as unreachable only — fixed (d3402fcf)
+- [x] The migration helper printed "Nothing was migrated" after committing the import locally — fixed (52f6241c)
+- [x] No spec covered the import dialog asking which repo under All repos — fixed (52f6241c)
+- [x] The migration helper said "Nothing was migrated" when only the read-back after a push failed — fixed (dad52e4f)
+- [x] No check covered the migration helper's local-only path — fixed (dad52e4f)
+- [x] The import spec's no-preview check could not fail if the guard regressed — fixed (dad52e4f)
+- [x] Portal UI saves failed on Linux CI: the test server's temp HOME had no Git identity — fixed in review (5dd10c12)
+- [x] Automatic cleanup failed open when an active plan's frontmatter, worktree field, or a worktree-bound folder was unreadable — fixed in review (cb1d2078)
+- [x] Replaying an offline backlog reorder over a remote order change dropped the local reorder — fixed in review (1a875388)
+
+### Verification
+
+- Gate: `npm run check` passed end to end at 54ab2bc2 (427 CLI assertions, 76 of 76 unit suites, package install, four clean-machine suites, 252 portal specs). Windows installer parity skipped: `pwsh` unavailable.
+- Validation pass 1 (fresh-context subagent) at 54821b17: 7 fix findings, all fixed above.
+- Gate: `npm run check` passed end to end again at 8e1ba4c4 (427 CLI assertions, 76 of 76 unit suites, 252 portal specs).
+- Validation pass 2 (fresh-context subagent) at 8e1ba4c4: 3 fix findings, all fixed above.
+- Validation pass 3 (fresh-context subagent) at bf1f2d88: 3 fix findings, all fixed above.
+- Validation pass 4 (fresh-context subagent) at 51a48a67: 1 fix finding, fixed above.
+- Validation pass 5 (fresh-context subagent) at 79ebea7a: 2 fix findings, fixed above. The gate at 79ebea7a failed one portal spec on an `index.lock` race in the backlog spec's own store staging, which now retries (52f6241c).
+- Validation pass 6 (fresh-context subagent) at 18e5f72d: 3 fix findings, fixed above.
+- Validation: clean on pass 7 at f45b84cd (fresh-context subagent).
+- Gate at f45b84cd: `test-cli.sh` 426 passed and 1 failed, the remote-sync menu base failure below; every later stage then passed when run directly (76 of 76 unit suites, package install, 254 portal specs). Docker was unavailable for that run, so the clean-machine suites last passed at 8e1ba4c4; nothing they cover changed after it.
+- Intermittent, outside the diff: the gate at 18e5f72d stopped in `test-cli.sh`'s MCP section on `Claude Code has no validated CLI or desktop runtime`; `test-cli.sh` alone then passed (427 passed, 0 failed), and no MCP or harness code changed since the last passing run.
+- Intermittent, outside the diff: `browser-playwright-check.mjs` failed once in the gate at 51a48a67 (`the mismatch images are evidence`) and passed 3 of 3 reruns; this branch changes no browser code.
+- Codex save, run by `codex exec` (codex-cli 0.166.0) with the profile `renderPermissionsTo` writes for a fixture repo kept outside `/tmp` and `$TMPDIR`, so only the rendered grants made Git writable: `roborepo plans save` exited 0, committed to the store, and reported `synchronized: false` with `! [remote rejected] repo-plans -> repo-plans (unpacker error)`, because the bare origin sat outside the sandbox. A later `plans init` outside Codex pushed it (`synchronized: true`, nothing pending).
+- Base failure: `scripts/test/cli-surface-integration-check.mjs` fails intermittently on `main` too, on `single-repo refresh should leave other cached ahead repos in the main list` (2 of 6 runs on an export of `main`).
+- Human review (2026-11-10): base `main` at b94fe510 merged cleanly at d7129473; one documentation hunk in `docs/user/reference/repositories.md` resolved to keep the store wording.
+- Human review gate at d7129473 (no CI result exists for it): `npm run check` ran doctor, `test-cli.sh` (427 passed, 0 failed), install collisions, and unit suites (76 of 76), then stopped at `test:package-install`, the base failure below. `npm run test:portal-ui` then passed directly (254 of 254). Docker and `pwsh` were unavailable, so the clean-machine suites and Windows parity did not run.
+- Base failure: `test:package-install` fails with `usage-statusline:package-runtime-asset source missing: scripts/usage-adapters.mjs`. Base 0bde0b5f made `globals/packages/usage-statusline/scripts/usage-{adapters,domain,render}.mjs` symlinks, which `npm pack` omits; `main` packs the same file list and its `package.config.json` references the same source.
+- Human review Validator pass (fresh-context subagent) at d7129473: clean. Every Validation criterion has code and test evidence, including the merged copy-path, missing-worktree, and empty-directory cleanup changes from base; the `docs/plans` grep criterion finds nothing.
+
+- Base `main` at 3f2a33e7, which ships the usage-statusline modules without symlinks, merged cleanly at 71e4ddb5; the `test:package-install` base failure above no longer applies.
+- PR CI at 1a875388 passed (3 checks passed, 1 skipped). The cleanup fix and the reorder fix each come with a test that fails without them (`worktree-lifecycle-check.mjs`, `plan-store-check.mjs`); the portal identity fix passed 91 of 91 affected specs locally with the Git identity removed.
+- History: d7129473 was approved by the human on 2026-11-10; the three review fixes above made that approval stale.
+
+### Result
+
+- Status: complete
+- Reviewed implementation commit: 1a875388c74ada963083a84cc706e180de228578
+- Base commit: 3f2a33e7bbc4f55f5189cb3c553e9ba05f1b6c2c
+
+### Approval
+
+- Decision: approved
+- Reviewed implementation commit: 1a875388c74ada963083a84cc706e180de228578
+- Confirmed by: human
+- Answer: approved in the /plan-review session on 2026-11-10, choosing "Approve 1a875388" in reply to the exact-commit approval question.
 
 ## Follow-up task
 

@@ -166,7 +166,7 @@ for (const pkgId of packageIds) {
   const tmp = makeHome();
   const appRoot = path.join(tmp, "app");
   fs.mkdirSync(path.join(appRoot, ".git"), { recursive: true });
-  for (const dir of ["manifests", "scripts", "globals/harnesses", "globals/system"]) {
+  for (const dir of ["manifests", "modules", "scripts", "globals/harnesses", "globals/system"]) {
     fs.cpSync(path.join(repoRoot, dir), path.join(appRoot, dir), { recursive: true });
   }
   writeMultiSkillPackage(path.join(appRoot, "globals", "packages"));

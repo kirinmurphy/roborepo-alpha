@@ -26,7 +26,16 @@ export function setNamespacePinned({ repositoryId, namespace, pinned }) {
   return portalPostJson("/api/plans/namespace-pin", { repositoryId, namespace, pinned });
 }
 
-// Moves one unprioritized Backlog plan to Archived, in a commit on the repo's base branch that also
+// What uploading this Markdown would do, and then doing it. `newId` keeps a new plan's previewed id.
+export function previewPlanImport({ repositoryId, filename, markdown }) {
+  return portalPostJson("/api/plans/import/preview", { repositoryId, filename, markdown });
+}
+
+export function savePlanImport({ repositoryId, filename, markdown, newId }) {
+  return portalPostJson("/api/plans/import", { repositoryId, filename, markdown, newId });
+}
+
+// Moves one unprioritized Backlog plan to Archived, in a commit on the repo's plans branch that also
 // clears it from the plans depending on it.
 export function archiveBacklogPlan({ repositoryId, id, reason }) {
   return portalPostJson("/api/plans/archive", { repositoryId, id, reason });

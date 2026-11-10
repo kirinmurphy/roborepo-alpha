@@ -33,8 +33,8 @@ export function buildRepairPrompt({ repository, plan, sourceLifecycle, destinati
     "",
     "Instructions:",
     "",
-    "- Revise the plan with `/plan-write`.",
-    `- Do not move the file. Leave it in \`docs/plans/${sourceLifecycle}/\`; the lifecycle move is`,
+    "- Revise the plan with `/plan-write`, which saves it with `roborepo plans save`.",
+    `- Do not move the plan. It stays in \`plans/${sourceLifecycle}/\`; the lifecycle move is`,
     "  committed separately, by the plan command that owns it, once the document validates.",
     plan.id
       ? `- Preserve the stable plan ID \`${plan.id}\` exactly as written.`

@@ -15,6 +15,7 @@ import { codexHookGuidance } from "./hook-guidance.mjs";
 import { mergeCodexConfig, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
 import { resolveBehaviors, resolveArbitraryCommands, renderCodexConfig } from "../permissions-render.mjs";
 import { loadPermissionWorkspaceRootsForCwd } from "../permission-workspace-roots.mjs";
+import { codexPlansStoreWritablePaths } from "./plans-store-grants.mjs";
 import { addCodexMcpBlock, removeCodexMcpBlock, codexHasMcp, listCodexMcpServers } from "../mcp-codex-toml.mjs";
 import { transcriptStats, privacySafeRateLimits } from "../transcript-parse.mjs";
 import { tomlConfigEdit } from "../config-edit/toml.mjs";
@@ -157,6 +158,7 @@ export const codexProvider = defineHarnessProvider({
     configEdit: tomlConfigEdit,
     permissions: {
       workspaceRoots: ({ cwd } = {}) => loadPermissionWorkspaceRootsForCwd(cwd),
+      writablePaths: codexPlansStoreWritablePaths,
       render: (current, manifest, overrides, target, options = {}) => {
         const behaviors = resolveBehaviors(manifest, overrides.behaviors);
         const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);

@@ -60,7 +60,7 @@ function findBehavior(behaviors, id) {
 // This is also Codex's implementation of the platform's `repo-write-boundary` behavior. Codex has
 // no per-write prompt hook equivalent to Claude's boundary hook; what it has is a permission
 // profile whose writable area is the active workspace roots. The runtime workspace root is always
-// included by Codex, and roborepo adds profile-defined roots from plans config for managed
+// included by Codex, and its provider adapter adds roots from the plans config for managed
 // worktrees. Switching the boundary off ("allow") would imply a wider full-access profile, and
 // that is deliberately NOT rendered here: opening the whole filesystem is a bigger step than
 // turning off a prompt, and should be an explicit Codex-side choice rather than a side effect of a
@@ -76,8 +76,9 @@ function codexNetworkAccess(behaviors) {
   return findBehavior(behaviors, "go-online")?.bucket === "allow";
 }
 
-function renderCodexProfile(behaviors, workspaceRoots = [], credentials = { paths: [] }, readOnly = false) {
+function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], credentials = { paths: [] }, readOnly = false) {
   const roots = [...new Set(workspaceRoots.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))];
+  const writable = readOnly ? [] : [...new Set(writablePaths)];
   const profile = readOnly ? "managed-read-only" : "managed-workspace";
   const lines = [
     `default_permissions = ${quoteToml(profile)}`,
@@ -91,8 +92,9 @@ function renderCodexProfile(behaviors, workspaceRoots = [], credentials = { path
     for (const root of roots) lines.push(`${quoteToml(root)} = true`);
   }
 
-  if (credentials.paths.length) {
+  if (writable.length || credentials.paths.length) {
     lines.push("", `[permissions.${profile}.filesystem]`);
+    for (const item of writable) lines.push(`${quoteToml(item)} = "write"`);
     for (const credential of credentials.paths) lines.push(`${quoteToml(credential)} = "deny"`);
   }
 
@@ -100,14 +102,14 @@ function renderCodexProfile(behaviors, workspaceRoots = [], credentials = { path
   return lines;
 }
 
-function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoots = [] } = {}) {
+function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoots = [], writablePaths = [] } = {}) {
   const sandboxMode = codexSandboxMode(behaviors);
   const lines = [begin, "# Source: manifests/inventory/agent-permissions.json", `approval_policy = ${quoteToml(codexApprovalPolicy(behaviors, arbitraryCommands))}`];
 
   const credentials = codexCredentialPermissions(behaviors);
   lines.push(...credentials.notes.map((note) => `# roborepo credential: ${note}`));
   if (sandboxMode === "workspace-write" || credentials.paths.length) {
-    lines.push(...renderCodexProfile(behaviors, workspaceRoots, credentials, sandboxMode === "read-only"));
+    lines.push(...renderCodexProfile(behaviors, workspaceRoots, writablePaths, credentials, sandboxMode === "read-only"));
   } else {
     lines.push(`default_permissions = ${quoteToml(":read-only")}`);
   }

@@ -183,7 +183,7 @@ function testPlanWriteCreateRequiresSchemaAndNamespaceResolution() {
   assert.match(skill, /Resolve the plan identity before drafting body content/,
     "the identity checkpoint must be visible before any reference is opened");
   assert.match(skill, /plans-config\.json/, "the entry point must name the namespace source file");
-  assert.match(skill, /docs\/plans\/backlog\//, "the entry point must state that creation lands in backlog");
+  assert.match(skill, /puts a new plan in `backlog\/`/, "the entry point must state that creation lands in backlog");
 
   const create = flat(`${PLAN_WRITE}/references/workflow-create.md`);
   assert.match(create, /Identity checkpoint/, "the create workflow must have a pre-draft identity checkpoint");

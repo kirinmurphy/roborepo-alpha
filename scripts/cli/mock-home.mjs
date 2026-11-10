@@ -23,7 +23,7 @@ const MOCK_PLAN_DEFINITIONS = [
     nextAction: "Verify the service health checks in the shared checkout.",
     taskCounts: { total: 5, complete: 3 },
     changedAt: "2026-10-03T14:00:00.000Z",
-    relativePath: "docs/plans/active/mock-compose-refresh.md",
+    relativePath: "plans/active/mock-compose-refresh.md",
     excerpt: "Exercise a plan attached to the shared Compose worktree.",
   },
   {
@@ -35,7 +35,7 @@ const MOCK_PLAN_DEFINITIONS = [
     nextAction: "Resolve the failing checkout state and capture its recovery path.",
     taskCounts: { total: 8, complete: 4 },
     changedAt: "2026-10-02T10:30:00.000Z",
-    relativePath: "docs/plans/active/mock-checkout-redesign.md",
+    relativePath: "plans/active/mock-checkout-redesign.md",
     excerpt: "Exercise a plan attached to a worktree with a warning.",
   },
   {
@@ -47,7 +47,7 @@ const MOCK_PLAN_DEFINITIONS = [
     nextAction: "Review the route inventory before implementation.",
     taskCounts: { total: 4, complete: 1 },
     changedAt: "2026-10-01T09:15:00.000Z",
-    relativePath: "docs/plans/active/mock-api-surface.md",
+    relativePath: "plans/active/mock-api-surface.md",
     excerpt: "Exercise a second plan attached to another active worktree.",
   },
   {
@@ -59,7 +59,7 @@ const MOCK_PLAN_DEFINITIONS = [
     nextAction: "Choose the first documentation slice to update.",
     taskCounts: { total: 0, complete: 0 },
     changedAt: "2026-09-30T16:00:00.000Z",
-    relativePath: "docs/plans/backlog/mock-docs-refresh.md",
+    relativePath: "plans/backlog/mock-docs-refresh.md",
     excerpt: "Exercise a backlog plan associated with a worktree.",
   },
 ];
@@ -480,7 +480,7 @@ function mockHomePlan(definition, checkoutRootId) {
     lifecycle: definition.lifecycle,
     changedAt: definition.changedAt,
     worktree: definition.worktree,
-    relativePath: definition.relativePath,
+    planPath: `/mock/repo_plans/${definition.relativePath}`,
     taskCounts: definition.taskCounts,
     checkoutRootId,
     nextAction: definition.nextAction,

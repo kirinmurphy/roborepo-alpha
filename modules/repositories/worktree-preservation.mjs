@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import { createHash } from "node:crypto";
-import { planEntriesByIdentity } from "../plan-suite/copy-integration.mjs";
 import path from "node:path";
 import { withTemporaryStorage } from "./temporary-storage.mjs";
 import { inspectBranchLanding, inspectCommitLanding, FIRST_PARENT_SCAN_LIMIT } from "./worktree-landed.mjs";
@@ -105,30 +104,6 @@ async function syntheticCommit(tree, parent, git) {
   return required(await git(["-c", "user.name=RoboRepo", "-c", "user.email=assessment@roborepo.local", "commit-tree", tree, "-p", parent], { input: "Temporary preservation assessment\n" })).trim();
 }
 
-async function mapPlanPaths(baseline, index, filesystem, target, git) {
-  const [basePlans, indexPlans, fsPlans, targetPlans] = await Promise.all([baseline, index, filesystem, target].map((entries) => planEntriesByIdentity(entries, async (oid) => required(await git(["cat-file", "blob", oid], { maxBuffer: GIT_MAX_BINARY_BUFFER })))));
-  const copies = { baseline: baseline.map((entry) => ({ ...entry })), index: index.map((entry) => ({ ...entry })), filesystem: filesystem.map((entry) => ({ ...entry })) };
-  for (const [id, before] of basePlans) {
-    const after = targetPlans.get(id);
-    if (!after || after.path === before.path) continue;
-    for (const [layer, planEntries] of [["index", indexPlans], ["filesystem", fsPlans]]) {
-      const local = planEntries.get(id);
-      if (!local) throw new Error(`ambiguous plan lifecycle deletion: ${id}`);
-      const changed = local.oid !== before.oid || local.mode !== before.mode;
-      if (changed && (local.oid !== after.oid || local.mode !== after.mode)) throw new Error(`changed plan differs from candidate: ${id}`);
-      const entry = copies[layer].find((entry) => entry.path === local.path);
-      entry.path = after.path;
-      // An unchanged index's old document is covered by committed landing, not local work.
-      if (!changed) { entry.oid = after.oid; entry.mode = after.mode; }
-    }
-    const entry = copies.baseline.find((entry) => entry.path === before.path);
-    entry.path = after.path;
-    entry.oid = after.oid;
-    entry.mode = after.mode;
-  }
-  return copies;
-}
-
 // Legacy manifests already identify immutable raw blobs. Assess those layers directly, without
 // restoring or dropping entries through the current disposable-artifact policy.
 export async function assessSnapshotPreservation(cwd, manifest, { base = "refs/heads/main", runGit: executeGit = runGitProcess } = {}) {
@@ -167,11 +142,10 @@ async function assessLayers({ baseline, index, filesystem, tip, candidates, land
     const candidateTree = required(await git(["rev-parse", `${candidate}^{tree}`])).trim();
     const target = parseTree(required(await git(["ls-tree", "-r", "-z", candidate], { maxBuffer: GIT_MAX_BINARY_BUFFER })));
     await inspectRawAttributes(git, target.map((entry) => entry.path), candidate, { indexFile: path.join(temporary, "attributes-index") });
-    const mapped = await mapPlanPaths(baseline, index, filesystem, target, git);
-    const parentTree = await writeTree(mapped.baseline, git);
+    const parentTree = await writeTree(baseline, git);
     const parent = await syntheticCommit(parentTree, tip, git);
     let absorbs = true;
-    for (const layer of [mapped.index, mapped.filesystem]) {
+    for (const layer of [index, filesystem]) {
       const tree = await writeTree(layer, git);
       const synthetic = await syntheticCommit(tree, tip, git);
       const merge = await git(["merge-tree", "--write-tree", `--merge-base=${parent}`, candidate, synthetic], { maxBuffer: GIT_MAX_BINARY_BUFFER });

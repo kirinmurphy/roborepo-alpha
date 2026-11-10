@@ -16,7 +16,7 @@ Everything internal that involves "runtime" carries a prefix so the bare word st
 | `package-runtime` | Assets a package installs for harnesses | `package-runtime-asset` component type, `${package-runtime:...}`, `~/.roborepo/package-runtime/` |
 | `harness-runtime` | Harness provider registry runtime | `scripts/harnesses/harness-runtime.mjs` |
 
-The plan namespace `runtime` (`runtime-<slug>.md` under `docs/plans/`) is also bare, because Backlog shows it to the reader as the name of the service.
+The plan namespace `runtime` (`runtime-<slug>.md` under `plans/` on the plans branch) is also bare, because Backlog shows it to the reader as the name of the service.
 
 Generic English ("at runtime") and the `"runtime": "bash"|"node"` script-interpreter field in `cli-commands.json` are unrelated.
 

@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "config", "namespaces"],
+  "kind": "internal",
+  "title": "Set plan namespaces",
+  "description": "Replace the plans config's namespaces after validation",
+  "usage": "roborepo plans config namespaces <file.json> [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["config", "namespaces"]
+  }
+}

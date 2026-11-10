@@ -1,8 +1,8 @@
 # Lifecycle
 
 The lifecycle is declared in `manifests/platform/plan-lifecycle.json`: `backlog → ready → active →
-review → completed`, with `archived` as an exit from any of the first four. Each move is committed in
-the primary checkout by the command that owns it; `/plan-write` never moves a plan.
+review → completed`, with `archived` as an exit from any of the first four. Each move is committed to the plans
+branch and pushed by the command that owns it, from any checkout; `/plan-write` never moves a plan.
 
 `backlog`: proposed, planned, blocked, or waiting. Readiness and blockers are separate from lifecycle.
 New plans start here, with their initial checklist.

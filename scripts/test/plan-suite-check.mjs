@@ -14,18 +14,13 @@ import {
 } from "../../modules/plan-suite/index.mjs";
 import { walkRepositoryRoots } from "../../modules/repositories/index.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
+import { createPlanFixture } from "./lib/plan-git-fixture.mjs";
 
-const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-plan-suite-"));
+const fx = createPlanFixture("roborepo-plan-suite-");
+const tempRoot = fx.tmp;
 try {
   const stateRoot = path.join(tempRoot, "state");
-  const projects = path.join(tempRoot, "projects");
-  const repo = path.join(projects, "sample");
-  fs.mkdirSync(path.join(repo, "docs", "plans", "backlog"), { recursive: true });
-  fs.mkdirSync(path.join(repo, "docs", "plans", "active"), { recursive: true });
-  fs.mkdirSync(path.join(repo, "docs", "plans", "completed"), { recursive: true });
-  fs.mkdirSync(path.join(repo, "docs", "plans", "archived"), { recursive: true });
-  fs.writeFileSync(path.join(repo, ".git"), "gitdir: nowhere\n");
-  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "ready.md"), `---
+  const readyPlan = `---
 id: ready-plan
 next_action: Add the portal view
 blocked_by: []
@@ -69,10 +64,10 @@ flowchart LR
 ## Validation
 
 Run targeted checks.
-`);
+`;
   // A fully-ready plan: every task checked and a Verification section, so the scanner reports no
   // lifecycle findings for it. Lifecycle moves are covered by plan-lifecycle-transitions-check.mjs.
-  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "movable.md"), `---
+  const movablePlan = `---
 id: movable-plan
 next_action: Move this plan around in tests.
 blocked_by: []
@@ -110,9 +105,8 @@ Verified manually by the test itself.
 ## Validation
 
 N/A.
-`);
-  fs.writeFileSync(path.join(repo, "docs", "plans", "root.md"), "# Root Plan\n");
-  fs.writeFileSync(path.join(repo, "docs", "plans", "backlog", "no-worktree-key.md"), `---
+`;
+  const noWorktreeKeyPlan = `---
 id: no-worktree-key-plan
 next_action: Add the portal view
 blocked_by: []
@@ -145,8 +139,15 @@ Use Markdown as source of truth.
 ## Validation
 
 Run targeted checks.
-`);
-  addRepositorySource({ path: projects, stateRoot });
+`;
+  const repo = fx.repository("sample", {
+    "plans/backlog/ready.md": readyPlan,
+    "plans/backlog/movable.md": movablePlan,
+    "plans/root.md": "# Root Plan\n",
+    "plans/backlog/no-worktree-key.md": noWorktreeKeyPlan,
+  });
+  const store = fx.storePath(repo);
+  addRepositorySource({ path: repo, stateRoot });
 
   const snapshot = buildPlanSnapshot({ stateRoot, packageState: { available: true, enabled: false, status: "disabled" } });
   assert.equal(snapshot.repositories.length, 1);
@@ -166,7 +167,7 @@ Run targeted checks.
   assert.match(root.plan.validation.warnings.join("\n"), /unclassified/);
 
   const doc = readPlanDocument(snapshot, ready.key);
-  assert.ok(path.isAbsolute(doc.absolutePath), "the drawer's copy button gets the plan's absolute path");
+  assert.equal(doc.absolutePath, path.join(store, "plans/backlog/ready.md"), "the drawer's copy button gets the plan's absolute path in the plans worktree");
   assert.equal(doc.plan.absolutePath, undefined);
   assert.match(doc.html, /Ready Plan/);
   // The drawer renders through the shared markdown renderer (scripts/cli/markdown-render.mjs), not
@@ -187,7 +188,7 @@ Run targeted checks.
   // suite command yields a context-only prompt rather than a slash line the agent cannot run.
   const prompt = buildPrompt("plan-execute", [ready], { mode: "repository-aware" });
   assert.match(prompt, /^\/plan-execute\n/);
-  assert.match(prompt, /docs\/plans\/backlog\/ready.md/);
+  assert.match(prompt, /plans\/backlog\/ready.md/);
   assert.doesNotMatch(prompt, /Verify material claims against the current repository/);
   assert.doesNotMatch(buildPrompt(null, [ready]), /Verify material claims against the current repository/);
   const portablePrompt = buildPrompt(null, [ready], { mode: "portable" });
@@ -303,9 +304,9 @@ Run targeted checks.
   fs.writeFileSync(path.join(nested, ".git"), "gitdir: nowhere\n");
 
   // Stop-at-first-.git: a subfolder of a repo must NOT be double-counted as its own repo root,
-  // even though it satisfies candidateRepository's docs/plans check.
-  fs.mkdirSync(path.join(nested, "docs", "plans"), { recursive: true });
-  fs.mkdirSync(path.join(nested, "vendor", "docs", "plans"), { recursive: true }); // also blacklist-covered
+  // even though it has a plans folder of its own.
+  fs.mkdirSync(path.join(nested, "plans"), { recursive: true });
+  fs.mkdirSync(path.join(nested, "vendor", "plans"), { recursive: true });
 
   // Blacklist bail-out: a repo living inside an ignored directory name must not be discovered.
   const blacklisted = path.join(traversalRoot, "node_modules", "should-not-be-found");
@@ -325,8 +326,8 @@ Run targeted checks.
   const worktreeParent = path.join(tempRoot, "worktree-parent");
   const primaryWorktree = path.join(worktreeParent, "primary");
   const linkedWorktree = path.join(worktreeParent, "feature");
-  fs.mkdirSync(path.join(primaryWorktree, "docs", "plans", "backlog"), { recursive: true });
-  fs.writeFileSync(path.join(primaryWorktree, "docs", "plans", "backlog", "root.md"), "# Root plan\n");
+  fs.mkdirSync(primaryWorktree, { recursive: true });
+  fs.writeFileSync(path.join(primaryWorktree, "README.md"), "# Primary\n");
   const gitInit = spawnSync("git", ["init", "-b", "main"], { cwd: primaryWorktree, encoding: "utf8" });
   if (gitInit.status === 0) {
     spawnSync("git", ["config", "user.email", "test@example.com"], { cwd: primaryWorktree, stdio: "ignore" });
@@ -367,9 +368,6 @@ Run targeted checks.
   // wrong id: the INVALID_ID format rule only rejects a malformed one, so a transposed character in
   // an otherwise well-formed id passes it and resolves to nothing. `related` and `blocked_by` went
   // unvalidated for a long time, which is how ten dangling references accumulated in this repo.
-  const refsRepo = path.join(projects, "refs");
-  fs.mkdirSync(path.join(refsRepo, "docs", "plans", "backlog"), { recursive: true });
-  fs.writeFileSync(path.join(refsRepo, ".git"), "gitdir: nowhere\n");
   const refsPlan = (id, extra) => `---
 id: ${id}
 next_action: Do the thing
@@ -394,10 +392,9 @@ Body.
 
 - [ ] Check
 `;
-  fs.writeFileSync(path.join(refsRepo, "docs", "plans", "backlog", "target.md"),
-    refsPlan("real-target", "blocked_by: []\ndepends_on: []\nrelated: []"));
-  fs.writeFileSync(path.join(refsRepo, "docs", "plans", "backlog", "source.md"),
-    refsPlan("ref-source", [
+  const refsRepo = fx.repository("refs", {
+    "plans/backlog/target.md": refsPlan("real-target", "blocked_by: []\ndepends_on: []\nrelated: []"),
+    "plans/backlog/source.md": refsPlan("ref-source", [
       "blocked_by:",
       "  - real-target",
       "  - ghost-blocker",
@@ -407,7 +404,8 @@ Body.
       "related:",
       "  - real-target",
       "  - ghost-related",
-    ].join("\n")));
+    ].join("\n")),
+  });
 
   const refsStateRoot = path.join(tempRoot, "refs-state");
   addRepositorySource({ path: refsRepo, stateRoot: refsStateRoot });
@@ -431,7 +429,8 @@ Body.
 
   // A blocker with an external prefix names something that has no plan document, so there is
   // nothing to resolve it against. Only blocked_by may carry one.
-  fs.writeFileSync(path.join(refsRepo, "docs", "plans", "backlog", "external.md"),
+  fs.mkdirSync(path.join(fx.storePath(refsRepo), "plans/backlog"), { recursive: true });
+  fs.writeFileSync(path.join(fx.storePath(refsRepo), "plans/backlog/external.md"),
     refsPlan("ext-source", [
       "blocked_by:",
       "  - \"upstream: Codex has no footer-command hook\"",
@@ -448,7 +447,7 @@ Body.
     "prefixed external blockers must be skipped, not reported as missing plans");
 
 } finally {
-  fs.rmSync(tempRoot, { recursive: true, force: true });
+  fx.cleanup();
 }
 
 console.log("ok: plan docs behavior");

@@ -26,6 +26,11 @@ const ICONS = {
     viewBox: "0 0 16 16",
     body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M2 4h1.4M6.6 4H14M2 8h7.4M12.6 8H14M2 12h3.4M8.6 12H14" /><circle cx="5" cy="4" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="11" cy="8" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" /><circle cx="7" cy="12" r="1.6" fill="none" stroke="currentColor" stroke-width="1.3" />`,
   },
+  // Plus: add something new.
+  plus: {
+    viewBox: "0 0 16 16",
+    body: `<path fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" d="M8 3v10M3 8h10" />`,
+  },
   // Pin: a push-pin, for pinning a repo to the top of Home.
   pin: {
     viewBox: "0 0 16 16",

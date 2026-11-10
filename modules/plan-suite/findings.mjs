@@ -57,7 +57,7 @@ const DEFS = {
     kind: "schema",
     severity: "blocking",
     message: ({ meta }) => `Unknown plan namespace: ${meta.namespace}.`,
-    resolution: "Use a universal namespace or one declared in `docs/plans/plans-config.json`, or add the namespace to that config first.",
+    resolution: "Use a universal namespace or one declared in `plans/plans-config.json`, or add the namespace to that config first.",
   },
   FORBIDDEN_PLAN_FILENAME_SUFFIX: {
     kind: "schema",
@@ -68,28 +68,28 @@ const DEFS = {
   INVALID_PLANS_CONFIG: {
     kind: "schema",
     severity: "blocking",
-    message: ({ meta }) => `docs/plans/plans-config.json cannot be read: ${meta.error}.`,
+    message: ({ meta }) => `plans/plans-config.json cannot be read: ${meta.error}.`,
     resolution: "Fix the file so it is valid JSON with a `namespaces` object. No plan can resolve a namespace until then.",
   },
-  // The ordering registry, docs/plans/plans-order.json. A write refuses an invalid registry rather
+  // The ordering registry, plans/plans-order.json. A write refuses an invalid registry rather
   // than overwriting it; the other two entries are preserved until someone removes them.
   INVALID_ORDER_REGISTRY: {
     kind: "schema",
     severity: "blocking",
-    message: ({ meta }) => `docs/plans/plans-order.json cannot be read: ${meta.error}.`,
+    message: ({ meta }) => `plans/plans-order.json cannot be read: ${meta.error}.`,
     resolution: "Fix the file so it holds `schemaVersion: 1` and a `namespaces` object of plan-id arrays. Every plan shows as unprioritized until then.",
   },
   ORDER_UNKNOWN_PLAN: {
     kind: "relationship",
     severity: "advisory",
     message: ({ meta }) => `plans-order.json names an unknown plan in ${meta.namespace}: ${meta.id}.`,
-    resolution: "Remove the id from docs/plans/plans-order.json, or restore the plan it names.",
+    resolution: "Remove the id from plans/plans-order.json, or restore the plan it names.",
   },
   ORDER_UNAPPROVED_NAMESPACE: {
     kind: "relationship",
     severity: "advisory",
     message: ({ meta }) => `plans-order.json has an order for a namespace that is not approved: ${meta.namespace}.`,
-    resolution: "Add the namespace back to docs/plans/plans-config.json, or remove its entry from docs/plans/plans-order.json.",
+    resolution: "Add the namespace back to plans/plans-config.json, or remove its entry from plans/plans-order.json.",
   },
 
   // --- structure ------------------------------------------------------------------------------
@@ -129,7 +129,7 @@ const DEFS = {
     kind: "lifecycle",
     severity: "blocking",
     message: "Plan file is unclassified; move it into a lifecycle folder.",
-    resolution: "Move the file into `docs/plans/backlog`, `ready`, `active`, `review`, `completed`, or `archived`.",
+    resolution: "Move the file into `plans/backlog`, `ready`, `active`, `review`, `completed`, or `archived`.",
   },
   MISSING_NEXT_ACTION: {
     kind: "lifecycle",
@@ -257,25 +257,6 @@ const DEFS = {
     severity: "blocking",
     message: ({ meta }) => `Duplicate plan id: ${meta.id}.`,
     resolution: "Give one of the plans a different `id`; ids must be unique within a repository.",
-  },
-  // The three authority findings: which copy of an active plan the portal shows (plan-authority.mjs).
-  PLAN_EDITED_OUTSIDE_WORKTREE: {
-    kind: "relationship",
-    severity: "advisory",
-    message: ({ meta }) => `Edited outside worktree ${meta.worktree}: the primary checkout's copy has ${meta.committed ? "a committed" : "an uncommitted"} change the worktree never had.`,
-    resolution: "Merge the base branch into the worktree, or move the edit into the worktree's copy and revert it in the primary checkout. RoboRepo shows the worktree's copy and merges nothing.",
-  },
-  PLAN_WORKTREE_COPY_UNAVAILABLE: {
-    kind: "relationship",
-    severity: "advisory",
-    message: ({ meta }) => `Worktree ${meta.worktree}'s copy is unavailable: ${COPY_UNAVAILABLE_REASONS[meta.reason] || "it could not be used"}.`,
-    resolution: "Restore the worktree, land its plan changes, or clear `worktree` to release the plan to the primary checkout. Progress recorded only in the worktree is not shown.",
-  },
-  PLAN_AUTHORITY_UNCHECKED: {
-    kind: "relationship",
-    severity: "advisory",
-    message: ({ meta }) => `Outside edits not checked for worktree ${meta.worktree}: ${meta.reason}.`,
-    resolution: "Showing the worktree's copy; an outside edit to the primary checkout's copy cannot be ruled out.",
   },
   SELF_DEPENDENCY: {
     kind: "relationship",

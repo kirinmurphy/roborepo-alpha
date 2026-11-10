@@ -19,8 +19,9 @@ const manifest = loadLifecycleManifest();
 // The lifecycle itself.
 assert.deepEqual(LIFECYCLE_MODEL.stateIds, ["backlog", "ready", "active", "review", "completed", "archived", "unclassified"]);
 assert.deepEqual([...LIFECYCLES], ["backlog", "ready", "active", "review", "completed", "archived"], "every state but unclassified is a folder");
-assert.equal(lifecycleFromPath("docs/plans/review/x.md"), "review", "lifecycle is still derived from the folder");
-assert.equal(lifecycleFromPath("docs/plans/x.md"), "unclassified");
+assert.equal(lifecycleFromPath("plans/review/x.md"), "review", "lifecycle is derived from the store folder");
+assert.equal(lifecycleFromPath("plans/x.md"), "unclassified");
+assert.equal(lifecycleFromPath("docs/plans/review/x.md"), "unknown", "the old code-branch path is not a plan path");
 assert.deepEqual([...LIFECYCLE_MODEL.worktreeBound], ["active", "review"], "Active and Review hold a worktree");
 assert.deepEqual(LIFECYCLE_MODEL.states.filter((state) => state.tab === "primary").map((state) => state.id), ["backlog", "ready", "active", "review"]);
 

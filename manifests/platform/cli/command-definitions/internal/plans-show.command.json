@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "show"],
+  "kind": "internal",
+  "title": "Show a plan",
+  "description": "Refresh remote state and print a plan from the plans worktree",
+  "usage": "roborepo plans show <plan> [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["show"]
+  }
+}

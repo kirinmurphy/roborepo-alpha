@@ -67,10 +67,12 @@ Writes target the user's **live** config, not the repo template (`globals/`). Th
 template is changed only by the install/render pipeline.
 
 When `roborepo config apply` or package-mode `roborepo update` runs from inside a repository with
-`docs/plans/plans-config.json`, the post-apply permissions refresh updates Codex's live profile with
-that repository family's concrete worktree root. With `"worktreeRoot": "~/.worktrees"` in
-`plans-config.json`, a normal checkout named `my-repo` renders `~/.worktrees/my-repo`; a nested
-worktree such as `~/.worktrees/my-repo/feature` renders the same family root. Codex profiles require
+a plans store, the post-apply permissions refresh updates Codex's live profile with that repository
+family's concrete worktree root. With `"worktreeRoot": "~/.worktrees"` and `"worktreeRepoName": "my-repo"`
+in `plans/plans-config.json`, a normal checkout and a nested worktree such as
+`~/.worktrees/my-repo/feature` both render `~/.worktrees/my-repo`. The refresh also asks each provider
+for `permissions.writablePaths({ cwd })`, where the Codex provider
+(`scripts/harnesses/codex/plans-store-grants.mjs`) lists the exact Git paths a plans commit writes. Codex profiles require
 concrete `workspace_roots`, so the Codex provider materializes the path instead of using a glob for
 every repository under `~/.worktrees`.
 
@@ -138,12 +140,12 @@ materializes those roots.
 
 The flow is:
 
-1. A repo carries `docs/plans/plans-config.json` with `"worktreeRoot": "~/.worktrees"`.
+1. A repo's plans worktree carries `plans/plans-config.json` with `"worktreeRoot": "~/.worktrees"`.
 2. `roborepo config apply`, package-mode `roborepo update`, or a permissions toggle renders live
    permissions from the current working directory.
 3. The generic permission renderer passes provider context to each harness adapter.
-4. The Codex provider reads the current repo's plan config and contributes
-   `~/.worktrees/<repo-folder-name>` to `workspace_roots`.
+4. The Codex provider reads the current repo's plan config through the store and contributes
+   `~/.worktrees/<worktreeRepoName>` to `workspace_roots`.
 5. Claude and Gemini ignore that Codex-only context. Claude gets repository scoping from its
    tool-call hook; Gemini cannot express a path predicate and keeps the documented skip.
 

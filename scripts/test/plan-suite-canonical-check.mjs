@@ -1,10 +1,9 @@
 #!/usr/bin/env node
-// Plans scans the repositories RoboRepo knows about (pljvmyh §9): every checkout of a visible
-// repository, merged by plan id and returned from each plan's authoritative copy, with explicit per-repository
-// scan state. Plans settings and ROBOREPO_PLAN_ROOTS no longer affect anything.
+// Plans scans the repositories RoboRepo knows about: each visible repository is read from its one plans
+// worktree and returned with explicit per-repository scan state, whichever checkout the registry
+// recorded. Plans settings and ROBOREPO_PLAN_ROOTS do not affect anything.
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -12,15 +11,12 @@ import { buildPlanSnapshot, planSnapshotFingerprint } from "../../modules/plan-s
 import { hideRepository, loadRegistry, updateRegistry } from "../../modules/repositories/index.mjs";
 import { recordRepositoryDiscovery } from "../cli/repositories.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
+import { createPlanFixture } from "./lib/plan-git-fixture.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const tempRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-plans-canonical-")));
+const fx = createPlanFixture("roborepo-plans-canonical-");
+const tempRoot = fx.tmp;
 const REPOSITORY_ID = "git:github.com/example/planned";
-
-function git(cwd, ...args) {
-  const result = spawnSync("git", ["-c", "user.email=t@example.com", "-c", "user.name=Test", ...args], { cwd, encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr);
-}
 
 function plan(id, title, worktree = "") {
   return `---\nid: ${id}\nnext_action: Do it\nworktree: ${worktree}\n---\n\n# ${title}\n`;
@@ -36,24 +32,15 @@ function snapshotFor(stateRoot) {
 }
 
 try {
-  const main = path.join(tempRoot, "planned");
-  write(path.join(main, "docs/plans/backlog/same.md"), plan("same111", "Same"));
-  write(path.join(main, "docs/plans/backlog/differs.md"), plan("diff222", "Differs", "feature-x"));
-  write(path.join(main, "docs/plans/backlog/main-only.md"), plan("main333", "Main only"));
-  fs.mkdirSync(main, { recursive: true });
-  git(main, "init", "-q", "-b", "main");
-  git(main, "remote", "add", "origin", "https://github.com/example/planned.git");
-  git(main, "add", ".");
-  git(main, "commit", "-qm", "seed");
-  const worktree = path.join(tempRoot, "trees", "feature-x");
-  git(main, "worktree", "add", "-q", "-b", "feature-x", worktree);
-  write(path.join(worktree, "docs/plans/backlog/differs.md"), plan("diff222", "Differs in the worktree", "feature-x"));
-  // A second worktree that is only behind main: it holds an older copy of a plan it never touched.
-  const behind = path.join(tempRoot, "trees", "behind");
-  git(main, "worktree", "add", "-q", "-b", "behind", behind);
-  write(path.join(main, "docs/plans/backlog/main-only.md"), plan("main333", "Main only, edited since"));
-  write(path.join(behind, "docs/plans/backlog/differs.md"), plan("diff222", "An older copy elsewhere", "feature-x"));
-  write(path.join(worktree, "docs/plans/active/new.md"), plan("new444", "Worktree only"));
+  const main = fx.repository("planned", {
+    "plans/backlog/same.md": plan("same111", "Same"),
+    "plans/backlog/differs.md": plan("diff222", "Differs", "feature-x"),
+    "plans/backlog/main-only.md": plan("main333", "Main only"),
+    "plans/active/new.md": plan("new444", "Plan in the store"),
+  });
+  const store = fx.storePath(main);
+  const worktree = fx.worktree(main, "feature-x").path;
+  fx.worktree(main, "behind");
 
   // ---- Runtime-discovered repository stays usable for Plans after its process goes offline. ----
   // Runtime registered only the worktree, first: the main checkout must still come from Git.
@@ -68,40 +55,29 @@ try {
   // new worktree.
   const fingerprint = planSnapshotFingerprint({ stateRoot });
   assert.equal(planSnapshotFingerprint({ stateRoot }), fingerprint, "an unchanged tree fingerprints the same");
-  const fingerprintFile = path.join(worktree, "docs/plans/active/new.md");
+  const fingerprintFile = path.join(store, "plans/active/new.md");
   fs.appendFileSync(fingerprintFile, "\n");
   const afterEdit = planSnapshotFingerprint({ stateRoot });
-  assert.notEqual(afterEdit, fingerprint, "editing a plan in any checkout changes the fingerprint");
-  const extra = path.join(tempRoot, "trees", "extra");
-  git(main, "worktree", "add", "-q", "-b", "extra", extra);
+  assert.notEqual(afterEdit, fingerprint, "editing a plan in the store changes the fingerprint");
+  const extra = fx.worktree(main, "extra").path;
   assert.notEqual(planSnapshotFingerprint({ stateRoot }), afterEdit, "adding a worktree changes the fingerprint");
-  git(main, "worktree", "remove", "--force", extra);
-  fs.writeFileSync(fingerprintFile, plan("new444", "Worktree only"));
+  fx.git(main, "worktree", "remove", "--force", extra);
+  fs.writeFileSync(fingerprintFile, plan("new444", "Plan in the store"));
 
   const snapshot = snapshotFor(stateRoot);
-  assert.deepEqual(snapshot.repositoryScans, [{ repositoryId: REPOSITORY_ID, state: "scanned", planCount: 4, checkoutCount: 3, worktrees: ["behind", "feature-x"] }],
+  assert.deepEqual(snapshot.repositoryScans, [{ repositoryId: REPOSITORY_ID, state: "scanned", planCount: 4, checkoutCount: 3, worktrees: ["behind", "feature-x"], pendingCommits: 0 }],
     "a scan lists every linked worktree Git knows, by administrative name");
   const byId = Object.fromEntries(snapshot.plans.map((record) => [record.plan.id, record]));
   assert.deepEqual(Object.keys(byId).sort(), ["diff222", "main333", "new444", "same111"], "identical copies collapse to one record");
   assert.equal(snapshot.plans.length, 4);
 
-  assert.equal(byId.same111.plan.checkout, null);
-  assert.deepEqual(byId.same111.plan.authority, { source: "primary" });
-  assert.equal(byId.same111.absolutePath, path.join(fs.realpathSync(main), "docs/plans/backlog/same.md"), "a backlog plan is read from the main checkout");
-
-  // Active-plan authority has its own fixture in plan-suite-authority-scan-check.mjs.
-  const copyFindings = (record) => record.plan.validation.findings.filter((item) => /WORKTREE|AUTHORITY/.test(item.code));
-  assert.equal(byId.diff222.plan.title, "Differs", "a backlog plan's worktree copy never wins, even in its named worktree");
-  assert.deepEqual(copyFindings(byId.diff222), [], "a backlog plan's differing worktree copy is not a finding");
-  assert.deepEqual(copyFindings(byId.main333), [], "a worktree that is only behind main marks nothing");
-
-  assert.equal(byId.new444.plan.checkout, "feature-x", "a worktree-only plan is labeled with its worktree");
-  assert.equal(byId.new444.plan.authority, null, "a worktree-only plan has no primary copy to resolve against");
-  assert.equal(byId.new444.repository.id, byId.same111.repository.id, "every checkout's plans belong to one repository");
+  assert.equal(byId.same111.absolutePath, path.join(store, "plans/backlog/same.md"), "a plan is read from the plans worktree");
+  assert.equal(byId.diff222.plan.title, "Differs", "a plan is read from the store whichever checkout is registered");
+  assert.equal(byId.new444.repository.id, byId.same111.repository.id, "every plan belongs to one repository");
 
   // ---- Plans settings and ROBOREPO_PLAN_ROOTS no longer affect Plans ----
   const decoy = path.join(tempRoot, "decoy");
-  write(path.join(decoy, "docs/plans/backlog/decoy.md"), plan("decoy555", "Decoy"));
+  write(path.join(decoy, "plans/backlog/decoy.md"), plan("decoy555", "Decoy"));
   write(path.join(stateRoot, "plan-suite", "settings.json"), JSON.stringify({ schemaVersion: 1, discoveryRoots: [decoy] }));
   const portal = spawnSync(process.execPath, ["-e", "import('./scripts/cli/plans.mjs').then((m) => process.stdout.write(JSON.stringify(m.loadPlansSnapshot())))"], {
     cwd: repoRoot,
@@ -125,7 +101,7 @@ try {
   `;
   const cached = spawnSync(process.execPath, ["--input-type=module", "-e", cachedScript], {
     cwd: repoRoot,
-    env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot, PLAN_FILE: path.join(main, "docs/plans/backlog/same.md") },
+    env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot, PLAN_FILE: path.join(store, "plans/backlog/same.md") },
     encoding: "utf8",
   });
   assert.equal(cached.status, 0, cached.stderr);
@@ -133,8 +109,7 @@ try {
 
   // ---- Explicit scan state: unavailable checkouts and hidden repositories ----
   const vanishedState = path.join(tempRoot, "state-vanished");
-  const vanished = path.join(tempRoot, "vanished");
-  write(path.join(vanished, "docs/plans/backlog/a.md"), plan("van666", "Vanished"));
+  const vanished = fx.repository("vanished", { "plans/backlog/a.md": plan("van666", "Vanished") });
   addRepositorySource({ path: vanished, stateRoot: vanishedState, homeDir: tempRoot });
   fs.rmSync(vanished, { recursive: true });
   const vanishedScan = snapshotFor(vanishedState).repositoryScans[0];
@@ -146,5 +121,5 @@ try {
 
   console.log("plan-suite canonical scan: ok");
 } finally {
-  fs.rmSync(tempRoot, { recursive: true, force: true });
+  fx.cleanup();
 }

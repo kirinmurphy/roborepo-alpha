@@ -58,7 +58,7 @@ export function selectOption([value, label]) {
 export function plansOnboardingStep(snapshot) {
   const scans = snapshot.repositoryScans || [];
   if (scans.length === 0) return "no-repositories";
-  if (!scans.some((scan) => scan.state === "scanned")) return "not-scanned";
+  if (!scans.some((scan) => scan.state === "scanned")) return scans.some((scan) => scan.state === "not-set-up") ? "not-set-up" : "not-scanned";
   return snapshot.plans.length === 0 ? "no-plans" : "plans";
 }
 
@@ -76,14 +76,19 @@ export function plansOnboardingState(snapshot, step, onManage, scope = null) {
   const scans = snapshot.repositoryScans || [];
   const scanned = scans.filter((scan) => scan.state === "scanned").length;
   const subject = scope ? scope.name : repositoryCount(step === "not-scanned" ? scans.length : scanned);
-  const fills = step === "not-scanned"
+  const fills = step === "not-set-up"
+    ? {
+      title: `Plans aren't set up in ${subject}`,
+      body: "Run the /plan-suite-init skill in the repo. It creates or reconnects the repo's plans branch.",
+    }
+    : step === "not-scanned"
     ? {
       title: `Not scanned yet: ${subject}`,
       body: "Plans reads each known repo's checkouts. None of them has a checkout Plans can read right now.",
     }
     : {
       title: scope ? `No plans yet found in ${subject}` : `No plans found in ${subject}`,
-      body: "Plans looks for Markdown files under docs/plans in every checkout of each known repo.",
+      body: "Plans reads Markdown files from each known repo's plans branch.",
     };
   const node = fill(tpl("tpl-empty-state"), { ...fills, action: scope ? "View All Repos" : "Manage Repos" });
   node.classList.add("empty-state--with-action");
@@ -189,11 +194,6 @@ export function drawerContent(doc, drawerActions) {
       dtdd("repository", doc.plan.repository.name),
       dtdd("lifecycle", lifecycleLabel(plan.lifecycle)),
       ...(plan.nextAction ? [dtdd("next action", plan.nextAction)] : []),
-      // An active or review plan's assigned worktree holds its authoritative copy; say so, since the
-      // path above is the same in every checkout. During review the primary copy has already moved,
-      // so the worktree's copy can sit at an older path; name the primary one too.
-      ...(plan.authority?.source === "worktree" ? [dtdd("read from", `From worktree ${plan.authority.worktree}`)] : []),
-      ...(plan.primaryRelativePath ? [dtdd("primary copy", plan.primaryRelativePath)] : []),
       dtdd("plan freshness", FRESHNESS_LABELS[plan.reviewState] || plan.reviewState),
     ],
     warnings: plan.validation.warnings,

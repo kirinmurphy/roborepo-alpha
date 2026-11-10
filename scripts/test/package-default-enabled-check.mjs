@@ -65,6 +65,7 @@ try {
   // mirroring the real npm package layout (scripts/cli/ ships under the install root) — so a
   // spawned CLI subprocess under a fake appRoot needs scripts/ too, not just manifests/+globals/.
   fs.cpSync(path.resolve("scripts"), path.join(appRoot, "scripts"), { recursive: true });
+  fs.cpSync(path.resolve("modules"), path.join(appRoot, "modules"), { recursive: true });
 
   const pkgDir = path.join(appRoot, "globals", "packages", "always-on-check");
   fs.mkdirSync(path.join(pkgDir, "rules"), { recursive: true });

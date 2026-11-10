@@ -93,8 +93,10 @@ test -f "$HOME/.claude/hooks/provider/repo-write-scope.mjs"
 echo "clean-machine[$label]: assert Codex permissions"
 assert_contains 'default_permissions = "managed-workspace"' "$codex_config"
 assert_contains '[permissions.managed-workspace]' "$codex_config"
-assert_contains '[permissions.managed-workspace.workspace_roots]' "$codex_config"
-assert_contains '"~/.worktrees/roborepo" = true' "$codex_config"
+if grep -F 'workspace_roots' "$codex_config" >/dev/null; then
+  echo "FAIL: Codex permissions added a worktree root outside a repo with a plans store" >&2
+  exit 1
+fi
 assert_contains 'enabled = false' "$codex_config"
 if grep -F 'sandbox_mode = "workspace-write"' "$codex_config" >/dev/null; then
   echo "FAIL: Codex permissions still use legacy sandbox_mode instead of profile roots" >&2

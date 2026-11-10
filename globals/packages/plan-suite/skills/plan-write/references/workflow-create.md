@@ -5,7 +5,8 @@
 3. Check whether an existing plan already owns the work.
 4. Create or revise one plan instead of duplicating scope.
 5. **Identity checkpoint — complete before drafting any body content.** See below.
-6. Write new plans into `docs/plans/backlog/`.
+6. Write the new plan to a file outside the code checkout and run `roborepo plans save <file.md>`,
+   which puts it in `backlog/`. Save again after each revision.
 7. Add minimal frontmatter from `plan-schema.md`, including an empty `worktree:` line. Do not fill
    it at creation; a backlog plan has no implementation worktree yet.
 8. Follow `writing-guidelines.md`. Add `## Documentation impact` with the affected docs of record
@@ -25,7 +26,7 @@ plan ends up with a namespace nobody checked against the repository's vocabulary
 
 | Decision | How to resolve it |
 | --- | --- |
-| Namespace | Read `docs/plans/plans-config.json`. Its keys are the project namespaces; `plan-schema.md` lists the universal ones. The project namespace wins whenever it is the more specific fit. If no key fits, propose adding one rather than inventing an unlisted prefix. |
+| Namespace | Read `plans/plans-config.json` from the plans worktree. Its keys are the project namespaces; `plan-schema.md` lists the universal ones. The project namespace wins whenever it is the more specific fit. If no key fits, propose adding one rather than inventing an unlisted prefix. |
 | Filename | `<namespace>-<specific-slug>.md`, lowercase and hyphenated, with no lifecycle, status, date, or version suffix. |
 | `id` | Generate a fresh opaque 6-8 character lowercase base36 string. **Do not derive it from the title, the filename, or the slug** — see "Plan ids" in `plan-schema.md`. |
 | H1 | Reader-facing prose naming the outcome. Not the filename with the hyphens removed, and it does not restate the namespace. |
@@ -36,8 +37,8 @@ silently fall back to universal namespaces.
 
 ## Placing a new plan
 
-Order is a list of plan ids per namespace in `docs/plans/plans-order.json`. `roborepo plans order
-place <plan>` is the only way this skill writes it, and it writes to the primary checkout.
+Order is a list of plan ids per namespace in `plans/plans-order.json`. `roborepo plans order
+place <plan>` is the only way this skill writes it.
 
 | The new plan | Do | Result |
 | --- | --- | --- |
@@ -73,4 +74,4 @@ Ordering:
 
 If the user asked for the plan to be started, hand off to `/plan-promote` only after the backlog
 artifact passes both layers; it refines the initial checklist and commits the move into
-`docs/plans/ready/`, after which `/plan-execute` starts it. Both keep the same `id`.
+`ready/`, after which `/plan-execute` starts it. Both keep the same `id`.

@@ -14,9 +14,9 @@ export function reviewFreshness({ primary, markdown, tip, base, workingPath = pr
   if (parsed.review.findings.open || parsed.notTested.unchecked) {
     return verdict("incomplete", "review findings or required manual checks remain open");
   }
-  const status = git(workingPath, ["status", "--porcelain=v1", "--untracked-files=all", "--", ".", ":(exclude)docs/plans"]);
-  const dirty = git(workingPath, ["diff", "--name-only", "HEAD", "--", ".", ":(exclude)docs/plans"]);
-  const untracked = git(workingPath, ["ls-files", "--others", "--exclude-standard", "--", ".", ":(exclude)docs/plans"]);
+  const status = git(workingPath, ["status", "--porcelain=v1", "--untracked-files=all"]);
+  const dirty = git(workingPath, ["diff", "--name-only", "HEAD"]);
+  const untracked = git(workingPath, ["ls-files", "--others", "--exclude-standard"]);
   // Diff can silently list unreadable files as changed; status reports the access errors even
   // when it exits zero. Require both views to be reliable before treating paths as edits.
   if ([status, dirty, untracked].some((result) => !result.ok || result.stderr)) {
@@ -40,6 +40,6 @@ export function reviewFreshness({ primary, markdown, tip, base, workingPath = pr
 }
 
 function changedPaths(primary, from, to) {
-  const result = git(primary, ["diff", "--name-only", from, to, "--", ".", ":(exclude)docs/plans"]);
+  const result = git(primary, ["diff", "--name-only", from, to]);
   return result.ok ? result.stdout.split("\n").filter(Boolean) : null;
 }
