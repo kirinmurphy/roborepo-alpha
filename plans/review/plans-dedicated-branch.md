@@ -433,6 +433,7 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - Re-review after merge (2026-11-10): 1a875388..f28de44c changes only `docs/plans/review/plans-dedicated-branch.md`, the pre-rollout copy of this review record (ec343658, f28de44c); no code, test, or doc of record changed. That made the 1a875388 approval read stale, because the code gates no longer exclude `docs/plans/**`.
 - PR CI at f28de44c passed (run 42899076690). PR #62 merged as fe75b35f, which absorbs f28de44c.
 - Validator pass (fresh-context subagent) over 1a875388..f28de44c: clean. Every commit id the record cites exists.
+- Approval of f28de44c: the human chose "Approve f28de44c" in reply to the exact-commit approval question in the /plan-review session on 2026-11-10.
 
 ### Result
 
