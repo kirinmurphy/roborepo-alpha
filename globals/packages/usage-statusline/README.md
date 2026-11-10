@@ -50,11 +50,14 @@ always matches the label:
 - `5–19 points` → orange;
 - `≥ 20 points` → red.
 
-**Usage severity** (styles any `## used` value, independently of pacing):
+**Context severity** (styles the Context value, the same in the terminal and the desktop row):
 
-- `0–29%` → white (normal); `30–49%` → yellow (caution); `50–59%` → orange (warning); `60–100%` → red (critical).
-- Inclusive lower bounds: each threshold percent belongs to its tier (`30%` is caution, not normal;
-  `60%` is critical, not warning).
+- `0–19%` → white (normal); `20–30%` → yellow (caution); `31–40%` → orange (warning); `41–100%` → red (critical).
+- `20%` is the first yellow; `30%` is still yellow and `40%` still orange.
+
+**Rate-limit severity** (styles the 5h and weekly `## used` values, independently of pacing):
+
+- `0–70%` → white (normal); `71–85%` → orange (warning); `86–100%` → red (critical).
 
 **Surplus is never orange or red** for being large. A high total-used value may still color the
 `## used` text on its own — debt/surplus severity and total-used severity are computed and styled
@@ -75,10 +78,16 @@ The desktop app has no status line to draw into, so the package installs a small
 (`claude/context-row/`) that draws one row above the prompt once context reaches 20%:
 
 ```text
-Context 42%
+Context 42% · 5h: 18% · Weekly: 90% (19% debt)
 ```
 
-The figure is yellow up to 30%, orange up to 40%, and red above that. The close button at the right
+The 5h and weekly segments are the status line's own: the row imports the same adapter, assessment
+and fragment modules (`claude/context-row/lib/`, installed beside the terminal command and re-exported from `scripts/` in the repo),
+so their numbers, pacing and severity colors match the terminal exactly. They are left out when no
+rate limit is reported (an API-key session).
+
+The context figure uses the same context severity colors as the terminal (above); the row appears
+at the first of them, 20%. The close button at the right
 of the row hides it until context reaches the next color, or until it comes back after dropping to a
 lower color (a compaction or a cleared session).
 

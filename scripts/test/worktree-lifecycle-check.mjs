@@ -839,7 +839,9 @@ try {
     assert.equal(worktreeRoots().length, 2, "both worktrees are registered");
     git(main, "worktree", "remove", worktree);
     fs.rmSync(handDeleted, { recursive: true, force: true });
-    await survey();
+    const { worktrees } = await survey();
+    assert.equal(worktrees.get(repositoryId).find((item) => item.branch === "hand-deleted")?.state, null,
+      "a missing worktree has no activity state");
     const remaining = worktreeRoots().map((item) => loadRegistry({ stateRoot }).localRootPaths[item.rootId].path);
     assert.deepEqual(remaining, [path.join(fs.realpathSync(root), "departed-hand-deleted")], "a removed worktree is forgotten; a prunable one is kept");
     assert.ok(loadRegistry({ stateRoot }).repositories[repositoryId].localRoots.find((item) => item.rootId === rootId(realMain)),

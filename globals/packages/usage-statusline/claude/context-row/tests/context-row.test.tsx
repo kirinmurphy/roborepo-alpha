@@ -172,3 +172,43 @@ test('a closed row comes back after the figure drops below its color', async ($,
   expect(await ui.find({ type: 'Text', text: '25%' })).toBeDefined()
   await ui.unmount()
 })
+
+// Five days into the week (5/7 = 71% elapsed) with 90% used: a 19-point debt.
+const NOW = Date.parse('2026-11-09T12:00:00.000Z')
+const WEEKLY_RESET = new Date(NOW + 2 * 24 * 60 * 60 * 1000).toISOString()
+
+function limitsReport(on: On, rateLimits: { kind: string; percentUsed: number; resetsAt?: string }[]) {
+  engineDraws(on)
+  on('clock.now', () => ({ value: NOW }))
+  on('tool.call', () => ({ result: {} }))
+  on('session.usage', () => ({
+    value: { startedAt: 0, context: { window: 1000, percent: 42 }, rateLimits },
+  }))
+}
+
+test('the row adds 5h and weekly usage as the status line renders them', async ($, on) => {
+  limitsReport(on, [
+    { kind: 'five_hour', percentUsed: 18 },
+    { kind: 'seven_day', percentUsed: 90, resetsAt: WEEKLY_RESET },
+  ])
+
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  const ui = await $.ui.mount(band('desktop'))
+
+  expect((await ui.find({ type: 'Text', text: /^Context/ }))?.text).toBe(
+    'Context 42% · 5h: 18% · Weekly: 90% (19% debt)',
+  )
+  expect((await ui.find({ type: 'Text', text: /^90%$/ }))?.props.color).toBe('#EF4444')
+  expect((await ui.find({ type: 'Text', text: /^19% debt$/ }))?.props.color).toBe('#F97316')
+  await ui.unmount()
+})
+
+test('the row shows only context when no rate limit is reported', async ($, on) => {
+  limitsReport(on, [])
+
+  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  const ui = await $.ui.mount(band('desktop'))
+
+  expect((await ui.find({ type: 'Text', text: /^Context/ }))?.text).toBe('Context 42%')
+  await ui.unmount()
+})

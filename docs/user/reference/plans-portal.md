@@ -388,7 +388,7 @@ The plan suite uses two optional packages. `plan-suite` holds the seven plan ski
 When `plan-suite` is disabled:
 
 - `/plans` remains available, behind the onboarding banner
-- copying the document filename and repository-aware context remains available
+- copying the absolute file path and repository-aware context remains available
 - workflow prompt actions stay hidden in the Copy menu
 
 When enabled:
@@ -421,8 +421,8 @@ When enabled:
   a short age such as **2 hrs**; its tooltip gives the exact date. The bottom row keeps the primary
   action and Copy menu at the left, with blockers, open review findings, and task progress at the right
 - Copy menus use compact labels with copy icons and flush hover backgrounds.
-  **Copy Document Filename** sits below a divider. Use the separate path button in the drawer
-  header to copy the absolute path. Shared copy controls confirm with a green check while keeping
+  **Copy file path** sits below a divider. It and the separate path button in the drawer header
+  both copy the plan's absolute path. Shared copy controls confirm with a green check while keeping
   their original labels
 - an active or review plan whose worktree has merged shows a **merged** completion badge; the same
   status is visible in the detail drawer

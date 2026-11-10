@@ -466,8 +466,7 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
     for (const checkout of persisted.checkouts || []) {
       if (!checkout?.rootId) continue;
       const root = ensureRoot(entry, checkout.rootId, checkout.git, checkout.projectRoot);
-      // A checkout that is gone has no git to say it was a worktree; the registry recorded which
-      // kind it was when Runtime saw it, so a missing worktree still renders and sorts as one.
+      // When Git status is unavailable, use the checkout kind recorded by the registry.
       if (checkout.kind === "worktree") root.isWorktree = true;
       root.checkoutState = checkout.state;
       root.checkoutReason = checkout.reason || null;
@@ -507,11 +506,10 @@ function buildRepositories({ projects, composeProjects, unmatchedInstances, repo
   // one place is what makes an idle repository pinnable at all.
   for (const [repositoryId, entry] of byRepository) {
     entry.pinned = pinnedRepositoryIds.has(repositoryId);
-    // Folder moves leave old clone observations behind. Filter only the display: keep
-    // unreadable locations, the last missing checkout, and worktrees with cleanup state.
-    if (entry.roots.some((root) => root.checkoutState === "present")) {
-      entry.roots = entry.roots.filter((root) => root.isWorktree || root.checkoutState !== "absent");
-    }
+    // Hide absent worktrees. Missing clone paths still explain why a repository is unavailable
+    // when there is no confirmed present checkout.
+    const hasPresentCheckout = entry.roots.some((root) => root.checkoutState === "present");
+    entry.roots = entry.roots.filter((root) => root.checkoutState !== "absent" || (!root.isWorktree && !hasPresentCheckout));
   }
 
   return sortRepositoriesForDisplay([...byRepository.values()]);

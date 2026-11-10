@@ -12,16 +12,14 @@
     { "name": "large surplus keeps normal pacing", "usedPercent": 75, "elapsedPercent": 90, "state": "surplus", "magnitude": 15, "usedSeverity": "warning", "debtSeverity": "normal", "weeklyText": "Weekly: 75% (15% surplus)" }
   ],
   "usageSeverity": [
-    { "usedPercent": 29, "usedSeverity": "normal" },
+    { "usedPercent": 19, "usedSeverity": "normal" },
+    { "usedPercent": 20, "usedSeverity": "caution" },
     { "usedPercent": 30, "usedSeverity": "caution" },
-    { "usedPercent": 49, "usedSeverity": "caution" },
-    { "usedPercent": 50, "usedSeverity": "warning" },
-    { "usedPercent": 59, "usedSeverity": "warning" },
+    { "usedPercent": 31, "usedSeverity": "warning" },
+    { "usedPercent": 40, "usedSeverity": "warning" },
+    { "usedPercent": 41, "usedSeverity": "critical" },
     { "usedPercent": 60, "usedSeverity": "critical" },
-    { "usedPercent": 70, "usedSeverity": "critical" },
-    { "usedPercent": 71, "usedSeverity": "critical" },
     { "usedPercent": 85, "usedSeverity": "critical" },
-    { "usedPercent": 86, "usedSeverity": "critical" },
     { "usedPercent": 100, "usedSeverity": "critical" }
   ],
   "rateLimitSeverity": [

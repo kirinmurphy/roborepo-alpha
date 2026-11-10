@@ -15,15 +15,15 @@
     },
     {
       "type": "package-runtime-asset",
-      "source": "scripts/usage-adapters.mjs"
+      "source": "claude/context-row/lib/usage-adapters.mjs"
     },
     {
       "type": "package-runtime-asset",
-      "source": "scripts/usage-domain.mjs"
+      "source": "claude/context-row/lib/usage-domain.mjs"
     },
     {
       "type": "package-runtime-asset",
-      "source": "scripts/usage-render.mjs"
+      "source": "claude/context-row/lib/usage-render.mjs"
     },
     {
       "type": "package-runtime-asset",
