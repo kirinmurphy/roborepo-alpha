@@ -11,27 +11,18 @@
   "resources": [
     {
       "type": "package-runtime-asset",
-      "source": "scripts/claude-statusline.mjs"
+      "source": "scripts/claude-statusline.mjs",
+      "target": "scripts/claude-statusline.mjs"
     },
     {
       "type": "package-runtime-asset",
-      "source": "scripts/usage-adapters.mjs"
+      "source": "scripts/usage-snapshot-store.mjs",
+      "target": "scripts/usage-snapshot-store.mjs"
     },
     {
       "type": "package-runtime-asset",
-      "source": "scripts/usage-domain.mjs"
-    },
-    {
-      "type": "package-runtime-asset",
-      "source": "scripts/usage-render.mjs"
-    },
-    {
-      "type": "package-runtime-asset",
-      "source": "scripts/usage-snapshot-store.mjs"
-    },
-    {
-      "type": "package-runtime-asset",
-      "source": "claude/context-row"
+      "source": "claude/context-row",
+      "target": "claude/context-row"
     },
     {
       "type": "config-patch",

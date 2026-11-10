@@ -82,7 +82,7 @@ Context 42% · 5h: 18% · Weekly: 90% (19% debt)
 ```
 
 The 5h and weekly segments are the status line's own: the row imports the same adapter, assessment
-and fragment modules (`claude/context-row/lib/`, linked into `scripts/` for the terminal command),
+and fragment modules (`claude/context-row/lib/`, which the terminal command imports from the same installed folder),
 so their numbers, pacing and severity colors match the terminal exactly. They are left out when no
 rate limit is reported (an API-key session).
 

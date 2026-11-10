@@ -3,7 +3,7 @@
 // leak-free view. Kept separate from portal-routes-usage.mjs so the route stays a thin HTTP shim.
 import fs from "node:fs";
 import { readLatestSnapshot } from "../../globals/packages/usage-statusline/scripts/usage-snapshot-store.mjs";
-import { assessUsage } from "../../globals/packages/usage-statusline/scripts/usage-domain.mjs";
+import { assessUsage } from "../../globals/packages/usage-statusline/claude/context-row/lib/usage-domain.mjs";
 
 // Usage snapshots come from the usage-statusline package's status-line integration, so a harness
 // has usage to show exactly when that package patches its config. Read from the package manifest

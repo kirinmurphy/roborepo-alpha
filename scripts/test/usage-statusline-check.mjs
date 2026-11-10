@@ -14,12 +14,14 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const formatter = path.join(repoRoot, "globals/packages/usage-statusline/scripts/claude-statusline.mjs");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 
+// Installed in the source layout, so the entrypoint's relative imports resolve the same way in the
+// repo and under ~/.roborepo/package-runtime/usage-statusline/.
 const RUNTIME_MODULES = [
-  "claude-statusline.mjs",
-  "usage-adapters.mjs",
-  "usage-domain.mjs",
-  "usage-render.mjs",
-  "usage-snapshot-store.mjs",
+  "scripts/claude-statusline.mjs",
+  "scripts/usage-snapshot-store.mjs",
+  "claude/context-row/lib/usage-adapters.mjs",
+  "claude/context-row/lib/usage-domain.mjs",
+  "claude/context-row/lib/usage-render.mjs",
 ];
 
 // --- installed command: stdin -> single line, NO_COLOR, invalid JSON --------
@@ -67,9 +69,15 @@ function runFormatter(input, env = {}) {
     for (const mod of RUNTIME_MODULES) {
       assert.ok(fs.existsSync(path.join(home, ".roborepo", "package-runtime", "usage-statusline", mod)), `enable installs ${mod}`);
     }
-    const entrypoint = path.join(home, ".roborepo", "package-runtime", "usage-statusline", "claude-statusline.mjs");
+    const entrypoint = path.join(home, ".roborepo", "package-runtime", "usage-statusline", "scripts", "claude-statusline.mjs");
     const settings = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
     assert.equal(settings.statusLine.command, `node "${entrypoint}"`, "Claude command references managed entrypoint");
+    const installedRun = spawnSync(process.execPath, [entrypoint], {
+      input: JSON.stringify({ context_window: { used_percentage: 70 } }),
+      encoding: "utf8",
+      env: { ...env, NO_COLOR: "" },
+    });
+    assert.equal(installedRun.status, 0, `the installed entrypoint resolves its imports and runs:\n${installedRun.stderr}`);
 
     // Codex footer stays fully native until an upstream footer-command hook exists.
     // No used-direction / pacing / scalar
@@ -111,7 +119,7 @@ function runFormatter(input, env = {}) {
       `${JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: otherDir, KEEP_ME: "1" } }, null, 2)}\n`,
     );
     const env = { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), SKIP_MCP: "1" };
-    const pluginDir = path.join(home, ".roborepo", "package-runtime", "usage-statusline", "context-row");
+    const pluginDir = path.join(home, ".roborepo", "package-runtime", "usage-statusline", "claude", "context-row");
     const readEnv = () => JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8")).env;
     const run = (...args) => spawnSync(process.execPath, [cli, "package", ...args], { env, encoding: "utf8" });
 

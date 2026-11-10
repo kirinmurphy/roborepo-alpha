@@ -153,32 +153,44 @@ function pruneCommands({ desiredCommands, removeAll, dryRun }) {
   return removed;
 }
 
+// An asset may sit in a subfolder (a `target` like "scripts/x.mjs"), so a folder that holds a
+// wanted asset is walked rather than removed, and dropped once the walk leaves it empty.
+function pruneRuntimeDir(dir, { desired, removeAll, dryRun }) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const ent of entries) {
+    const target = path.join(dir, ent.name);
+    if (!removeAll && desired.has(target)) continue;
+    const holdsWanted = !removeAll && ent.isDirectory() && [...desired].some((wanted) => wanted.startsWith(`${target}${path.sep}`));
+    if (holdsWanted) {
+      removed += pruneRuntimeDir(target, { desired, removeAll, dryRun });
+      continue;
+    }
+    removed += removePath(target, "package-runtime asset", { dryRun }) ? 1 : 0;
+  }
+  try {
+    if (!dryRun && fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmdirSync(dir);
+  } catch {}
+  return removed;
+}
+
 function prunePackageRuntimeAssets({ desiredPackageRuntimeAssets, removeAll, dryRun }) {
   const packageRuntimeDir = path.join(stateDir, "package-runtime");
-  let removed = 0;
   let packages = [];
   try {
     packages = fs.readdirSync(packageRuntimeDir, { withFileTypes: true });
   } catch {
     return 0;
   }
+  let removed = 0;
   for (const pkgEnt of packages) {
     if (!pkgEnt.isDirectory()) continue;
-    const pkgDir = path.join(packageRuntimeDir, pkgEnt.name);
-    let entries = [];
-    try {
-      entries = fs.readdirSync(pkgDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const ent of entries) {
-      const target = path.join(pkgDir, ent.name);
-      if (!removeAll && desiredPackageRuntimeAssets.has(target)) continue;
-      removed += removePath(target, "package-runtime asset", { dryRun }) ? 1 : 0;
-    }
-    try {
-      if (!dryRun && fs.existsSync(pkgDir) && fs.readdirSync(pkgDir).length === 0) fs.rmdirSync(pkgDir);
-    } catch {}
+    removed += pruneRuntimeDir(path.join(packageRuntimeDir, pkgEnt.name), { desired: desiredPackageRuntimeAssets, removeAll, dryRun });
   }
   return removed;
 }
