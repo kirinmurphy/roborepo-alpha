@@ -402,6 +402,9 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - [x] The migration helper said "Nothing was migrated" when only the read-back after a push failed — fixed (dad52e4f)
 - [x] No check covered the migration helper's local-only path — fixed (dad52e4f)
 - [x] The import spec's no-preview check could not fail if the guard regressed — fixed (dad52e4f)
+- [x] Portal UI saves failed on Linux CI: the test server's temp HOME had no Git identity — fixed in review (5dd10c12)
+- [x] Automatic cleanup failed open when an active plan's frontmatter, worktree field, or a worktree-bound folder was unreadable — fixed in review (cb1d2078)
+- [x] Replaying an offline backlog reorder over a remote order change dropped the local reorder — fixed in review (1a875388)
 
 ### Verification
 
@@ -424,18 +427,19 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - Base failure: `test:package-install` fails with `usage-statusline:package-runtime-asset source missing: scripts/usage-adapters.mjs`. Base 0bde0b5f made `globals/packages/usage-statusline/scripts/usage-{adapters,domain,render}.mjs` symlinks, which `npm pack` omits; `main` packs the same file list and its `package.config.json` references the same source.
 - Human review Validator pass (fresh-context subagent) at d7129473: clean. Every Validation criterion has code and test evidence, including the merged copy-path, missing-worktree, and empty-directory cleanup changes from base; the `docs/plans` grep criterion finds nothing.
 
+- Base `main` at 3f2a33e7, which ships the usage-statusline modules without symlinks, merged cleanly at 71e4ddb5; the `test:package-install` base failure above no longer applies.
+- PR CI at 1a875388 passed (3 checks passed, 1 skipped). The cleanup fix and the reorder fix each come with a test that fails without them (`worktree-lifecycle-check.mjs`, `plan-store-check.mjs`); the portal identity fix passed 91 of 91 affected specs locally with the Git identity removed.
+- History: d7129473 was approved by the human on 2026-11-10; the three review fixes above made that approval stale.
+
 ### Result
 
 - Status: complete
-- Reviewed implementation commit: d7129473a3dc6a44121ab44769a219b80ee5e37f
-- Base commit: b94fe510ff37b1123b41156a8db2c016e662bf8a
+- Reviewed implementation commit: 1a875388c74ada963083a84cc706e180de228578
+- Base commit: 3f2a33e7bbc4f55f5189cb3c553e9ba05f1b6c2c
 
 ### Approval
 
-- Decision: approved
-- Reviewed implementation commit: d7129473a3dc6a44121ab44769a219b80ee5e37f
-- Confirmed by: human
-- Answer: approved in the /plan-review session on 2026-11-10, choosing "Approve d7129473" in reply to the exact-commit approval question.
+- Decision: requested
 
 ## Follow-up task
 
