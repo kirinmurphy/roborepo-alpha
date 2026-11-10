@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: "Re-run /plan-review to renew approval: commits ec343658 and f28de44c changed docs/plans/review/plans-dedicated-branch.md after approval at 1a875388; then confirm rollout is done in all three repos and delete scripts/dev/migrate-plans-once.mjs and its check before /plan-close."
+next_action: Record the human's approval of f28de44c, then run /plan-close; before closing, confirm rollout in all three repos and delete scripts/dev/migrate-plans-once.mjs and its check.
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
@@ -430,11 +430,14 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - Base `main` at 3f2a33e7, which ships the usage-statusline modules without symlinks, merged cleanly at 71e4ddb5; the `test:package-install` base failure above no longer applies.
 - PR CI at 1a875388 passed (3 checks passed, 1 skipped). The cleanup fix and the reorder fix each come with a test that fails without them (`worktree-lifecycle-check.mjs`, `plan-store-check.mjs`); the portal identity fix passed 91 of 91 affected specs locally with the Git identity removed.
 - History: d7129473 was approved by the human on 2026-11-10; the three review fixes above made that approval stale.
+- Re-review after merge (2026-11-10): 1a875388..f28de44c changes only `docs/plans/review/plans-dedicated-branch.md`, the pre-rollout copy of this review record (ec343658, f28de44c); no code, test, or doc of record changed. That made the 1a875388 approval read stale, because the code gates no longer exclude `docs/plans/**`.
+- PR CI at f28de44c passed (run 42899076690). PR #62 merged as fe75b35f, which absorbs f28de44c.
+- Validator pass (fresh-context subagent) over 1a875388..f28de44c: clean. Every commit id the record cites exists.
 
 ### Result
 
 - Status: complete
-- Reviewed implementation commit: 1a875388c74ada963083a84cc706e180de228578
+- Reviewed implementation commit: f28de44c89504b15ffb998cd6e18b5933bcdfe41
 - Base commit: 3f2a33e7bbc4f55f5189cb3c553e9ba05f1b6c2c
 
 ### Approval
