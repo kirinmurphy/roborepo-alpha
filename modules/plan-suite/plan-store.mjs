@@ -299,7 +299,9 @@ async function replayPending(store, local, remote) {
   for (let guard = 0; !step.ok && guard < 50; guard += 1) {
     const conflicts = (await required(store, ["diff", "--name-only", "--diff-filter=U"])).split("\n").filter(Boolean);
     if (conflicts.length !== 1 || conflicts[0] !== PLANS_ORDER_RELATIVE_PATH) break;
-    fs.writeFileSync(path.join(store.root, PLANS_ORDER_RELATIVE_PATH), await mergedOrderFile(store));
+    const merged = await mergedOrderFile(store);
+    if (merged === null) break;
+    fs.writeFileSync(path.join(store.root, PLANS_ORDER_RELATIVE_PATH), merged);
     await required(store, ["add", "--", PLANS_ORDER_RELATIVE_PATH]);
     step = await storeGit(store, ["-c", "core.editor=true", "rebase", "--continue"]);
   }
@@ -309,12 +311,14 @@ async function replayPending(store, local, remote) {
 }
 
 // A pending placement's closure is gone, so it cannot be re-run. Its intent is the ids it added and
-// removed relative to the common ancestor, applied to the remote's order. Index stage 2 is the
-// branch being rebased onto; stage 3 is the pending commit.
+// removed relative to the common ancestor, and any new order it gave the ids both sides kept, applied
+// to the remote's order. Index stage 2 is the branch being rebased onto; stage 3 is the pending
+// commit. Null means both sides reordered one namespace differently, which is a person's call.
 async function mergedOrderFile(store) {
   const stage = async (number) => JSON.parse((await required(store, ["show", `:${number}:${PLANS_ORDER_RELATIVE_PATH}`])) || "{}");
   const [base, remote, pending] = await Promise.all([stage(1), stage(2), stage(3)]);
-  return `${JSON.stringify(mergeOrder(base, remote, pending), null, 2)}\n`;
+  const merged = mergeOrder(base, remote, pending);
+  return merged && `${JSON.stringify(merged, null, 2)}\n`;
 }
 
 export function mergeOrder(base, remote, pending) {
@@ -322,15 +326,27 @@ export function mergeOrder(base, remote, pending) {
   for (const namespace of new Set([...Object.keys(remote.namespaces || {}), ...Object.keys(pending.namespaces || {})])) {
     const before = base.namespaces?.[namespace] || [];
     const mine = pending.namespaces?.[namespace] || [];
+    const theirs = remote.namespaces?.[namespace] || [];
     const removed = new Set(before.filter((id) => !mine.includes(id)));
-    const kept = (remote.namespaces?.[namespace] || []).filter((id) => !removed.has(id));
-    const merged = [...kept, ...mine.filter((id) => !before.includes(id) && !kept.includes(id))];
+    const kept = theirs.filter((id) => !removed.has(id));
+    const mineReordered = !sameRelativeOrder(before, mine);
+    if (mineReordered && !sameRelativeOrder(before, theirs) && !sameRelativeOrder(mine, theirs)) return null;
+    // Only the pending commit reordered: its sequence wins for the ids both sides kept, and the
+    // remote's additions follow, as pending additions do below.
+    const ordered = mineReordered ? [...mine.filter((id) => kept.includes(id)), ...kept.filter((id) => !mine.includes(id))] : kept;
+    const merged = [...ordered, ...mine.filter((id) => !before.includes(id) && !ordered.includes(id))];
     if (merged.length) namespaces[namespace] = merged;
   }
   const unpinned = new Set((base.pinned || []).filter((namespace) => !(pending.pinned || []).includes(namespace)));
   const keptPins = (remote.pinned || []).filter((namespace) => !unpinned.has(namespace));
   const pinned = [...keptPins, ...(pending.pinned || []).filter((namespace) => !(base.pinned || []).includes(namespace) && !keptPins.includes(namespace))];
   return { schemaVersion: remote.schemaVersion ?? 1, ...(pinned.length ? { pinned } : {}), namespaces };
+}
+
+// Whether the ids two lists share appear in the same order in both.
+function sameRelativeOrder(a, b) {
+  const shared = a.filter((id) => b.includes(id));
+  return shared.join("\0") === b.filter((id) => a.includes(id)).join("\0");
 }
 
 async function pushBranch(store) {

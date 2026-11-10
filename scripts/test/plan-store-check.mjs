@@ -157,6 +157,22 @@ try {
   const order = JSON.parse(git(store, "show", "origin/repo-plans:plans/plans-order.json"));
   assert.ok(order.namespaces.test.includes("froma001") && order.namespaces.test.includes("fromb001"), `both ids land: ${JSON.stringify(order)}`);
 
+  // ---- an offline reorder replayed over a remote placement keeps its order
+  ok(run(root, "show", "froma001"), "A catches up");
+  ok(run(other, "show", "froma001"), "B catches up again");
+  const reorderUrl = git(root, "remote", "get-url", "origin");
+  git(root, "remote", "set-url", "origin", path.join(tmp, "nowhere.git"));
+  const before = JSON.parse(git(store, "show", "HEAD:plans/plans-order.json")).namespaces.test;
+  const last = before[before.length - 1];
+  assert.equal(ok(run(root, "order", "place", last, "--top"), "A reorders offline").synchronized, false);
+  git(root, "remote", "set-url", "origin", reorderUrl);
+  ok(run(other, "save", source("test-from-c.md", planDoc({ id: "fromc001" }))), "B adds a plan");
+  ok(run(other, "order", "place", "fromc001", "--bottom"), "B places it");
+  ok(run(root, "save", source("test-reorder-sync.md", planDoc({ id: "resync01" }))), "A's next reachable save replays the reorder");
+  git(store, "fetch", "--quiet", "origin");
+  const replayed = JSON.parse(git(store, "show", "origin/repo-plans:plans/plans-order.json")).namespaces.test;
+  assert.deepEqual(replayed, [last, ...before.filter((id) => id !== last), "fromc001"], `the offline reorder survives the replay: ${JSON.stringify(replayed)}`);
+
   // ---- an unreachable remote keeps the commit, reports it, and the next reachable mutation pushes it
   const url = git(root, "remote", "get-url", "origin");
   git(root, "remote", "set-url", "origin", path.join(tmp, "nowhere.git"));
@@ -263,6 +279,12 @@ try {
   const pins = (base, remote, pending) => mergeOrder({ pinned: base, namespaces: {} }, { pinned: remote, namespaces: {} }, { pinned: pending, namespaces: {} }).pinned ?? [];
   assert.deepEqual(pins(["api"], ["api", "web"], []), ["web"], "an offline unpin survives a remote pin");
   assert.deepEqual(pins(["api"], ["web"], ["api", "cli"]), ["web", "cli"], "the remote's unpin and the pending pin both stand");
+  const merge = (base, remote, pending) => mergeOrder({ namespaces: { api: base } }, { namespaces: { api: remote } }, { namespaces: { api: pending } })?.namespaces.api;
+  assert.deepEqual(merge(["a", "b", "c"], ["a", "b", "c", "d"], ["c", "a", "b"]), ["c", "a", "b", "d"], "an offline reorder keeps its order over a remote addition");
+  assert.deepEqual(merge(["a", "b", "c"], ["a", "c"], ["c", "a", "b"]), ["c", "a"], "an offline reorder keeps its order over a remote removal");
+  assert.deepEqual(merge(["a", "b", "c"], ["c", "a", "b"], ["a", "b", "c", "d"]), ["c", "a", "b", "d"], "a remote reorder keeps its order over an offline addition");
+  assert.deepEqual(merge(["a", "b", "c"], ["c", "a", "b"], ["c", "a", "b"]), ["c", "a", "b"], "the same reorder on both sides merges");
+  assert.equal(merge(["a", "b", "c"], ["b", "a", "c"], ["c", "a", "b"]), undefined, "two different reorders of one namespace are refused");
 
   // ---- the portal fetches at startup, so a plan pushed from another machine appears without a Refresh
   const portalRepo = repository("portal-start", { "plans/backlog/test-here.md": planDoc({ id: "here0001" }) });

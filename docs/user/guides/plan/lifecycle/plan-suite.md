@@ -104,7 +104,9 @@ nothing, and running a move again after it succeeded commits nothing.
 If the remote can't be reached, or refuses the push (a hook or branch rule), the commit stays local
 and the command reports **not synchronized** with Git's reason. The next command or portal Refresh
 that reaches the remote pushes it; a refusal keeps recurring until the rule allows the push. If another machine changed the
-same plan, the command refuses rather than overwriting.
+same plan, the command refuses rather than overwriting. Backlog order changes from both sides combine:
+added and removed plans from each, and a reorder from either side, unless both reordered the same
+namespace differently, which also refuses.
 
 Direct writes to `repo_plans` are prevented differently per harness. In Claude, Write and Edit follow
 your write-outside-the-repo setting, since that worktree is outside your checkout. In Codex a direct
