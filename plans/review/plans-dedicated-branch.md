@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Run /plan-review for the human review of the plans store branch.
+next_action: "Re-run /plan-review to renew approval: commits ec343658 and f28de44c changed docs/plans/review/plans-dedicated-branch.md after approval at 1a875388; then confirm rollout is done in all three repos and delete scripts/dev/migrate-plans-once.mjs and its check before /plan-close."
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
