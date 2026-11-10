@@ -2,30 +2,80 @@
   "schemaVersion": 1,
   "id": "fixture-tool",
   "label": "Fixture Tool",
-  "description": "Test-only package exercising every live-config resource type: an MCP server, Codex tool approvals, permissions, rules, and hooks with a script.",
+  "description": "Test-only package exercising every live-config resource type: an MCP server, config patches (Claude permissions and Codex tool approvals), rules, and hooks with a script.",
   "lifecycle": "optional",
   "presentation": {
     "category": "integrations",
     "order": 900
   },
   "resources": [
-    { "type": "mcp", "preset": "fixture-tool" },
-    { "type": "rules", "source": "rules.md" },
+    {
+      "type": "mcp",
+      "preset": "fixture-tool"
+    },
+    {
+      "type": "rules",
+      "source": "rules.md"
+    },
     {
       "type": "hooks",
       "source": "hooks-claude.json",
       "harness": "claude",
-      "scripts": ["hooks/fixture-session.mjs"]
-    },
-    { "type": "hooks", "source": "hooks-codex.json", "harness": "codex" },
-    {
-      "type": "permissions",
-      "allow": ["mcp__fixture-tool__lookup", "mcp__fixture-tool__register_edit"]
+      "scripts": [
+        "hooks/fixture-session.mjs"
+      ]
     },
     {
-      "type": "codex_tool_approvals",
-      "server": "fixture-tool",
-      "approvals": { "register_edit": "auto", "lookup": "approve" }
+      "type": "hooks",
+      "source": "hooks-codex.json",
+      "harness": "codex"
+    },
+    {
+      "type": "config-patch",
+      "harness": "claude",
+      "label": "permissions",
+      "patches": [
+        {
+          "op": "union",
+          "path": [
+            "permissions",
+            "allow"
+          ],
+          "value": [
+            "mcp__fixture-tool__lookup",
+            "mcp__fixture-tool__register_edit"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "config-patch",
+      "harness": "codex",
+      "label": "tool approvals",
+      "patches": [
+        {
+          "op": "set",
+          "path": [
+            "mcp_servers",
+            "fixture-tool",
+            "tools",
+            "register_edit",
+            "approval_mode"
+          ],
+          "value": "auto"
+        },
+        {
+          "op": "set",
+          "path": [
+            "mcp_servers",
+            "fixture-tool",
+            "tools",
+            "lookup",
+            "approval_mode"
+          ],
+          "value": "approve"
+        }
+      ]
     }
   ]
 }

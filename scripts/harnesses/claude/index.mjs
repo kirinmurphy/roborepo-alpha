@@ -20,6 +20,7 @@ import { renderClaudeSettings } from "../permissions-render.mjs";
 import { mcpRemove, mcpAddServer, mcpRemoveServer, mcpList } from "./mcp.mjs";
 import { hooksWriteRemove } from "./hooks-withdraw.mjs";
 import { transcriptStats } from "../transcript-parse.mjs";
+import { jsonConfigEdit } from "../config-edit/json.mjs";
 import { locateTranscript, extractHeavyTurns, transcriptTitle } from "../transcript-locate.mjs";
 
 const PACKAGES_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "globals", "packages");
@@ -39,52 +40,14 @@ function renderClaudeRootConfig(current, manifest, overrides, options = {}) {
   return `${JSON.stringify(rendered, null, 2)}\n`;
 }
 
-function statusLineMatches(existing, desired) {
-  return JSON.stringify(existing || null) === JSON.stringify(desired || null);
-}
-
-// merge/render/mergePackageComponent/unmergePackageComponent stay thin wrappers over
-// root-config-merge.mjs's existing, characterization-tested functions
-// (scripts/test/{root-config-merge,package-harness-config}-characterization-check.mjs) rather
-// than a re-port — this phase moves OWNERSHIP behind the provider contract, not the
-// implementation itself. mergePackageComponent/unmergePackageComponent take the already-read
-// component config (not the raw component) so this module never needs package-harness-config.mjs's
-// readHarnessConfig, which depends on paths.mjs -> registry.mjs -> this module — a cycle.
-function mergePackageComponent(pkg, config, { claudeSettingsPath, readSettings, writeSettings }) {
-  if (!config.statusLine || typeof config.statusLine !== "object") {
-    throw new Error(`${pkg.id}: Claude harness-config needs statusLine`);
-  }
-  const settings = readSettings(claudeSettingsPath);
-  if (settings.statusLine && !statusLineMatches(settings.statusLine, config.statusLine)) {
-    console.warn("  conflict: Claude statusLine already exists; leaving unmanaged setting unchanged");
-    return;
-  }
-  settings.statusLine = config.statusLine;
-  writeSettings(claudeSettingsPath, settings);
-  console.log(`  wired: Claude statusLine -> ${claudeSettingsPath}`);
-}
-
-function unmergePackageComponent(pkg, config, { claudeSettingsPath, readSettings, writeSettings }) {
-  const settings = readSettings(claudeSettingsPath);
-  if (!settings.statusLine) {
-    console.log("  ok: Claude statusLine already absent");
-    return;
-  }
-  if (!statusLineMatches(settings.statusLine, config.statusLine)) {
-    console.warn("  conflict: Claude statusLine is unmanaged; leaving it unchanged");
-    return;
-  }
-  delete settings.statusLine;
-  writeSettings(claudeSettingsPath, settings);
-  console.log(`  removed: Claude statusLine <- ${claudeSettingsPath}`);
-}
+// merge/render stay thin wrappers over root-config-merge.mjs's existing, characterization-tested
+// functions (scripts/test/root-config-merge-characterization-check.mjs) rather than a re-port.
 
 // Claude stores hooks nested under settings.json's "hooks" key, alongside permissions etc. — the
 // same shape Gemini's settings.json uses, so the read/merge/unmerge wrapper is shared via
 // root-config-hooks.mjs rather than duplicated per provider. Returns { changed, content } rather
 // than writing — the orchestrator (packages.mjs, which already imports paths.mjs directly with no
-// cycle risk) performs the actual write, same pattern as mergePackageComponent/
-// unmergePackageComponent above.
+// cycle risk) performs the actual write.
 
 // Telemetry capture's hook fragment is fixed per provider (globals/packages/telemetry/hooks-<id>.json),
 // unlike the package-driven hooks.merge below which takes an arbitrary fragment — reuses the same
@@ -138,9 +101,8 @@ export const claudeProvider = defineHarnessProvider({
     rootConfig: {
       merge: (repoText, localText) => mergeClaudeSettings(repoText, localText),
       render: (content) => normalizeRootConfigContent("claude", content),
-      mergePackageComponent,
-      unmergePackageComponent,
     },
+    configEdit: jsonConfigEdit,
     mcp: {
       ...stubGroups.mcp,
       remove: mcpRemove,

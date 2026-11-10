@@ -7,7 +7,7 @@ import { effectiveEnabledIds } from "./package-state.mjs";
 import { stateSkillsDir, stateDir } from "./state-paths.mjs";
 import { isMainModule } from "./roots.mjs";
 import { slashCommandLiveDir } from "./skill-command-config.mjs";
-import { claudePluginDirDestination, packageRuntimeAssetDestination } from "./package-harness-config.mjs";
+import { packageRuntimeAssetDestination } from "./package-runtime-assets.mjs";
 import { listSourceSkills } from "./skill-files.mjs";
 
 const MANAGED_SKILL_MARKER = ".builtin-managed";
@@ -37,8 +37,6 @@ function currentDesired(catalog = loadPackageCatalog({ includeUnavailable: true 
         }
       } else if (resource.type === "package-runtime-asset") {
         packageRuntimeAssets.add(packageRuntimeAssetDestination(pkg, resource));
-      } else if (resource.type === "claude-plugin-dir") {
-        packageRuntimeAssets.add(claudePluginDirDestination(pkg, resource));
       }
     }
   }

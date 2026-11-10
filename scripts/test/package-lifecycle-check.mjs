@@ -395,26 +395,26 @@ for (const pkgId of packageIds) {
   fixture("status-middle", { requires: ["status-leaf"], presentation: { order: -20 } });
   fixture("status-leaf", {
     presentation: { order: -10 },
-    resources: [{ type: "permissions", allow: ["ReviewFixtureMissingPermission"] }],
+    resources: [{ type: "config-patch", harness: "claude", patches: [{ op: "union", path: ["permissions", "allow"], value: ["ReviewFixtureMissingPermission"] }] }],
   });
   fixture("orphan-parent-a", { requires: ["orphan-dependency"] });
   fixture("orphan-parent-b", { requires: ["orphan-dependency"] });
   fixture("orphan-dependency", {
     resources: [
-      { type: "permissions", allow: ["ReviewFixtureOrphanPermission"] },
+      { type: "config-patch", harness: "claude", patches: [{ op: "union", path: ["permissions", "allow"], value: ["ReviewFixtureOrphanPermission"] }] },
       { type: "hooks", harness: "claude", source: "hooks.json" },
-      { type: "plugin", id: "review-fixture@review-market", marketplace: { name: "review-market", source: { source: "github", repo: "example/review-fixture" } } },
+      { type: "config-patch", harness: "claude", patches: [{ op: "set", path: ["extraKnownMarketplaces", "review-market"], value: { source: { source: "github", repo: "example/review-fixture" } } }, { op: "set", path: ["enabledPlugins", "review-fixture@review-market"], value: true }] },
       { type: "service", id: "telemetry" },
     ],
   });
   fs.writeFileSync(path.join(workspace, "packages", "orphan-dependency", "hooks.json"), JSON.stringify({
     SessionStart: [{ hooks: [{ type: "command", command: "echo review-orphan-hook" }] }],
   }));
-  fixture("orphan-external", { resources: [{ type: "permissions", allow: ["ReviewFixtureExternalPermission"] }] });
+  fixture("orphan-external", { resources: [{ type: "config-patch", harness: "claude", patches: [{ op: "union", path: ["permissions", "allow"], value: ["ReviewFixtureExternalPermission"] }] }] });
   fixture("gc-service-parent", { requires: ["gc-service"] });
   fixture("gc-service", { resources: [{ type: "service", id: "telemetry" }] });
-  fixture("gc-edited", { resources: [{ type: "permissions", allow: ["ReviewFixtureEditedPermission"] }] });
-  fixture("gc-legacy", { resources: [{ type: "permissions", allow: ["ReviewFixtureLegacyPermission"] }] });
+  fixture("gc-edited", { resources: [{ type: "config-patch", harness: "claude", patches: [{ op: "union", path: ["permissions", "allow"], value: ["ReviewFixtureEditedPermission"] }] }] });
+  fixture("gc-legacy", { resources: [{ type: "config-patch", harness: "claude", patches: [{ op: "union", path: ["permissions", "allow"], value: ["ReviewFixtureLegacyPermission"] }] }] });
 
   const ok = (...args) => {
     const result = spawnSync(process.execPath, args, { env, cwd: repoRoot, encoding: "utf8", input: "" });

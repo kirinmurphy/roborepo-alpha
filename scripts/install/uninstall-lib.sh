@@ -455,7 +455,7 @@ remove_runtime_state() {
   remove_path "${state_dir}/logs" "remove"
   remove_path "${state_dir}/portal" "remove"
   remove_path "${state_dir}/skills" "remove"
-  # Package-runtime assets (see scripts/cli/package-harness-config.mjs packageRuntimeAssetDestination).
+  # Package-runtime assets (see scripts/cli/package-runtime-assets.mjs packageRuntimeAssetDestination).
   # The CLI's projection cleanup prunes individual files it can attribute to a package, but it runs
   # on package disable and leaves the package-runtime/ directory itself; uninstall owns the whole tree.
   remove_path "${state_dir}/package-runtime" "remove"

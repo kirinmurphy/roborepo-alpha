@@ -1,20 +1,24 @@
 // Execution layer for the /api/usage route: read each harness's latest snapshot, assess it with the
 // SAME domain functions the status line uses (no duplicated thresholds), and shape a JSON-safe,
 // leak-free view. Kept separate from portal-routes-usage.mjs so the route stays a thin HTTP shim.
+import fs from "node:fs";
 import { readLatestSnapshot } from "../../globals/packages/usage-statusline/scripts/usage-snapshot-store.mjs";
 import { assessUsage } from "../../globals/packages/usage-statusline/scripts/usage-domain.mjs";
-import { harnessIdsWithCapability } from "./rules-render.mjs";
 
-// Usage snapshots come from the usage-statusline package's status-line integration, which is
-// delivered as a harness-config resource — so a harness has usage to show exactly when it supports
-// package-config. Derived from the provider manifests rather than listed literally, so a new
-// provider appears here when it declares the capability, and one that cannot host the status line
-// (Gemini CLI today) is absent by contract rather than by an omission someone has to remember.
+// Usage snapshots come from the usage-statusline package's status-line integration, so a harness
+// has usage to show exactly when that package patches its config. Read from the package manifest
+// rather than listed here, so adding a harness to the package is the one edit that adds it to this
+// route, and a harness the package does not reach (Gemini CLI today) is absent.
 //
 // Deliberately NOT telemetry-rate-limits: that capability describes parsing rate-limit headers out
 // of transcripts (Codex only), which is a different subsystem from the status-line snapshot store
 // this route reads. Claude writes usage snapshots without declaring it.
-const HARNESSES = harnessIdsWithCapability("package-config");
+const USAGE_PACKAGE_MANIFEST = new URL("../../globals/packages/usage-statusline/package.config.json", import.meta.url);
+const HARNESSES = [...new Set(
+  JSON.parse(fs.readFileSync(USAGE_PACKAGE_MANIFEST, "utf8")).resources
+    .filter((resource) => resource.type === "config-patch")
+    .map((resource) => resource.harness),
+)];
 
 // A window's public shape: used + severity always; pacing fields only when elapsed was computable.
 function windowView(assessed) {

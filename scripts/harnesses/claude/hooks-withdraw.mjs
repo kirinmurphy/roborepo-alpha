@@ -8,6 +8,15 @@ import { recordConfigWrite } from "../../cli/write-log.mjs";
 
 const PACKAGE_DIRS = [path.join(repoRoot, "globals", "packages")];
 
+// Allow-list entries a package adds through a Claude config patch (a union on permissions.allow).
+function packagePermissionEntries(pkg) {
+  return (pkg.resources || [])
+    .filter((resource) => resource.type === "config-patch" && resource.harness === "claude")
+    .flatMap((resource) => resource.patches || [])
+    .filter((patch) => patch.op === "union" && patch.path?.join(".") === "permissions.allow")
+    .flatMap((patch) => patch.value || []);
+}
+
 // Ported from scripts/install/uninstall-lib.sh's strip_package_hooks (characterization test:
 // scripts/test/harness-hooks-write-remove-characterization-check.mjs). Strips BOTH package-
 // injected hooks AND package-injected permission allow-entries from ~/.claude/settings.json in one
@@ -79,9 +88,7 @@ export function hooksWriteRemove({ homePath, dryRun = false } = {}) {
     }
   }
 
-  const toRemove = new Set(
-    packages.flatMap(({ config: pkg }) => (pkg.resources || []).filter((c) => c.type === "permissions").flatMap((c) => c.allow || []))
-  );
+  const toRemove = new Set(packages.flatMap(({ config: pkg }) => packagePermissionEntries(pkg)));
   const existingAllow = settings.permissions?.allow || [];
   const nextAllow = existingAllow.filter((p) => !toRemove.has(p));
   if (nextAllow.length !== existingAllow.length) {

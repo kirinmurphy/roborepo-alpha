@@ -9,6 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { jsonConfigEdit } from "../config-edit/json.mjs";
 import { defineHarnessProvider } from "../contract.mjs";
 import { detectHarnessProvider } from "../discovery.mjs";
 import { stubAdapterGroups } from "../stub-adapter.mjs";
@@ -164,6 +165,7 @@ export const geminiProvider = defineHarnessProvider({
       merge: (repoText, localText) => mergeGeminiSettings(repoText, localText),
       render: (content) => normalizeGeminiRootConfig(content),
     },
+    configEdit: jsonConfigEdit,
     permissions: {
       render: renderGeminiPermissions,
     },
