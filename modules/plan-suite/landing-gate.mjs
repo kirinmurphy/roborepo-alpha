@@ -3,11 +3,12 @@
 // transition, and plan-scoped worktree cleanup verify that one commit instead of rescanning base
 // history. A recorded commit that no longer absorbs the branch falls back to the full scan.
 import fs from "node:fs";
-import path from "node:path";
-import { inspectBranchLanding } from "../repositories/worktree-landed.mjs";
-import { authoritativeMarkdown } from "./worktree-copy.mjs";
+import { inspectBranchLanding, inspectCommitLanding } from "../repositories/worktree-landed.mjs";
+import { linkedWorktreeNamed } from "./plan-git.mjs";
 
 const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+// Past the completion preflight, which refuses a branch with no commits of its own.
+const PREFLIGHT_PASSED = new Set(["review", "completed"]);
 const ABSORBING_LINE = /^\s*[-*]\s+Absorbing commit:\s*`?([0-9a-f]+)`?\s*$/i;
 
 // The full commit id on the first `- Absorbing commit:` line of the top-level `## Verification`
@@ -24,17 +25,22 @@ export function recordedAbsorbingCommit(markdown) {
   return null;
 }
 
-// `markdown` is the primary copy, where /plan-close writes its verification; it defaults to the file
-// on disk. `branch` skips resolving the plan's worktree when the caller already has it.
+// `markdown` is the plan's text, where /plan-close writes its verification; it defaults to the file
+// in the store. `branch` skips resolving the plan's worktree when the caller already has it.
 export async function planLanding({ primary, record, base, branch = null, markdown = null }) {
   if (!record.plan.worktree) return { landed: true, reason: "implemented on the base branch", absorbingCommit: null };
-  const resolvedBranch = branch || authoritativeMarkdown(primary, record).worktree?.branch || null;
+  const resolvedBranch = branch || linkedWorktreeNamed(primary, record.plan.worktree)?.branch || null;
   if (!resolvedBranch) {
     return { landed: false, reason: `worktree ${record.plan.worktree} has no resolvable branch`, absorbingCommit: null };
   }
-  const content = markdown ?? fs.readFileSync(path.join(primary, record.plan.relativePath), "utf8");
-  return inspectBranchLanding(primary, resolvedBranch, {
-    base: `refs/heads/${base}`,
-    recorded: recordedAbsorbingCommit(content),
-  });
+  const content = markdown ?? fs.readFileSync(record.absolutePath, "utf8");
+  const baseRef = `refs/heads/${base}`;
+  const landing = await inspectBranchLanding(primary, resolvedBranch, { base: baseRef, recorded: recordedAbsorbingCommit(content) });
+  // A fast-forward merge puts a branch's commits on the base's own line, which the generic branch
+  // check can't tell from a branch that never had work. The preflight already ruled that out here, so
+  // the tip being reachable from the base proves it landed.
+  if (landing.reason === "no own work" && PREFLIGHT_PASSED.has(record.plan.lifecycle)) {
+    return inspectCommitLanding(primary, landing.tip, { base: baseRef });
+  }
+  return landing;
 }

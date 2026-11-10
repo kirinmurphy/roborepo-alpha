@@ -13,7 +13,7 @@ It reports, in the shape
 - Schema: recognized lifecycle folder, required frontmatter, unique stable ID, valid enums, normalized arrays.
 - Naming: filename is lowercase-hyphenated `<namespace>-<slug>.md`, with no lifecycle, status, date,
   or version suffix. **Naming is checked only when the repository declares project namespaces in
-  `docs/plans/plans-config.json`** — a repository without that file gets no naming findings at all,
+  `plans/plans-config.json`** — a repository without that file gets no naming findings at all,
   because the universal namespaces in `plan-schema.md` are a fallback vocabulary rather than a
   default that applies on its own. Where the check does run, the allowed prefixes are the universal
   namespaces plus the declared project ones. Findings are reported for `backlog`, `ready`, `active`,
@@ -29,7 +29,7 @@ It reports, in the shape
 - Not tested: unchecked `## Not tested` entries on an active, review, or completed plan.
 - Relationships: duplicate ids, and `depends_on`, `related`, and `blocked_by` entries that resolve
   to no plan.
-- Repository: problems with `docs/plans/plans-config.json` and `docs/plans/plans-order.json`, which
+- Repository: problems with `plans/plans-config.json` and `plans/plans-order.json`, which
   belong to no one plan, in the output's `repositoryFindings`. A file that cannot be read is
   blocking, so the command exits 1 even when the plan itself is valid. Repair that file; the plan is
   not the cause. Entries in the order file for an unknown plan or an unapproved namespace are advisory.

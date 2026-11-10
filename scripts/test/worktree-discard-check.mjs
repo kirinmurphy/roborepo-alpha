@@ -12,6 +12,7 @@ import { deleteTransaction, readTransaction, saveTransaction } from "../../modul
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { cleanupWorktrees } from "../cli/worktree-cleanup.mjs";
 import { appendRemoval, removalLogPath, retryBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
+import { addPlansStore } from "./lib/plan-store-fixture.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "worktree-discard-check-"));
 const restore = isolateGitConfig(root);
@@ -227,7 +228,8 @@ try {
   console.log("worktree discard: stale receipts, scopes, raw inventory, intent-write refusal and serialized log assertions passed");
   const planFixture = fixture();
   const planName = planFixture.worktree.name;
-  const planFile = (stage) => path.join(planFixture.mainPath, "docs/plans", stage, "story.md");
+  const planStore = addPlansStore(planFixture.mainPath);
+  const planFile = (stage) => path.join(planStore, "plans", stage, "story.md");
   const planText = `---\nid: abc12345\nworktree: ${planName}\n---\n\n# Story\n`;
   function planStage(stage) {
     for (const folder of ["active", "completed"]) fs.rmSync(planFile(folder), { force: true });

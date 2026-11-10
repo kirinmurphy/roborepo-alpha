@@ -1,14 +1,14 @@
 // Merges the base branch into a plan's implementation branch, from that branch's linked worktree.
 // /plan-review runs it at the start of every review round, so it does nothing when base has nothing
 // new. It never merges the other way, never rewrites local state silently, and never resolves a
-// conflict by picking a side, with one deterministic exception: the plan document itself, when Git
-// misses the rename the primary checkout committed (see resolvePlanRenameConflicts).
+// conflict by picking a side.
 //
 // A conflicted merge is left in progress for an agent or a human to resolve; `continueMerge`
 // verifies the resolution and commits it.
 import fs from "node:fs";
 import path from "node:path";
-import { domainError, parseFrontmatter } from "./index.mjs";
+import { domainError } from "./index.mjs";
+import { PLANS_BRANCH } from "./plan-store.mjs";
 import { currentBranch, dirtyPaths, git, primaryCheckout, topLevel } from "./plan-git.mjs";
 
 const CONFLICT_MARKER = /^(<{7}|>{7}) /m;
@@ -24,6 +24,7 @@ export function syncBase({ cwd = process.cwd(), base = "main", continueMerge = f
   const branch = currentBranch(worktree);
   if (!branch) throw domainError("INVALID_CHANGE", "The worktree's HEAD is detached, so there is no branch to merge into.");
   if (branch === base) throw domainError("INVALID_CHANGE", `The worktree is on ${base} itself; there is nothing to synchronize.`);
+  if (branch === PLANS_BRANCH) throw domainError("INVALID_CHANGE", "This is the plans worktree, which never takes code; run sync-base from the plan's implementation worktree.");
   if (!git(worktree, ["rev-parse", "--verify", "-q", `refs/heads/${base}`]).ok) {
     throw domainError("INVALID_CHANGE", `The base branch ${base} does not exist locally.`);
   }
@@ -46,19 +47,16 @@ export function syncBase({ cwd = process.cwd(), base = "main", continueMerge = f
 
   const before = git(worktree, ["rev-parse", "HEAD"]).stdout;
   if (git(worktree, ["merge-base", "--is-ancestor", base, "HEAD"]).ok) {
-    return { state: "up-to-date", branch, base, before, commit: before, conflicts: [], resolved: [] };
+    return { state: "up-to-date", branch, base, before, commit: before, conflicts: [] };
   }
   const merged = git(worktree, ["merge", "--no-ff", "--no-edit", "-m", `Merge ${base} into ${branch}`, base]);
-  if (merged.ok) return { state: "merged", branch, base, before, commit: git(worktree, ["rev-parse", "HEAD"]).stdout, conflicts: [], resolved: [] };
+  if (merged.ok) return { state: "merged", branch, base, before, commit: git(worktree, ["rev-parse", "HEAD"]).stdout, conflicts: [] };
 
   const conflicted = unmergedPaths(worktree);
   if (!conflicted.length) {
     throw domainError("MOVE_FAILED", `git merge ${base} failed before it could start.`, { details: [merged.stderr] });
   }
-  const resolved = resolvePlanRenameConflicts(worktree);
-  const conflicts = unmergedPaths(worktree);
-  if (conflicts.length) return { state: "conflicts", branch, base, before, commit: null, conflicts, resolved };
-  return { ...commitMerge(worktree, branch, base), before, resolved };
+  return { state: "conflicts", branch, base, before, commit: null, conflicts: conflicted };
 }
 
 function continueSync({ worktree, branch, base, merging }) {
@@ -85,7 +83,7 @@ function continueSync({ worktree, branch, base, merging }) {
       details: marked,
     });
   }
-  return { ...commitMerge(worktree, branch, base), resolved: [] };
+  return commitMerge(worktree, branch, base);
 }
 
 function commitMerge(worktree, branch, base) {
@@ -97,30 +95,6 @@ function commitMerge(worktree, branch, base) {
     throw domainError("MOVE_FAILED", `The commit on ${branch} does not merge ${base}.`, { details: [commit] });
   }
   return { state: "merged", branch, base, commit, conflicts: [] };
-}
-
-// The primary checkout commits a plan's moves before the worktree sees them, so a sync can bring a
-// rename of a plan the worktree has edited. When rename detection misses it, Git reports the old
-// path as modified here and deleted on base. The worktree's copy is authoritative, so its content
-// goes to the path base gave the plan (found by its `id`), and the old path is removed.
-function resolvePlanRenameConflicts(worktree) {
-  const resolved = [];
-  const status = git(worktree, ["status", "--porcelain=v1", "--", "docs/plans"]).raw.split("\n").filter(Boolean);
-  const theirs = git(worktree, ["ls-tree", "-r", "--name-only", "MERGE_HEAD", "--", "docs/plans"]).stdout.split("\n").filter(Boolean);
-  for (const line of status) {
-    if (line.slice(0, 2) !== "UD") continue;
-    const oldPath = line.slice(3);
-    const ours = git(worktree, ["show", `:2:${oldPath}`]);
-    const id = ours.ok ? parseFrontmatter(ours.raw).frontmatter.id : "";
-    if (!id) continue;
-    const newPath = theirs.find((candidate) => candidate !== oldPath && path.basename(candidate) === path.basename(oldPath)
-      && parseFrontmatter(git(worktree, ["show", `MERGE_HEAD:${candidate}`]).raw).frontmatter.id === id);
-    if (!newPath) continue;
-    fs.writeFileSync(path.join(worktree, newPath), ours.raw);
-    if (!git(worktree, ["add", "--", newPath]).ok || !git(worktree, ["rm", "--quiet", "--", oldPath]).ok) continue;
-    resolved.push({ from: oldPath, to: newPath });
-  }
-  return resolved;
 }
 
 // Tracking information is only as fresh as the last fetch; a local base behind it is reported

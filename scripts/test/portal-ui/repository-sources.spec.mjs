@@ -128,7 +128,7 @@ test.describe("Manage repositories dialog", () => {
   test.beforeAll(() => {
     projects = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-sources-")));
     const repo = path.join(projects, "dialog-fixture");
-    fs.mkdirSync(path.join(repo, "docs", "plans", "backlog"), { recursive: true });
+    fs.mkdirSync(repo, { recursive: true });
     spawnSync("git", ["init", "-q", "-b", "main"], { cwd: repo });
   });
   test.afterAll(() => fs.rmSync(projects, { recursive: true, force: true }));

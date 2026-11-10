@@ -91,7 +91,7 @@ say so explicitly rather than guessing from the working tree.
   session's work. Use the repository's doc-of-record map when one exists to find the owning guide
   or reference; also inspect architecture docs, ADRs, changelogs, and other tracking docs the
   work actually affects. Update those docs against the code, preserving their existing structure.
-- When the session worked on a repository plan under `docs/plans`, sync it with `plan-write`:
+- When the session worked on a repository plan, sync it with `plan-write`:
   tick only tasks the code proves done, add `## Not tested` entries for gaps the session left, and
   update `next_action`. Then run the repository's canonical plan validator for `<plan>` and report its findings.
 - Do not restructure or rewrite docs wholesale. Small, targeted edits, preserving existing
@@ -165,9 +165,9 @@ deliverable of a session close.
   - For ambiguous priority items, ask the user what to do with each item before including it.
     Offer exactly these choices: **include details in the handoff note**, **add it to the
     backlog as a new task**, or **forget about it**.
-  - If the user chooses backlog, load `plan-write` and create a backlog plan for that issue
-    before committing. Stage that plan with the same session commit, not a separate
-    follow-up commit. Include the new plan path in the status summary.
+  - If the user chooses backlog, load `plan-write` and create a backlog plan for that issue. It
+    saves to the plans branch, so it is no part of the session commit. Include the new plan path in
+    the status summary.
   - If the user chooses forget, omit it from the handoff and do not create a plan.
   - After handling each selected option, complete with the normal handoff/status response;
     do not stop at the prompt.

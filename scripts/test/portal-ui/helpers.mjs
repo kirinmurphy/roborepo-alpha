@@ -1,5 +1,7 @@
 // Helpers shared by portal UI specs: registering fixture repositories with the hermetic server, and
 // patching Home's overview so a test states only the domain data it depends on.
+import fs from "node:fs";
+import path from "node:path";
 import { expect } from "@playwright/test";
 
 export async function portalToken(page) {
@@ -16,13 +18,22 @@ export async function addRepositorySource(page, sourcePath) {
 }
 
 // The repositories a removed source found stay registered (removal never deletes a repository),
-// which is harmless here: each fixture is its own repository and its folder outlives the describe.
+// which is harmless here: each fixture is its own repository, and removeFixtureContents keeps it
+// out of later specs' Home.
 export async function removeRepositorySources(page) {
   const token = await portalToken(page);
   const { sources } = await (await retryingReset(() => page.request.get("/api/repositories/sources"))).json();
   for (const source of sources) {
     const response = await page.request.post(`/api/repositories/sources/${source.id}/remove`, { headers: { "X-Cli-Portal-Token": token } });
     expect(response.ok()).toBe(true);
+  }
+}
+
+// Empties a plan fixture but keeps its root. A registered checkout whose parent folder is gone reads
+// as unreadable, which Home keeps listing; with the parent present it reads as absent and leaves Home.
+export function removeFixtureContents(fx) {
+  for (const entry of fs.readdirSync(fx.tmp)) {
+    fs.rmSync(path.join(fx.tmp, entry), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 }
 

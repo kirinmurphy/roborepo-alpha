@@ -123,6 +123,10 @@ cp -R "${repo_root}/scripts/cli/." "${pkg_app}/scripts/cli/"
 # for the same requirement, first hit there.
 cp -R "${repo_root}/scripts/harnesses/." "${pkg_app}/scripts/harnesses/"
 cp -R "${repo_root}/globals/harnesses/." "${pkg_app}/globals/harnesses/"
+# Workspace roots and the Codex grants read the plans store through modules/plan-suite.
+mkdir -p "${pkg_app}/modules"
+cp -R "${repo_root}/modules/." "${pkg_app}/modules/"
+cp "${repo_root}/manifests/platform/plan-lifecycle.json" "${pkg_app}/manifests/platform/plan-lifecycle.json"
 cp "${repo_root}/manifests/platform/cli-commands.json" "${pkg_app}/manifests/platform/cli-commands.json"
 cp "${repo_root}/manifests/platform/context-cost-thresholds.json" "${pkg_app}/manifests/platform/context-cost-thresholds.json"
 cp -R "${repo_root}/manifests/platform/cli" "${pkg_app}/manifests/platform/cli"
@@ -1123,6 +1127,7 @@ cp -R "${repo_root}/modules/." "${mcp_harness}/modules/"
 cp -R "${repo_root}/scripts/harnesses/." "${mcp_harness}/scripts/harnesses/"
 cp -R "${repo_root}/globals/harnesses/." "${mcp_harness}/globals/harnesses/"
 cp "${repo_root}/manifests/inventory/mcp-presets.json" "${mcp_harness}/manifests/inventory/mcp-presets.json"
+cp "${repo_root}/manifests/platform/plan-lifecycle.json" "${mcp_harness}/manifests/platform/plan-lifecycle.json"
 cp "${repo_root}/manifests/platform/cli-commands.json" "${mcp_harness}/manifests/platform/cli-commands.json"
 cp "${repo_root}/manifests/platform/context-cost-thresholds.json" "${mcp_harness}/manifests/platform/context-cost-thresholds.json"
 cp -R "${repo_root}/manifests/platform/cli" "${mcp_harness}/manifests/platform/cli"
@@ -2048,21 +2053,17 @@ assert "plan-suite: validate, start, and package status commands" \
 assert "plans: portal mutation-orchestration helpers" \
   node "${repo_root}/scripts/test/plans-portal-state-check.mjs"
 
-# Which checkout's copy of a plan the snapshot returns, and the Git checks behind that choice.
-assert "plan-suite: every checkout of a repository, merged by plan id" \
+# Every checkout of a repository reads one set of plans from its store.
+assert "plan-suite: every checkout of a repository reads its one plans store" \
   node "${repo_root}/scripts/test/plan-suite-canonical-check.mjs"
 
-assert "plan-suite: authority resolver and outside-edit check" \
-  node "${repo_root}/scripts/test/plan-authority-check.mjs"
+# The plans store end to end: fresh clones, offline saves, two clones, hooks, and the commands that
+# own lifecycle and approval. The migration helper is checked until it is deleted after rollout.
+assert "plan store: init, save, approve, synchronization, and conflicts" \
+  node "${repo_root}/scripts/test/plan-store-check.mjs"
 
-assert "plan-suite: active plans read from their assigned worktree" \
-  node "${repo_root}/scripts/test/plan-suite-authority-scan-check.mjs"
-
-assert "plan-suite: authority edge cases (clones, unreadable, duplicates, refs)" \
-  node "${repo_root}/scripts/test/plan-suite-authority-edge-check.mjs"
-
-assert "plan-close: integration and archive commands give their documented verdicts" \
-  node "${repo_root}/scripts/test/plan-close-integration-check.mjs"
+assert "plan store: one-time migration from the old layout" \
+  node "${repo_root}/scripts/test/migrate-plans-once-check.mjs"
 
 # The mode/reference matrices technical-writing and plan-write declare in their own SKILL.md prose.
 # A required reference dropped from an artifact-producing mode is invisible at runtime — the work

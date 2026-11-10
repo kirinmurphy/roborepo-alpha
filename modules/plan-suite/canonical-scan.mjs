@@ -1,13 +1,12 @@
 // The Plans snapshot, built from the repositories RoboRepo knows about rather than from folders
-// Plans owns. Every visible repository with a readable checkout is scanned across all
-// of its checkouts; copies of one plan are merged by plan `id`, and the one authoritative copy is
-// returned (plan-authority.mjs).
+// Plans owns. Each visible repository is read from its one plans worktree (plan-store.mjs); a known
+// repository without one is reported as not set up, never as having zero plans.
 import { checkoutRootsFor, loadRegistry } from "../repositories/index.mjs";
 import { repositoryCheckouts } from "./checkouts.mjs";
 import { buildBacklogIndex } from "./backlog-registry.mjs";
-import { repositoryPlanRecords, scanCheckout } from "./plan-copies.mjs";
-import { publicPlan, publicRepository, withRelationshipFindings } from "./index.mjs";
+import { discoverPlansInRepository, publicPlan, publicRepository, repositoryRecord, withRelationshipFindings } from "./index.mjs";
 import { LIFECYCLE_MODEL, lifecycleProjection } from "./lifecycle-manifest.mjs";
+import { locateStore, pendingCommitCount } from "./plan-store.mjs";
 
 export function buildPlanSnapshot({ stateRoot, packageState = null, registry = null } = {}) {
   const known = registry || loadRegistry({ stateRoot });
@@ -26,16 +25,23 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
       repositoryScans.push({ repositoryId: record.id, state: "unavailable", planCount: 0, checkoutCount: 0 });
       continue;
     }
+    // Linked worktree names straight from Git's administrative files, running or not, so Home can
+    // tell a plan's idle worktree from one that no longer exists.
+    const worktrees = checkouts.filter((checkout) => checkout.isWorktree).map((checkout) => checkout.label);
+    const store = locateStore(checkouts[0].path);
+    const identity = { repositoryId: record.id, name: record.displayName, urlKey: record.urlKey ?? null };
+    if (!store || store.missing) {
+      repositoryScans.push({ repositoryId: record.id, name: record.displayName, urlKey: identity.urlKey, state: "not-set-up", planCount: 0, checkoutCount: checkouts.length, worktrees });
+      continue;
+    }
     try {
-      const scan = scanRepository(checkouts, { repositoryId: record.id, name: record.displayName, urlKey: record.urlKey ?? null });
-      repositories.push(scan.repository);
-      plans.push(...scan.plans);
-      backlog.push({ repositoryId: record.id, name: record.displayName, urlKey: record.urlKey ?? null, ...scan.backlog });
-      errors.push(...scan.errors.map((error) => ({ repository: record.displayName, repositoryId: record.id, ...error })));
-      // Linked worktree names straight from Git's administrative files, running or not, so Home can
-      // tell a plan's idle worktree from one that no longer exists.
-      const worktrees = checkouts.filter((checkout) => checkout.isWorktree).map((checkout) => checkout.label);
-      repositoryScans.push({ repositoryId: record.id, state: "scanned", planCount: scan.plans.length, checkoutCount: checkouts.length, worktrees });
+      const repository = { ...repositoryRecord(store.root, identity), codeRoot: store.primary };
+      const repositoryPlans = discoverPlansInRepository(repository);
+      repositories.push(repository);
+      plans.push(...repositoryPlans);
+      backlog.push({ repositoryId: record.id, name: record.displayName, urlKey: identity.urlKey, ...buildBacklogIndex(store.root, repositoryPlans) });
+      errors.push(...scanErrors(repositoryPlans, repository, record));
+      repositoryScans.push({ repositoryId: record.id, state: "scanned", planCount: repositoryPlans.length, checkoutCount: checkouts.length, worktrees, pendingCommits: pendingCommitCount(store) ?? 0 });
     } catch (err) {
       errors.push({ repository: record.displayName, repositoryId: record.id, error: pathFreeError(err) });
       repositoryScans.push({ repositoryId: record.id, state: "error", planCount: 0, checkoutCount: checkouts.length });
@@ -64,12 +70,10 @@ export function plannableRepositories(registry) {
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
-function scanRepository(checkouts, canonical) {
-  const scanned = checkouts.map((checkout) => scanCheckout(checkout, canonical));
-  // Repository-relative paths only: /api/plans never carries an absolute path.
-  const errors = scanned.flatMap(({ checkout, scoped }) => scoped.errors.map((error) => ({ checkout: checkout.label, path: error.path, error: "could not be read" })));
-  const plans = repositoryPlanRecords(scanned);
-  return { repository: scanned[0].scoped, plans, errors, backlog: buildBacklogIndex(scanned[0].checkout.path, plans) };
+// Store-relative paths only: /api/plans never carries an absolute path.
+function scanErrors(plans, repository, record) {
+  const walk = plans[0]?.repository?.errors ?? repository.errors ?? [];
+  return walk.map((error) => ({ repository: record.displayName, repositoryId: record.id, path: error.path, error: "could not be read" }));
 }
 
 // Filesystem and Git error messages embed absolute paths, so only the error code crosses over.

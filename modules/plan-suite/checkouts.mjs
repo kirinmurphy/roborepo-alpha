@@ -1,5 +1,5 @@
-// Every checkout of one known repository that Plans should read: the main checkout
-// plus each linked worktree and any other registered clone. Read from Git's administrative files,
+// Every code checkout of one known repository: the main checkout plus each linked worktree and any
+// other registered clone. Plans comes from the store; Home joins plans to these worktrees by name. Read from Git's administrative files,
 // not from `git worktree list`, so enumerating checkouts costs no subprocess per repository.
 import fs from "node:fs";
 import path from "node:path";
@@ -21,6 +21,7 @@ export function repositoryCheckouts(registry, repositoryId, { fsApi = fs } = {})
   for (const root of known) {
     if (checkouts.has(root)) continue;
     const git = resolveGitDir(root, { fsApi });
+    if (isReservedPlansCheckout(git, fsApi)) continue;
     checkouts.set(root, { path: root, isMain: false, isWorktree: Boolean(git?.isWorktree), label: git?.isWorktree ? git.worktreeName : path.basename(root), branch: null });
   }
   const [first, ...rest] = [...checkouts.values()];
@@ -29,15 +30,20 @@ export function repositoryCheckouts(registry, repositoryId, { fsApi = fs } = {})
     : [first, ...rest].sort((a, b) => a.label.localeCompare(b.label));
 }
 
-// The main checkout at `main` followed by each of its linked worktrees that still exists, in the
-// shape repositoryCheckouts returns. Needs no registry, so a CLI run inside one repository can use it.
-export function mainAndLinkedCheckouts(main, { fsApi = fs } = {}) {
+function mainAndLinkedCheckouts(main, { fsApi = fs } = {}) {
   const checkouts = [{ path: main, isMain: true, isWorktree: false, label: null, branch: null }];
   const git = resolveGitDir(main, { fsApi });
   if (git) for (const worktree of linkedWorktrees(git.commonDir, { fsApi })) {
     if (!worktree.prunable) checkouts.push({ path: worktree.path, isMain: false, isWorktree: true, label: worktree.name, branch: worktree.branch });
   }
   return checkouts;
+}
+
+// A session once run inside the reserved plans worktree may have registered it as a checkout.
+function isReservedPlansCheckout(git, fsApi) {
+  if (!git?.isWorktree) return false;
+  const name = path.basename(git.gitDir);
+  return linkedWorktrees(git.commonDir, { fsApi, includeReserved: true }).some((worktree) => worktree.name === name && worktree.reserved);
 }
 
 function realpathOrNull(value, fsApi) {

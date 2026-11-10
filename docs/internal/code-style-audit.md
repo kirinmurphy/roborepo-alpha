@@ -77,7 +77,7 @@ Full reviews added in this pass: the remaining 13 plan modules; `scripts/cli/pla
 
 | Change | Files | Verification |
 | --- | --- | --- |
-| Put entry points and route tables above private helpers; group module constants. | `modules/plan-suite/lifecycle-policy.mjs`, `plan-authority.mjs`; `scripts/cli/plans.mjs`, `portal-routes-plans.mjs`, `portal-routes-developer-runtime.mjs`, `portal-routes-repositories.mjs` | Function bodies and route definitions unchanged. |
+| Put entry points and route tables above private helpers; group module constants. | `modules/plan-suite/lifecycle-policy.mjs`; `scripts/cli/plans.mjs`, `portal-routes-plans.mjs`, `portal-routes-developer-runtime.mjs`, `portal-routes-repositories.mjs` | Function bodies and route definitions unchanged. |
 | Reuse the exported plan-config path constant. | `modules/plan-suite/naming.mjs` | Resolves the same file. |
 | Put template and custom-element helpers after the primary API; remove an unused import. | `portal/plans/templates.js`, `elements/plan-card.js`, `elements/plan-status.js` | Markup and callbacks unchanged. |
 | Reuse the drawer's blocker-link renderer in the popover. | `portal/plans/blockers-popover.js` | Resolved links close the popover first; unresolved entries stay plain text. |

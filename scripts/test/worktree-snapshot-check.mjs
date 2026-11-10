@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { addPlansStore } from "./lib/plan-store-fixture.mjs";
 import assert from "node:assert/strict";
 import { createWorktreeSnapshot } from "./helpers/worktree-snapshot-fixture.mjs";
 import { isolateGitConfig } from "./lib/git-config.mjs";
@@ -170,31 +171,31 @@ try {
   git(work, "update-index", "--assume-unchanged", "code");
   await assert.rejects(() => inventoryWorktree(work), /index flag/);
   git(work, "update-index", "--no-assume-unchanged", "code");
-  for (const shape of ["redundant", "directory-only", "deletion", "rename", "binary", "mode", "plan-move", "conflict", "concurrent-file", "concurrent-index", "concurrent-tip", "concurrent-config", "concurrent-base"]) {
+  for (const shape of ["redundant", "directory-only", "deletion", "rename", "binary", "mode", "file-move", "conflict", "concurrent-file", "concurrent-index", "concurrent-tip", "concurrent-config", "concurrent-base"]) {
     const repo = path.join(root, shape); fs.mkdirSync(repo);
     git(repo, "init", "-qb", "main");
     write(repo, "seed", "seed\n");
-    write(repo, "docs/plans/plans-config.json", JSON.stringify({ worktreeRoot: root }));
     git(repo, "add", "."); git(repo, "commit", "-qm", "seed");
+    addPlansStore(repo, { "plans-config.json": JSON.stringify({ worktreeRoot: root }) });
     const checkout = path.join(root, `${shape}-work`); git(repo, "worktree", "add", "-qb", "feature", checkout);
     write(checkout, "code", "feature\n");
-    if (shape === "plan-move") write(checkout, "docs/plans/review/story.md", "---\nid: abc12345\n---\n\n# Story\n");
+    if (shape === "file-move") write(checkout, "notes/review/story.md", "---\nid: abc12345\n---\n\n# Story\n");
     git(checkout, "add", "."); git(checkout, "commit", "-qm", "feature");
     git(repo, "merge", "--squash", "feature"); git(repo, "commit", "-qm", "squash");
     if (shape === "deletion") { fs.unlinkSync(path.join(repo, "code")); git(repo, "add", "code"); }
     else if (shape === "rename") git(repo, "mv", "code", "renamed");
     else if (shape === "mode") { fs.chmodSync(path.join(repo, "code"), 0o755); git(repo, "add", "code"); }
-    else if (shape === "plan-move") {
-      fs.mkdirSync(path.join(repo, "docs/plans/completed"));
-      git(repo, "mv", "docs/plans/review/story.md", "docs/plans/completed/story.md");
-      write(repo, "docs/plans/completed/story.md", "---\nid: abc12345\n---\n\n# Story\n\nEvidence on base\n");
+    else if (shape === "file-move") {
+      fs.mkdirSync(path.join(repo, "notes/completed"));
+      git(repo, "mv", "notes/review/story.md", "notes/completed/story.md");
+      write(repo, "notes/completed/story.md", "---\nid: abc12345\n---\n\n# Story\n\nEvidence on base\n");
       git(repo, "add", ".");
     } else { write(repo, "code", shape === "binary" ? Buffer.from([0, 255, 1]) : "redundant\n"); git(repo, "add", "code"); }
     git(repo, "commit", "-qm", "later base change");
     if (shape === "deletion") { fs.unlinkSync(path.join(checkout, "code")); git(checkout, "add", "code"); }
     else if (shape === "rename") git(checkout, "mv", "code", "renamed");
     else if (shape === "mode") { fs.chmodSync(path.join(checkout, "code"), 0o755); git(checkout, "add", "code"); }
-    else if (shape === "plan-move") write(checkout, "docs/plans/review/story.md", fs.readFileSync(path.join(repo, "docs/plans/completed/story.md")));
+    else if (shape === "file-move") write(checkout, "notes/review/story.md", fs.readFileSync(path.join(repo, "notes/completed/story.md")));
     else if (shape === "directory-only") {
       fs.mkdirSync(path.join(checkout, "generated/packages/__char_test_pkg__/claude"), { recursive: true });
       assert.equal(git(checkout, "status", "--porcelain"), "", "directory-only local content is invisible to Git status");

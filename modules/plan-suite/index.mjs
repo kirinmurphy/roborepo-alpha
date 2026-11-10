@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { resolveProjectIdentity, canonicalRepositoryId, providerUrlForRepositoryId } from "../repositories/index.mjs";
+import { resolveGitDir, resolveProjectIdentity, canonicalRepositoryId, providerUrlForRepositoryId } from "../repositories/index.mjs";
+import { linkedWorktrees } from "../repositories/worktree-inventory.mjs";
 import { finding, messagesOf } from "./findings.mjs";
 import { validateForLifecycle } from "./lifecycle-policy.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
@@ -11,6 +12,7 @@ import { classifyPlanId, isExternalBlocker } from "./plan-id.mjs";
 import { validatePlanNaming, readProjectNamespaces, resolvePlanNamespace } from "./naming.mjs";
 import { findDependencyCycles } from "./backlog-order.mjs";
 import { renderMarkdown } from "../../scripts/cli/markdown-render.mjs";
+import { PLANS_DIR, requireStore } from "./plan-store.mjs";
 
 // The lifecycle folders a plan can live in, from manifests/platform/plan-lifecycle.json.
 export const LIFECYCLES = LIFECYCLE_MODEL.folders;
@@ -40,22 +42,16 @@ export function withRelationshipFindings(plans) {
 }
 
 // Every plan in the one repository containing `cwd`, validated exactly as the portal validates it.
-// Unlike discovery, a linked worktree is a valid root here: a suite skill running inside the
-// worktree that implements a plan validates that worktree's copy of the plans.
+// Any checkout of the repository resolves to the same store, so this reads alike from all of them.
 export function buildRepositoryPlanSnapshot({ cwd = process.cwd() } = {}) {
-  const root = findPlansRoot(path.resolve(cwd));
-  if (!root) {
-    throw domainError("PLAN_NOT_FOUND", "No repository with docs/plans contains this directory.", {
-      resolution: "Run the command inside a repository that has a docs/plans folder.",
-    });
-  }
-  const repository = repositoryRecord(fs.realpathSync(root));
+  const store = requireStore(path.resolve(cwd));
+  const repository = { ...repositoryRecord(fs.realpathSync(store.root), { name: path.basename(store.primary) }), codeRoot: store.primary };
   const plans = withRelationshipFindings(discoverPlansInRepository(repository));
   return { repository: publicRepository(repository), root: repository.root, plans };
 }
 
-// Resolves `selector` — a plan id, or a plan path relative to the repository root, the current
-// directory, or absolute — to one record of a repository snapshot.
+// Resolves `selector` — a plan id, or a path relative to the store root (`plans/<lifecycle>/x.md`), a path relative
+// to the current directory, or an absolute one — to one record of a repository snapshot.
 export function selectRepositoryPlan(snapshot, selector, { cwd = process.cwd() } = {}) {
   const byId = snapshot.plans.filter((record) => record.plan.id && record.plan.id === selector);
   if (byId.length === 1) return byId[0];
@@ -64,24 +60,17 @@ export function selectRepositoryPlan(snapshot, selector, { cwd = process.cwd() }
   if (byPath) return byPath;
   if (byId.length > 1) {
     throw domainError("INVALID_CHANGE", `More than one plan has id ${selector}.`, {
-      resolution: "Pass the plan's repository-relative path instead.",
+      resolution: "Pass the plan's store-relative path instead, such as plans/ready/x.md.",
       details: byId.map((record) => record.plan.relativePath),
     });
   }
   throw domainError("PLAN_NOT_FOUND", `No plan matches ${selector}.`, {
-    resolution: "Pass a plan id or a docs/plans/... path in this repository.",
+    resolution: "Pass a plan id or a plans/... path in this repo.",
   });
 }
 
-// `roborepo plans validate`, which resolves each plan's authoritative copy the way the scan does.
+// `roborepo plans validate`.
 export { validateRepositoryPlans } from "./repository-validation.mjs";
-
-function findPlansRoot(start) {
-  for (let current = start; ; current = path.dirname(current)) {
-    if (fs.existsSync(path.join(current, "docs", "plans")) || fs.existsSync(path.join(current, ".git"))) return current;
-    if (path.dirname(current) === current) return null;
-  }
-}
 
 function samePath(a, b) {
   try {
@@ -116,12 +105,17 @@ export function domainError(code, message, { resolution, details, findings, repa
 const DOMAIN_ERROR_STATUS = {
   INVALID_CHANGE: 400,
   STALE_ORDER: 409,
-  ORDER_WRITE_FAILED: 500,
   DESTINATION_EXISTS: 409,
   LIFECYCLE_REQUIREMENTS: 422,
   PLAN_NOT_FOUND: 404,
   MOVE_FAILED: 500,
-  MOVE_NOT_COMMITTED: 500,
+  PLAN_STORE_NOT_SET_UP: 409,
+  PLAN_STORE_INIT_FAILED: 500,
+  PLAN_STORE_CONFLICT: 409,
+  PLAN_STORE_DIVERGED: 409,
+  PLAN_STORE_DIRTY: 409,
+  PLAN_STORE_BUSY: 409,
+  PLAN_STORE_FAILED: 500,
 };
 
 export function readPlanDocument(snapshot, key) {
@@ -176,10 +170,8 @@ export function buildPrompt(command, selectedPlans, { mode = "repository-aware" 
   ].join("\n");
 }
 
-// `canonical` carries the registry's identity when the scan comes from a known repository. Every
-// checkout of that repository then shares one `id`, so plans from a worktree group, filter, and
-// resolve relationships with the main checkout's plans; `root` stays the checkout the record was
-// read from, which is where its edits are written.
+// `root` is the plans worktree. `canonical` carries the registry's identity when the scan comes from
+// a known repository, and at least its display name otherwise.
 export function repositoryRecord(root, canonical = null) {
   const git = gitInfo(root);
   const repositoryId = canonical?.repositoryId ?? canonicalRepositoryId(resolveProjectIdentity(root, "plan-suite"));
@@ -206,7 +198,7 @@ export function discoverPlansInRepository(repository) {
 // walk's `truncated`/`errors`. Split from discoverPlansInRepository so a scan can decide which files
 // deserve a full record — building one costs several Git subprocesses.
 export function planFilesInRepository(repository) {
-  const plansDir = path.join(repository.root, "docs", "plans");
+  const plansDir = path.join(repository.root, PLANS_DIR);
   const files = [];
   const errors = [];
   let truncated = false;
@@ -241,11 +233,9 @@ function walkPlans(dir, repoRoot, files, errors) {
   }
 }
 
-// `lifecycle` overrides the stage derived from the file's own path. An assigned worktree's copy is
-// read under the primary copy's stage, which decides where the plan is in its lifecycle.
-export function readPlanRecord(repository, absolutePath, { lifecycle = null } = {}) {
+export function readPlanRecord(repository, absolutePath) {
   const relativePath = relative(repository.root, absolutePath);
-  const stage = lifecycle || lifecycleFromPath(relativePath);
+  const stage = lifecycleFromPath(relativePath);
   const stat = fs.statSync(absolutePath);
   // Naming findings depend on the repository's declared namespaces, not only on the plan file, so
   // a cached record built under a different namespace set is stale even when the plan itself is
@@ -273,7 +263,7 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
   const tooLarge = stat.size > MAX_DOC_BYTES;
   const markdown = tooLarge ? "" : fs.readFileSync(absolutePath, "utf8");
   const parsed = tooLarge ? emptyParsed("DOCUMENT_TOO_LARGE") : parsePlanMarkdown(markdown, { repository, relativePath });
-  const git = gitFileInfo(repository.root, relativePath, parsed.frontmatter.reviewed_commit);
+  const git = gitFileInfo(repository, relativePath, parsed.frontmatter);
   const validation = validateParsedPlan(parsed, {
     lifecycle,
     filename: path.basename(relativePath),
@@ -538,7 +528,7 @@ function withoutBlockEntry(lines, index, key, entry) {
 // Pure path builder for a lifecycle move destination. Filename is preserved unchanged — lifecycle
 // moves never rename the file.
 function resolveDestinationPath(repositoryRoot, lifecycle, filename) {
-  return path.join(repositoryRoot, "docs", "plans", lifecycle, filename);
+  return path.join(repositoryRoot, PLANS_DIR, lifecycle, filename);
 }
 
 // Where a lifecycle move puts a plan, refusing a destination outside the repository or one already
@@ -664,13 +654,18 @@ function gitInfo(root) {
   return { available: head.ok, head: head.ok ? head.stdout : null, branch: branch.ok ? branch.stdout : null };
 }
 
-function gitFileInfo(root, relativePath, reviewedCommit) {
+function gitFileInfo(repository, relativePath, frontmatter) {
+  const { root } = repository;
   const last = git(root, ["log", "-1", "--format=%cI", "--", relativePath]);
   const status = git(root, ["status", "--porcelain", "--", relativePath]);
+  const reviewedCommit = frontmatter.reviewed_commit;
   let reviewState = "never-reviewed";
   if (reviewedCommit) {
-    const head = git(root, ["rev-parse", "--verify", "HEAD"]);
-    const ancestor = head.ok ? git(root, ["merge-base", "--is-ancestor", reviewedCommit, "HEAD"]) : { ok: false };
+    // A reviewed commit is a code commit, so it is judged against the plan's implementation branch
+    // and never against the plans branch.
+    const code = implementationCheckout(root, frontmatter.worktree);
+    const head = git(code, ["rev-parse", "--verify", "HEAD"]);
+    const ancestor = head.ok ? git(code, ["merge-base", "--is-ancestor", reviewedCommit, "HEAD"]) : { ok: false };
     if (!head.ok || !ancestor.ok) reviewState = "unknown";
     else reviewState = reviewedCommit === head.stdout ? "current" : "possibly-stale";
   }
@@ -679,6 +674,13 @@ function gitFileInfo(root, relativePath, reviewedCommit) {
     status: status.ok && status.stdout ? status.stdout : null,
     reviewState,
   };
+}
+
+function implementationCheckout(storeRoot, worktree) {
+  const commonDir = resolveGitDir(storeRoot)?.commonDir;
+  if (!commonDir) return storeRoot;
+  const name = typeof worktree === "string" ? worktree.trim() : "";
+  return linkedWorktrees(commonDir).find((item) => item.name === name && !item.prunable)?.path ?? path.dirname(commonDir);
 }
 
 function git(cwd, args) {
@@ -735,8 +737,8 @@ function portablePlanSummary(item) {
 
 export function lifecycleFromPath(relativePath) {
   const parts = relativePath.split(/[\\/]/);
-  if (parts[0] !== "docs" || parts[1] !== "plans") return "unknown";
-  const lifecycle = parts[2];
+  if (parts[0] !== PLANS_DIR) return "unknown";
+  const lifecycle = parts[1];
   return LIFECYCLES.has(lifecycle) ? lifecycle : "unclassified";
 }
 

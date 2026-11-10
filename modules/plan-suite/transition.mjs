@@ -1,12 +1,13 @@
-// The one lifecycle transition operation: every committed move between lifecycle folders runs here,
-// in the primary checkout, so the portal and every checkout agree on which stage a plan is in.
+// The one lifecycle transition operation: every move between lifecycle folders runs here, from any
+// checkout of the repository, and lands as one commit on the plans branch.
 //
 // It resolves the plan, checks the move against the lifecycle manifest, applies that transition's
-// rules (transition-rules.mjs), validates the destination, renames the plan with `git mv`, commits
-// only the plan's old and new paths, and approves the result only after fresh post-commit checks
+// rules (transition-rules.mjs), validates the destination, and hands the store the plan's old and new
+// paths to commit and push. It approves the result only after fresh post-commit checks
 // (transition-checks.mjs). Archiving alone also clears the plan from the prerequisites of unfinished
-// plans, in the same commit, so nothing is left waiting on work that will never happen. Unrelated staged or unstaged work in the primary checkout is never
-// touched. A refused move mutates nothing, a repeated move commits nothing, and nothing is pushed.
+// plans, in the same commit, so nothing is left waiting on work that will never happen. `--base` names
+// the code branch the gates compare against; no code checkout changes. A refused move changes
+// nothing and a repeated move commits nothing.
 import fs from "node:fs";
 import path from "node:path";
 import {
@@ -18,9 +19,10 @@ import {
   selectRepositoryPlan,
 } from "./index.mjs";
 import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
-import { namingGateFindings, pathFreeFileError } from "./naming.mjs";
+import { namingGateFindings } from "./naming.mjs";
 import { buildRepairPrompt } from "./repair-prompt.mjs";
-import { currentBranch, dirtyPaths, findLinkedWorktree, git, gitOrThrow, linksToPath, primaryCheckout, topLevel } from "./plan-git.mjs";
+import { findLinkedWorktree, linksToPath, primaryCheckout } from "./plan-git.mjs";
+import { mutateStore, requireStore } from "./plan-store.mjs";
 import { TRANSITION_RULES } from "./transition-rules.mjs";
 import { validateTransition } from "./transition-checks.mjs";
 
@@ -33,10 +35,6 @@ const GATE_KINDS = { archived: new Set(["lifecycle"]) };
 // Moving a plan into implementation is the last cheap moment to fix its filename: inbound links and
 // worktree records accumulate from here on. Later transitions never revisit it.
 const NAMING_GATED_TRANSITIONS = new Set(["promote", "start"]);
-const UNCOMMITTED_MOVE_RESOLUTION = "Run `git status` in the repo. Fix what stopped the commit and commit the staged move, or restore those files to undo it.";
-// A retry can't tell a failed commit from a failed undo, whose staged rename lacks some of the move's
-// edits, and the plan may carry uncommitted edits of its own. So it recommends neither way out.
-const RETRIED_MOVE_RESOLUTION = "Run `git status` in the repo. Commit the staged move only if every edit it should carry is staged. To undo it instead, restore those files, which discards any uncommitted edits to them.";
 
 export async function transitionPlan(options) {
   const { cwd = process.cwd(), selector, transition: transitionId, base = "main" } = options;
@@ -47,173 +45,17 @@ export async function transitionPlan(options) {
   const missing = rules.requires?.(options);
   if (missing) throw domainError("INVALID_CHANGE", missing);
 
+  const store = requireStore(cwd);
   const primary = primaryCheckout(cwd);
-  assertRunningInPrimary(cwd, primary, transition.id);
-  assertOnBaseBranch(primary, base);
   const target = transition.id === "start" ? findLinkedWorktree(primary, options.worktree) : null;
-  const snapshot = buildRepositoryPlanSnapshot({ cwd: primary });
-  const record = selectRepositoryPlan(snapshot, selector, { cwd });
-  const from = record.plan.lifecycle;
-  const fromPath = record.plan.relativePath;
-  const atDestination = from === transition.to;
-  const base0 = git(primary, ["rev-parse", base]).stdout;
-
-  if (!atDestination && !transition.from.includes(from)) refuseSource(record, transition, from);
-  if (!git(primary, ["ls-files", "--error-unmatch", "--", fromPath]).ok) {
-    throw domainError("INVALID_CHANGE", `${fromPath} is not committed, so it cannot be moved.`, {
-      resolution: "Commit the plan on the base branch first.",
-    });
-  }
-  // An earlier run's commit or undo failed after its rename, so the plan only reads as being here. Recording it
-  // as done would be false, and committing here would land only half of that move.
-  if (atDestination && !git(primary, ["cat-file", "-e", `HEAD:${fromPath}`]).ok) {
-    throw domainError("MOVE_NOT_COMMITTED", `The plan's move to ${fromPath} was not committed.`, { resolution: RETRIED_MOVE_RESOLUTION });
-  }
-  if (atDestination && !rules.carriesEdits && !rules.reassigns) {
-    return result({ primary, cwd, base, transition, record, fromPath, toPath: fromPath, commit: null, options, target, rules, evidence: {} });
-  }
-
-  const toPath = atDestination ? fromPath : path.relative(primary,
-    lifecycleMoveDestination(fs.realpathSync(primary), fs.realpathSync(record.absolutePath), transition.to).destination).split(path.sep).join("/");
-  const paths = atDestination ? [fromPath] : [fromPath, toPath];
-  const dirty = dirtyPaths(primary, paths);
-  if (dirty.length && !rules.carriesEdits) {
-    throw domainError("INVALID_CHANGE", "The plan has uncommitted changes in the primary checkout.", {
-      resolution: "Ask the user how to handle them; this transition commits only the move, never someone else's edit to the plan.",
-      details: dirty,
-    });
-  }
-
-  const references = rules.clearsReferences ? planReferences(primary, snapshot, record) : { cleared: [], left: [] };
-
-  const current = fs.readFileSync(path.join(primary, fromPath), "utf8");
-  // A repeated move of a plan already at its destination skips the gates that judged the move; it
-  // only commits the command's own pending edits, if any.
-  const prepared = atDestination && !rules.reassigns
-    ? { content: current, evidence: {} }
-    : await (rules.prepare ? rules.prepare({ primary, record, content: current, options, base, today: today() }) : { content: current });
-  const content = prepared.content;
-  assertDestinationReady(record, transition.to, content, NAMING_GATED_TRANSITIONS.has(transition.id)
-    ? namingGateFindings({ repositoryRoot: primary, filename: path.basename(fromPath), lifecycle: from })
-    : []);
-
-  const committed = git(primary, ["show", `HEAD:${fromPath}`]);
-  if (atDestination && committed.ok && committed.raw === content && dirty.length === 0) {
-    return result({ primary, cwd, base, transition, record, fromPath, toPath, commit: null, options, target, rules, evidence: prepared.evidence || {} });
-  }
-
-  assertPlanWritable(primary, fromPath);
-  const clearedDependents = prepareClearedReferences(primary, references.cleared, record.plan.id);
-
-  if (!atDestination) {
-    // A repository that predates a lifecycle folder (ready/ and review/, say) gets it on first use.
-    fs.mkdirSync(path.join(primary, path.dirname(toPath)), { recursive: true });
-    gitOrThrow(primary, ["mv", "--", fromPath, toPath]);
-  }
-  try {
-    fs.writeFileSync(path.join(primary, toPath), content);
-    for (const dependent of clearedDependents) fs.writeFileSync(dependent.file, dependent.markdown);
-    gitOrThrow(primary, ["add", "--", toPath, ...references.cleared]);
-  } catch (err) {
-    if (atDestination) throw err;
-    throw undoUnstagedMove({ primary, fromPath, toPath, original: current, clearedDependents, cause: err });
-  }
-  try {
-    gitOrThrow(primary, ["commit", "--quiet", "--only", "-m", rules.message(path.basename(fromPath, ".md"), options), "--", ...paths, ...references.cleared]);
-  } catch (err) {
-    if (atDestination) throw err;
-    // Past the rename the plan already sits at its new path, so saying the move failed would be false.
-    // It isn't undone here: every edit is staged, so committing finishes the move whole.
-    throw domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but the move was not committed.`, {
-      resolution: UNCOMMITTED_MOVE_RESOLUTION,
-      details: err.details ?? [pathFreeFileError(err)],
-    });
-  }
-  const commit = git(primary, ["rev-parse", "HEAD"]).stdout;
-  const fastForward = target ? fastForwardTarget(target.path, base, base0) : undefined;
-  return result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, dependentPaths: references.cleared, evidence: { ...(prepared.evidence || {}), ...(fastForward ? { fastForward } : {}), ...(rules.clearsReferences ? { references } : {}) } });
-}
-
-// The unfinished plans that name this one as a prerequisite. A plan bound to a worktree is left alone:
-// its worktree copy is the authoritative one, and editing the base copy behind it would read as a
-// conflicting copy later. Completed and archived plans keep their history. A dependent with
-// uncommitted edits refuses the move, since committing the file would commit someone else's work too.
-function planReferences(primary, snapshot, record) {
-  const { id } = record.plan;
-  const dependents = id
-    ? snapshot.plans.filter((other) => other.key !== record.key
-      && !["completed", "archived"].includes(other.plan.lifecycle)
-      && [...(other.plan.dependencies || []), ...(other.plan.blockers || [])].includes(id))
-    : [];
-  const cleared = dependents.filter((other) => !other.plan.worktree).map((other) => other.plan.relativePath);
-  const left = dependents.filter((other) => other.plan.worktree).map((other) => other.plan.relativePath);
-  const dirty = cleared.length ? dirtyPaths(primary, cleared) : [];
-  if (dirty.length) {
-    throw domainError("INVALID_CHANGE", "A plan that depends on this one has uncommitted changes, so its dependency cannot be cleared.", {
-      resolution: "Commit or discard those changes, then archive again.",
-      details: dirty,
-    });
-  }
-  return { cleared, left };
-}
-
-// The edits didn't reach the index, so committing the staged rename would land a plan without them and
-// leave its dependents waiting on it. The pre-move text is in hand, so putting it back loses nothing,
-// including uncommitted plan edits. Returns the error to raise.
-function undoUnstagedMove({ primary, fromPath, toPath, original, clearedDependents, cause }) {
-  const details = cause.details ?? [pathFreeFileError(cause)];
-  try {
-    // Only what changed is rewritten: the file that refused the first write may refuse this one too.
-    const restore = (file, text) => { if (fs.readFileSync(file, "utf8") !== text) fs.writeFileSync(file, text); };
-    restore(path.join(primary, toPath), original);
-    for (const dependent of clearedDependents) restore(dependent.file, dependent.original);
-    gitOrThrow(primary, ["mv", "--", toPath, fromPath]);
-  } catch {
-    return domainError("MOVE_NOT_COMMITTED", `The plan moved to ${toPath}, but its edits were not saved.`, {
-      resolution: "Run `git status` in the repo and restore those files to undo the move. Committing the staged move would leave its edits out.",
-      details,
-    });
-  }
-  return domainError("MOVE_FAILED", "The plan's files could not be updated, so it was not moved.", {
-    resolution: "Run `git status` in the repo, resolve what it shows, then try again.",
-    details,
+  const saved = await mutateStore({
+    store,
+    operation: ({ root }) => planMove({ root, primary, cwd, base, options, selector, transition, rules }),
   });
-}
 
-// The move rewrites the plan after renaming it, so a file it can't write refuses here, with nothing changed.
-function assertPlanWritable(primary, relativePath) {
-  try {
-    fs.accessSync(path.join(primary, relativePath), fs.constants.W_OK);
-  } catch (err) {
-    throw domainError("INVALID_CHANGE", `The plan file could not be updated (${pathFreeFileError(err)}).`, {
-      resolution: "Check that the plan file is writable, then try again.",
-      details: [relativePath],
-    });
-  }
-}
-
-// Runs before the rename, so a dependent that can't be rewritten refuses the move with nothing changed.
-function prepareClearedReferences(primary, relativePaths, id) {
-  return relativePaths.map((relativePath) => {
-    const file = path.join(primary, relativePath);
-    try {
-      fs.accessSync(file, fs.constants.W_OK);
-      const content = fs.readFileSync(file, "utf8");
-      return { file, original: content, markdown: ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content) };
-    } catch (err) {
-      throw domainError("INVALID_CHANGE", `A plan that depends on this one could not be updated (${pathFreeFileError(err)}).`, {
-        resolution: "Check that the plan file is writable, then archive again.",
-        details: [relativePath],
-      });
-    }
-  });
-}
-
-function result({ primary, cwd, base, transition, record, fromPath, toPath, commit, options, target, rules, dependentPaths = [], evidence }) {
+  const { record, fromPath, toPath, dependentPaths, evidence, commit, synchronized, reason } = saved;
   const checks = validateTransition({
-    cwd,
-    primary,
-    base,
+    root: store.root,
     id: record.plan.id,
     fromPath,
     toPath,
@@ -230,10 +72,66 @@ function result({ primary, cwd, base, transition, record, fromPath, toPath, comm
     base,
     commit,
     alreadyRecorded: commit === null,
+    synchronized,
+    ...(reason ? { reason } : {}),
     ...evidence,
-    staleLinks: fromPath === toPath ? [] : linksToPath(primary, fromPath),
+    staleLinks: fromPath === toPath ? [] : linksToPath(store.root, fromPath),
     checks,
   };
+}
+
+// The store's operation: works out the files this move changes from the fresh tree, writing nothing,
+// so the store can re-run it if another machine pushes first.
+async function planMove({ root, primary, cwd, base, options, selector, transition, rules }) {
+  const snapshot = buildRepositoryPlanSnapshot({ cwd: root });
+  const record = selectRepositoryPlan(snapshot, selector, { cwd });
+  const from = record.plan.lifecycle;
+  const fromPath = record.plan.relativePath;
+  const atDestination = from === transition.to;
+  const unchanged = (evidence = {}, toPath = fromPath) => ({ files: {}, result: { record, fromPath, toPath, dependentPaths: [], evidence } });
+
+  if (!atDestination && !transition.from.includes(from)) refuseSource(record, transition, from);
+  if (atDestination && !rules.reassigns) return unchanged();
+
+  const toPath = atDestination ? fromPath : path.relative(root,
+    lifecycleMoveDestination(fs.realpathSync(root), fs.realpathSync(record.absolutePath), transition.to).destination).split(path.sep).join("/");
+  const current = fs.readFileSync(record.absolutePath, "utf8");
+  const prepared = rules.prepare
+    ? await rules.prepare({ primary, record, content: current, options, base, today: today() })
+    : { content: current };
+  const { content, evidence = {} } = prepared;
+  assertDestinationReady(record, transition.to, content, NAMING_GATED_TRANSITIONS.has(transition.id)
+    ? namingGateFindings({ repositoryRoot: root, filename: path.basename(fromPath), lifecycle: from })
+    : []);
+  if (atDestination && content === current) return unchanged(evidence);
+
+  const references = rules.clearsReferences ? dependentPlans(snapshot, record) : [];
+  const files = {
+    ...(atDestination ? {} : { [fromPath]: null }),
+    [toPath]: content,
+    ...Object.fromEntries(references.map((dependent) => [dependent.plan.relativePath, withoutPrerequisite(dependent, record.plan.id)])),
+  };
+  const dependentPaths = references.map((dependent) => dependent.plan.relativePath);
+  return {
+    files,
+    message: rules.message(path.basename(fromPath, ".md"), options),
+    result: { record, fromPath, toPath, dependentPaths, evidence: { ...evidence, ...(rules.clearsReferences ? { references: { cleared: dependentPaths } } : {}) } },
+  };
+}
+
+// The unfinished plans that name this one as a prerequisite. Completed and archived plans keep their
+// history.
+function dependentPlans(snapshot, record) {
+  const { id } = record.plan;
+  if (!id) return [];
+  return snapshot.plans.filter((other) => other.key !== record.key
+    && !["completed", "archived"].includes(other.plan.lifecycle)
+    && [...(other.plan.dependencies || []), ...(other.plan.blockers || [])].includes(id));
+}
+
+function withoutPrerequisite(dependent, id) {
+  const content = fs.readFileSync(dependent.absolutePath, "utf8");
+  return ["depends_on", "blocked_by"].reduce((markdown, key) => removeFrontmatterListEntry(markdown, key, id), content);
 }
 
 function assertDestinationReady(record, lifecycle, content, gateFindings) {
@@ -268,41 +166,6 @@ function refuseSource(record, transition, from) {
     resolution: available.length ? `From ${from}, the plan can take: ${available.join(", ")}.` : `A ${from} plan has no further transitions.`,
     details: [record.plan.relativePath],
   });
-}
-
-function assertRunningInPrimary(cwd, primary, transitionId) {
-  const here = topLevel(cwd);
-  if (here !== primary) {
-    throw domainError("INVALID_CHANGE", `Run plans ${transitionId} from the primary checkout.`, {
-      resolution: `cd ${primary} and run it again; lifecycle transitions commit to the base branch there.`,
-      details: [`current checkout: ${here}`],
-    });
-  }
-}
-
-// Only the branch matters: unrelated work in the primary checkout stays where it is, because the
-// commit names the plan's two paths and nothing else.
-function assertOnBaseBranch(primary, base) {
-  const branch = currentBranch(primary);
-  if (branch !== base) {
-    throw domainError("INVALID_CHANGE", `The primary checkout is on ${branch || "a detached HEAD"}, not ${base}.`, {
-      resolution: "Ask the user before switching branches; lifecycle transitions commit only on the base branch.",
-    });
-  }
-}
-
-// Brings a worktree branch that has no commits of its own up to the start commit, so the branch
-// carries the plan's start state. A branch with its own commits, or uncommitted edits, is left alone:
-// its copy of the plan predates the transition and the result says so.
-function fastForwardTarget(targetPath, base, baseBefore) {
-  const head = git(targetPath, ["rev-parse", "HEAD"]).stdout;
-  if (head === git(targetPath, ["rev-parse", base]).stdout) return { applied: false, reason: "already at the base branch" };
-  const ownCommits = Number(git(targetPath, ["rev-list", "--count", `${base}..HEAD`]).stdout || "0");
-  if (ownCommits > 0) return { applied: false, reason: "worktree branch has its own commits; its plan copy predates the transition" };
-  if (dirtyPaths(targetPath).length) return { applied: false, reason: "worktree has uncommitted changes; its plan copy predates the transition" };
-  const merged = git(targetPath, ["merge", "--ff-only", "--quiet", base]);
-  if (!merged.ok) return { applied: false, reason: `fast-forward failed: ${merged.stderr}` };
-  return { applied: true, from: head || baseBefore };
 }
 
 function today() {

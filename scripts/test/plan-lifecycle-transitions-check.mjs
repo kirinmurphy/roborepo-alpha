@@ -1,26 +1,24 @@
 #!/usr/bin/env node
 // The plan lifecycle end to end, through the real `roborepo plans` commands against real Git
-// repositories: promote, start, the completion preflight, submit, the authoritative copy while the
-// primary and worktree copies sit in different folders, approval freshness, reopen, close after a
-// normal, squash, or rebase merge, and archive with integrated, unintegrated, and conflicting copies.
-// Every move must commit only the plan's paths, refuse without mutating anything, and repeat safely.
+// repositories: promote, start, the completion preflight, submit, approval freshness, reopen, close
+// after a normal, squash, or rebase merge, and archive. Every move must land as one commit on the plans
+// branch touching only the plan's paths, leave code branches alone, refuse without changing anything,
+// and repeat safely.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
-import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { reviewFreshness } from "../../modules/plan-suite/review-freshness.mjs";
 import { buildPlanSnapshot } from "../../modules/plan-suite/index.mjs";
 import { addRepositorySource } from "../cli/repository-sources.mjs";
 import { createPlanFixture, planDoc } from "./lib/plan-git-fixture.mjs";
 
 const fx = createPlanFixture("roborepo-plan-transitions-");
-const { git, roborepo, json, repository, worktree, commit } = fx;
+const { git, tryGit, roborepo, json, repository, storePath, worktree, commit } = fx;
 const plans = (root, ...args) => roborepo(["plans", ...args, "--json"], { cwd: root });
 const head = (root) => git(root, "rev-parse", "HEAD");
 const read = (file) => fs.readFileSync(file, "utf8");
-const exists = (root, file) => fs.existsSync(path.join(root, file));
 
 function approved(result, label) {
   const body = json(result, label);
@@ -30,7 +28,7 @@ function approved(result, label) {
   return body;
 }
 
-function refused(root, result, label, pattern) {
+function refused(result, label, pattern) {
   assert.equal(result.status, 1, `${label} refuses\n${result.stdout}${result.stderr}`);
   const body = json(result, label);
   assert.equal(body.ok, false, label);
@@ -38,131 +36,131 @@ function refused(root, result, label, pattern) {
   return body.error;
 }
 
-// Checks every unchecked task in a plan copy and commits it, as an implementation agent would.
-function completeTasks(checkout, planPath, message = "Complete the plan's tasks") {
-  const file = path.join(checkout, planPath);
-  return commit(checkout, message, { [planPath]: read(file).replaceAll("- [ ]", "- [x]") });
-}
-
-function approvalSection(sha) {
-  return `\n## Review\n\n### Findings\n\n- [x] Missing retry test — added and verified\n\n### Verification\n\n- Unit tests passed\n\n### Approval\n\n- Decision: approved\n- Reviewed implementation commit: ${sha}\n- Confirmed by: human\n`;
-}
-
-function recordApproval(wt, planPath) {
-  const sha = head(wt.path);
-  const file = path.join(wt.path, planPath);
-  const withoutApproval = read(file).replace(/\n## Review[\s\S]*$/, "\n");
-  commit(wt.path, "Record review approval", { [planPath]: `${withoutApproval.trimEnd()}\n${approvalSection(sha)}` });
-  return sha;
-}
-
-// What /plan-close writes into the primary copy before it asks for the move, optionally with the
-// absorbing commit its landed check reported.
-function closeEdits(root, planPath, absorbingCommit = null) {
-  const file = path.join(root, planPath);
-  const landing = absorbingCommit ? `\n- Absorbing commit: ${absorbingCommit}\n` : "";
-  fs.writeFileSync(file, `${read(file).replace(/^next_action: .*$/m, "next_action:").trimEnd()}\n\n## Verification\n\nThe fixture's checks passed.\n${landing}`);
-}
-
-// Moves one backlog plan to Review with a recorded, fresh approval, as the suite commands would.
-function toReview(root, id, file, branch) {
-  approved(plans(root, "promote", id), `promote ${id}`);
-  const wt = worktree(root, branch);
-  approved(plans(root, "start", id, "--worktree", wt.name), `start ${id}`);
-  commit(wt.path, `Implement ${id}`, { [`src/${id}.txt`]: `${id}\n` });
-  completeTasks(wt.path, `docs/plans/active/${file}`);
-  approved(plans(root, "submit", id), `submit ${id}`);
-  const synced = json(roborepo(["plans", "sync-base", "--json"], { cwd: wt.path }), `sync ${id}`);
-  assert.equal(synced.state, "merged", `sync-base brings the review rename into ${branch}`);
-  recordApproval(wt, `docs/plans/review/${file}`);
-  return wt;
-}
+let drafts = 0;
 
 try {
   const root = repository("repo", {
-    "docs/plans/backlog/test-flow.md": planDoc({ id: "flow0001" }),
-    "docs/plans/backlog/test-weak.md": "---\nid: weak0001\nnext_action: Decide.\n---\n\n# Weak\n\n## Summary\n\nNot much yet.\n",
-    "docs/plans/backlog/test-shelved.md": planDoc({ id: "shelf001" }),
-    "docs/plans/backlog/test-squash.md": planDoc({ id: "squash01" }),
-    "docs/plans/backlog/test-rebase.md": planDoc({ id: "rebase01" }),
-    "docs/plans/backlog/test-late-approval.md": planDoc({ id: "late0001" }),
-    "docs/plans/backlog/test-gone.md": planDoc({ id: "gone0001" }),
-    "docs/plans/backlog/test-carry.md": planDoc({ id: "carry001" }),
-    "docs/plans/backlog/test-conflict.md": planDoc({ id: "confl001" }),
+    "plans/backlog/test-flow.md": planDoc({ id: "flow0001" }),
+    "plans/backlog/test-weak.md": "---\nid: weak0001\nnext_action: Decide.\n---\n\n# Weak\n\n## Summary\n\nNot much yet.\n",
+    "plans/backlog/test-shelved.md": planDoc({ id: "shelf001" }),
+    "plans/backlog/test-squash.md": planDoc({ id: "squash01" }),
+    "plans/backlog/test-rebase.md": planDoc({ id: "rebase01" }),
+    "plans/backlog/test-late-approval.md": planDoc({ id: "late0001" }),
+    "plans/backlog/test-gone.md": planDoc({ id: "gone0001" }),
+    "plans/backlog/test-ffwd.md": planDoc({ id: "ffwd0001" }),
+    "plans/backlog/test-carry.md": planDoc({ id: "carry001" }),
     "src/app.txt": "v1\n",
   });
+  const store = storePath(root);
+  const inStore = (file) => path.join(store, file);
+  const exists = (file) => fs.existsSync(inStore(file));
+  // The agent workflow: read the plan, edit a copy outside the checkouts, and save the copy.
+  const edit = (planPath, change, cwd = root) => {
+    const draft = path.join(fx.tmp, "drafts", String(drafts += 1), path.basename(planPath));
+    fs.mkdirSync(path.dirname(draft), { recursive: true });
+    fs.writeFileSync(draft, change(read(inStore(planPath))));
+    const result = plans(cwd, "save", draft);
+    assert.equal(result.status, 0, `save ${planPath}\n${result.stdout}${result.stderr}`);
+    return json(result, `save ${planPath}`);
+  };
+  const completeTasks = (planPath) => edit(planPath, (text) => text.replaceAll("- [ ]", "- [x]"));
+  // What /plan-close saves before it asks for the move, optionally with the absorbing commit its
+  // landed check reported.
+  const closeEdits = (planPath, absorbingCommit = null) => edit(planPath, (text) => {
+    const landing = absorbingCommit ? `\n- Absorbing commit: ${absorbingCommit}\n` : "";
+    return `${text.trimEnd()}\n\n## Verification\n\nThe fixture's checks passed.\n${landing}`;
+  });
+  const approve = (wt, id) => {
+    const result = plans(root, "approve", id, "--commit", head(wt.path), "--confirmed-by", "human");
+    assert.equal(result.status, 0, `approve ${id}\n${result.stdout}${result.stderr}`);
+  };
+  // Moves one backlog plan to Review, as the suite commands would.
+  const toReview = (id, file, branch) => {
+    approved(plans(root, "promote", id), `promote ${id}`);
+    const wt = worktree(root, branch);
+    approved(plans(root, "start", id, "--worktree", wt.name), `start ${id}`);
+    commit(wt.path, `Implement ${id}`, { [`src/${id}.txt`]: `${id}\n` });
+    completeTasks(`plans/active/${file}`);
+    approved(plans(root, "submit", id), `submit ${id}`);
+    return wt;
+  };
 
-  // ── Invalid moves refuse without mutating anything ───────────────────────────────────────────
+  // ── Invalid moves refuse without changing anything ───────────────────────────────────────────
   {
-    const before = head(root);
-    const reopen = refused(root, plans(root, "reopen", "flow0001"), "reopen a backlog plan", /from review to active; this one is backlog/);
+    const before = head(store);
+    const reopen = refused(plans(root, "reopen", "flow0001"), "reopen a backlog plan", /from review to active; this one is backlog/);
     assert.match(reopen.resolution, /promote \(\/plan-promote\)/, "the refusal names what the plan can do instead");
-    refused(root, plans(root, "submit", "flow0001"), "submit a backlog plan", /from active to review/);
-    refused(root, plans(root, "close", "flow0001"), "close a backlog plan", /from review to completed/);
+    refused(plans(root, "submit", "flow0001"), "submit a backlog plan", /from active to review/);
+    refused(plans(root, "close", "flow0001"), "close a backlog plan", /from review to completed/);
 
-    const weak = refused(root, plans(root, "promote", "weak0001"), "promote an incomplete plan", /does not meet the ready requirements/);
+    const weak = refused(plans(root, "promote", "weak0001"), "promote an incomplete plan", /does not meet the ready requirements/);
     assert.equal(weak.code, "LIFECYCLE_REQUIREMENTS");
     assert.ok(weak.findings.some((item) => item.code === "MISSING_IMPLEMENTATION_CONTEXT"), "the gate lists each finding");
     assert.match(weak.repair.prompt, /^\/plan-write\n/, "a refused promotion carries a repair prompt");
-    assert.ok(exists(root, "docs/plans/backlog/test-weak.md"), "the refused plan stays where it was");
-    assert.equal(head(root), before, "no refusal commits anything");
-    assert.equal(git(root, "status", "--porcelain"), "", "no refusal leaves anything behind");
+    assert.ok(exists("plans/backlog/test-weak.md"), "the refused plan stays where it was");
+    assert.equal(head(store), before, "no refusal commits anything");
+    assert.equal(git(store, "status", "--porcelain"), "", "no refusal leaves anything behind");
+
+    // A transition reads only the store, so a raw edit in the plans worktree is refused, never committed.
+    const raw = inStore("plans/backlog/test-flow.md");
+    const clean = read(raw);
+    fs.appendFileSync(raw, "\nA raw edit.\n");
+    assert.equal(refused(plans(root, "promote", "flow0001"), "promote over a raw edit", /uncommitted edits/).code, "PLAN_STORE_DIRTY");
+    assert.equal(head(store), before);
+    fs.writeFileSync(raw, clean);
   }
 
-  // ── promote: backlog → ready, carrying the command's own edits, beside unrelated work ─────────
+  // ── promote: backlog → ready, one plans-branch commit, beside unrelated code work ────────────
   {
     fs.writeFileSync(path.join(root, "notes.txt"), "someone else's unstaged file\n");
     fs.writeFileSync(path.join(root, "src/app.txt"), "v1 with someone else's staged edit\n");
     git(root, "add", "--", "src/app.txt");
-    fs.appendFileSync(path.join(root, "docs/plans/backlog/test-flow.md"), "\nRefined during promotion.\n");
+    edit("plans/backlog/test-flow.md", (text) => `${text}\nRefined before promotion.\n`);
 
-    const before = head(root);
+    const before = head(store);
+    const codeBefore = head(root);
     const promoted = approved(plans(root, "promote", "flow0001"), "promote");
     assert.deepEqual(promoted.plan.lifecycle, { from: "backlog", to: "ready" });
-    assert.equal(git(root, "rev-parse", "HEAD^"), before, "one commit");
-    const touched = git(root, "show", "--name-status", "--format=", "HEAD").split("\t");
-    assert.match(touched[0], /^R/, "the commit is the plan's rename");
-    assert.deepEqual(touched.slice(1), ["docs/plans/backlog/test-flow.md", "docs/plans/ready/test-flow.md"], "and nothing else");
-    assert.equal(git(root, "log", "-1", "--format=%s"), "Promote plan test-flow to ready", "the commit names the plan by its filename, not its id");
-    assert.match(git(root, "show", "HEAD:docs/plans/ready/test-flow.md"), /Refined during promotion/, "the promotion's edits ride along");
+    assert.equal(git(store, "rev-parse", "HEAD^"), before, "one commit");
+    assert.deepEqual(git(store, "show", "--name-status", "--no-renames", "--format=", "HEAD").split("\n").sort(),
+      ["A\tplans/ready/test-flow.md", "D\tplans/backlog/test-flow.md"], "the commit is the plan's move and nothing else");
+    assert.equal(git(store, "log", "-1", "--format=%s"), "Promote plan test-flow to ready", "the commit names the plan by its filename, not its id");
+    assert.match(git(store, "show", "HEAD:plans/ready/test-flow.md"), /Refined before promotion/);
+    assert.equal(head(root), codeBefore, "the code branch does not move");
     assert.equal(git(root, "diff", "--cached", "--name-only"), "src/app.txt", "unrelated staged work stays staged");
-    assert.ok(exists(root, "notes.txt"), "unrelated unstaged work stays in place");
+    assert.ok(fs.existsSync(path.join(root, "notes.txt")), "unrelated unstaged work stays in place");
     git(root, "reset", "--quiet", "--", "src/app.txt");
     git(root, "checkout", "--", "src/app.txt");
     fs.rmSync(path.join(root, "notes.txt"));
 
-    const refinedBefore = head(root);
+    const after = head(store);
     const again = approved(plans(root, "promote", "flow0001"), "promote again");
     assert.equal(again.alreadyRecorded, true, "repeating a completed transition records nothing new");
-    assert.equal(head(root), refinedBefore, "a repeat makes no commit");
-    fs.appendFileSync(path.join(root, "docs/plans/ready/test-flow.md"), "\nRefined again while ready.\n");
-    const refined = approved(plans(root, "promote", "flow0001"), "refine a ready plan");
-    assert.equal(git(root, "rev-parse", "HEAD^"), refinedBefore, "a refinement in Ready is one commit");
-    assert.equal(git(root, "show", "--name-status", "--format=", refined.commit), "M\tdocs/plans/ready/test-flow.md");
+    assert.equal(head(store), after, "a repeat makes no commit");
   }
 
   // ── start, then the completion preflight while implementation is unfinished ───────────────────
   const flow = worktree(root, "feat/flow");
   {
-    const started = approved(plans(root, "start", "flow0001", "--worktree", flow.name), "start");
-    assert.equal(started.fastForward.applied, true);
-    assert.doesNotMatch(read(path.join(root, "docs/plans/active/test-flow.md")), /^priority:/m, "starting writes no priority line back");
-    assert.match(read(path.join(flow.path, "docs/plans/active/test-flow.md")), new RegExp(`^worktree: ${flow.name}$`, "m"));
+    const flowHead = head(flow.path);
+    approved(plans(root, "start", "flow0001", "--worktree", flow.name), "start");
+    assert.equal(head(flow.path), flowHead, "starting does not move the implementation worktree");
+    assert.doesNotMatch(read(inStore("plans/active/test-flow.md")), /^priority:/m, "starting writes no priority line back");
+    assert.match(read(inStore("plans/active/test-flow.md")), new RegExp(`^worktree: ${flow.name}$`, "m"));
 
     const early = json(plans(root, "preflight", "flow0001"), "early preflight");
     assert.equal(early.ok, false, "a plan with open tasks and no commits is not complete");
-    const failed = early.checks.filter((check) => !check.ok).map((check) => check.n);
-    assert.deepEqual(failed, [2, 5], "open tasks and a branch with no work of its own");
-    const fileLine = read(path.join(flow.path, "docs/plans/active/test-flow.md")).split("\n").findIndex((line) => /^\s*[-*]\s+\[ \]/.test(line)) + 1;
+    assert.deepEqual(early.checks.filter((check) => !check.ok).map((check) => check.n), [2, 5], "open tasks and a branch with no work of its own");
+    const fileLine = read(inStore("plans/active/test-flow.md")).split("\n").findIndex((line) => /^\s*[-*]\s+\[ \]/.test(line)) + 1;
     assert.match(early.checks.find((check) => check.n === 2).observed, new RegExp(`^line ${fileLine}: `), "an open task is reported at its line in the file, frontmatter included");
 
-    const before = head(root);
-    refused(root, plans(root, "submit", "flow0001"), "submit an unfinished plan", /Implementation is not complete/);
-    assert.equal(head(root), before);
-    assert.ok(exists(root, "docs/plans/active/test-flow.md"), "an unfinished plan stays active");
+    const before = head(store);
+    refused(plans(root, "submit", "flow0001"), "submit an unfinished plan", /Implementation is not complete/);
+    assert.equal(head(store), before);
+    assert.ok(exists("plans/active/test-flow.md"), "an unfinished plan stays active");
 
     commit(flow.path, "Implement the thing", { "src/app.txt": "v2\n" });
-    completeTasks(flow.path, "docs/plans/active/test-flow.md");
+    completeTasks("plans/active/test-flow.md");
     fs.writeFileSync(path.join(flow.path, "scratch.txt"), "uncommitted\n");
     const dirty = json(plans(root, "preflight", "flow0001"), "dirty preflight");
     assert.deepEqual(dirty.checks.filter((check) => !check.ok).map((check) => check.n), [4], "uncommitted work keeps the plan active");
@@ -170,78 +168,60 @@ try {
     assert.equal(json(plans(root, "preflight", "flow0001"), "preflight").ok, true, "finished, committed work passes");
   }
 
-  // ── submit: active → review is a pure rename; the worktree copy stays authoritative ───────────
+  // ── submit: active → review is a pure rename ─────────────────────────────────────────────────
   const stateRoot = path.join(fx.tmp, "portal-state");
   addRepositorySource({ path: root, stateRoot });
   const scanned = (id) => buildPlanSnapshot({ stateRoot }).plans.find((record) => record.plan.id === id);
   {
-    const submitted = approved(plans(root, "submit", "flow0001"), "submit");
+    const flowHead = head(flow.path);
+    const submitted = approved(plans(flow.path, "submit", "flow0001"), "submit from the implementation worktree");
     assert.equal(submitted.preflight.ok, true, "submit reports the preflight it ran");
-    assert.match(git(root, "show", "--name-status", "--format=", "HEAD"), /^R100\tdocs\/plans\/active\/test-flow.md\tdocs\/plans\/review\/test-flow.md$/);
+    assert.deepEqual(git(store, "show", "--name-status", "--no-renames", "--format=", "HEAD").split("\n").sort(), ["A\tplans/review/test-flow.md", "D\tplans/active/test-flow.md"]);
+    assert.equal(head(flow.path), flowHead, "submit commits nothing on the code branch");
     assert.equal(approved(plans(root, "submit", "flow0001"), "submit again").alreadyRecorded, true);
 
     const record = scanned("flow0001");
-    assert.equal(record.plan.lifecycle, "review", "the primary copy decides the stage");
-    assert.deepEqual(record.plan.authority, { source: "worktree", worktree: flow.name }, "a worktree copy still in active/ stays authoritative");
-    assert.equal(record.plan.relativePath, "docs/plans/active/test-flow.md", "content is read from the worktree's copy");
-    assert.equal(record.plan.primaryRelativePath, "docs/plans/review/test-flow.md", "and the primary copy's path is kept beside it");
-    assert.equal(record.plan.taskCounts.remaining, 0, "the worktree's checked tasks are what the portal shows");
-    assert.ok(!record.plan.validation.findings.some((item) => item.code === "PLAN_WORKTREE_COPY_UNAVAILABLE"), "the path difference is expected, not a finding");
+    assert.equal(record.plan.lifecycle, "review");
+    assert.equal(record.plan.relativePath, "plans/review/test-flow.md");
+    assert.equal(record.plan.taskCounts.remaining, 0, "the checked tasks are what the portal shows");
+    assert.equal("authority" in record.plan, false, "one copy has no authority to report");
   }
 
-  // ── validate: from the primary checkout, the authoritative copy is the one validated ──────────
+  // ── validate: every checkout reads the one copy, and the portal agrees ───────────────────────
   {
-    // Only the worktree's copy gains an open Not tested entry, so the two copies' findings differ. Its
-    // link to a plan only the primary checkout holds must still resolve across the two checkouts.
-    const worktreeCopy = path.join(flow.path, "docs/plans/active/test-flow.md");
-    const linked = read(worktreeCopy).replace(/^related: \[\]$/m, "related: [weak0001]");
-    fs.writeFileSync(worktreeCopy, `${linked.trimEnd()}\n\n## Not tested\n\n- [ ] Checked by hand.\n`);
+    edit("plans/review/test-flow.md", (text) => `${text.replace(/^related: \[\]$/m, "related: [weak0001]").trimEnd()}\n\n## Not tested\n\n- [ ] Checked by hand.\n`);
     const codes = (plan) => plan.findings.map((item) => item.code).sort();
-
-    const fromPrimary = json(plans(root, "validate", "flow0001"), "validate from the primary checkout");
-    const [plan] = fromPrimary.plans;
-    assert.equal(plan.relativePath, "docs/plans/review/test-flow.md", "the plan is named by its primary copy, which decides the stage");
-    assert.equal(plan.lifecycle, "review");
-    assert.deepEqual(plan.validated, { source: "worktree", worktree: flow.name, relativePath: "docs/plans/active/test-flow.md" }, "and validated from its worktree's copy");
-    assert.ok(codes(plan).includes("UNCONFIRMED_NOT_TESTED"), "the worktree copy's findings are reported");
-    assert.ok(!codes(plan).includes("RELATED_NOT_FOUND"), "every checkout is one repository, so cross-plan links resolve");
-    assert.deepEqual(codes(plan), scanned("flow0001").plan.validation.findings.map((item) => item.code).sort(), "the CLI and the portal agree on the authoritative copy");
-    const all = json(plans(root, "validate"), "validate every plan from the primary checkout");
-    assert.deepEqual(all.plans.find((item) => item.id === "flow0001").validated.source, "worktree", "a full run resolves authority too");
-    assert.equal(all.plans.find((item) => item.id === "weak0001").validated.source, "primary", "a plan with no worktree is validated from the primary copy");
-
-    // Inside the worktree, the suite skills validate that checkout's own copies, as before.
-    const fromWorktree = json(plans(flow.path, "validate", "flow0001"), "validate from the worktree");
-    assert.equal(fromWorktree.plans[0].relativePath, "docs/plans/active/test-flow.md");
-    assert.deepEqual(fromWorktree.plans[0].validated, { source: "checkout" }, "a linked worktree validates its own copy");
-    git(flow.path, "checkout", "--", "docs/plans/active/test-flow.md");
+    const [fromPrimary] = json(plans(root, "validate", "flow0001"), "validate from the primary checkout").plans;
+    const [fromWorktree] = json(plans(flow.path, "validate", "flow0001"), "validate from the worktree").plans;
+    assert.equal(fromPrimary.relativePath, "plans/review/test-flow.md");
+    assert.equal(fromPrimary.lifecycle, "review");
+    assert.ok(codes(fromPrimary).includes("UNCONFIRMED_NOT_TESTED"));
+    assert.ok(!codes(fromPrimary).includes("RELATED_NOT_FOUND"), "links between plans resolve in the store");
+    assert.deepEqual(fromWorktree, fromPrimary, "a linked worktree sees the same plan");
+    assert.deepEqual(codes(fromPrimary), scanned("flow0001").plan.validation.findings.map((item) => item.code).sort(), "the CLI and the portal agree");
+    edit("plans/review/test-flow.md", (text) => text.replace(/\n## Not tested\n\n- \[ \] Checked by hand\.\n$/, "\n"));
   }
 
-  // ── approval freshness: plan-only commits keep it, implementation changes do not ─────────────
+  // ── approval freshness: plans commits keep it, implementation changes do not ─────────────────
   {
     const missing = plans(root, "approval", "flow0001");
     assert.equal(missing.status, 1);
     assert.equal(json(missing, "missing approval").state, "missing");
     assert.equal(json(missing, "missing review result").review.state, "missing");
 
-    const synced = json(roborepo(["plans", "sync-base", "--json"], { cwd: flow.path }), "sync before review");
-    assert.equal(synced.state, "merged");
-    assert.ok(exists(flow.path, "docs/plans/review/test-flow.md") && !exists(flow.path, "docs/plans/active/test-flow.md"), "the rename arrives through the merge");
-    assert.equal(scanned("flow0001").plan.relativePath, "docs/plans/review/test-flow.md");
-
-    const reviewPath = "docs/plans/review/test-flow.md";
+    const reviewPath = "plans/review/test-flow.md";
     const reviewedTip = head(flow.path);
     const reviewedBase = head(root);
-    const reviewDoc = `${read(path.join(flow.path, reviewPath))}\n## Review\n\n### Result\n- Status: complete\n- Reviewed implementation commit: ${reviewedTip}\n- Base commit: ${reviewedBase}\n\n### Findings\n- [x] Review checks passed\n\n### Approval\n- Decision: requested\n`;
-    commit(flow.path, "Record completed review awaiting approval", { [reviewPath]: reviewDoc });
-    const pendingTip = head(flow.path);
+    const reviewDoc = `${read(inStore(reviewPath)).trimEnd()}\n\n## Review\n\n### Result\n- Status: complete\n- Reviewed implementation commit: ${reviewedTip}\n- Base commit: ${reviewedBase}\n\n### Findings\n- [x] Review checks passed\n`;
+    const saveReview = (text) => edit(reviewPath, () => text);
+    saveReview(reviewDoc);
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const pending = json(plans(root, "approval", "flow0001"), "completed review awaiting approval");
       assert.equal(pending.review.state, "fresh", "review completion is independent of approval");
-      assert.equal(pending.state, "not-approved", "completed checks never grant human approval");
-      assert.equal(pending.review.result.commit, reviewedTip, "recording the result does not stale the implementation");
+      assert.equal(pending.state, "missing", "completed checks never grant human approval");
+      assert.equal(pending.review.result.commit, reviewedTip);
       assert.deepEqual(pending.review.baseChangedPaths, []);
-      assert.equal(head(flow.path), pendingTip, "checking a pending review twice makes no commits");
+      assert.equal(head(flow.path), reviewedTip, "checking a pending review makes no commits");
     }
     fs.writeFileSync(path.join(flow.path, "src/app.txt"), "pending implementation\n");
     assert.equal(json(plans(root, "approval", "flow0001"), "uncommitted implementation").review.state, "incomplete");
@@ -257,7 +237,7 @@ try {
           return spawnSync(binary, args, options);
         };
         syncBuiltinESMExports();
-        const unreadable = reviewFreshness({ primary: root, markdown: reviewDoc, tip: pendingTip, base: reviewedBase, workingPath: flow.path });
+        const unreadable = reviewFreshness({ primary: root, markdown: reviewDoc, tip: reviewedTip, base: reviewedBase, workingPath: flow.path });
         assert.equal(unreadable.state, "unavailable", `${command} access errors do not establish changed files`);
         assert.match(unreadable.reason, /could not reliably check/);
         assert.match(unreadable.diagnostics.join("\n"), /Operation not permitted/);
@@ -267,15 +247,15 @@ try {
       childProcess.spawnSync = spawnSync;
       syncBuiltinESMExports();
     }
-    commit(flow.path, "Leave review pending", { [reviewPath]: reviewDoc.replace("- Status: complete", "- Status: pending") });
+    saveReview(reviewDoc.replace("- Status: complete", "- Status: pending"));
     assert.equal(json(plans(root, "approval", "flow0001"), "pending review result").review.state, "incomplete");
-    commit(flow.path, "Reopen a review finding", { [reviewPath]: reviewDoc.replace("- [x] Review checks passed", "- [ ] Review checks passed") });
+    saveReview(reviewDoc.replace("- [x] Review checks passed", "- [ ] Review checks passed"));
     assert.equal(json(plans(root, "approval", "flow0001"), "open review finding").review.state, "incomplete");
-    commit(flow.path, "Record a pending manual check", { [reviewPath]: `${reviewDoc}\n## Not tested\n- [ ] Confirm the manual workflow\n` });
+    saveReview(`${reviewDoc}\n## Not tested\n- [ ] Confirm the manual workflow\n`);
     assert.equal(json(plans(root, "approval", "flow0001"), "open manual check").review.state, "incomplete");
-    commit(flow.path, "Record an invalid review commit", { [reviewPath]: reviewDoc.replace(reviewedTip, "not-a-commit") });
+    saveReview(reviewDoc.replace(reviewedTip, "not-a-commit"));
     assert.equal(json(plans(root, "approval", "flow0001"), "invalid review commit").review.state, "invalid");
-    commit(flow.path, "Restore review evidence", { [reviewPath]: reviewDoc });
+    saveReview(reviewDoc);
     commit(root, "Change base after review", { "src/base.txt": "new base work\n" });
     const movedBase = json(plans(root, "approval", "flow0001"), "base moved after review");
     assert.equal(movedBase.review.state, "fresh", "base movement does not erase the reviewed branch result");
@@ -288,111 +268,126 @@ try {
     assert.equal(staleReview.review.state, "stale");
     assert.deepEqual(staleReview.review.changedPaths, ["src/review.txt"]);
 
-    recordApproval(flow, "docs/plans/review/test-flow.md");
+    approve(flow, "flow0001");
     const fresh = plans(root, "approval", "flow0001");
-    assert.equal(json(fresh, "fresh approval").state, "fresh", "recording the approval is a plan-only commit");
+    assert.equal(json(fresh, "fresh approval").state, "fresh");
     assert.equal(fresh.status, 0);
 
-    commit(flow.path, "Tidy the plan", { "docs/plans/review/test-flow.md": `${read(path.join(flow.path, "docs/plans/review/test-flow.md"))}\nA note.\n` });
-    assert.equal(json(plans(root, "approval", "flow0001"), "after plan edit").state, "fresh", "later plan-only commits keep it fresh");
+    edit(reviewPath, (text) => text.replace("The thing is done.", "The thing is done. A note."));
+    assert.equal(json(plans(root, "approval", "flow0001"), "after plan edit").state, "fresh", "later plans commits keep it fresh");
 
     commit(flow.path, "Change code after approval", { "src/app.txt": "v3\n" });
     const stale = json(plans(root, "approval", "flow0001"), "stale approval");
     assert.equal(stale.state, "stale");
     assert.deepEqual(stale.changedPaths, ["src/app.txt"], "the stale report names what changed");
-    recordApproval(flow, "docs/plans/review/test-flow.md");
+    approve(flow, "flow0001");
     assert.equal(json(plans(root, "approval", "flow0001"), "re-approved").state, "fresh");
   }
 
-  // Approval recovery after a squash merge needs only evidence commits, never another base merge.
+  // ── Approval recorded after a squash merge touches nothing on the code branch ────────────────
   {
-    const late = toReview(root, "late0001", "test-late-approval.md", "feat/late");
-    const planPath = "docs/plans/review/test-late-approval.md";
+    const late = toReview("late0001", "test-late-approval.md", "feat/late");
+    const planPath = "plans/review/test-late-approval.md";
     const reviewedTip = head(late.path);
-    const reviewedBase = head(root);
-    const pendingDoc = read(path.join(late.path, planPath))
-      .replace(/### Approval[\s\S]*$/, `### Result\n- Status: complete\n- Reviewed implementation commit: ${reviewedTip}\n- Base commit: ${reviewedBase}\n\n### Approval\n- Decision: requested\n`);
-    commit(late.path, "Record reviewed implementation before approval", { [planPath]: pendingDoc });
+    edit(planPath, (text) => `${text.trimEnd()}\n\n## Review\n\n### Result\n- Status: complete\n- Reviewed implementation commit: ${reviewedTip}\n- Base commit: ${head(root)}\n`);
     git(root, "merge", "--squash", "feat/late");
     git(root, "commit", "--quiet", "-m", "Land reviewed work with approval still pending");
     const pending = json(plans(root, "approval", "late0001"), "landed review awaiting approval");
-    assert.equal(pending.state, "not-approved");
+    assert.equal(pending.state, "missing");
     assert.equal(pending.review.state, "fresh", "landing preserves the feature's completed review");
-    const approvedDoc = pendingDoc.replace("- Decision: requested", `- Decision: approved\n- Reviewed implementation commit: ${reviewedTip}\n- Confirmed by: human`);
-    commit(late.path, "Record explicit human approval after landing", { [planPath]: approvedDoc });
-    const primaryBeforeRecovery = head(root);
-    assert.equal(read(path.join(root, planPath)), pendingDoc, "the primary still holds the version before the evidence edit");
-    commit(root, "Persist recovered approval on base", { [planPath]: approvedDoc });
-    assert.equal(git(root, "diff", "--name-only", primaryBeforeRecovery, "HEAD"), planPath, "recovery changes only the selected plan on base");
-    assert.equal(git(root, "diff", "--name-only", reviewedTip, head(late.path), "--", ".", ":(exclude)docs/plans"), "", "recovery preserves reviewed implementation");
-    const recorded = json(plans(root, "approval", "late0001"), "recovered approval");
-    assert.equal(recorded.state, "fresh");
-    assert.equal(recorded.review.state, "fresh");
-    const beforeRetry = head(root);
-    assert.equal(json(plans(root, "approval", "late0001"), "repeat recovered approval check").state, "fresh");
-    assert.equal(head(root), beforeRetry, "checking the recovered decision does not write another commit");
-    closeEdits(root, planPath);
-    const closed = approved(plans(root, "close", "late0001"), "close after approval recovery");
-    assert.equal(closed.landing.landed, true, "evidence-only recovery still passes the canonical landing gate");
-    assert.equal(closed.worktreeCopy, "integrated");
+    const codeBefore = head(root);
+    approve(late, "late0001");
+    assert.equal(head(root), codeBefore, "recording approval changes nothing on base");
+    assert.equal(head(late.path), reviewedTip, "or on the reviewed branch");
+    assert.equal(json(plans(root, "approval", "late0001"), "late approval").state, "fresh");
+    closeEdits(planPath);
+    const closed = approved(plans(root, "close", "late0001"), "close after a late approval");
+    assert.equal(closed.landing.landed, true);
   }
 
-  // ── reopen: review → active on a scope change, keeping the worktree; then back to review ──────
+  // ── reopen: review → active on a scope change, retiring the approval; then back to review ────
   {
     const reopened = approved(plans(root, "reopen", "flow0001"), "reopen");
-    assert.match(git(root, "show", "--name-status", "--format=", reopened.commit), /^R100\t/, "reopening is a pure rename");
+    assert.deepEqual(git(store, "show", "--name-status", "--no-renames", "--format=", reopened.commit).split("\n").sort(), ["A\tplans/active/test-flow.md", "D\tplans/review/test-flow.md"]);
     assert.equal(scanned("flow0001").plan.lifecycle, "active");
-    assert.deepEqual(scanned("flow0001").plan.authority, { source: "worktree", worktree: flow.name }, "a worktree copy in review/ is authoritative for an active plan");
+    assert.match(read(inStore("plans/active/test-flow.md")), /### Approval\n- Decision: invalidated\n- Reviewed implementation commit: [0-9a-f]{40}/, "reopening marks the approval, keeping the record as history");
+    const retired = plans(root, "approval", "flow0001");
+    assert.equal(retired.status, 1, "a retired approval does not pass the check");
+    assert.equal(json(retired, "approval after reopen").state, "not-approved", "though the implementation has not changed since it was recorded");
+
     approved(plans(root, "submit", "flow0001"), "resubmit");
+    refused(plans(root, "close", "flow0001"), "close on a retired approval", /human approval is not-approved/);
+    approve(flow, "flow0001");
+    assert.equal(json(plans(root, "approval", "flow0001"), "approved again after reopen").state, "fresh");
+    assert.match(read(inStore("plans/review/test-flow.md")), /### Approval\n- Decision: approved/, "a new approval replaces the retired record");
   }
 
   // ── close: refused until the reviewed branch has merged, then review → completed ──────────────
   {
-    const before = head(root);
-    refused(root, plans(root, "close", "flow0001"), "close before merge", /not integrated/);
-    assert.equal(head(root), before, "a refused close commits nothing");
+    const before = head(store);
+    refused(plans(root, "close", "flow0001"), "close before merge", /landed: unconfirmed/);
+    assert.equal(head(store), before, "a refused close commits nothing");
     const unlanded = plans(root, "landed", "flow0001");
     assert.equal(unlanded.status, 1, "the landed check fails before the merge");
     assert.equal(json(unlanded, "landed before merge").landed, false);
 
     git(root, "merge", "--quiet", "--no-ff", "--no-edit", "feat/flow");
-    closeEdits(root, "docs/plans/review/test-flow.md");
+    closeEdits("plans/review/test-flow.md");
     const closed = approved(plans(root, "close", "flow0001"), "close");
     assert.equal(closed.approval.state, "fresh");
     assert.equal(closed.landing.landed, true, "the merge commit absorbs the branch");
-    assert.ok(exists(root, "docs/plans/completed/test-flow.md"));
-    assert.match(git(root, "show", "HEAD:docs/plans/completed/test-flow.md"), /## Verification/, "close carries its verification edits");
+    const completed = git(store, "show", "HEAD:plans/completed/test-flow.md");
+    assert.match(completed, /## Verification/, "the saved verification moves with it");
+    assert.match(completed, /^next_action:$/m, "closing clears the next action, which no save in Review can");
     assert.ok(fs.existsSync(flow.path), "close never removes the worktree itself");
     assert.equal(approved(plans(root, "close", "flow0001"), "close again").alreadyRecorded, true);
   }
 
   // ── close after a squash merge and after a rebase merge ───────────────────────────────────────
   {
-    const squash = toReview(root, "squash01", "test-squash.md", "feat/squash");
+    const squash = toReview("squash01", "test-squash.md", "feat/squash");
+    approve(squash, "squash01");
     git(root, "merge", "--quiet", "--squash", "feat/squash");
     git(root, "commit", "--quiet", "-m", "Squash feat/squash");
     const squashCommit = head(root);
     const landed = json(plans(root, "landed", "squash01"), "landed after squash");
     assert.deepEqual([landed.landed, landed.absorbingCommit, landed.reused], [true, squashCommit, false], "the first landed check scans base history");
-    closeEdits(root, "docs/plans/review/test-squash.md", squashCommit);
+    closeEdits("plans/review/test-squash.md", squashCommit);
     const recheck = json(plans(root, "landed", "squash01"), "landed with recorded evidence");
     assert.equal(recheck.reused, true, "a recorded absorbing commit is verified instead of rescanned");
     const closedSquash = approved(plans(root, "close", "squash01"), "close after squash");
     assert.deepEqual([closedSquash.landing.landed, closedSquash.landing.reused], [true, true], "close verifies the recorded absorbing commit");
     assert.ok(fs.existsSync(squash.path));
 
-    toReview(root, "rebase01", "test-rebase.md", "feat/rebase");
+    const rebased = toReview("rebase01", "test-rebase.md", "feat/rebase");
+    approve(rebased, "rebase01");
+    commit(root, "Base moves before the rebase", { "src/moved.txt": "moved\n" });
     const rebasing = path.join(fx.tmp, "worktrees", "rebasing");
     git(root, "worktree", "add", "--quiet", "-b", "rebased", rebasing, "feat/rebase");
     git(rebasing, "rebase", "--quiet", "main");
     git(root, "merge", "--quiet", "--ff-only", "rebased");
-    closeEdits(root, "docs/plans/review/test-rebase.md");
+    closeEdits("plans/review/test-rebase.md");
     assert.equal(approved(plans(root, "close", "rebase01"), "close after rebase").landing.landed, true);
+  }
+
+  // ── close after a fast-forward: lifecycle commits no longer move the base, so a branch can do this ──
+  {
+    const ffwd = toReview("ffwd0001", "test-ffwd.md", "feat/ffwd");
+    approve(ffwd, "ffwd0001");
+    const tip = head(ffwd.path);
+    assert.equal(json(plans(root, "landed", "ffwd0001"), "landed before the fast-forward").landed, false, "a review plan's unmerged branch has not landed");
+    git(root, "merge", "--quiet", "--ff-only", "feat/ffwd");
+    assert.equal(head(root), tip, "the merge really was a fast-forward");
+    const landed = json(plans(root, "landed", "ffwd0001"), "landed after the fast-forward");
+    assert.deepEqual([landed.landed, landed.absorbingCommit], [true, tip], "the branch's tip is on the base");
+    closeEdits("plans/review/test-ffwd.md", tip);
+    assert.equal(approved(plans(root, "close", "ffwd0001"), "close after a fast-forward").landing.landed, true);
   }
 
   // ── close after the worktree is removed: unavailable, never compared against the base branch ──
   {
-    const gone = toReview(root, "gone0001", "test-gone.md", "feat/gone");
+    const gone = toReview("gone0001", "test-gone.md", "feat/gone");
+    approve(gone, "gone0001");
     git(root, "merge", "--quiet", "--squash", "feat/gone");
     git(root, "commit", "--quiet", "-m", "Squash feat/gone");
     commit(root, "Unrelated work on main", { "src/unrelated.txt": "later\n" });
@@ -403,216 +398,119 @@ try {
     assert.equal(unavailable.state, "unavailable", "a later base commit is not reported as an implementation change");
     assert.match(unavailable.reason, new RegExp(`worktree ${gone.name} is not a linked worktree`), "the reason names the missing worktree");
 
-    closeEdits(root, "docs/plans/review/test-gone.md");
-    const before = head(root);
-    refused(root, plans(root, "close", "gone0001"), "close without the worktree", new RegExp(`cannot be checked[\\s\\S]*Recreate the linked worktree named ${gone.name}`));
-    assert.equal(head(root), before, "a refused close commits nothing");
+    closeEdits("plans/review/test-gone.md");
+    const before = head(store);
+    refused(plans(root, "close", "gone0001"), "close without the worktree", new RegExp(`cannot be checked[\\s\\S]*Recreate the linked worktree named ${gone.name}`));
+    assert.equal(head(store), before, "a refused close commits nothing");
 
     git(root, "worktree", "add", "--quiet", gone.path, "feat/gone");
     const closed = approved(plans(root, "close", "gone0001"), "close after recreating the worktree");
     assert.equal(closed.landing.landed, true, "landing is checked against the recreated worktree's branch");
   }
 
-  // ── archive: no worktree, an unintegrated worktree copy, and conflicting copies ───────────────
+  // ── archive: with no worktree, and with unmerged work it must leave alone ─────────────────────
   {
     assert.equal(roborepo(["plans", "archive", "shelf001"], { cwd: root }).status, 2, "--reason is required");
-    const shelved = approved(plans(root, "archive", "shelf001", "--reason", "Superseded by flow0001."), "archive backlog");
-    assert.equal(shelved.worktreeCopy, "no-worktree");
-    const archived = git(root, "show", "HEAD:docs/plans/archived/test-shelved.md");
+    approved(plans(root, "archive", "shelf001", "--reason", "Superseded by flow0001."), "archive backlog");
+    const archived = git(store, "show", "HEAD:plans/archived/test-shelved.md");
     assert.match(archived, /## Archived\n\n\d{4}-\d{2}-\d{2}: Superseded by flow0001\./, "the reason goes in the plan body");
     assert.match(archived, /^next_action:$/m, "an archived plan has no next action");
 
     approved(plans(root, "promote", "carry001"), "promote carry");
     const carry = worktree(root, "feat/carry");
     approved(plans(root, "start", "carry001", "--worktree", carry.name), "start carry");
-    commit(carry.path, "Unmerged code", { "src/carry.txt": "unmerged\n" });
-    commit(carry.path, "Record progress", { "docs/plans/active/test-carry.md": `${read(path.join(carry.path, "docs/plans/active/test-carry.md"))}\nProgress only the worktree has.\n` });
-    const carried = approved(plans(root, "archive", "carry001", "--reason", "Abandoned."), "archive with carry");
-    assert.equal(carried.worktreeCopy, "carried");
-    assert.match(git(root, "show", "HEAD:docs/plans/archived/test-carry.md"), /Progress only the worktree has\.[\s\S]*## Archived/, "the worktree's progress is carried once");
+    const carryHead = commit(carry.path, "Unmerged code", { "src/carry.txt": "unmerged\n" });
+    approved(plans(root, "archive", "carry001", "--reason", "Abandoned."), "archive an active plan");
     assert.ok(fs.existsSync(path.join(carry.path, "src/carry.txt")), "archiving never touches the unmerged work");
-    assert.equal(git(root, "rev-parse", "--verify", "-q", "refs/heads/feat/carry").length > 0, true, "the branch survives");
-
-    approved(plans(root, "promote", "confl001"), "promote conflict");
-    const conflict = worktree(root, "feat/conflict");
-    approved(plans(root, "start", "confl001", "--worktree", conflict.name), "start conflict");
-    commit(conflict.path, "Worktree edit", { "docs/plans/active/test-conflict.md": `${read(path.join(conflict.path, "docs/plans/active/test-conflict.md"))}\nWorktree note.\n` });
-    commit(root, "Primary edit", { "docs/plans/active/test-conflict.md": `${read(path.join(root, "docs/plans/active/test-conflict.md"))}\nPrimary note.\n` });
-    const before = head(root);
-    refused(root, plans(root, "archive", "confl001", "--reason", "Abandoned."), "archive conflicting copies", /conflicting copies/);
-    assert.equal(head(root), before, "a refused archive commits nothing");
-    assert.ok(exists(root, "docs/plans/active/test-conflict.md"));
+    assert.equal(git(root, "rev-parse", "--verify", "-q", "refs/heads/feat/carry"), carryHead, "the branch survives");
   }
 
   // ── archive clears the plan from what depends on it, in both list forms, in its own commit ────
   {
     const linkedDoc = (id, relations) => `---\nid: ${id}\nnext_action: Decide.\n${relations}\n---\n\n# Plan ${id}\n\n## Summary\n\nBody stays exactly as written.\n`;
-    const backlog = (name) => `docs/plans/backlog/test-${name}.md`;
-    commit(root, "Seed linked plans", {
+    const backlog = (name) => `plans/backlog/test-${name}.md`;
+    const seed = (files) => {
+      for (const [file, content] of Object.entries(files)) fs.writeFileSync(inStore(file), content);
+      git(store, "add", "--", ...Object.keys(files));
+      git(store, "commit", "--quiet", "-m", "Seed linked plans");
+    };
+    seed({
       [backlog("arch-root")]: linkedDoc("archroot", "depends_on: []\nblocked_by: []\nrelated: []"),
       [backlog("arch-flow")]: linkedDoc("archflow", 'depends_on: [archroot, flow0001]\nblocked_by: ["external: vendor, inc"]\nrelated: [archroot]'),
       [backlog("arch-list")]: linkedDoc("archlist", "depends_on:\n  - archroot\nblocked_by:\n  - 'archroot'\n  - external: a vendor\nrelated: []"),
       [backlog("arch-busy")]: linkedDoc("archbusy", "depends_on: []\nblocked_by: []\nrelated: []"),
       [backlog("arch-leaf")]: linkedDoc("archleaf", "depends_on: [archbusy]\nblocked_by: []\nrelated: []"),
+      [backlog("arch-dep")]: linkedDoc("archdep1", "depends_on: [archbusy]\nblocked_by: []\nrelated: []"),
     });
 
     const archived = approved(plans(root, "archive", "archroot", "--reason", "Abandoned."), "archive a prerequisite");
     assert.deepEqual([...archived.references.cleared].sort(), [backlog("arch-flow"), backlog("arch-list")], "every dependent is cleared");
-    assert.deepEqual(archived.references.left, []);
-    const flow = read(path.join(root, backlog("arch-flow")));
-    assert.match(flow, /^depends_on: \[flow0001\]$/m, "the other prerequisite stays");
-    assert.match(flow, /^blocked_by: \["external: vendor, inc"\]$/m, "a list without the plan is untouched");
-    assert.match(flow, /^related: \[archroot\]$/m, "related is not a dependency, and the archived plan still resolves");
-    const list = read(path.join(root, backlog("arch-list")));
+    const flowDoc = read(inStore(backlog("arch-flow")));
+    assert.match(flowDoc, /^depends_on: \[flow0001\]$/m, "the other prerequisite stays");
+    assert.match(flowDoc, /^blocked_by: \["external: vendor, inc"\]$/m, "a list without the plan is untouched");
+    assert.match(flowDoc, /^related: \[archroot\]$/m, "related is not a dependency, and the archived plan still resolves");
+    const list = read(inStore(backlog("arch-list")));
     assert.match(list, /^depends_on: \[\]$/m, "a block list left empty becomes an empty list");
     assert.match(list, /^blocked_by:\n {2}- external: a vendor$/m, "a quoted block entry is removed and the rest kept");
     assert.match(list, /Body stays exactly as written\.\n$/);
-    assert.deepEqual(git(root, "show", "--no-renames", "--name-only", "--format=", "HEAD").split("\n").filter(Boolean).sort(),
-      ["docs/plans/archived/test-arch-root.md", backlog("arch-flow"), backlog("arch-list"), backlog("arch-root")].sort(), "the move and the clearing land in one commit");
+    assert.deepEqual(git(store, "show", "--no-renames", "--name-only", "--format=", "HEAD").split("\n").filter(Boolean).sort(),
+      ["plans/archived/test-arch-root.md", backlog("arch-flow"), backlog("arch-list"), backlog("arch-root")].sort(), "the move and the clearing land in one commit");
 
     // Archiving the dependent leaves its prerequisite with nothing to clean up.
-    const busyBefore = read(path.join(root, backlog("arch-busy")));
+    const busyBefore = read(inStore(backlog("arch-busy")));
     const dependent = approved(plans(root, "archive", "archleaf", "--reason", "Abandoned."), "archive a dependent");
-    assert.deepEqual(dependent.references, { cleared: [], left: [] });
-    assert.equal(read(path.join(root, backlog("arch-busy"))), busyBefore, "the prerequisite never named its dependent");
+    assert.deepEqual(dependent.references, { cleared: [] });
+    assert.equal(read(inStore(backlog("arch-busy"))), busyBefore, "the prerequisite never named its dependent");
 
-    // A dependent with someone's uncommitted edit refuses the whole move rather than committing that edit.
-    commit(root, "Seed a dirty dependent", {
-      [backlog("arch-dirty")]: linkedDoc("archdirt", "depends_on: [archbusy]\nblocked_by: []\nrelated: []"),
-    });
-    fs.appendFileSync(path.join(root, backlog("arch-dirty")), "\nSomeone else's edit.\n");
-    const before = head(root);
-    refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a dirty dependent", /uncommitted changes/);
-    assert.equal(head(root), before, "a refused archive commits nothing");
-    assert.ok(exists(root, backlog("arch-busy")));
-    fs.writeFileSync(path.join(root, backlog("arch-dirty")), git(root, "show", `HEAD:${backlog("arch-dirty")}`));
+    // A dependent with a raw edit refuses the whole move rather than committing that edit.
+    const dependentFile = inStore(backlog("arch-dep"));
+    const dependentBefore = read(dependentFile);
+    fs.appendFileSync(dependentFile, "\nA raw edit.\n");
+    const before = head(store);
+    assert.equal(refused(plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a dirty dependent", /uncommitted edits/).code, "PLAN_STORE_DIRTY");
+    assert.equal(head(store), before, "a refused archive commits nothing");
+    assert.ok(fs.existsSync(inStore(backlog("arch-busy"))));
+    fs.writeFileSync(dependentFile, dependentBefore);
 
-    // A dependent that can't be rewritten refuses before the rename, so nothing is left half moved.
-    git(root, "checkout", "--", backlog("arch-dirty"));
-    const statusBefore = git(root, "status", "--porcelain");
-    // Root writes a read-only file anyway, so these cases cannot be staged there.
+    const storeBefore = () => git(store, "status", "--porcelain");
+    // A dependent that can't be rewritten leaves nothing half moved. Root writes a read-only file anyway.
     if (process.getuid?.() !== 0) {
-      fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o444);
-      refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a read-only dependent", /could not be updated \(EACCES\)/);
-      fs.chmodSync(path.join(root, backlog("arch-dirty")), 0o644);
-      assert.equal(head(root), before, "a refused archive commits nothing");
-      assert.equal(git(root, "status", "--porcelain"), statusBefore, "a refused archive leaves no staged move");
-      fs.chmodSync(path.join(root, backlog("arch-busy")), 0o444);
-      refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive of a read-only plan", /plan file could not be updated \(EACCES\)/);
-      fs.chmodSync(path.join(root, backlog("arch-busy")), 0o644);
-      assert.equal(head(root), before, "a refused archive commits nothing");
-      assert.equal(git(root, "status", "--porcelain"), statusBefore, "a read-only plan leaves no staged move");
+      fs.chmodSync(dependentFile, 0o444);
+      const failed = plans(root, "archive", "archbusy", "--reason", "Abandoned.");
+      fs.chmodSync(dependentFile, 0o644);
+      assert.equal(failed.status, 1, `archive with a read-only dependent\n${failed.stdout}${failed.stderr}`);
+      assert.equal(head(store), before, "a failed write commits nothing");
+      assert.equal(storeBefore(), "", "a failed write restores the store");
+      assert.equal(read(dependentFile), dependentBefore);
+      assert.ok(fs.existsSync(inStore(backlog("arch-busy"))), "the plan stays where it was");
     }
 
-    // Edits that can't be written or staged undo the rename, so no half-finished move is left to commit.
-    // The failures are injected because a real one, such as a failing clean filter, can stop `git mv`
-    // first on some systems, before there is anything to undo. The dependent keeps refusing writes
-    // during the undo too, which it survives because that file never changed.
-    const dependentBefore = fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8");
-    const planBefore = fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8");
-    const realWriteFileSync = fs.writeFileSync;
-    const realSpawnSync = childProcess.spawnSync;
-    for (const failure of ["write", "stage"]) {
-      if (failure === "write") {
-        fs.writeFileSync = (file, ...args) => {
-          if (path.basename(String(file)) === path.basename(backlog("arch-dirty"))) throw Object.assign(new Error("injected write failure"), { code: "EIO" });
-          return realWriteFileSync(file, ...args);
-        };
-      } else {
-        childProcess.spawnSync = (binary, args, options) => (args[2] === "add" ? { status: 1, stdout: "", stderr: "injected add failure" } : realSpawnSync(binary, args, options));
-        syncBuiltinESMExports();
-      }
-      try {
-        await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }), { code: "MOVE_FAILED", message: /could not be updated, so it was not moved/ });
-      } finally {
-        fs.writeFileSync = realWriteFileSync;
-        childProcess.spawnSync = realSpawnSync;
-        syncBuiltinESMExports();
-      }
-      assert.equal(head(root), before, `a ${failure} failure commits nothing`);
-      assert.equal(git(root, "status", "--porcelain"), statusBefore, `a ${failure} failure undoes the rename and edits`);
-      assert.equal(fs.readFileSync(path.join(root, backlog("arch-busy")), "utf8"), planBefore, `a ${failure} failure restores the plan's text`);
-      assert.equal(fs.readFileSync(path.join(root, backlog("arch-dirty")), "utf8"), dependentBefore, `the dependent still names the plan after a ${failure} failure`);
-    }
+    // A real commit failure, from a lock Git holds, restores every file and reports what happened.
+    const indexLock = git(store, "rev-parse", "--git-path", "index.lock");
+    const lockFile = path.isAbsolute(indexLock) ? indexLock : path.join(store, indexLock);
+    fs.writeFileSync(lockFile, "");
+    const blocked = refused(plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a held index lock", /git status/);
+    fs.rmSync(lockFile);
+    assert.equal(blocked.code, "PLAN_STORE_FAILED");
+    assert.equal(head(store), before, "a failed commit commits nothing");
+    assert.equal(storeBefore(), "", "a failed commit restores the store");
+    assert.ok(fs.existsSync(inStore(backlog("arch-busy"))));
 
-    // When the undo fails too, the staged rename lacks the move's edits, so neither the error nor a retry
-    // may recommend committing it, and a retry warns what restoring discards.
-    let moves = 0;
-    childProcess.spawnSync = (binary, args, options) => {
-      if (args[2] === "add") return { status: 1, stdout: "", stderr: "injected add failure" };
-      if (args[2] === "mv" && ++moves === 2) return { status: 1, stdout: "", stderr: "injected undo failure" };
-      return realSpawnSync(binary, args, options);
-    };
-    syncBuiltinESMExports();
-    try {
-      await assert.rejects(transitionPlan({ cwd: root, selector: "archbusy", transition: "archive", reason: "Abandoned." }), (err) => {
-        assert.equal(err.code, "MOVE_NOT_COMMITTED");
-        assert.match(err.message, /moved to docs\/plans\/archived\/test-arch-busy\.md, but its edits were not saved/);
-        assert.match(err.resolution, /Committing the staged move would leave its edits out/);
-        return true;
-      });
-    } finally {
-      childProcess.spawnSync = realSpawnSync;
-      syncBuiltinESMExports();
-    }
-    assert.equal(head(root), before, "a failed undo commits nothing");
-    assert.match(git(root, "status", "--porcelain"), /^R {2}docs\/plans\/backlog\/test-arch-busy\.md -> docs\/plans\/archived\/test-arch-busy\.md$/m, "the failed undo leaves the rename staged");
-    assert.equal(fs.readFileSync(path.join(root, "docs/plans/archived/test-arch-busy.md"), "utf8"), planBefore, "the staged rename has none of the move's edits");
-    const retriedUndo = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "retrying after a failed undo", /was not committed/);
-    assert.equal(retriedUndo.code, "MOVE_NOT_COMMITTED");
-    assert.match(retriedUndo.resolution, /Commit the staged move only if every edit it should carry is staged\. To undo it instead, restore those files, which discards any uncommitted edits/);
-    assert.equal(head(root), before, "a retry after a failed undo commits nothing");
-    git(root, "reset", "--quiet", "--hard");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the failed undo restores cleanly");
+    // An untracked file in the plans worktree is a raw write too, so it is never committed by a move.
+    fs.writeFileSync(inStore("plans/backlog/test-untracked.md"), planDoc({ id: "archuntr" }));
+    assert.equal(refused(plans(root, "promote", "archuntr"), "promote an untracked plan", /uncommitted edits/).code, "PLAN_STORE_DIRTY");
+    fs.rmSync(inStore("plans/backlog/test-untracked.md"));
 
-    // A commit that fails after the rename says the plan moved, and keeps git's reason for this reader.
-    // A signing program that fails stops the commit; a hook could be bypassed by an inherited core.hooksPath.
-    git(root, "config", "commit.gpgsign", "true");
-    git(root, "config", "gpg.program", "false");
-    const uncommitted = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a failing commit", /moved to docs\/plans\/archived\/test-arch-busy\.md, but the move was not committed/);
-    assert.equal(uncommitted.code, "MOVE_NOT_COMMITTED");
-    assert.match(uncommitted.details.join("\n"), /gpg failed/);
-    assert.equal(head(root), before, "nothing was committed");
-    assert.ok(exists(root, "docs/plans/archived/test-arch-busy.md"), "the plan is where the message says");
-    assert.match(git(root, "status", "--porcelain"), /^R {2}docs\/plans\/backlog\/test-arch-busy\.md -> docs\/plans\/archived\/test-arch-busy\.md$/m, "the move stays staged");
-    git(root, "config", "--unset", "commit.gpgsign");
-    git(root, "config", "--unset", "gpg.program");
-    const retriedArchive = refused(root, plans(root, "archive", "archbusy", "--reason", "Abandoned."), "retrying an uncommitted archive", /was not committed/);
-    assert.equal(retriedArchive.code, "MOVE_NOT_COMMITTED");
-    assert.equal(head(root), before, "a retried archive commits nothing");
-    git(root, "reset", "--quiet", "--hard");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged move restores cleanly");
-
-    // A plan that reads as already at its destination must not commit only that half of the move.
-    commit(root, "Seed a promotable plan", { [backlog("arch-retry")]: planDoc({ id: "archretr" }) });
-    const seeded = head(root);
-    git(root, "config", "commit.gpgsign", "true");
-    git(root, "config", "gpg.program", "false");
-    refused(root, plans(root, "promote", "archretr"), "promote with a failing commit", /was not committed/);
-    git(root, "config", "--unset", "commit.gpgsign");
-    git(root, "config", "--unset", "gpg.program");
-    const retried = refused(root, plans(root, "promote", "archretr"), "retrying an uncommitted promote", /was not committed/);
-    assert.equal(retried.code, "MOVE_NOT_COMMITTED");
-    assert.equal(head(root), seeded, "a retry never commits half the move");
-    git(root, "reset", "--quiet", "--hard");
-    assert.equal(git(root, "status", "--porcelain"), statusBefore, "the staged promote restores cleanly");
-
-    // An untracked plan had no move to fail, so it gets the plain refusal.
-    fs.mkdirSync(path.join(root, "docs/plans/ready"), { recursive: true });
-    fs.writeFileSync(path.join(root, "docs/plans/ready/test-untracked.md"), planDoc({ id: "archuntr" }));
-    const untracked = refused(root, plans(root, "promote", "archuntr"), "promote of an untracked plan", /is not committed, so it cannot be moved/);
-    assert.equal(untracked.code, "INVALID_CHANGE");
-    fs.rmSync(path.join(root, "docs/plans/ready/test-untracked.md"));
-
-    // A dependent bound to a worktree keeps its reference, and the result names it; the clean one clears.
-    commit(root, "Bind a dependent", {
-      [backlog("arch-dirty")]: linkedDoc("archdirt", "depends_on: [archbusy]\nblocked_by: []\nrelated: []\nworktree: arch-bound"),
-    });
+    // A dependent bound to a worktree has one copy like any other, so it is cleared too.
+    fs.writeFileSync(dependentFile, dependentBefore.replace("related: []", "related: []\nworktree: arch-bound"));
+    git(store, "add", "--", backlog("arch-dep"));
+    git(store, "commit", "--quiet", "-m", "Bind a dependent");
     const kept = approved(plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a bound dependent");
-    assert.deepEqual(kept.references, { cleared: [], left: [backlog("arch-dirty")] });
-    assert.match(read(path.join(root, backlog("arch-dirty"))), /^depends_on: \[archbusy\]$/m);
+    assert.deepEqual(kept.references, { cleared: [backlog("arch-dep")] });
+    assert.match(read(dependentFile), /^depends_on: \[\]$/m);
   }
 
+  assert.equal(tryGit(root, "cat-file", "-e", "main:plans").status === 0, false, "no plan ever reaches the code branch");
   console.log("plan lifecycle transitions: ok");
 } finally {
   fx.cleanup();

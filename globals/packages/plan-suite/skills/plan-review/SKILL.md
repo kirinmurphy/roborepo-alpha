@@ -45,17 +45,14 @@ no permission. These rules do not authorize another plan command or expand execu
 
 ## Inputs
 
-Resolve the primary plan's lifecycle first. A committed completed plan returns before worktree
+Resolve the plan's lifecycle first, with `roborepo plans show <plan>`. A committed completed plan returns before worktree
 resolution, test discovery, or paired-skill loading, as described in the resume reference.
 
 Resolve:
 
-- the repository root, the primary checkout (first `worktree` entry of
-  `git worktree list --porcelain`), and the base branch (`main` unless repository policy names
-  another);
-- the selected plan, by id or path, and its folder in the primary checkout;
-- the worktree the plan names, its branch, and the worktree's copy of the plan — the authoritative
-  copy while the plan is in `active/` or `review/`;
+- the repository root and the base branch (`main` unless repository policy names another);
+- the selected plan, by id or store-relative path, and its folder;
+- the worktree the plan names, and its branch;
 - the repository's canonical completion gate and the plan's own tests, from `package.json` scripts,
   a `Makefile`, `justfile`, `pyproject.toml`, or CI config — never an invented one — and where the
   repository's CI result for a commit can be read, from its forge when available.
@@ -107,13 +104,13 @@ workflow owns those records and its validation and approval gates still apply.
 
 ### 1. Confirm implementation is complete (active plans only)
 
-Run the repository's canonical completion preflight command for `<plan>` from the primary checkout.
+Run `roborepo plans preflight <plan> --json`.
 
 - **It fails:** report exactly which checks failed and what remains, and stop. The plan stays in
   `active/`; the user resumes it with `/plan-execute`. Make no other change. Prompt for the
   missing prerequisite or the handoff to `/plan-execute`; do not end with only the failed preflight.
-- **It passes:** run the repository's canonical submit transition command for `<plan>` from the
-  primary checkout. It commits the plan-only move to `review/` on the base branch. Do not push.
+- **It passes:** run `roborepo plans submit <plan> --json`. It commits and pushes the move to
+  `review/` on the plans branch.
 
 ### 2. Synchronize the base branch into the feature branch
 
@@ -121,14 +118,12 @@ From the plan's worktree, run the repository's canonical base synchronization co
 base branch into the feature branch, and does nothing when there is nothing new, so every review
 round runs it.
 
-- It refuses a dirty worktree, a run from the primary checkout, and a local base branch that is
+- It refuses a dirty worktree, a run outside the plan's worktree, and a local base branch that is
   behind its upstream. A stale base is the user's to update; ask them, then rerun.
 - **Conflicts:** the merge pauses with both sides in place. Resolve each conflict by what both sides
   meant — read the base change and the branch change, never discard work and never pick a side
   blindly. Stage the resolution, run the repository's checks, then run the same command with its
   continue flag; it refuses while conflicts or conflict markers remain, and commits the merge.
-- The move the primary checkout committed arrives through this merge. When Git cannot pair the
-  rename, the command keeps the worktree's content at the plan's new path and reports it.
 - Never merge the feature branch into the base branch. That merge is the user's, through a pull
   request.
 
@@ -188,7 +183,7 @@ like any other.
 
 ### 4. Record the review
 
-Write to the `## Review` section in the worktree's copy of the plan. Plain checkboxes are enough for
+Write to the plan's `## Review` section, saving with `roborepo plans save`. Plain checkboxes are enough for
 findings; earlier findings may stay for readable history.
 
 ```md
@@ -208,8 +203,6 @@ findings; earlier findings may stay for readable history.
 - Reviewed implementation commit: <full commit id>
 - Base commit: <full base commit id>
 
-### Approval
-- Decision: requested
 ```
 
 Record only what is specific to this plan. `Outside this plan` items, and any general issue this
@@ -219,9 +212,8 @@ packet instead.
 Keep each finding to one line a fixer can act on: what is wrong and where. Record evidence itself,
 never a path under `/tmp` or another temporary folder: the OS deletes those within days and the
 plan outlives them. Keep Result pending
-until step 5 finishes and all findings and required manual checks are resolved. Commit the plan in
-the worktree as a plan-only commit; leave any prior approval intact as historical evidence rather
-than replacing it with an implied new approval.
+until step 5 finishes and all findings and required manual checks are resolved. Save the plan; `plans
+save` leaves any prior approval intact as historical evidence.
 
 ### 5. Fix what has a clear fix
 
@@ -286,13 +278,13 @@ Approval needs every finding resolved and every required manual check confirmed 
 ```
 
 1. Recheck review freshness and the human's answer against the exact implementation they were
-   shown. Write `### Approval` with `Decision: approved`, that full reviewed commit id, and who
-   confirmed it, then commit it immediately as a plan-only change before other work or ending the
-   turn. Include a reference to the explicit answer in the review prose. If the write or commit
+   shown. Run `roborepo plans approve <plan> --commit <full reviewed commit id> --confirmed-by <who>`
+   immediately, before other work or ending the turn. Include a reference to the explicit answer in
+   the review prose, saved with `plans save`. If the command
    fails, report approval received but not durably recorded; resume this step on the next run.
-2. Run the repository's canonical approval check for `<plan>`; it must report `fresh`. Plan-only
-   commits after approval keep it fresh; any change outside `docs/plans/` makes it stale.
-3. Before landing, run `roborepo plans merge-readiness <plan> --json` after committing approval.
+2. Run `roborepo plans approval <plan> --json`; it must report `fresh`. Plans-branch commits never
+   affect it; any code change on the feature branch makes it stale.
+3. Before landing, run `roborepo plans merge-readiness <plan> --json` after recording approval.
    Require a clean worktree and committed fresh Result/Approval against the current reviewed base.
    Report actionable failures and the assessed tips; a pass does not authorize a merge.
    Tell the user to open and merge the pull request themselves, then run `/plan-close`. If the base
@@ -317,13 +309,11 @@ the proposed change and its consequences, and wait for an explicit answer.
 
 On agreement:
 
-1. Revise the requirements, acceptance criteria, and tasks in the worktree's copy, record the user
-   decision in the Decision Log, and set `next_action`.
-2. Invalidate any approval: set `- Decision: invalidated` in `### Approval`.
-3. Commit the plan in the worktree.
-4. From the primary checkout, run the repository's canonical reopen transition command for `<plan>`.
-   It commits the plan-only move back to `active/`. The plan keeps its worktree and branch, and
-   never returns to `ready/`.
+1. Revise the requirements, acceptance criteria, and tasks, record the user decision in the Decision
+   Log, set `next_action`, and save the plan.
+2. Run `roborepo plans reopen <plan> --json`. It marks any approval `invalidated` and commits and
+   pushes the move back to `active/`. The plan keeps its worktree and branch, and never returns to
+   `ready/`.
 
 ## Final Report
 
@@ -333,7 +323,7 @@ questions, review packets, and other prose in this run.
 
 ```text
 Review result
-- Plan: "<title>" (<id>), <repository-relative path>
+- Plan: "<title>" (<id>), <store-relative path>
 - Resume path: full review | changes since review | approval only | already approved | already closed
 - Completion preflight: passed | failed with <checks> | not run (<resume reason>)
 - Lifecycle change: active -> review | review -> active | none
@@ -350,7 +340,7 @@ Review result
 ```
 
 Also report the evidence behind each finding, the verification commands and results, paired skills
-loaded or skipped, and current Git status in the worktree and the primary checkout.
+loaded or skipped, current Git status in the worktree, and whether plan changes reached the remote.
 Label historical checks as reused. Skills and checks bypassed by an unchanged success path are
 not applicable to this run; never present them as newly performed. Report unavailable worktree
 status as expected after completed cleanup.
@@ -367,7 +357,7 @@ Do not:
 - fix a finding that chooses between real alternatives, changes requirements, or changes a contract
   the plan did not specify, without the human's decision;
 - infer, assume, or record approval without the human's explicit answer;
-- merge the feature branch into the base branch, push, open or merge pull requests;
+- merge the feature branch into the base branch, push code, open or merge pull requests;
 - change lifecycle state except the submit transition from `active/` and the reopen transition
   after an agreed scope change;
 - move a plan back to `ready/`;

@@ -5,7 +5,7 @@
 // reason itself.
 //
 // Only comments are checked. Plan paths in string literals are behavior — plan-suite reads and
-// writes docs/plans, and test fixtures build plan paths — so they are never flagged. Durable docs
+// writes plans/, and test fixtures build plan paths — so they are never flagged. Durable docs
 // (docs/user, docs/internal) are out of scope: code that serves or audits them names them on purpose.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -19,7 +19,7 @@ const SKIPPED = /(?:^|\/)vendor\/|^portal\/mockups\//;
 const SOURCE_FILE = /\.(?:mjs|cjs|js|sh|bash|ps1|html|css)$/;
 
 const CITATIONS = [
-  /docs\/plans\/(?:backlog|active|completed|archived)\//,
+  /\b(?:docs\/)?plans\/(?:backlog|ready|active|review|completed|archived)\//,
   /\b[a-z0-9]+(?:-[a-z0-9]+)*-plan(?:-v\d+)?\.md\b/,
   /\bPhases?\s+\d/,
   /\bMilestone\s+[A-Z0-9]\b/,
@@ -55,7 +55,9 @@ function flags(filePath, source) {
 }
 
 assert.deepEqual(flags("a.mjs", "// See docs/plans/active/x.md\nconst y = 1;\n"), ["1:docs/plans/active/"]);
-assert.deepEqual(flags("a.mjs", "const p = \"docs/plans/active/\"; // plain note\n"), [],
+assert.deepEqual(flags("a.mjs", "// See plans/review/x.md\nconst y = 1;\n"), ["1:plans/review/"], "the plans store's paths are citations too");
+assert.deepEqual(flags("a.mjs", "// The plans/ folder holds every lifecycle.\n"), [], "naming the folder itself cites no plan");
+assert.deepEqual(flags("a.mjs", "const p = \"plans/active/\"; // plain note\n"), [],
   "a plan path in a string literal is behavior, not a citation");
 assert.deepEqual(flags("a.mjs", "const t = `// Phase 4 ${x} docs/plans/active/`;\n"), [],
   "template literal text is not a comment");

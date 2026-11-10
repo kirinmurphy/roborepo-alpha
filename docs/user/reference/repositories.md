@@ -68,7 +68,7 @@ The same repository found by several sources is one repository: identity comes f
    count, and **Refresh**, **Disable**, and **Remove**. **How folder scanning works** explains the
    walk.
 
-A path RoboRepo can read is classified for you: a folder with `.git` or `docs/plans` is a repository,
+A path RoboRepo can read is classified for you: a folder with `.git` is a repository,
 any other folder is a folder of repositories. A path that is missing or unreadable when you add it
 asks which of the two it is. That answer is kept on every later refresh, so a path that becomes
 readable never broadens into a folder walk you did not ask for.
@@ -81,7 +81,7 @@ repository's own subfolders as candidates:
 ```mermaid
 flowchart TD
   Root["Folder source"] -->|walks into| Folder["Next subfolder"]
-  Folder -->|is checked for| Q{".git or docs/plans?"}
+  Folder -->|is checked for| Q{".git?"}
   Q -->|yes: registers| Repo["Repository"]
   Q -->|no: applies| Skip{"Hidden, ignored,<br/>or deeper than 6 levels?"}
   Skip -->|yes: skips| Done["Folder left out"]
@@ -236,8 +236,11 @@ proof of preservation; confirmation alone cannot discard unmerged commits.
 Automatic cleanup can remove worktrees without a plan. An active or review plan naming a
 worktree keeps it protected. Cleanup requires an unlocked worktree beneath the configured worktree
 folder and proof that committed, staged, and filesystem versions are preserved. The folder comes
-from `worktreeRoot` in `docs/plans/plans-config.json`, or the folder confirmed in Home. Proofs
-compare both local layers against one historical base commit, including plan lifecycle moves,
+from `worktreeRoot` in `plans/plans-config.json` on the plans branch, or the folder confirmed in Home.
+When the plans worktree can't be read, is missing a lifecycle folder, or holds an active or review
+plan whose frontmatter names no worktree, automatic cleanup removes nothing, because it can't tell
+which worktrees active plans claim. The plans worktree itself is locked, never a cleanup candidate, and
+never listed on Home. Proofs compare both local layers against one historical base commit,
 within 500 first-parent commits and a 30-second budget. Unsupported Git behavior or unavailable
 history keeps the worktree. No backup or snapshot is created.
 Empty directories do not block cleanup once the worktree has landed. If the final inventory finds

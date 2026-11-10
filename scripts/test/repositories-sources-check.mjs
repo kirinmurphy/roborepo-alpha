@@ -58,19 +58,19 @@ try {
   const projects = path.join(tempRoot, "projects");
   const alpha = gitRepo(path.join(projects, "alpha"), "https://github.com/example/alpha.git");
   gitRepo(path.join(projects, "nested", "beta"), "git@github.com:example/beta.git");
-  fs.mkdirSync(path.join(projects, "plans-only", "docs", "plans"), { recursive: true });
+  fs.mkdirSync(path.join(projects, "not-a-repo", "docs"), { recursive: true });
   {
     const stateRoot = freshState("converge");
     let payload = addRepositorySource({ path: "~/projects", stateRoot, homeDir });
     const folder = sourceByPath(payload, "~/projects");
     assert.equal(folder.kind, "directory", "a readable non-repository folder is classified as a directory");
     assert.equal(folder.status.state, "healthy");
-    assert.equal(folder.status.repositoryCount, 3, "folder finds git and plans-only repositories");
-    assert.deepEqual(payload.repositories.map((repo) => repo.displayName), ["alpha", "beta", "plans-only"]);
+    assert.equal(folder.status.repositoryCount, 2, "a folder finds Git repositories only");
+    assert.deepEqual(payload.repositories.map((repo) => repo.displayName), ["alpha", "beta"]);
 
     payload = addRepositorySource({ path: alpha, stateRoot, homeDir });
     assert.equal(sourceByPath(payload, "~/projects/alpha").kind, "repository", "an eligible root is classified as a repository");
-    assert.equal(payload.repositories.length, 3, "overlapping sources do not duplicate a repository");
+    assert.equal(payload.repositories.length, 2, "overlapping sources do not duplicate a repository");
 
     // Runtime discovering the same checkout adds evidence to the same record.
     recordRepositoryDiscovery({
@@ -81,7 +81,7 @@ try {
     const alphaRow = payload.repositories.find((repo) => repo.displayName === "alpha");
     assert.deepEqual(alphaRow.foundBy.sort(), ["auto-discovery", "~/projects", "~/projects/alpha"].sort(), "Found by lists every source");
     const registry = loadRegistry({ stateRoot });
-    assert.equal(Object.keys(registry.repositories).length, 3);
+    assert.equal(Object.keys(registry.repositories).length, 2);
 
     // Duplicate source paths are refused.
     assert.throws(() => addRepositorySource({ path: projects, stateRoot, homeDir }), (err) => err.code === "DUPLICATE_SOURCE");
@@ -90,7 +90,7 @@ try {
     // evidence-less ones as records that age out instead of being deleted.
     payload = removeRepositorySource({ id: folder.id, stateRoot, homeDir });
     const after = loadRegistry({ stateRoot });
-    assert.equal(Object.keys(after.repositories).length, 3, "source removal never deletes repositories");
+    assert.equal(Object.keys(after.repositories).length, 2, "source removal never deletes repositories");
     assert.deepEqual(payload.repositories.find((repo) => repo.displayName === "alpha").foundBy.sort(), ["auto-discovery", "~/projects/alpha"].sort());
     const beta = Object.values(after.repositories).find((record) => record.displayName === "beta");
     assert.equal(beta.discoveries.length, 0, "beta has no evidence left");

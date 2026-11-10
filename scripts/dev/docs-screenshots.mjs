@@ -11,7 +11,7 @@
 //   - Harnesses: stub `claude` / `codex` binaries on PATH, then `roborepo init`, a typical package
 //     set, and telemetry enabled.
 //   - Tokens: the repo's own mock spool (portal/tokens/mock-spool.jsonl).
-//   - Plans: this repository's docs/plans (public content), added as a repository source.
+//   - Plans: this repository's plans store (public content), added as a repository source.
 //   - Runtime: two demo apps in throwaway git repos with example remotes (acme/*). Auto-discovery
 //     is turned on and scans the real machine's listeners, so the page's snapshot is filtered to
 //     the demo apps before it renders.

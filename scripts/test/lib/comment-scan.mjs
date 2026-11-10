@@ -1,5 +1,5 @@
 // Extracts comments from source files so a check can inspect what code SAYS without tripping over
-// what code DOES. A plan path inside a string literal is behavior (plan-suite reads docs/plans);
+// what code DOES. A plan path inside a string literal is behavior (plan-suite reads plans/);
 // the same path inside a comment is a citation. Telling the two apart needs each language's real
 // string and comment syntax, so this is a small scanner per language rather than a line regex.
 //

@@ -23,14 +23,12 @@
   <div class="modal-body">
     <pre class="folder-tree"><span class="tree-root">projects/</span>
 <span class="tree-branch">├── </span><span class="project-folder">git_repo1/</span>
-<span class="tree-branch">│   └── </span><span class="tree-plain">docs/plans/</span>
-<span class="tree-branch">├── </span><span class="project-folder">plans_only/</span>
-<span class="tree-branch">│   └── </span><span class="tree-plain">docs/plans/</span>
+<span class="tree-branch">│   └── </span><span class="tree-plain">.git/</span>
 <span class="tree-branch">└── </span><span class="tree-plain">repos_folder/</span>
 <span class="tree-branch">    ├── </span><span class="project-folder">git_repo2/</span>
-<span class="tree-branch">    └── </span><span class="tree-plain">notes/</span>  <span class="tree-note">(no .git or docs/plans)</span></pre>
+<span class="tree-branch">    └── </span><span class="tree-plain">notes/</span>  <span class="tree-note">(no .git)</span></pre>
     <ul class="tree-legend">
-      <li><span class="legend-swatch legend-repo"></span> found repo (a folder with .git or docs/plans)</li>
+      <li><span class="legend-swatch legend-repo"></span> found repo (a folder with .git)</li>
     </ul>
     <p class="modal-note">
       Stops at the first repo found in each branch — folders inside a repo aren't

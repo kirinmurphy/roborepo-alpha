@@ -15,6 +15,7 @@ import { lifecycleLabel, lifecycleTabs, setLifecycleModel } from "./lifecycle.js
 import { createBacklogController } from "./backlog.js";
 import { NAMESPACE_PARAM, hrefWithNamespace } from "./backlog-model.js";
 import { createBlockersPopover } from "./blockers-popover.js";
+import { createPlanImportDialog } from "./plan-import-dialog.js";
 import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
 import {
   clearRepositoryScope,
@@ -159,6 +160,8 @@ function bindStaticControls() {
   document.getElementById("search").addEventListener("keydown", (event) => {
     if (event.key === "Enter" && !filtersUpdateEl.disabled) filtersUpdateEl.click();
   });
+  const planImport = createPlanImportDialog({ repositories: () => state.snapshot?.repositories || [], onSaved: reloadAfterChange });
+  document.getElementById("plan-import-toggle").addEventListener("click", () => planImport.open());
   filtersToggleEl.addEventListener("click", () => {
     discardFilterDraft();
     filtersDialogEl.showModal();
@@ -514,6 +517,7 @@ function renderOnboarding(snapshot, step) {
 function renderWarnings(snapshot) {
   const warnings = [
     ...(snapshot.errors || []).map((err) => `${err.repository || "scan"}${err.checkout ? ` (${err.checkout})` : ""}: ${err.path ? `${err.path} ` : ""}${err.error}`),
+    ...(snapshot.repositoryScans || []).filter((scan) => scan.state === "not-set-up").map((scan) => `${scan.name || "A repo"}: plans aren't set up. Run the /plan-suite-init skill in this repo.`),
     ...(snapshot.truncated ? ["Some repos have more plan documents than the scanner reads; the rest are not shown."] : []),
     ...(staleReason ? [`The latest plans could not be loaded (${staleReason}), so this page may be out of date. Press Refresh to try again.`] : []),
   ];

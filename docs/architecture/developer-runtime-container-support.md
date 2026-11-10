@@ -7,7 +7,7 @@ app — is rarely one container.
 
 This document states how each kind of container is recognized, where it is placed on the page, and
 which signals are trusted to decide that. It describes current behavior; proposed changes live in
-`docs/plans/`.
+plans on the `repo-plans` branch.
 
 ## Definition List
 
@@ -150,7 +150,7 @@ resolution could not handle. That is one batched `docker inspect` per scan with 
 
 The Shared services region and member counts are described in the
 [Runtime reference](../user/reference/runtime.md). The implementation history is in
-`docs/plans/completed/developer-runtime-workspace-model.md`.
+the completed plan `developer-runtime-workspace-model`.
 
 ## Trust and safety properties
 

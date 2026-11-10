@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // `roborepo plans sync-base`: merging the base branch into a plan's feature branch from its linked
 // worktree. Covers a branch already up to date, a clean merge, a conflict that pauses without losing
-// work and then continues, the plan rename Git fails to detect, and every refusal.
+// work and then continues, and every refusal.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
-import { createPlanFixture, planDoc } from "./lib/plan-git-fixture.mjs";
+import { createPlanFixture } from "./lib/plan-git-fixture.mjs";
 
 const fx = createPlanFixture("roborepo-plan-sync-base-");
 const { git, roborepo, json, repository, worktree, commit } = fx;
@@ -20,7 +20,6 @@ function refused(result, label, pattern) {
 
 try {
   const root = repository("repo", {
-    "docs/plans/active/test-sync.md": planDoc({ id: "sync0001" }),
     "src/shared.txt": "line one\n",
     "src/other.txt": "other\n",
   });
@@ -41,7 +40,6 @@ try {
 
   const ahead = commit(root, "Upstream-only commit", { "src/upstream.txt": "fetched\n" });
   git(root, "reset", "--quiet", "--hard", "HEAD^");
-  git(root, "remote", "add", "origin", root);
   git(root, "update-ref", "refs/remotes/origin/main", ahead);
   git(root, "config", "branch.main.remote", "origin");
   git(root, "config", "branch.main.merge", "refs/heads/main");
@@ -77,22 +75,6 @@ try {
   assert.equal(continued.state, "merged");
   assert.equal(git(wt.path, "rev-list", "--parents", "-n", "1", "HEAD").split(" ").length, 3);
   assert.equal(read(path.join(wt.path, "src/shared.txt")), "line one from base and the branch\n", "the resolution is what was committed");
-
-  // The plan moved on base while the worktree edited it. When base also rewrote it enough that Git
-  // cannot pair the rename, the worktree's content lands at base's new path.
-  const planPath = "docs/plans/active/test-sync.md";
-  commit(wt.path, "Progress in the worktree", { [planPath]: `${read(path.join(wt.path, planPath))}\nWorktree progress.\n` });
-  fs.mkdirSync(path.join(root, "docs/plans/review"), { recursive: true });
-  git(root, "mv", "--", planPath, "docs/plans/review/test-sync.md");
-  const rewritten = `---\nid: sync0001\nnext_action:\n---\n\n# Rewritten\n\n${"Entirely different text on base.\n".repeat(40)}`;
-  fs.writeFileSync(path.join(root, "docs/plans/review/test-sync.md"), rewritten);
-  git(root, "add", "--", "docs/plans/review/test-sync.md");
-  git(root, "commit", "--quiet", "-m", "Move and rewrite the plan on base");
-  const renamed = json(sync(wt.path), "rename conflict");
-  assert.equal(renamed.state, "merged", `the plan's modify/delete conflict is resolved\n${JSON.stringify(renamed)}`);
-  assert.deepEqual(renamed.resolved, [{ from: planPath, to: "docs/plans/review/test-sync.md" }]);
-  assert.ok(!fs.existsSync(path.join(wt.path, planPath)), "the old path is removed");
-  assert.match(read(path.join(wt.path, "docs/plans/review/test-sync.md")), /Worktree progress\./, "the worktree's content is kept at the new path");
 
   console.log("plan sync-base: ok");
 } finally {
