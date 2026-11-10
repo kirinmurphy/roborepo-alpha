@@ -1,6 +1,6 @@
 ---
 id: pvgx8oh7
-next_action: Run /plan-close.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["6q16tocb", "gqzjlzgx", "rxv53v6z", "a7bslb00", "vzgsx5vz", "i5mnkm7z", "d9ywaa8d", "w7vls1yk", "p3vbk03v", "b2sgiejd", "git-exec-consolidation", "plans-portal-live-refresh-and-static-preflight"]
