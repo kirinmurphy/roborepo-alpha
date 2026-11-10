@@ -441,11 +441,9 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - Base commit: 3f2a33e7bbc4f55f5189cb3c553e9ba05f1b6c2c
 
 ### Approval
-
 - Decision: approved
-- Reviewed implementation commit: 1a875388c74ada963083a84cc706e180de228578
+- Reviewed implementation commit: f28de44c89504b15ffb998cd6e18b5933bcdfe41
 - Confirmed by: human
-- Answer: approved in the /plan-review session on 2026-11-10, choosing "Approve 1a875388" in reply to the exact-commit approval question.
 
 ## Follow-up task
 
