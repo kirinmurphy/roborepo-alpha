@@ -356,7 +356,7 @@ endpoint (`/api/config/packages/bulk`).
 When `plan-suite` is disabled:
 
 - `/plans` remains available, behind the onboarding banner
-- copying the document filename and repository-aware context remains available
+- copying the absolute file path and repository-aware context remains available
 - workflow prompt actions stay hidden
 
 When enabled:
@@ -388,8 +388,8 @@ When enabled:
   a short age such as **2 hrs**; its tooltip gives the exact date. The bottom row keeps the primary
   action and Copy menu at the left, with blockers, open review findings, and task progress at the right
 - Copy menus use compact labels with copy icons and flush hover backgrounds. Update and Portable Prompt are
-  omitted. **Copy Document Filename** sits below a divider and copies only the filename; the
-  popup header's separate path button still copies the repository-relative path. Shared copy
+  omitted. **Copy file path** sits below a divider and copies the plan's absolute file path; the
+  popup header's separate path button copies the same absolute path. Shared copy
   controls confirm with a green check while keeping their original labels
 - an active or review plan whose worktree has merged shows a **merged** completion badge; the same
   status is visible in the detail drawer

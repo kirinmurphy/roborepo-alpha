@@ -242,7 +242,9 @@ worktrees active plans claim. The plans worktree itself is locked, never a clean
 never listed on Home. Proofs compare both local layers against one historical base commit,
 within 500 first-parent commits and a 30-second budget. Unsupported Git behavior or unavailable
 history keeps the worktree. No backup or snapshot is created.
-Non-disposable empty directories remain as leftovers because Git trees cannot preserve them.
+Empty directories do not block cleanup once the worktree has landed. If the final inventory finds
+a new file outside the recognized disposable artifacts below, cleanup keeps the worktree for
+reassessment.
 
 | Preservation result | Outcome | Next action |
 | --- | --- | --- |

@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7"]
 reviewed_commit: 7ab4c5c96b8db028e58d7375b5e23838f805b05f
-worktree:
+worktree: plans-suite-quick-wins-1-cleanup
 ---
 
 # Clear agent friction: permissions, rule conflicts, and stale docs

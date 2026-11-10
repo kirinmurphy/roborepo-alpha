@@ -43,6 +43,7 @@ async function inspectPreservation(cwd, temporary, { branch, base = null, record
     const knownBlobs = new Set([...baseline, ...inventory.index].map((entry) => entry.oid));
     const filesystem = [];
     for (const entry of inventory.entries) {
+      // Keep directory entries in the inventory fingerprint so removal can detect later writes.
       if (entry.mode === "directory") continue;
       // Inventory has already refused filters and conversions. Reuse raw blobs present in the
       // baseline or index; only new bytes need writing to the disposable object store.
@@ -61,17 +62,17 @@ async function inspectPreservation(cwd, temporary, { branch, base = null, record
         if (before.get(file)?.oid !== local.get(file)?.oid || before.get(file)?.mode !== local.get(file)?.mode) remainingPaths.push(file);
       }
     }
-    const emptyDirectories = inventory.entries.filter((entry) => entry.mode === "directory").map((entry) => entry.path);
-    remainingPaths = [...new Set([...remainingPaths, ...emptyDirectories])].sort();
-    const hasLocalContent = remainingPaths.length > 0;
+    remainingPaths = [...new Set(remainingPaths)].sort();
     if (!landing.landed) {
+      const emptyDirectories = inventory.entries.filter((entry) => entry.mode === "directory").map((entry) => entry.path);
+      remainingPaths = [...new Set([...remainingPaths, ...emptyDirectories])].sort();
+      const hasLocalContent = remainingPaths.length > 0;
       // Committed differences are remaining work too; local paths alone omit an unlanded branch.
       const committed = await git(["diff", "--name-only", "-z", baseCommit, inventory.tip], { maxBuffer: GIT_MAX_BINARY_BUFFER });
       if (committed.ok) remainingPaths = [...new Set([...remainingPaths, ...committed.stdout.split("\0").filter(Boolean)])].sort();
       return result(landing.reason === "not absorbed" || landing.reason === "no own work" ? "remaining" : "unknown", landing.reason, { hasLocalContent });
     }
-    if (emptyDirectories.length) return result("remaining", "empty directories have no retained Git representation", { hasLocalContent });
-    if (!hasLocalContent) return result("preserved", null, { evidenceCommit: landing.absorbingCommit, hasLocalContent: false });
+    if (!remainingPaths.length) return result("preserved", null, { evidenceCommit: landing.absorbingCommit, hasLocalContent: false });
     const candidates = required(await git(["rev-list", "--first-parent", "--reverse", `${landing.fork}..${baseCommit}`], { maxBuffer: GIT_MAX_BINARY_BUFFER })).trim().split("\n").filter(Boolean);
     if (candidates.length > FIRST_PARENT_SCAN_LIMIT) throw new Error("scan limit exceeded");
     const proof = await assessLayers({ baseline, index: inventory.index, filesystem, tip: inventory.tip, candidates, landing, git, temporary });

@@ -405,6 +405,9 @@ const withPersisted = buildDeveloperRuntimeSnapshot({
       checkouts: [{ rootId: "stale-root", kind: "primary", state: "absent", reason: "checkout missing", projectRoot: "/tmp/stale-one", git: null }],
     },
   ],
+  knownWorktrees: new Map([[IDLE, [
+    { rootId: "unregistered-gone-wt", name: "gone", projectRoot: "/tmp/idle-one-gone", git: null, prunable: true },
+  ]]]),
 });
 const idle = withPersisted.repositories.find((r) => r.repositoryId === IDLE);
 const staleRepo = withPersisted.repositories.find((r) => r.repositoryId === STALE);
@@ -415,12 +418,8 @@ assert.equal(withPersisted.repositories.length, 3);
 // branches, its identity — and has no members, which is the entire difference.
 assert.equal(idle.lifecycle.state, "idle");
 assert.equal(idle.members.length, 0);
-assert.equal(idle.roots.length, 2);
+assert.equal(idle.roots.length, 1, "a deleted worktree is hidden from the dashboard");
 assert.equal(idle.roots[0].git.branch, "main");
-// A deleted worktree has no git left to say it was one; the registry's recorded kind keeps it a
-// worktree row, sorted after the main checkout, instead of a second "main checkout".
-assert.equal(idle.roots[1].isWorktree, true);
-assert.equal(idle.roots[1].checkoutState, "absent");
 assert.equal(idle.lastSeenAt, "2026-08-01T00:00:00.000Z");
 // A checkout that is not on disk carries that as a fact about the directory, so the card can say
 // "checkout missing" rather than the misleading "no active members".
@@ -450,12 +449,12 @@ function movedRepository(checkouts) {
 }
 const originalMovedCheckouts = structuredClone(movedCheckouts);
 assert.deepEqual(movedRepository(movedCheckouts).roots.map((root) => root.rootId).sort(),
-  ["missing-worktree", "new-folder", "offline-clone"], "hide the absent clone, preserving unreadable clones and worktree cleanup rows");
+  ["new-folder", "offline-clone"], "hide absent checkouts and keep unreadable clones");
 assert.deepEqual(movedCheckouts, originalMovedCheckouts, "display filtering leaves persisted checkout observations intact");
 assert.equal(movedRepository([movedCheckouts[0]]).roots.length, 1, "keep the last missing checkout visible");
 assert.equal(movedRepository([movedCheckouts[0], movedCheckouts[2]]).roots.length, 2, "unreadable is not proof of a surviving checkout");
 assert.equal(movedRepository(movedCheckouts.map((checkout) => checkout.rootId === "old-folder"
-  ? { ...checkout, state: "present", git: { branch: "main" } } : checkout)).roots.length, 4,
+  ? { ...checkout, state: "present", git: { branch: "main" } } : checkout)).roots.length, 3,
 "a returning folder reappears alongside the other clone");
 assert.equal(movedRepository([movedCheckouts[0], { ...movedCheckouts[1], kind: "worktree", git: { branch: "feature", isWorktree: true } }]).roots.length,
   1, "a confirmed-present worktree also keeps the repository visible without an absent main row");
