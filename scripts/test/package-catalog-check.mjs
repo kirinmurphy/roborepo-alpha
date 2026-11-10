@@ -20,6 +20,14 @@ function assert(condition, message) {
 const catalog = loadPackageCatalog({ includeUnavailable: true });
 validatePackageCatalog(catalog);
 
+// npm pack omits symlinks, so a linked file under a shipped package works from a checkout but is
+// missing from the published tarball. Share code with a real file or a re-export module instead.
+const repoRoot = path.resolve(moduleDir, "../..");
+for (const entry of fs.readdirSync(path.join(repoRoot, "globals/packages"), { recursive: true, withFileTypes: true })) {
+  const full = path.join(entry.parentPath, entry.name);
+  assert(!entry.isSymbolicLink(), `shipped package path is a symlink (npm pack drops it): ${path.relative(repoRoot, full)}`);
+}
+
 const packageIds = new Set(catalog.map((pkg) => pkg.id));
 assert(
   !catalog.some((pkg) => pkg.origin === "built-in" && pkg.defaultEnabled),
