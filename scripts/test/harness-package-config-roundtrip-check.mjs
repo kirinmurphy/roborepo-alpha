@@ -26,10 +26,6 @@ function writeSettings(settingsPath, settings) {
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   fs.writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`);
 }
-function writeText(filePath, content) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, content);
-}
 function readText(p) {
   try { return fs.readFileSync(p, "utf8"); } catch { return ""; }
 }
@@ -48,7 +44,7 @@ function testClaudeRoundTrip() {
   const settingsPath = path.join(tmp, "claude-settings-roundtrip.json");
   const sourcePath = writeComponentFixture("claude-status-roundtrip", { statusLine: { type: "command", command: "roundtrip" } });
   const component = { harness: "claude", source: path.relative(process.cwd(), sourcePath) };
-  const options = { configPath: settingsPath, write: (content) => writeText(settingsPath, content) };
+  const options = { claudeSettingsPath: settingsPath, readSettings, writeSettings };
 
   mergeHarnessConfig(pkg, component, options);
   const firstEnable = readText(settingsPath);
@@ -66,7 +62,7 @@ function testCodexRoundTrip() {
   const configPath = path.join(tmp, "codex-config-roundtrip.toml");
   const sourcePath = writeComponentFixture("codex-tui-roundtrip", { tui: { status_line: ["item-a", "item-b"], status_line_use_colors: true } });
   const component = { harness: "codex", source: path.relative(process.cwd(), sourcePath) };
-  const options = { configPath };
+  const options = { codexConfigPath: configPath, readSettings, writeSettings };
 
   mergeHarnessConfig(pkg, component, options);
   const firstEnable = readText(configPath);
@@ -87,7 +83,7 @@ function testCodexRoundTripPreservesUnownedNeighbors() {
   fs.writeFileSync(configPath, '[tui]\nstatus_line = ["user-owned"]\n');
   const sourcePath = writeComponentFixture("codex-tui-roundtrip-neighbors", { tui: { status_line: ["item-a"] } });
   const component = { harness: "codex", source: path.relative(process.cwd(), sourcePath) };
-  const options = { configPath };
+  const options = { codexConfigPath: configPath, readSettings, writeSettings };
 
   mergeHarnessConfig(pkg, component, options);
   const firstEnable = readText(configPath);

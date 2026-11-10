@@ -11,10 +11,6 @@ export const HARNESS_CAPABILITIES = Object.freeze([
   "hooks",
   "mcp",
   "package-config",
-  "package-permissions",
-  "package-plugins",
-  "package-plugin-dirs",
-  "package-tool-approvals",
   "telemetry-capture",
   "telemetry-rate-limits",
   "telemetry-transcripts",
@@ -45,18 +41,8 @@ export const CAPABILITY_REQUIRED_METHODS = Object.freeze({
   // configured servers) -- separate names on purpose, same lesson as hooks' merge/unmerge vs
   // write: "remove" was already claimed by bulk-removal semantics first, so reusing it
   // for a single-server op would make one name mean two different things depending on caller.
-  // installPreset/removePreset/hasServer: a package's MCP preset, which applies to every
-  // MCP-capable provider. Each provider decides how it registers (a CLI, a config file) and what
-  // else comes with it, so the package system never branches on which provider it is talking to.
-  mcp: { group: "mcp", methods: ["add", "remove", "addServer", "removeServer", "list", "installPreset", "removePreset", "hasServer"] },
-  "package-config": { group: "rootConfig", methods: ["mergePackageComponent", "unmergePackageComponent", "probePackageComponent"] },
-  // Package resources a provider owns the storage for. Each method takes the resource and an io
-  // object ({ configPath, write }) from the package system, writes through io.write, and probe*
-  // returns { observed, detail } for package status.
-  "package-permissions": { group: "packages", methods: ["mergePermissions", "unmergePermissions", "probePermissions"] },
-  "package-plugins": { group: "packages", methods: ["enablePlugin", "disablePlugin", "probePlugin"] },
-  "package-plugin-dirs": { group: "packages", methods: ["validatePluginDir", "registerPluginDir", "unregisterPluginDir", "probePluginDir"] },
-  "package-tool-approvals": { group: "packages", methods: ["mergeToolApprovals", "unmergeToolApprovals", "probeToolApprovals"] },
+  mcp: { group: "mcp", methods: ["add", "remove", "addServer", "removeServer", "list"] },
+  "package-config": { group: "rootConfig", methods: ["mergePackageComponent", "unmergePackageComponent"] },
   "telemetry-capture": { group: "telemetry", methods: ["wireCaptureHooks"] },
   "telemetry-rate-limits": { group: "telemetry", methods: ["parseRateLimits"] },
   "telemetry-transcripts": { group: "transcripts", methods: ["locate", "parse"] },

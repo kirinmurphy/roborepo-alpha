@@ -49,7 +49,6 @@
     "hooks",
     "mcp",
     "package-config",
-    "package-tool-approvals",
     "telemetry-capture",
     "telemetry-rate-limits",
     "telemetry-transcripts",

@@ -5,7 +5,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "../../cli/roots.mjs";
 import { claudeMcpArgs, runClaudeMcpAdd, hasClaudeCli, claudeMcpRemove, claudeMcpList } from "./mcp-claude-cli.mjs";
-import { addMcpPermission } from "./mcp-permission.mjs";
 
 // Mirrors scripts/cli/mcp-config.mjs's MCP_SERVERS_PATH/MCP_SCOPES, duplicated rather than
 // imported: mcp-config.mjs pulls in paths.mjs's registry-dependent half (rootConfigActive/
@@ -137,39 +136,4 @@ export function mcpList() {
   const output = claudeMcpList();
   if (!output) return [];
   return [...output.matchAll(/^([^\s:]+):/gm)].map((match) => match[1]);
-}
-
-function readJsonFile(filePath) {
-  try { return JSON.parse(fs.readFileSync(filePath, "utf8")); } catch { return null; }
-}
-
-// A package's MCP preset. Registers through the `claude` CLI when it is on PATH (skipped, not
-// failed, without it), then grants the mcp__<server> permission in the active settings, seeding
-// from the baseline when the active file does not exist yet.
-export function mcpInstallPreset(spec, io) {
-  if (!hasClaudeCli()) {
-    console.log(`  ok: claude CLI unavailable for mcp ${spec.name}`);
-    return;
-  }
-  if (mcpList().includes(spec.name)) {
-    console.log(`  ok: claude mcp ${spec.name} already present`);
-    return;
-  }
-  const result = mcpAddServer(spec, { scope: "user", transport: null });
-  if (!result.ok) throw new Error(`mcp add failed for preset: ${spec.name}${result.warnings.length ? ` (${result.warnings.join("; ")})` : ""}`);
-  const settings = readJsonFile(io.configPath) ?? readJsonFile(io.baselinePath) ?? {};
-  const { permission, changed } = addMcpPermission(settings, spec.name);
-  if (!changed) { console.log(`permission already present: ${permission}`); return; }
-  io.write(`${JSON.stringify(settings, null, 2)}\n`);
-  console.log(`permission added: ${permission} -> ${io.configPath}`);
-}
-
-export function mcpRemovePreset(name, io) {
-  mcpRemoveServer(name, { homePath: io.homePath });
-  console.log(`  removed: mcp ${name} from Claude scopes`);
-}
-
-// Read without the CLI, so package status stays fast: the settings file's own mcpServers key.
-export function mcpHasServer(name, { configPath }) {
-  return !!readJsonFile(configPath)?.mcpServers?.[name];
 }

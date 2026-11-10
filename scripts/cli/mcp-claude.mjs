@@ -4,7 +4,6 @@ import { displayPath } from "./mcp-config.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
 import { claudeMcpArgs, runClaudeMcpAdd } from "../harnesses/claude/mcp-claude-cli.mjs";
 import { shellQuote } from "../harnesses/shell-quote.mjs";
-import { addMcpPermission } from "../harnesses/claude/mcp-permission.mjs";
 
 // claudeMcpArgs/runClaudeMcpAdd live in scripts/harnesses/claude/mcp-claude-cli.mjs (a leaf
 // module with zero registry-touching imports) so the Claude provider adapter can call them
@@ -18,13 +17,19 @@ export { shellQuote, claudeMcpArgs, runClaudeMcpAdd };
 // same drift-state recording + normalization Codex already uses, so a later `apply` won't clobber
 // this grant. When the active file does not exist yet, the baseline seeds the initial permission set.
 export function ensureClaudeMcpPermission(serverName) {
+  const permission = `mcp__${serverName}`;
   const activePath = rootConfigActive.claude;
   const settings = readClaudeSettings(activePath) ?? readClaudeSettings(rootConfigBaseline.claude) ?? {};
-  const { permission, changed } = addMcpPermission(settings, serverName);
-  if (!changed) {
+
+  settings.permissions ||= {};
+  settings.permissions.allow ||= [];
+  if (settings.permissions.allow.includes(permission)) {
     console.log(`permission already present: ${permission}`);
     return;
   }
+
+  const insertAt = nextMcpPermissionIndex(settings.permissions.allow);
+  settings.permissions.allow.splice(insertAt, 0, permission);
   writeRootConfig("claude", activePath, `${JSON.stringify(settings, null, 2)}\n`);
   console.log(`permission added: ${permission} -> ${displayPath(activePath)}`);
 }
@@ -35,4 +40,11 @@ function readClaudeSettings(filePath) {
   } catch {
     return null;
   }
+}
+
+function nextMcpPermissionIndex(allow) {
+  for (let i = allow.length - 1; i >= 0; i--) {
+    if (allow[i].startsWith("mcp__")) return i + 1;
+  }
+  return 0;
 }

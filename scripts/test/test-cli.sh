@@ -559,7 +559,7 @@ assert "config: Claude rules use managed inline block" \
 assert "config: package snapshot includes runtime status and component status" \
   bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-tool');process.exit(p?.enabled===true&&p?.status==='partial'&&Array.isArray(p.componentStatus)&&p.componentStatus.some(x=>x.type==='mcp'&&x.state==='missing')?0:1)})\""
 assert "config: package snapshot tracks package-owned Codex tool approvals" \
-  bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-tool');process.exit(p?.componentStatus?.some(x=>x.type==='mcp-tool-approvals'&&x.state==='present')?0:1)})\""
+  bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-tool');process.exit(p?.componentStatus?.some(x=>x.type==='codex_tool_approvals'&&x.state==='present')?0:1)})\""
 bash -c "${cfg_env} node '${fixture_cli}' package disable fixture-tool >/dev/null 2>&1" || true
 assert "config: disable removes package permissions" \
   bash -c "[ \"\$(node -e \"console.log((require('${cfg_home}/.claude/settings.json').permissions?.allow||[]).length)\")\" = 0 ]"

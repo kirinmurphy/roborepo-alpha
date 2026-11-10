@@ -7,14 +7,22 @@ import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs
 import { loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
+import { ensureClaudeMcpPermission } from "./mcp-claude.mjs";
+import { configFileMcpProviders, ensureConfigFileMcp, removeConfigFileMcp } from "./mcp-config-file.mjs";
 import { loadMcpPresets } from "./mcp-presets.mjs";
+import { writeRootConfig } from "./root-config-writes.mjs";
 import { hookFilePath, mergeHooksInto, unmergeHooksFrom, installHookScripts, removeHookScripts } from "./hook-composition.mjs";
-import { capableProviders, installPackageRuntimeAsset, installPluginDir, mergeHarnessConfig, providerIO, removePackageRuntimeAsset, removePluginDir, resourceProviders, unmergeHarnessConfig } from "./package-harness-config.mjs";
+import { installClaudePluginDir, installPackageRuntimeAsset, mergeHarnessConfig, removeClaudePluginDir, removePackageRuntimeAsset, unmergeHarnessConfig } from "./package-harness-config.mjs";
 import { installPackageCommands, removePackageCommands } from "./slash-commands.mjs";
 import { cleanupPackageProjections } from "./package-projection-cleanup.mjs";
 import { SKILL_TRIGGERS_FILE } from "./skill-trigger-fixtures.mjs";
+import { getHarnessProvider } from "../harnesses/registry.mjs";
+import { hasClaudeCli } from "../harnesses/claude/mcp-claude-cli.mjs";
 import { assertHarnessWriteAllowed } from "./harness-write-guard.mjs";
 import { confirmYesNo, makePrompter } from "./prompts.mjs";
+
+export const USER_CLAUDE_SETTINGS = rootConfigActive.claude;
+export const USER_CODEX_CONFIG = rootConfigActive.codex;
 
 // Lazy: packages.mjs is imported by every CLI command (version, setup, rules, ...), not just ones
 // that touch MCP presets. Loading eagerly at module scope meant any environment missing
@@ -387,13 +395,116 @@ function validatePackages(rest) {
   console.log(pkgId ? `ok: package ${pkgId} valid` : `ok: ${catalog.length} package(s) valid`);
 }
 
-// A package's MCP preset is registered with every MCP-capable provider, each independently, so an
-// environment missing one harness's CLI (e.g. CI) still gets the others' config-file writes.
+export function readSettings(settingsPath) {
+  try { return JSON.parse(fs.readFileSync(settingsPath, "utf8")); } catch { return {}; }
+}
+
+export function writeSettings(settingsPath, settings) {
+  writeRootConfig("claude", settingsPath, JSON.stringify(settings, null, 2) + "\n");
+}
+
+function mergePermissions(settingsPath, allow) {
+  const settings = readSettings(settingsPath);
+  const existing = settings.permissions?.allow || [];
+  const toAdd = allow.filter((p) => !existing.includes(p));
+  if (toAdd.length === 0) { console.log("ok: permissions already present"); return; }
+  settings.permissions = { ...settings.permissions, allow: [...existing, ...toAdd] };
+  writeSettings(settingsPath, settings);
+  console.log(`wired: ${toAdd.length} permissions → ${settingsPath}`);
+}
+
+function tomlTableKey(key) {
+  return /^[A-Za-z0-9_-]+$/.test(key) ? key : JSON.stringify(key);
+}
+
+function codexToolApprovalTable(component, toolName) {
+  return `[mcp_servers.${tomlTableKey(component.server)}.tools.${tomlTableKey(toolName)}]`;
+}
+
+function mergeCodexToolApprovals(configPath, component) {
+  let text = "";
+  try { text = fs.readFileSync(configPath, "utf8"); } catch {}
+  let changed = false;
+  for (const [toolName, approvalMode] of Object.entries(component.approvals || {})) {
+    const table = codexToolApprovalTable(component, toolName);
+    const tablePattern = table.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const blockPattern = new RegExp(`(^${tablePattern}\\n)([^[]*)`, "m");
+    const nextLine = `approval_mode = ${JSON.stringify(approvalMode)}\n`;
+    if (blockPattern.test(text)) {
+      text = text.replace(blockPattern, (_match, header, body) => {
+        if (/^approval_mode\s*=/m.test(body)) {
+          const nextBody = body.replace(/^approval_mode\s*=.*$/m, nextLine.trim());
+          if (nextBody !== body) changed = true;
+          return `${header}${nextBody}`;
+        }
+        changed = true;
+        return `${header}${nextLine}${body}`;
+      });
+    } else {
+      text = `${text.endsWith("\n") ? text : `${text}\n`}\n${table}\n${nextLine}`;
+      changed = true;
+    }
+  }
+  if (changed) {
+    writeRootConfig("codex", configPath, text);
+    console.log(`wired: Codex tool approvals → ${configPath}`);
+  } else {
+    console.log(`ok: Codex tool approvals already present → ${configPath}`);
+  }
+}
+
+function unmergeCodexToolApprovals(configPath, component) {
+  let text = "";
+  try { text = fs.readFileSync(configPath, "utf8"); } catch {}
+  let changed = false;
+  for (const toolName of Object.keys(component.approvals || {})) {
+    const table = codexToolApprovalTable(component, toolName);
+    const tablePattern = table.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const blockPattern = new RegExp(`\\n?^${tablePattern}\\n[^[]*(?=^\\[|$)`, "m");
+    if (blockPattern.test(text)) {
+      text = text.replace(blockPattern, (match) => {
+        changed = true;
+        return match.startsWith("\n") ? "\n" : "";
+      });
+    }
+  }
+  if (changed) {
+    writeRootConfig("codex", configPath, text.replace(/\n{3,}/g, "\n\n"));
+    console.log(`removed: Codex tool approvals ← ${configPath}`);
+  } else {
+    console.log(`ok: Codex tool approvals already absent ← ${configPath}`);
+  }
+}
+
+
 function installMcpPreset(presetId) {
+  // Wires a built-in package's own MCP preset. Registers Claude and every config-file-backed
+  // provider (Codex, Gemini, ...) independently (mirroring removeMcpPreset below) instead of
+  // delegating to a single `mcp add` subprocess: that combined path treats Claude CLI registration
+  // and the config-file writes as all-or-nothing (see mcpAdd), so an environment without the
+  // `claude` binary (e.g. CI) would silently skip the other writes too, even though they have no
+  // external CLI dependency of their own. configFileMcpProviders() (scripts/cli/mcp.mjs) iterates
+  // the registry rather than naming Codex/Gemini individually, so a future config-file-backed
+  // provider is wired here with no change to this function.
   if (process.env.SKIP_MCP === "1") { console.log(`skip: mcp ${presetId} (SKIP_MCP)`); return; }
   const spec = getMcpPresets().get(presetId.toLowerCase());
   if (!spec) throw new Error(`mcp add failed for preset: ${presetId} (unknown preset)`);
-  for (const provider of capableProviders("mcp")) provider.adapters.mcp.installPreset(spec, providerIO(provider));
+
+  if (hasClaudeCli()) {
+    if (getHarnessProvider("claude").adapters.mcp.list().includes(spec.name)) {
+      console.log(`  ok: claude mcp ${spec.name} already present`);
+    } else {
+      const result = getHarnessProvider("claude").adapters.mcp.addServer(spec, { scope: "user", transport: null });
+      if (!result.ok) throw new Error(`mcp add failed for preset: ${presetId}${result.warnings.length ? ` (${result.warnings.join("; ")})` : ""}`);
+      // The old subprocess call (`mcp add --builtin --only-claude`) never passed
+      // --skip-claude-permission, so updateClaudePermission defaulted true -- preserve that grant.
+      ensureClaudeMcpPermission(spec.name);
+    }
+  } else {
+    console.log(`  ok: claude CLI unavailable for mcp ${presetId}`);
+  }
+
+  for (const provider of configFileMcpProviders()) ensureConfigFileMcp(provider, spec);
 }
 
 // Typed failure for a package mutation that cannot start: a usage error, an unknown package, a
@@ -558,15 +669,11 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
         break;
       case "permissions":
         if (dryRun) { console.log(`  [dry-run] merge ${component.allow.length} permissions`); break; }
-        for (const provider of resourceProviders(component, "package-permissions")) {
-          provider.adapters.packages.mergePermissions(component.allow, providerIO(provider));
-        }
+        mergePermissions(USER_CLAUDE_SETTINGS, component.allow);
         break;
-      case "mcp-tool-approvals":
-        if (dryRun) { console.log(`  [dry-run] merge MCP tool approvals for ${component.server}`); break; }
-        for (const provider of resourceProviders(component, "package-tool-approvals")) {
-          provider.adapters.packages.mergeToolApprovals(component, providerIO(provider));
-        }
+      case "codex_tool_approvals":
+        if (dryRun) { console.log(`  [dry-run] merge Codex tool approvals for ${component.server}`); break; }
+        mergeCodexToolApprovals(USER_CODEX_CONFIG, component);
         break;
       case "rules": {
         if (dryRun) { console.log(`  [dry-run] register rules from ${component.source} (${component.harness || "all harnesses"})`); break; }
@@ -591,9 +698,7 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
       }
       case "plugin":
         if (dryRun) { console.log(`  [dry-run] enable plugin ${component.id}`); break; }
-        for (const provider of resourceProviders(component, "package-plugins")) {
-          provider.adapters.packages.enablePlugin(component, providerIO(provider));
-        }
+        enablePlugin(USER_CLAUDE_SETTINGS, component);
         break;
       case "service":
         if (dryRun) { console.log(`  [dry-run] enable service ${component.id}`); break; }
@@ -602,12 +707,17 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
       case "package-runtime-asset":
         installPackageRuntimeAsset(pkg, component, { dryRun });
         break;
-      case "plugin-dir":
-        installPluginDir(pkg, component, { dryRun });
+      case "claude-plugin-dir":
+        installClaudePluginDir(pkg, component, { dryRun, readSettings, writeSettings, settingsPath: USER_CLAUDE_SETTINGS });
         break;
       case "harness-config":
         if (dryRun) { console.log(`  [dry-run] merge harness config ${component.source} (${component.harness})`); break; }
-        mergeHarnessConfig(pkg, component);
+        mergeHarnessConfig(pkg, component, {
+          claudeSettingsPath: USER_CLAUDE_SETTINGS,
+          codexConfigPath: USER_CODEX_CONFIG,
+          readSettings,
+          writeSettings,
+        });
         break;
       case "skill":
         if (dryRun) {
@@ -707,9 +817,27 @@ export function adoptLivePackages({ dryRun = false } = {}) {
 
 // --------------------------------------------------------------------------- disable (reversal)
 
+function unmergePermissions(settingsPath, allow) {
+  const settings = readSettings(settingsPath);
+  const existing = settings.permissions?.allow || [];
+  const toRemove = new Set(allow);
+  const next = existing.filter((p) => !toRemove.has(p));
+  if (next.length === existing.length) { console.log("ok: permissions already absent"); return; }
+  settings.permissions = { ...settings.permissions, allow: next };
+  writeSettings(settingsPath, settings);
+  console.log(`removed: ${existing.length - next.length} permissions ← ${settingsPath}`);
+}
+
 function removeMcpPreset(presetId, dryRun) {
   if (dryRun) { console.log(`  [dry-run] mcp remove ${presetId}`); return; }
-  for (const provider of capableProviders("mcp")) provider.adapters.mcp.removePreset(presetId, providerIO(provider));
+  // mcp.removeServer already does the same all-scope sweep + ~/.claude.json prune as the
+  // pruneClaudeMcpStore/multi-scope-remove pair this replaces (see mcpRemoveServer in
+  // scripts/harnesses/claude/index.mjs) -- including its own internal CLI-availability check, so
+  // the ~/.claude.json prune still runs even when the `claude` binary is absent, matching the
+  // original's unconditional pruneClaudeMcpStore call.
+  getHarnessProvider("claude").adapters.mcp.removeServer(presetId, { homePath: harnessHome.claude });
+  console.log(`  removed: mcp ${presetId} from Claude scopes`);
+  for (const provider of configFileMcpProviders()) removeConfigFileMcp(provider, presetId);
 }
 
 // Disable removes selected roots, then removes the resources of every package that left the
@@ -787,15 +915,11 @@ async function removePackageComponents(pkg, { dryRun = false } = {}) {
         break;
       case "permissions":
         if (dryRun) { console.log(`  [dry-run] remove ${component.allow.length} permissions`); break; }
-        for (const provider of resourceProviders(component, "package-permissions")) {
-          provider.adapters.packages.unmergePermissions(component.allow, providerIO(provider));
-        }
+        unmergePermissions(USER_CLAUDE_SETTINGS, component.allow);
         break;
-      case "mcp-tool-approvals":
-        if (dryRun) { console.log(`  [dry-run] remove MCP tool approvals for ${component.server}`); break; }
-        for (const provider of resourceProviders(component, "package-tool-approvals")) {
-          provider.adapters.packages.unmergeToolApprovals(component, providerIO(provider));
-        }
+      case "codex_tool_approvals":
+        if (dryRun) { console.log(`  [dry-run] remove Codex tool approvals for ${component.server}`); break; }
+        unmergeCodexToolApprovals(USER_CODEX_CONFIG, component);
         break;
       case "rules": {
         if (dryRun) { console.log(`  [dry-run] deregister rules from ${component.source} (${component.harness || "all harnesses"})`); break; }
@@ -819,9 +943,7 @@ async function removePackageComponents(pkg, { dryRun = false } = {}) {
       }
       case "plugin":
         if (dryRun) { console.log(`  [dry-run] disable plugin ${component.id}`); break; }
-        for (const provider of resourceProviders(component, "package-plugins")) {
-          provider.adapters.packages.disablePlugin(component, providerIO(provider));
-        }
+        disablePlugin(USER_CLAUDE_SETTINGS, component);
         break;
       case "service":
         if (dryRun) { console.log(`  [dry-run] disable service ${component.id}`); break; }
@@ -829,13 +951,18 @@ async function removePackageComponents(pkg, { dryRun = false } = {}) {
         break;
       case "harness-config":
         if (dryRun) { console.log(`  [dry-run] remove harness config ${component.source} (${component.harness})`); break; }
-        unmergeHarnessConfig(pkg, component);
+        unmergeHarnessConfig(pkg, component, {
+          claudeSettingsPath: USER_CLAUDE_SETTINGS,
+          codexConfigPath: USER_CODEX_CONFIG,
+          readSettings,
+          writeSettings,
+        });
         break;
       case "package-runtime-asset":
         removePackageRuntimeAsset(pkg, component, { dryRun });
         break;
-      case "plugin-dir":
-        removePluginDir(pkg, component, { dryRun });
+      case "claude-plugin-dir":
+        removeClaudePluginDir(pkg, component, { dryRun, readSettings, writeSettings, settingsPath: USER_CLAUDE_SETTINGS });
         break;
       case "skill":
         if (dryRun) {
@@ -887,3 +1014,59 @@ async function setSkillComponent(id, enabled) {
   return result;
 }
 
+// --------------------------------------------------------------------------- plugin component
+//
+// A plugin component owns two settings keys: extraKnownMarketplaces[<marketplace.name>] (so the
+// harness knows where to fetch it) and enabledPlugins[<id>] (the on/off bool). enable writes both;
+// the harness performs the actual download on its next launch — we can't fetch it from here, so a
+// freshly enabled plugin shows as enabled but only takes effect once the harness installs it.
+// disable flips the bool to false and removes our marketplace entry, leaving any already-downloaded
+// plugin files for the harness to clean up.
+
+function enablePlugin(settingsPath, component) {
+  const settings = readSettings(settingsPath);
+  let changed = false;
+
+  if (component.marketplace?.name) {
+    settings.extraKnownMarketplaces ||= {};
+    if (!settings.extraKnownMarketplaces[component.marketplace.name]) {
+      settings.extraKnownMarketplaces[component.marketplace.name] = { source: component.marketplace.source };
+      changed = true;
+    }
+  }
+
+  settings.enabledPlugins ||= {};
+  if (settings.enabledPlugins[component.id] !== true) {
+    settings.enabledPlugins[component.id] = true;
+    changed = true;
+  }
+
+  if (changed) {
+    writeSettings(settingsPath, settings);
+    console.log(`  plugin enabled: ${component.id} → ${settingsPath}`);
+    console.log(`  note: the harness installs the plugin from the marketplace on its next launch`);
+  } else {
+    console.log(`  ok: plugin ${component.id} already enabled`);
+  }
+}
+
+function disablePlugin(settingsPath, component) {
+  const settings = readSettings(settingsPath);
+  let changed = false;
+
+  if (settings.enabledPlugins && component.id in settings.enabledPlugins) {
+    delete settings.enabledPlugins[component.id];
+    changed = true;
+  }
+  if (component.marketplace?.name && settings.extraKnownMarketplaces?.[component.marketplace.name]) {
+    delete settings.extraKnownMarketplaces[component.marketplace.name];
+    changed = true;
+  }
+
+  if (changed) {
+    writeSettings(settingsPath, settings);
+    console.log(`  plugin disabled: ${component.id} ← ${settingsPath}`);
+  } else {
+    console.log(`  ok: plugin ${component.id} already absent`);
+  }
+}

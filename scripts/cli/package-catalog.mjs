@@ -23,13 +23,13 @@ const RESOURCE_TYPES = new Set([
   "rules",
   "hooks",
   "permissions",
-  "mcp-tool-approvals",
+  "codex_tool_approvals",
   "mcp",
   "plugin",
   "service",
   "harness-config",
   "package-runtime-asset",
-  "plugin-dir",
+  "claude-plugin-dir",
 ]);
 const SKILL_INVOCATIONS = new Set(["auto", "manual"]);
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -327,13 +327,11 @@ function normalizeResource(resource, { pkgId, root, index }) {
     if (!next.allow.every((entry) => typeof entry === "string" && entry.trim() !== "")) {
       throw new Error(`${pkgId}: permissions.allow entries must be non-empty strings`);
     }
-    validateOptionalHarness(next, `${pkgId}:permissions`, "package-permissions");
-  } else if (next.type === "mcp-tool-approvals") {
-    if (typeof next.server !== "string" || next.server.trim() === "") throw new Error(`${pkgId}: mcp-tool-approvals needs server`);
+  } else if (next.type === "codex_tool_approvals") {
+    if (typeof next.server !== "string" || next.server.trim() === "") throw new Error(`${pkgId}: codex_tool_approvals needs server`);
     if (!next.approvals || typeof next.approvals !== "object" || Array.isArray(next.approvals) || Object.keys(next.approvals).length === 0) {
-      throw new Error(`${pkgId}: mcp-tool-approvals needs non-empty approvals map`);
+      throw new Error(`${pkgId}: codex_tool_approvals needs non-empty approvals map`);
     }
-    validateOptionalHarness(next, `${pkgId}:mcp-tool-approvals`, "package-tool-approvals");
   } else if (next.type === "mcp") {
     if (typeof next.preset !== "string" || next.preset.trim() === "") throw new Error(`${pkgId}: mcp resource needs preset`);
   } else if (next.type === "plugin") {
@@ -341,7 +339,6 @@ function normalizeResource(resource, { pkgId, root, index }) {
     if (!next.marketplace || typeof next.marketplace.name !== "string" || !next.marketplace.source) {
       throw new Error(`${pkgId}: plugin resource needs marketplace.name and marketplace.source`);
     }
-    validateOptionalHarness(next, `${pkgId}:plugin`, "package-plugins");
   } else if (next.type === "service") {
     if (typeof next.id !== "string" || next.id.trim() === "") throw new Error(`${pkgId}: service resource needs id`);
   } else if (next.type === "harness-config") {
@@ -354,13 +351,10 @@ function normalizeResource(resource, { pkgId, root, index }) {
     if (next.target !== undefined && !isSafeRelativeTarget(next.target)) {
       throw new Error(`${pkgId}:package-runtime-asset target must be a relative path`);
     }
-  } else if (next.type === "plugin-dir") {
-    next.source = validateInsideSource(root, next.source, `${pkgId}:plugin-dir`);
-    validateHarness(next.harness, `${pkgId}:plugin-dir`, { requiredCapability: "package-plugin-dirs" });
-    try {
-      getHarnessProvider(next.harness).adapters.packages.validatePluginDir(path.join(root, next.source));
-    } catch (err) {
-      throw new Error(`${pkgId}:${err.message}: ${next.source}`);
+  } else if (next.type === "claude-plugin-dir") {
+    next.source = validateInsideSource(root, next.source, `${pkgId}:claude-plugin-dir`);
+    if (!fs.existsSync(path.join(root, next.source, ".claude-plugin", "plugin.json"))) {
+      throw new Error(`${pkgId}:claude-plugin-dir source has no .claude-plugin/plugin.json: ${next.source}`);
     }
   } else if (next.type === "rules" || next.type === "hooks") {
     next.source = validateInsideSource(root, next.source, `${pkgId}:${next.type}`);
@@ -431,12 +425,6 @@ function validateHarness(harness, label, { requiredCapability } = {}) {
   if (requiredCapability && !getHarnessProvider(harness).manifest.capabilities.includes(requiredCapability)) {
     throw new Error(`${label} harness "${harness}" does not support required capability: ${requiredCapability}`);
   }
-}
-
-// A resource that may name one harness, and otherwise applies to every provider declaring the
-// capability: when it names one, that provider must exist and declare it.
-function validateOptionalHarness(resource, label, capability) {
-  if (resource.harness !== undefined) validateHarness(resource.harness, label, { requiredCapability: capability });
 }
 
 function validateHarnesses(harnesses, label, { requiredCapability } = {}) {

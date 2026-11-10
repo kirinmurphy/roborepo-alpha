@@ -12,7 +12,6 @@ import { fileURLToPath } from "node:url";
 import { defineHarnessProvider } from "../contract.mjs";
 import { detectHarnessProvider } from "../discovery.mjs";
 import { stubAdapterGroups } from "../stub-adapter.mjs";
-import { configFileMcpPresetMethods } from "../mcp-config-file-preset.mjs";
 import { mergeRootConfigHooks, unmergeRootConfigHooks } from "../root-config-hooks.mjs";
 import { renderGeminiPolicyFile, GENERATED_POLICY_FILENAME } from "./policy-toml.mjs";
 
@@ -178,7 +177,6 @@ export const geminiProvider = defineHarnessProvider({
       addServer: mcpAddServer,
       removeServer: mcpRemoveServer,
       list: mcpList,
-      ...configFileMcpPresetMethods("gemini", { addServer: mcpAddServer, removeServer: mcpRemoveServer, list: mcpList }),
     },
   },
 });
