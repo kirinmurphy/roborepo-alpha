@@ -2,5 +2,18 @@
   "schemaVersion": 1,
   "worktreeRoot": "/Users/esteban/.worktrees",
   "worktreeRepoName": "roborepo",
-  "namespaces": {}
+  "namespaces": {
+    "skills": "What a skill says and does: content, triggers, invocation policy, relationships between skills, and evaluating whether skills behave.",
+    "packages": "How things get bundled and delivered: package definitions, sources, catalog, enable/disable lifecycle, apply engine.",
+    "agent-config": "What harnesses read other than skills: rules, hooks, permissions, settings, MCP registration, cross-harness parity, and inspecting that configuration.",
+    "harness": "Harness provider architecture: registry, adapters, per-provider capability model.",
+    "plans": "The plan suite: schema, validation, repair, authoring workflow, lifecycle transitions, and the Plans page.",
+    "onboarding": "A new user's path from first install to first useful result, in the terminal or the portal.",
+    "git": "Local Git and the Git host, GitHub first: worktrees, branches, Git execution, agent identity on the host, pull request and CI workflows, host-specific permission rules, and the host module.",
+    "release": "Publishing and distributing RoboRepo itself: registry releases, Homebrew, release artifacts.",
+    "local-data": "What RoboRepo keeps on the user's machine: generated stores, retention, user-owned data, portable profiles and backup.",
+    "runtime": "The Runtime service: local dev server discovery, Docker/Compose grouping, repo cards.",
+    "telemetry": "Agent session telemetry: capture, classification, phase inference, metrics, cohorts, experiments, analysis. Tokens are one captured field among ~30 (alongside test-failure streaks, edit/read counts, phase signals), which is why the namespace is not named for them. The portal routes this at /tokens because token cost is what a user goes there to read.",
+    "session": "Agent session launching, attachment, terminal integration."
+  }
 }
