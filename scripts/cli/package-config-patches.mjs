@@ -93,6 +93,20 @@ function listItems(value, patch) {
   return Array.isArray(value) ? value : [];
 }
 
+// The list at `path`, or null when a value is there that is not a list of the patch's shape (or the
+// editor could not parse it). Writing a list over such a value would destroy it.
+function readList(edit, text, patch) {
+  const current = readValue(edit, text, patch);
+  if (!current.found) return [];
+  if (current.unreadable) return null;
+  const shaped = patch.delimiter ? typeof current.value === "string" : Array.isArray(current.value);
+  return shaped ? listItems(current.value, patch) : null;
+}
+
+function warnUnreadable(harness, patch) {
+  console.warn(`  conflict: ${describe(harness, patch)} holds a value RoboRepo cannot read or merge; leaving it unchanged`);
+}
+
 function listValue(items, patch) {
   return patch.delimiter ? items.join(patch.delimiter) : items;
 }
@@ -107,6 +121,10 @@ function readValue(edit, text, patch) {
 
 function applySet(edit, text, harness, patch, log) {
   const current = readValue(edit, text, patch);
+  if (current.unreadable) {
+    warnUnreadable(harness, patch);
+    return text;
+  }
   if (current.found && isDeepStrictEqual(current.value, patch.value)) {
     log(`  ok: ${describe(harness, patch)} already set`);
     return text;
@@ -123,6 +141,10 @@ function applySet(edit, text, harness, patch, log) {
 
 function removeSet(edit, text, harness, patch, log) {
   const current = readValue(edit, text, patch);
+  if (current.unreadable) {
+    warnUnreadable(harness, patch);
+    return text;
+  }
   const ours = current.found && isDeepStrictEqual(current.value, patch.value);
   const record = readOwnedScalar(harness, patch.path);
   if (record) clearOwnedScalar(harness, patch.path);
@@ -140,7 +162,11 @@ function removeSet(edit, text, harness, patch, log) {
 }
 
 function applyUnion(edit, text, harness, patch, log) {
-  const items = listItems(readValue(edit, text, patch).value, patch);
+  const items = readList(edit, text, patch);
+  if (!items) {
+    warnUnreadable(harness, patch);
+    return text;
+  }
   const missing = patch.value.filter((item) => !items.includes(item));
   if (missing.length === 0) {
     log(`  ok: ${describe(harness, patch)} already includes ${patch.value.length} item(s)`);
@@ -151,8 +177,11 @@ function applyUnion(edit, text, harness, patch, log) {
 }
 
 function removeUnion(edit, text, harness, patch, log) {
-  const current = readValue(edit, text, patch);
-  const items = listItems(current.value, patch);
+  const items = readList(edit, text, patch);
+  if (!items) {
+    warnUnreadable(harness, patch);
+    return text;
+  }
   const owned = new Set(patch.value);
   const remaining = items.filter((item) => !owned.has(item));
   if (remaining.length === items.length) {

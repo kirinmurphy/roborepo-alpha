@@ -66,6 +66,36 @@ const component = (harness, patches) => ({ type: "config-patch", harness, label:
 }
 
 {
+  // Lines inside a multi-line value are never table headers: a `[` that starts a string line or a
+  // nested array row does not end the table, so later keys are still found and never duplicated.
+  const source = [
+    "grid = [",
+    "  [1, 2],",
+    "  [3, 4],",
+    "]",
+    "",
+    "[agent]",
+    "developer_instructions = \"\"\"",
+    "[link](https://example.com)",
+    "say \"\"hi\"\" ''' and done\"\"\"",
+    "model = \"gpt\"",
+    "",
+    "[tui]",
+    "animations = true",
+    "",
+  ].join("\n");
+  assert.deepEqual(tomlConfigEdit.get(source, ["agent", "model"]), { found: true, value: "gpt" }, "a key after a multi-line string is found");
+  assert.deepEqual(tomlConfigEdit.get(source, ["tui", "animations"]), { found: true, value: true });
+  assert.throws(() => tomlConfigEdit.get(source, ["agent", "developer_instructions"]), /unsupported TOML value/, "a multi-line string is unreadable, not misread");
+
+  const replaced = tomlConfigEdit.set(source, ["agent", "model"], "o3");
+  assert.equal(replaced, source.replace("model = \"gpt\"", "model = \"o3\""), "replaces the key in place instead of adding a duplicate");
+  const rooted = tomlConfigEdit.set(source, ["approval"], "never");
+  assert.equal(rooted, source.replace("]\n\n[agent]", "]\napproval = \"never\"\n\n[agent]"), "a root key goes after the multi-line array, not inside it");
+  assert.equal(tomlConfigEdit.delete(rooted, ["approval"]), source);
+}
+
+{
   let text = jsonConfigEdit.set("", ["env", "A"], "1");
   text = jsonConfigEdit.set(text, ["enabledPlugins", "caveman@caveman"], true);
   assert.deepEqual(json(text), { env: { A: "1" }, enabledPlugins: { "caveman@caveman": true } }, "keys are path items, so @ and . need no escaping");
@@ -160,6 +190,35 @@ const setStatus = component("claude", [{ op: "set", path: ["statusLine"], value:
   applyConfigPatches(assetPkg, dirs, alone.options);
   removeConfigPatches(assetPkg, dirs, alone.options);
   assert.deepEqual(json(alone.read()), {}, "the last item out removes the variable and the empty env");
+}
+
+// --- values the engine cannot read or merge are conflicts -----------------------------------
+
+{
+  const warn = console.warn;
+  console.warn = quiet;
+  try {
+    const unreadable = "[tui]\nstatus_line = \"\"\"\nmodel\n\"\"\"\nstatus_line_use_colors = 1979-05-27\n";
+    const box = sandbox("config.toml", unreadable);
+    const union = component("codex", [{ op: "union", path: ["tui", "status_line"], value: ["model"] }]);
+    const set = component("codex", [{ op: "set", path: ["tui", "status_line_use_colors"], value: true }]);
+    for (const patches of [union, set]) {
+      applyConfigPatches(pkg, patches, box.options);
+      assert.equal(box.read(), unreadable, `apply ${patches.patches[0].op} leaves a value the editor cannot parse alone`);
+      removeConfigPatches(pkg, patches, box.options);
+      assert.equal(box.read(), unreadable, `remove ${patches.patches[0].op} leaves a value the editor cannot parse alone`);
+    }
+
+    const wrongShape = `${JSON.stringify({ env: { PLUGIN_DIRS: 7 }, list: "a" })}\n`;
+    const jsonBox = sandbox("settings.json", wrongShape);
+    applyConfigPatches(pkg, component("claude", [
+      { op: "union", path: ["env", "PLUGIN_DIRS"], value: ["/x"], delimiter: ":" },
+      { op: "union", path: ["list"], value: ["b"] },
+    ]), jsonBox.options);
+    assert.equal(jsonBox.read(), wrongShape, "union never writes a list over a value of another shape");
+  } finally {
+    console.warn = warn;
+  }
 }
 
 // --- validation -----------------------------------------------------------------------------

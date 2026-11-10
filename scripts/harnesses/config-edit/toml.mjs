@@ -164,56 +164,83 @@ function assignmentIndex(line) {
   return -1;
 }
 
-// The last line a value starting on `start` occupies: it runs on while brackets or braces are open.
+// The last line a value starting on `start` occupies: it runs on while brackets or braces are open
+// or a multi-line (""" or ''') string is.
 function valueEndLine(lines, start, column) {
   let depth = 0;
   let quote = null;
   for (let row = start; row < lines.length; row += 1) {
     const line = lines[row];
+    if (quote?.length === 1) quote = null; // a one-line string cannot run past its line
     for (let i = row === start ? column : 0; i < line.length; i += 1) {
       const ch = line[i];
       if (quote) {
-        if (ch === "\\" && quote === "\"") i += 1;
-        else if (ch === quote) quote = null;
+        if (ch === "\\" && quote[0] === "\"") i += 1;
+        else if (line.startsWith(quote, i)) {
+          i += quote.length - 1;
+          // A multi-line string may end with up to two quote characters of its own: `x""""`.
+          for (let extra = 0; quote.length === 3 && extra < 2 && line[i + 1] === quote[0]; extra += 1) i += 1;
+          quote = null;
+        }
+      } else if (line.startsWith("\"\"\"", i) || line.startsWith("'''", i)) {
+        quote = line.slice(i, i + 3);
+        i += 2;
       } else if (ch === "\"" || ch === "'") quote = ch;
       else if (ch === "#") break;
       else if (ch === "[" || ch === "{") depth += 1;
       else if (ch === "]" || ch === "}") depth -= 1;
     }
-    if (depth <= 0) return row;
+    if (depth <= 0 && quote?.length !== 3) return row;
   }
   return lines.length - 1;
 }
 
-// { headerIndex, bodyStart, bodyEnd } for a table (bodyEnd exclusive); the root table has
-// headerIndex -1. null when the table has no header in the file.
-function locateTable(lines, table) {
-  if (table.length === 0) {
-    const first = lines.findIndex(isHeaderLine);
-    return { headerIndex: -1, bodyStart: 0, bodyEnd: first < 0 ? lines.length : first };
-  }
-  const headerIndex = lines.findIndex((line) => {
-    const found = headerPath(line);
-    return found && samePath(found, table);
-  });
-  if (headerIndex < 0) return null;
-  let bodyEnd = headerIndex + 1;
-  while (bodyEnd < lines.length && !isHeaderLine(lines[bodyEnd])) bodyEnd += 1;
-  return { headerIndex, bodyStart: headerIndex + 1, bodyEnd };
-}
-
-function findKey(lines, location, key) {
-  for (let row = location.bodyStart; row < location.bodyEnd; row += 1) {
+// The file's top-level statements in order: table headers and key/value entries (start..end rows).
+// Lines inside a multi-line value are neither, so an array row such as `  [1, 2],` or a string line
+// such as `[link](...)` is never taken for a table header.
+function scanStatements(lines) {
+  const statements = [];
+  for (let row = 0; row < lines.length; row += 1) {
     const line = lines[row];
-    if (!line.trim() || line.trim().startsWith("#")) continue;
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    if (isHeaderLine(line)) {
+      statements.push({ header: true, start: row, end: row });
+      continue;
+    }
     const eq = assignmentIndex(line);
     if (eq < 0) continue;
     const end = valueEndLine(lines, row, eq + 1);
-    const keyPath = parseKeyPath(line.slice(0, eq).trim());
-    if (keyPath && samePath(keyPath, [key])) {
-      return { start: row, end, valueText: [line.slice(eq + 1), ...lines.slice(row + 1, end + 1)].join("\n") };
-    }
+    statements.push({ header: false, start: row, end, eq });
     row = end;
+  }
+  return statements;
+}
+
+// { headerIndex, bodyStart, bodyEnd, statements } for a table (bodyEnd exclusive); the root table
+// has headerIndex -1. null when the table has no header in the file.
+function locateTable(lines, table) {
+  const statements = scanStatements(lines);
+  const headers = statements.filter((statement) => statement.header);
+  const nextHeader = (after) => headers.find((header) => header.start > after)?.start ?? lines.length;
+  if (table.length === 0) return { headerIndex: -1, bodyStart: 0, bodyEnd: nextHeader(-1), statements };
+  const header = headers.find((candidate) => {
+    const found = headerPath(lines[candidate.start]);
+    return found && samePath(found, table);
+  });
+  if (!header) return null;
+  return { headerIndex: header.start, bodyStart: header.start + 1, bodyEnd: nextHeader(header.start), statements };
+}
+
+function findKey(lines, location, key) {
+  for (const statement of location.statements) {
+    if (statement.header || statement.start < location.bodyStart || statement.start >= location.bodyEnd) continue;
+    const line = lines[statement.start];
+    const keyPath = parseKeyPath(line.slice(0, statement.eq).trim());
+    if (keyPath && samePath(keyPath, [key])) {
+      const { start, end } = statement;
+      return { start, end, valueText: [line.slice(statement.eq + 1), ...lines.slice(start + 1, end + 1)].join("\n") };
+    }
   }
   return null;
 }
