@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "worktreeRoot": "/Users/esteban/.worktrees",
+  "worktreeRoot": "~/.worktrees",
   "worktreeRepoName": "roborepo",
   "namespaces": {
     "skills": "What a skill says and does: content, triggers, invocation policy, relationships between skills, and evaluating whether skills behave.",
