@@ -419,6 +419,20 @@ None. The real Codex save was run once by hand (see Verification); no automated 
 - Intermittent, outside the diff: `browser-playwright-check.mjs` failed once in the gate at 51a48a67 (`the mismatch images are evidence`) and passed 3 of 3 reruns; this branch changes no browser code.
 - Codex save, run by `codex exec` (codex-cli 0.166.0) with the profile `renderPermissionsTo` writes for a fixture repo kept outside `/tmp` and `$TMPDIR`, so only the rendered grants made Git writable: `roborepo plans save` exited 0, committed to the store, and reported `synchronized: false` with `! [remote rejected] repo-plans -> repo-plans (unpacker error)`, because the bare origin sat outside the sandbox. A later `plans init` outside Codex pushed it (`synchronized: true`, nothing pending).
 - Base failure: `scripts/test/cli-surface-integration-check.mjs` fails intermittently on `main` too, on `single-repo refresh should leave other cached ahead repos in the main list` (2 of 6 runs on an export of `main`).
+- Human review (2026-11-10): base `main` at b94fe510 merged cleanly at d7129473; one documentation hunk in `docs/user/reference/repositories.md` resolved to keep the store wording.
+- Human review gate at d7129473 (no CI result exists for it): `npm run check` ran doctor, `test-cli.sh` (427 passed, 0 failed), install collisions, and unit suites (76 of 76), then stopped at `test:package-install`, the base failure below. `npm run test:portal-ui` then passed directly (254 of 254). Docker and `pwsh` were unavailable, so the clean-machine suites and Windows parity did not run.
+- Base failure: `test:package-install` fails with `usage-statusline:package-runtime-asset source missing: scripts/usage-adapters.mjs`. Base 0bde0b5f made `globals/packages/usage-statusline/scripts/usage-{adapters,domain,render}.mjs` symlinks, which `npm pack` omits; `main` packs the same file list and its `package.config.json` references the same source.
+- Human review Validator pass (fresh-context subagent) at d7129473: clean. Every Validation criterion has code and test evidence, including the merged copy-path, missing-worktree, and empty-directory cleanup changes from base; the `docs/plans` grep criterion finds nothing.
+
+### Result
+
+- Status: complete
+- Reviewed implementation commit: d7129473a3dc6a44121ab44769a219b80ee5e37f
+- Base commit: b94fe510ff37b1123b41156a8db2c016e662bf8a
+
+### Approval
+
+- Decision: requested
 
 ## Follow-up task
 
