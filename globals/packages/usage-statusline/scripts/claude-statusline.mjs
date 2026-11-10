@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 // Claude status-line entrypoint. Kept as the installed command so ownership stays stable across the
 // refactor; it is now orchestration only — adapt stdin JSON, assess, render, print, then persist a
-// snapshot best-effort. Pure work lives in the context row's lib modules, installed beside this
-// folder in the same layout; this file is the only one doing I/O.
-import { adaptClaudeStatusPayload } from "../claude/context-row/lib/usage-adapters.mjs";
-import { assessUsage } from "../claude/context-row/lib/usage-domain.mjs";
-import { renderStatusLine } from "../claude/context-row/lib/usage-render.mjs";
+// snapshot best-effort. Pure work lives in the sibling modules; this file is the only one doing I/O.
+import { adaptClaudeStatusPayload } from "./usage-adapters.mjs";
+import { assessUsage } from "./usage-domain.mjs";
+import { renderStatusLine } from "./usage-render.mjs";
 import { writeLatestSnapshot } from "./usage-snapshot-store.mjs";
 
 // Returns both the normalized snapshot (for persistence) and the rendered line. color is left

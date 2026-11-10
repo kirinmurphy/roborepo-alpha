@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 import type { LimitFragment, LimitSegments } from '../types'
-// Linked from the package's scripts, so the row computes 5h and weekly exactly as the terminal does.
+// Shared with the terminal status line, so the row computes 5h and weekly exactly as the terminal does.
 import { adaptClaudeSessionUsage } from '../lib/usage-adapters.mjs'
 import { assessUsage, usageSeverity } from '../lib/usage-domain.mjs'
 import { statusLineSegments } from '../lib/usage-render.mjs'

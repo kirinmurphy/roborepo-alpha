@@ -14,10 +14,9 @@ const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-usage-domain-")
 process.env.ROBOREPO_STATE_ROOT = stateDir;
 
 const pkg = path.join(repoRoot, "globals/packages/usage-statusline/scripts");
-const lib = path.join(repoRoot, "globals/packages/usage-statusline/claude/context-row/lib");
-const { adaptClaudeStatusPayload, adaptCodexRateLimitSnapshot } = await import(`${lib}/usage-adapters.mjs`);
-const { assessBalance, assessUsage, rateLimitSeverity, usageSeverity, elapsedPercent } = await import(`${lib}/usage-domain.mjs`);
-const { renderStatusLine } = await import(`${lib}/usage-render.mjs`);
+const { adaptClaudeStatusPayload, adaptCodexRateLimitSnapshot } = await import(`${pkg}/usage-adapters.mjs`);
+const { assessBalance, assessUsage, rateLimitSeverity, usageSeverity, elapsedPercent } = await import(`${pkg}/usage-domain.mjs`);
+const { renderStatusLine } = await import(`${pkg}/usage-render.mjs`);
 const { writeLatestSnapshot, readLatestSnapshot } = await import(`${pkg}/usage-snapshot-store.mjs`);
 const portalUsage = await import(`${repoRoot}/scripts/cli/portal-usage.mjs`);
 const fixtures = JSON.parse(fs.readFileSync(path.join(repoRoot, "globals/packages/usage-statusline/fixtures/usage-cases.json"), "utf8"));
