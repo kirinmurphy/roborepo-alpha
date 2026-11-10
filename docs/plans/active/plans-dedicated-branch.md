@@ -368,11 +368,12 @@ Tests: `plan-store-check.mjs` and `codex-plans-store-grants-check.mjs` pass and 
 - **Portal specs empty a fixture rather than delete its root.** A registered checkout whose parent is gone reads as unreadable, and Home keeps listing it, which put a stale repo ahead of the card the keyboard focus spec expects. `removeFixtureContents` leaves an empty folder in the temp directory per fixture. Alternative: changing the focus spec's expectation, which would hide stale repos from every later spec's Home only in that one test.
 - **The reserved worktree is recognized by its rebase head or lock reason when HEAD is off its branch.** Alternative: the admin folder's name, which Git suffixes when `repo_plans` is taken. The lock reason is written only by the store.
 - **A push the remote refuses is a not-synchronized result, like an unreachable remote.** The commit stays and the next reachable mutation retries it, with Git's `[remote rejected]` line as the reason. Alternative: a hard error, which would stop a Codex run for a branch rule a person must change.
+- **User decision: Codex gets no reftable grant.** In a reftable repo every ref lives in `<common>/reftable/`, so the exact-path grants in `scripts/harnesses/codex/plans-store-grants.mjs` cannot cover a store commit there, and granting `<common>/reftable/**` would let a Codex session move any branch. Codex therefore cannot save plans in reftable repos; Claude and the portal can. This repo uses the `files` format.
 - **The remote-sync menu flake stays out of this plan.** `cli-surface-integration-check.mjs` fails intermittently on the same assertion on `main` (2 of 6 runs) and on this branch; this branch does not touch that flow.
 
 ## Open Questions
 
-- **Codex in a reftable repository.** A reftable repo keeps every ref in `<common>/reftable/`, so the exact-path grants in `scripts/harnesses/codex/plans-store-grants.mjs` do not cover a store commit there. By reading the code, not measured: a Codex save would fail on the ref update. Options: grant `<common>/reftable/**` when the repo uses reftable, which lets a Codex session move any branch and goes against the grant decision above; or leave it, so Codex can't save plans in reftable repos until someone needs that. Recommendation: leave it, since this repo uses `files`. Blocked because it changes a sandbox permission. Blocks no checklist task; Claude and the portal work in reftable repos (`plan-store-check.mjs`).
+None.
 
 ## Not tested
 
