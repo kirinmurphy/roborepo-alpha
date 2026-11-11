@@ -90,7 +90,8 @@ assertThrows(
 
 // defineHarnessProvider wires manifest + adapter validation together and freezes the result.
 const completeAdapters = {
-  rootConfig: { merge() {}, render() {}, mergePackageComponent() {}, unmergePackageComponent() {} },
+  rootConfig: { merge() {}, render() {} },
+  configEdit: { get() {}, set() {}, delete() {} },
   rules: { render() {} },
   permissions: { render() {} },
   skills: { link() {} },

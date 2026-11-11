@@ -20,15 +20,32 @@
       "source": "rules.md"
     },
     {
-      "type": "plugin",
-      "id": "caveman@caveman",
-      "marketplace": {
-        "name": "caveman",
-        "source": {
-          "source": "github",
-          "repo": "JuliusBrussee/caveman"
+      "type": "config-patch",
+      "harness": "claude",
+      "label": "Caveman plugin",
+      "patches": [
+        {
+          "op": "set",
+          "path": [
+            "extraKnownMarketplaces",
+            "caveman"
+          ],
+          "value": {
+            "source": {
+              "source": "github",
+              "repo": "JuliusBrussee/caveman"
+            }
+          }
+        },
+        {
+          "op": "set",
+          "path": [
+            "enabledPlugins",
+            "caveman@caveman"
+          ],
+          "value": true
         }
-      }
+      ]
     },
     {
       "type": "hooks",

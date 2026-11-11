@@ -734,23 +734,19 @@ function oneLine(text) {
 }
 
 // Plain names for the component types a package can find already installed. A bare type id
-// ("harness-config", "mcp") means nothing to someone reading the Agents page.
+// ("config-patch", "mcp") means nothing to someone reading the Agents page.
 const EXTERNAL_COMPONENT_NOUNS = {
   skill: "skill",
   mcp: "MCP server",
-  plugin: "plugin",
   command: "command",
   rules: "rules",
   hooks: "hooks",
-  permissions: "permissions",
-  codex_tool_approvals: "Codex tool approvals",
-  // The harness-config probe only compares status line settings, so that is what was found.
-  "harness-config": "status line",
+  // A config patch names itself through its label ("status line"); this is the fallback.
+  "config-patch": "harness setting",
   "package-runtime-asset": "script file",
-  "claude-plugin-dir": "Claude plugin folder",
 };
 // Types whose id is a name a person would recognize; the rest carry a source path, so the noun alone reads better.
-const NAMED_COMPONENT_TYPES = new Set(["skill", "mcp", "plugin", "command"]);
+const NAMED_COMPONENT_TYPES = new Set(["skill", "mcp", "command"]);
 
 // "external" = this package's components exist on the machine but RoboRepo did not install them
 // (a hand-copied skill, an MCP server or status line another tool configured). Names each one.
@@ -758,6 +754,7 @@ function externalComponentLabels(componentStatus) {
   const labels = (componentStatus || [])
     .filter((component) => component.state === "external")
     .map((component) => {
+      if (component.type === "config-patch" && component.id) return component.id;
       const noun = EXTERNAL_COMPONENT_NOUNS[component.type] || component.type;
       return NAMED_COMPONENT_TYPES.has(component.type) && component.id ? `${noun} ${component.id}` : noun;
     });

@@ -27,7 +27,7 @@
     "slash-commands",
     "hooks",
     "mcp",
-    "package-config",
+    "config-edit",
     "telemetry-capture",
     "telemetry-transcripts",
     "session-launch"

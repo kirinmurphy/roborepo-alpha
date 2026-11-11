@@ -7,7 +7,8 @@ import { compareHookReadiness, fragmentHooks } from "../harnesses/hook-readiness
 import { hookRecordsFromFile } from "../harnesses/root-config-hooks.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { stateSkillsDir, telemetryDir } from "./state-paths.mjs";
-import { claudePluginDirDestination, claudePluginDirRegistered, codexStatusLineIncludes, readHarnessConfig, packageRuntimeAssetDestination } from "./package-harness-config.mjs";
+import { packageRuntimeAssetDestination } from "./package-runtime-assets.mjs";
+import { probeConfigPatches } from "./package-config-patches.mjs";
 import { knownHarnessIds } from "./rules-render.mjs";
 import { effectiveEnabledIds } from "./package-state.mjs";
 import { requiredClosure } from "./package-graph.mjs";
@@ -40,16 +41,6 @@ function firstNonblankLine(relPath) {
   return content.split("\n").find((line) => line.trim()) || "";
 }
 
-// True when a boolean scalar under [tui] equals `value` in live Codex config. Mirrors the writer in
-// scripts/harnesses/codex/index.mjs (setTomlScalar, behind the Codex provider's
-// rootConfig.mergePackageComponent) — scoped to the [tui] block so an unrelated same-named key
-// elsewhere can't produce a false match.
-function codexScalarMatches(configText, key, value) {
-  const block = configText.match(/^\[tui\]\s*\n([\s\S]*?)(?=^\[|\s*$)/m);
-  if (!block) return false;
-  return new RegExp(`^${key}\\s*=\\s*${value ? "true" : "false"}\\b`, "m").test(block[1]);
-}
-
 // A component without a harness applies to every registered harness.
 function targetHarnesses(component) {
   if (!component.harness) return knownHarnessIds();
@@ -72,7 +63,7 @@ function foldComponentState({ desired, observed, blocked = false, inactive = fal
 function componentResult(component, { desired, observed, owner = "unknown", detail = null, blocked = false, inactive = false }) {
   return {
     type: component.type,
-    id: component.id || component.name || component.preset || component.source || null,
+    id: component.id || component.name || component.preset || component.source || component.label || null,
     desired,
     observed,
     owner: observed ? owner : null,
@@ -145,43 +136,6 @@ function harnessDisplayName(harness) {
   return getHarnessProvider(harness).manifest.displayName;
 }
 
-function probePermissions(component, desired, settings) {
-  const allow = settings.permissions?.allow || [];
-  const missing = (component.allow || []).filter((entry) => !allow.includes(entry));
-  return componentResult(component, {
-    desired,
-    observed: missing.length === 0,
-    owner: desired ? "roborepo" : "external",
-    detail: missing.length ? `${missing.length} permission(s) missing` : `${(component.allow || []).length} permission(s) present`,
-  });
-}
-
-function probeCodexToolApprovals(component, desired) {
-  const config = readText(CODEX_CONFIG, "");
-  const missing = Object.entries(component.approvals || {}).filter(([toolName, approvalMode]) => {
-    const server = component.server.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const tool = toolName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const mode = String(approvalMode).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return !new RegExp(`^\\[mcp_servers\\.${server}\\.tools\\.${tool}\\]\\s*\\napproval_mode\\s*=\\s*"${mode}"`, "m").test(config);
-  });
-  return componentResult(component, {
-    desired,
-    observed: missing.length === 0,
-    owner: desired ? "roborepo" : "external",
-    detail: missing.length ? `${missing.length} Codex tool approval(s) missing` : `${Object.keys(component.approvals || {}).length} Codex tool approval(s) present`,
-  });
-}
-
-function probePlugin(component, desired, settings) {
-  const observed = settings.enabledPlugins?.[component.id] === true;
-  return componentResult(component, {
-    desired,
-    observed,
-    owner: desired ? "roborepo" : "external",
-    detail: observed ? "enabled in Claude settings" : "not enabled in Claude settings",
-  });
-}
-
 function probeMcp(component, desired, settings) {
   const name = component.preset;
   const codexConfig = readText(CODEX_CONFIG, "");
@@ -218,6 +172,10 @@ function probeService(component, desired, telemetryState) {
   });
 }
 
+function probeConfigPatch(component, desired, pkg) {
+  return componentResult(component, { desired, ...probeConfigPatches(pkg, component) });
+}
+
 function probePackageRuntimeAsset(component, desired, pkg) {
   const dest = packageRuntimeAssetDestination(pkg, component);
   const observed = fs.existsSync(dest);
@@ -227,54 +185,6 @@ function probePackageRuntimeAsset(component, desired, pkg) {
     owner: observed ? "roborepo" : null,
     detail: observed ? `package-runtime asset present: ${dest}` : `package-runtime asset missing: ${dest}`,
   });
-}
-
-function probeClaudePluginDir(component, desired, settings, pkg) {
-  const dest = claudePluginDirDestination(pkg, component);
-  const installed = fs.existsSync(path.join(dest, ".claude-plugin", "plugin.json"));
-  const registered = claudePluginDirRegistered(settings, pkg, component);
-  const observed = installed && registered;
-  return componentResult(component, {
-    desired,
-    observed,
-    owner: observed ? "roborepo" : null,
-    detail: observed
-      ? `Claude plugin folder registered: ${dest}`
-      : !installed ? `Claude plugin folder missing: ${dest}` : `Claude plugin folder not registered: ${dest}`,
-  });
-}
-
-function probeHarnessConfig(component, desired, settings, pkg) {
-  const config = readHarnessConfig(component, pkg);
-  if (component.harness === "claude") {
-    const observed = JSON.stringify(settings.statusLine || null) === JSON.stringify(config.statusLine || null);
-    return componentResult(component, {
-      desired,
-      observed,
-      owner: observed ? "roborepo" : settings.statusLine ? "external" : null,
-      detail: observed ? "Claude statusLine matches package config" : settings.statusLine ? "Claude statusLine is unmanaged" : "Claude statusLine missing",
-    });
-  }
-  if (component.harness === "codex") {
-    const configText = readText(CODEX_CONFIG, "");
-    const desiredItems = config.tui?.status_line || [];
-    const itemsPresent = desiredItems.every((item) => codexStatusLineIncludes(configText, item));
-    // When the package owns a scalar (e.g. status_line_use_colors), the probe must verify it too —
-    // array items alone would report "present" while an owned scalar silently failed to apply.
-    const wantsColorScalar = typeof config.tui?.status_line_use_colors === "boolean";
-    const scalarPresent = !wantsColorScalar
-      || codexScalarMatches(configText, "status_line_use_colors", config.tui.status_line_use_colors);
-    const observed = itemsPresent && scalarPresent;
-    return componentResult(component, {
-      desired,
-      observed,
-      owner: observed ? "roborepo" : null,
-      detail: observed
-        ? "Codex status_line contains package fields"
-        : !itemsPresent ? "Codex status_line missing package fields" : "Codex status_line color scalar not applied",
-    });
-  }
-  return componentResult(component, { desired, observed: false, detail: "unknown harness-config harness", blocked: desired });
 }
 
 // Slash-command entrypoints this skill resource declares, keyed by harness — needed here because
@@ -374,14 +284,10 @@ export function buildPackageLiveState(packages, { hookRecords = null, effectiveI
       if (component.type === "rules") components.push(probeRules(component, componentDesired));
       else if (component.type === "command") components.push(probeCommand(component, componentDesired));
       else if (component.type === "hooks") components.push(probeHooks(component, componentDesired, hookRecords));
-      else if (component.type === "permissions") components.push(probePermissions(component, componentDesired, settings));
-      else if (component.type === "codex_tool_approvals") components.push(probeCodexToolApprovals(component, componentDesired));
-      else if (component.type === "plugin") components.push(probePlugin(component, componentDesired, settings));
       else if (component.type === "mcp") components.push(probeMcp(component, componentDesired, settings));
       else if (component.type === "service") components.push(probeService(component, componentDesired, telemetryState));
       else if (component.type === "package-runtime-asset") components.push(probePackageRuntimeAsset(component, componentDesired, pkg));
-      else if (component.type === "claude-plugin-dir") components.push(probeClaudePluginDir(component, componentDesired, settings, pkg));
-      else if (component.type === "harness-config") components.push(probeHarnessConfig(component, componentDesired, settings, pkg));
+      else if (component.type === "config-patch") components.push(probeConfigPatch(component, componentDesired, pkg));
       else if (component.type === "skill") components.push(probeSkill(component, componentDesired, pkg));
       else components.push(componentResult(component, { desired: componentDesired, observed: false, detail: "unknown component type", blocked: componentDesired }));
     }

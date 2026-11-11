@@ -152,9 +152,9 @@ export function validateAdapterActionResult(result) {
 /**
  * @typedef {object} AdapterComputeResult A "compute-only" adapter method's return shape — no file
  *   I/O, no path resolution; the caller (an orchestrator that already sits above the harness
- *   registry in the dependency graph, e.g. hook-composition.mjs, package-harness-config.mjs,
+ *   registry in the dependency graph, e.g. hook-composition.mjs, package-config-patches.mjs,
  *   mcp.mjs) performs the actual write via writeRootConfig or a plain file write. Used by e.g.
- *   rootConfig.merge{,PackageComponent}, hooks.merge/unmerge, mcp.addServer/removeServer (the
+ *   rootConfig.merge, hooks.merge/unmerge, mcp.addServer/removeServer (the
  *   config-file-backed providers' single-server shape, as opposed to Claude's CLI-shell-out
  *   AdapterActionResult shape for the same capability).
  * @property {boolean} changed

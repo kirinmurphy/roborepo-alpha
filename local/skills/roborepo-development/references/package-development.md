@@ -103,11 +103,11 @@ speculatively; the current approach is deliberate (see `validatePackageCatalog`)
 
 ## Resource types
 
-`RESOURCE_TYPES` (package-catalog.mjs): `skill`, `slash-command`, `rules`, `hooks`, `permissions`,
-`codex_tool_approvals`, `mcp`, `plugin`, `service`, `harness-config`, `package-runtime-asset`,
-`claude-plugin-dir`.
-No shipped package uses `mcp` or `codex_tool_approvals` today; the test-only fixture packages in
-`scripts/test/fixtures/packages/` cover them.
+`RESOURCE_TYPES` (package-catalog.mjs): `skill`, `slash-command`, `rules`, `hooks`, `mcp`,
+`service`, `config-patch`, `package-runtime-asset`.
+No shipped package uses `mcp` today; the test-only fixture packages in
+`scripts/test/fixtures/packages/` cover it, along with Claude permission and Codex tool-approval
+config patches.
 
 Validation depth differs by type — know this before assuming everything is checked:
 
@@ -117,23 +117,49 @@ Validation depth differs by type — know this before assuming everything is che
 | `slash-command` | Yes — slug name, source path shape, source file exists on disk, harnesses array shape | rendered via `slash-commands.mjs` |
 | `rules` | Yes — source exists on disk; `harness` is optional (absent = every rules-capable harness) or a registered rules-capable harness | `renderHomeRules()` |
 | `hooks` | Yes — source exists, valid harness, `scripts[]` entries exist on disk if present | `mergeHooksInto`/`unmergeHooksFrom`, `installHookScripts` |
-| `permissions` | Yes — non-empty `.allow` array of non-empty strings | `mergePermissions(path, component.allow)` — expects `.allow: string[]` |
-| `codex_tool_approvals` | Yes — non-empty `.server` string, non-empty `.approvals` object | `mergeCodexToolApprovals` — expects `.server: string`, `.approvals: {toolName: approvalMode}` |
 | `mcp` | Yes — non-empty `.preset` string | `installMcpPreset(component.preset)` — expects `.preset: string` matching `manifests/inventory/mcp-servers.json`/`mcp-presets.json` |
-| `plugin` | Yes — non-empty `.id`, `.marketplace.{name,source}` present | `enablePlugin` — expects `.id`, `.marketplace.{name,source}` |
 | `service` | Yes — non-empty `.id` | `setService(component.id, ...)` — expects `.id` |
-| `harness-config` | Yes — source exists inside package dir; target is a registered package-config-capable harness | package-managed live harness config merge/unmerge |
-| `package-runtime-asset` | Yes — source exists inside package dir, optional relative `.target` | copied to `~/.roborepo/package-runtime/<package-id>/` and referenced by harness config |
-| `claude-plugin-dir` | Yes — source folder inside package dir holds `.claude-plugin/plugin.json` | folder copied to `~/.roborepo/package-runtime/<package-id>/<folder>/` and added to `env.CLAUDE_CODE_PLUGIN_DIRS` in Claude settings; other entries in that list are preserved |
+| `config-patch` | Yes — `harness` declares `config-edit`, optional `label`, each patch's op/path/value shape, and a trial write of every value into an empty config in that harness's format | `applyConfigPatches`/`removeConfigPatches` in `package-config-patches.mjs` — see Config patches below |
+| `package-runtime-asset` | Yes — source file or folder exists inside package dir, optional relative `.target` | copied to `~/.roborepo/package-runtime/<package-id>/` (a folder is replaced wholesale) and referenced from config patches as `${package-runtime:<source basename>}` |
 
 All resource types get shape-level validation at `roborepo package validate` time, not
 just at enable-time. If you're extending one
 of these checks, mirror the existing `else if (next.type === ...)` branches in `normalizeResource`
 (`scripts/cli/package-catalog.mjs`).
 
-`harness-config` and `package-runtime-asset` were added for default-enabled package-owned status-line
-support. Keep package-runtime assets out of prompt-context accounting; they are copied executable files, not
-agent instructions.
+Keep package-runtime assets out of prompt-context accounting; they are copied executable files and
+folders, not agent instructions.
+
+### Config patches
+
+A package's own harness settings (a status line, a plugin, permissions, tool approvals) are data in
+its manifest, not methods on a provider. A provider contributes only the `config-edit` capability:
+`get`/`set`/`delete` at a key path in its root config's format (JSON for Claude and Gemini, TOML for
+Codex). Adding a harness never means adding a method for one package's setting.
+
+```json
+{
+  "type": "config-patch",
+  "harness": "claude",
+  "label": "status line",
+  "patches": [
+    { "op": "set", "path": ["statusLine"], "value": { "type": "command", "command": "node \"${package-runtime:claude-statusline.mjs}\"" } },
+    { "op": "union", "path": ["env", "CLAUDE_CODE_PLUGIN_DIRS"], "value": ["${package-runtime:context-row}"], "delimiter": "path" }
+  ]
+}
+```
+
+| Op | Enable | Disable |
+| --- | --- | --- |
+| `set` | Writes the value when the key is absent, already equal, or recorded as RoboRepo's. An unmanaged different value is left and reported as a conflict. The prior state is recorded in `owned-scalars-state.mjs`. | Restores the recorded prior value, or removes a key RoboRepo introduced. A value changed since enable is left. |
+| `union` | Adds the missing items to the list at `path`. With `delimiter` the list is a delimited string; `"path"` means the OS path-list separator. | Removes only the package's items; an emptied list loses its key. |
+
+- `path` is an array of keys, so `["enabledPlugins", "caveman@caveman"]` needs no escaping. In
+  TOML, `[...table, key]` addresses `key` under `[table]`.
+- Two packages may not `set` the same path; `validatePackageCatalog` claims each one.
+- `label` names the component in package status and in "Installed outside RoboRepo" badges.
+- The TOML editor edits only the key line it targets and keeps comments. It does not read dotted
+  keys inside a table body or tables defined inline by a parent; those read as absent.
 
 ## Ownership and conflict behavior (current, not aspirational)
 
@@ -304,7 +330,7 @@ Add these rows to `docs/user/reference/roborepo-cli.md` and to
 ## Apply behavior (already automatic — do not reintroduce a manual step)
 
 `enablePackage`/`disablePackage` in `packages.mjs` mutate live harness state directly as part of
-the same call: permissions merged into `USER_CLAUDE_SETTINGS`, hooks merged via
+the same call: config patches applied to each harness's root config, hooks merged via
 `mergeHooksInto`/`unmergeHooksFrom`, rules re-rendered via `renderHomeRules()`, MCP presets
 installed/removed, skill commands installed via `installPackageCommands`. **There is no separate
 apply/sync step required after enable or disable** — this already matches the goal of "package
@@ -351,7 +377,7 @@ enable/disable must round-trip without leaving stale live state (covered generic
 [ ] package.config.json matches current schema (schemaVersion 1, valid category, valid resources)
 [ ] Directory name matches id exactly
 [ ] Every declared resource source file actually exists (`roborepo package validate` enforces
-    this for skill/rules/hooks/slash-command/harness-config/package-runtime-asset)
+    this for skill/rules/hooks/slash-command/package-runtime-asset, and trial-writes config patches)
 [ ] No resource ID/name collides with another package's claimed skill/slash-command/CLI-command
 [ ] Optional behavior kept entirely inside this package — nothing added to globals/system/
 [ ] Ran `roborepo package validate <id>`

@@ -5,6 +5,7 @@ import { experimentalStatePath } from "./state-paths.mjs";
 import { readWorkspaceOverrides, hasReplaceOverride } from "./workspace-resources.mjs";
 import { hasHarnessProvider, getHarnessProvider } from "../harnesses/registry.mjs";
 import { requiresCycles } from "./package-graph.mjs";
+import { CONFIG_EDIT_CAPABILITY, configPatchClaims, normalizeConfigPatches } from "./package-config-patches.mjs";
 
 export const PACKAGE_CATEGORIES_PATH = path.join(repoRoot, "manifests", "inventory", "package-categories.json");
 export const BUILT_IN_PACKAGES_DIR = path.join(repoRoot, "globals", "packages");
@@ -22,14 +23,10 @@ const RESOURCE_TYPES = new Set([
   "slash-command",
   "rules",
   "hooks",
-  "permissions",
-  "codex_tool_approvals",
   "mcp",
-  "plugin",
   "service",
-  "harness-config",
+  "config-patch",
   "package-runtime-asset",
-  "claude-plugin-dir",
 ]);
 const SKILL_INVOCATIONS = new Set(["auto", "manual"]);
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
@@ -191,6 +188,7 @@ export function validatePackageCatalog(packages) {
   const packageIds = new Set();
   const skillIds = new Map();
   const slashNames = new Map();
+  const configSettings = new Map();
 
   for (const pkg of packages) {
     if (packageIds.has(pkg.id)) errors.push(`duplicate package id: ${pkg.id}`);
@@ -220,6 +218,8 @@ export function validatePackageCatalog(packages) {
         }
       } else if (resource.type === "slash-command") {
         claim(slashNames, resource.name, pkg.id, errors, "slash command");
+      } else if (resource.type === "config-patch") {
+        for (const key of configPatchClaims(resource)) claim(configSettings, key, pkg.id, errors, "config setting");
       }
     }
   }
@@ -322,39 +322,22 @@ function normalizeResource(resource, { pkgId, root, index }) {
     next.source = validateInsideSource(root, next.source, `${pkgId}:/${next.name}`);
     if (!fs.existsSync(path.join(root, next.source))) throw new Error(`${pkgId}:/${next.name} source missing: ${next.source}`);
     validateHarnesses(next.harnesses, `${pkgId}:/${next.name}`, { requiredCapability: "slash-commands" });
-  } else if (next.type === "permissions") {
-    if (!Array.isArray(next.allow) || next.allow.length === 0) throw new Error(`${pkgId}: permissions resource needs non-empty allow array`);
-    if (!next.allow.every((entry) => typeof entry === "string" && entry.trim() !== "")) {
-      throw new Error(`${pkgId}: permissions.allow entries must be non-empty strings`);
-    }
-  } else if (next.type === "codex_tool_approvals") {
-    if (typeof next.server !== "string" || next.server.trim() === "") throw new Error(`${pkgId}: codex_tool_approvals needs server`);
-    if (!next.approvals || typeof next.approvals !== "object" || Array.isArray(next.approvals) || Object.keys(next.approvals).length === 0) {
-      throw new Error(`${pkgId}: codex_tool_approvals needs non-empty approvals map`);
-    }
   } else if (next.type === "mcp") {
     if (typeof next.preset !== "string" || next.preset.trim() === "") throw new Error(`${pkgId}: mcp resource needs preset`);
-  } else if (next.type === "plugin") {
-    if (typeof next.id !== "string" || next.id.trim() === "") throw new Error(`${pkgId}: plugin resource needs id`);
-    if (!next.marketplace || typeof next.marketplace.name !== "string" || !next.marketplace.source) {
-      throw new Error(`${pkgId}: plugin resource needs marketplace.name and marketplace.source`);
-    }
   } else if (next.type === "service") {
     if (typeof next.id !== "string" || next.id.trim() === "") throw new Error(`${pkgId}: service resource needs id`);
-  } else if (next.type === "harness-config") {
-    next.source = validateInsideSource(root, next.source, `${pkgId}:harness-config`);
-    if (!fs.existsSync(path.join(root, next.source))) throw new Error(`${pkgId}:harness-config source missing: ${next.source}`);
-    validateHarness(next.harness, `${pkgId}:harness-config`, { requiredCapability: "package-config" });
+  } else if (next.type === "config-patch") {
+    const label = `${pkgId}:config-patch`;
+    validateHarness(next.harness, label, { requiredCapability: CONFIG_EDIT_CAPABILITY });
+    if (next.label !== undefined && (typeof next.label !== "string" || next.label.trim() === "")) {
+      throw new Error(`${label} label must be a non-empty string`);
+    }
+    next.patches = normalizeConfigPatches(next.patches, next.harness, label);
   } else if (next.type === "package-runtime-asset") {
     next.source = validateInsideSource(root, next.source, `${pkgId}:package-runtime-asset`);
     if (!fs.existsSync(path.join(root, next.source))) throw new Error(`${pkgId}:package-runtime-asset source missing: ${next.source}`);
     if (next.target !== undefined && !isSafeRelativeTarget(next.target)) {
       throw new Error(`${pkgId}:package-runtime-asset target must be a relative path`);
-    }
-  } else if (next.type === "claude-plugin-dir") {
-    next.source = validateInsideSource(root, next.source, `${pkgId}:claude-plugin-dir`);
-    if (!fs.existsSync(path.join(root, next.source, ".claude-plugin", "plugin.json"))) {
-      throw new Error(`${pkgId}:claude-plugin-dir source has no .claude-plugin/plugin.json: ${next.source}`);
     }
   } else if (next.type === "rules" || next.type === "hooks") {
     next.source = validateInsideSource(root, next.source, `${pkgId}:${next.type}`);

@@ -27,7 +27,8 @@
     "skills",
     "slash-commands",
     "hooks",
-    "mcp"
+    "mcp",
+    "config-edit"
   ],
   "extensions": {
     "app": {
