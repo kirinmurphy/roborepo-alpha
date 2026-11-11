@@ -108,10 +108,12 @@ same plan, the command refuses rather than overwriting. Backlog order changes fr
 added and removed plans from each, and a reorder from either side, unless both reordered the same
 namespace differently, which also refuses.
 
-Direct writes to `repo_plans` are prevented differently per harness. In Claude, Write and Edit follow
-your write-outside-the-repo setting, since that worktree is outside your checkout. In Codex a direct
-write is technically possible, because the CLI runs inside the sandbox and needs that access; the
-skills forbid it, and the next store command refuses uncommitted edits. Neither protects against a
+Direct writes to `repo_plans` are prevented differently per harness. In Claude, a deny rule
+(`edit-plans-store`) refuses Write and Edit there. In Codex a direct write is technically possible,
+because the CLI runs inside the sandbox and needs that access; the skills forbid it, and the next
+store command refuses uncommitted edits. In every agent shell, the Git hooks RoboRepo installs refuse
+a hand-made commit, merge commit, or push of `repo-plans`; the store's own commands run Git with
+hooks off. Neither protects against a
 process with unrestricted shell access deleting local files, which is why the remote is the source
 of truth.
 

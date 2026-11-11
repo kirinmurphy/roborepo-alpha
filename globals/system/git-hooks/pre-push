@@ -2,7 +2,8 @@
 # Refuses agent pushes that land on a protected branch or rewrite a remote ref, then runs the repo's
 # own pre-push hook. Git passes the exact refs on stdin, so this catches pushes the PreToolUse check
 # could not parse. Protected: main, master, the remote's default branch, and
-# ROBOREPO_PROTECTED_BRANCHES (comma-separated).
+# ROBOREPO_PROTECTED_BRANCHES (comma-separated). repo-plans, the plans store branch, is refused too:
+# `roborepo plans` pushes it with hooks off, so a push that reaches this hook was made by hand.
 
 . "$(dirname "$0")/chain.sh"
 
@@ -39,6 +40,8 @@ blocked=""
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ -n "$remote_ref" ] || continue
   branch=${remote_ref#refs/heads/}
+  [ "$branch" = "repo-plans" ] \
+    && refuse "repo-plans holds the plans store. Change plans with 'roborepo plans' commands, which push for you."
   if [ "$branch" != "$remote_ref" ]; then
     # The default branch is usually main too: stop at the first match so it is reported once.
     for name in $protected; do

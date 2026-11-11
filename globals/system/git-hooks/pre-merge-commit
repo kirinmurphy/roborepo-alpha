@@ -1,4 +1,7 @@
 #!/bin/sh
-# Runs the repo's own hook of this name; see chain.sh.
+# Refuses a hand-made commit in the plans store, then runs the repo's own hook of this name; see
+# chain.sh.
 . "$(dirname "$0")/chain.sh"
+. "$(dirname "$0")/plans-store.sh"
+roborepo_refuse_plans_store
 roborepo_chain_hook "$(basename "$0")" "$@"

@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url'
 // prefix rule cannot tell them apart: `git push` on main, `git push origin HEAD:main`, and
 // `git push origin :main` all start with the same words as a feature-branch push.
 //
-// Protected: main, master, the remote's default branch (refs/remotes/<remote>/HEAD), and any names in
-// ROBOREPO_PROTECTED_BRANCHES (comma-separated). A push that lands on one is denied, and so is any
+// Protected: main, master, the remote's default branch (refs/remotes/<remote>/HEAD), any names in
+// ROBOREPO_PROTECTED_BRANCHES (comma-separated), and repo-plans, the plans store branch, which only
+// `roborepo plans` commands push. A push that lands on one is denied, and so is any
 // force push (a force option or a `+` refspec). A push this parser cannot pin down (--all, --mirror,
 // shell expansion, globbed or configured refspecs, an unknown remote default branch) asks.
 //
@@ -40,6 +41,10 @@ const VALUE_OPTIONS = new Set(['--repo', '-o', '--push-option', '--receive-pack'
 const UNCLASSIFIABLE_OPTIONS = new Set(['--all', '--branches', '--mirror'])
 // Skips the pre-push backstop, so a push carrying it is never allowed without a prompt.
 const SKIPS_BACKSTOP = new Set(['--no-verify'])
+// `roborepo plans` pushes this branch with Git hooks off, so a push that reaches either guard is a
+// hand-made one.
+const PLANS_STORE_BRANCH = 'repo-plans'
+
 const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
 // Mirrors the change-github-directly behavior in agent-permissions.json; a test keeps them equal.
 const GH_DENIED = [
@@ -117,7 +122,7 @@ function git(cwd, args) {
 // fetched, or a push to a URL): the remote's default branch is then unknown, and this hook has no
 // network access to ask the remote.
 function protectedBranches(cwd, remote) {
-  const names = new Set(['main', 'master'])
+  const names = new Set(['main', 'master', PLANS_STORE_BRANCH])
   for (const name of (process.env.ROBOREPO_PROTECTED_BRANCHES || '').split(',')) {
     if (name.trim()) names.add(name.trim())
   }
@@ -256,9 +261,12 @@ function unknownDefault(remote) {
 }
 
 function deny(branch, detail) {
+  const instead = branch === PLANS_STORE_BRANCH
+    ? 'It holds the plans store: change plans with `roborepo plans` commands, which push for you.'
+    : 'Push a feature branch and open a pull request instead.'
   return {
     decision: 'deny',
-    reason: `roborepo: pushing to protected branch "${branch}" is blocked for agents (${detail}). Push a feature branch and open a pull request instead.`,
+    reason: `roborepo: pushing to protected branch "${branch}" is blocked for agents (${detail}). ${instead}`,
   }
 }
 

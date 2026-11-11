@@ -182,6 +182,14 @@ Policy Engine), and falls back to the whole-tool decision there. `write-files` d
 unscoped rule of its own: a bare `Write`/`Edit` entry out-ranks every path-scoped rule and would
 silently defeat the scoping.
 
+### Plans store edits
+
+`edit-plans-store` denies Claude's Write and Edit tools under any `repo_plans` folder, the plans store
+worktree. Plans change only through `roborepo plans` commands, which validate, commit, and push, and
+Claude's writes inside the repo's worktree family otherwise need no prompt. Reading stays allowed.
+Codex and Gemini render nothing for it: Codex's sandbox must let the CLI write there, and Gemini
+policies cannot match paths.
+
 ### Credential denylist
 
 `read-secrets` denies reads of credential material — `~/.ssh`, `~/.aws`, `~/.gnupg`, cloud config,

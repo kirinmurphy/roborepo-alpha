@@ -87,6 +87,21 @@
       "category": "files"
     },
     {
+      "id": "edit-plans-store",
+      "label": "Edit the plans store directly",
+      "description": "Write or edit files in a repo's plans store worktree (`repo_plans`). Plans change only through `roborepo plans` commands, which validate, commit, and push; a direct edit skips all three and the next store command refuses it. Denied for Claude, whose writes inside the repo's worktree family otherwise need no prompt. Codex cannot take this rule, because the CLI it runs writes there from inside its sandbox.",
+      "kind": "tools-scoped",
+      "tools": [
+        "Edit",
+        "Write"
+      ],
+      "paths": [
+        "//**/repo_plans/**"
+      ],
+      "bucket": "deny",
+      "category": "files"
+    },
+    {
       "id": "repo-write-boundary",
       "label": "Repository boundary",
       "description": "Writes inside the repository you are working in proceed; writes outside it follow this setting. Reads are wider: the whole repository family (a worktree, its primary checkout, and its sibling worktrees) is readable, because comparing a branch against main is routine while writing across checkouts is how one session clobbers another's work. Enforced at tool-call time for harnesses with hooks, so the boundary is the current checkout rather than a fixed directory. Claude enforces this with a PreToolUse hook; Codex with a managed-workspace permission profile, whose runtime workspace root is augmented by the current repo's worktree root from its plans config.",
