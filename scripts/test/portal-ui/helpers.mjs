@@ -31,9 +31,27 @@ export async function removeRepositorySources(page) {
 
 // Empties a plan fixture but keeps its root. A registered checkout whose parent folder is gone reads
 // as unreadable, which Home keeps listing; with the parent present it reads as absent and leaves Home.
+//
+// The portal can still be running Git in a fixture's plans worktree (a refresh started before the
+// source was removed), and Git writes into `.git/worktrees/<name>` while the removal walks it. rmSync's
+// own retries cover a few hundred milliseconds; a slow runner needs the whole removal retried until
+// that Git work finishes.
+const REMOVE_SETTLE_MS = 15_000;
+const TRANSIENT_REMOVE_CODES = new Set(["ENOTEMPTY", "EBUSY", "EPERM"]);
+
 export function removeFixtureContents(fx) {
+  const deadline = Date.now() + REMOVE_SETTLE_MS;
   for (const entry of fs.readdirSync(fx.tmp)) {
-    fs.rmSync(path.join(fx.tmp, entry), { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    const target = path.join(fx.tmp, entry);
+    for (;;) {
+      try {
+        fs.rmSync(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+        break;
+      } catch (err) {
+        if (!TRANSIENT_REMOVE_CODES.has(err?.code) || Date.now() > deadline) throw err;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+      }
+    }
   }
 }
 
