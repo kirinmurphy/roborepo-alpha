@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Run /plan-promote to confirm the GitHub endpoints against the live repo and settle the open questions
+next_action: Run /plan-promote to confirm the GitHub endpoints and the permissions field against the live repo
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "developer-runtime-remote-branch-status"]
@@ -16,8 +16,10 @@ Every repo that uses the plans store keeps its plans on a `repo-plans` branch th
 to directly. On GitHub, that branch should carry a ruleset that blocks deletion, force pushes, and
 merge commits while still allowing direct pushes. Today the user has to remember to add that ruleset
 by hand for each repo. This plan adds `roborepo plans protect`, which reports or creates the
-ruleset; `/plan-suite-init` offers it after setting up a store; and the Plans page shows a
-**Protect** button only while GitHub reports the branch unprotected.
+ruleset; `/plan-suite-init` offers it after setting up a store; `roborepo doctor` reports it; and
+the Plans page shows a **Protect** button only while GitHub reports the branch unprotected. When the
+user's GitHub account is not an admin of the repo, and so cannot add the ruleset, the command,
+doctor, and the Plans page all say so.
 
 ## Context
 
@@ -60,6 +62,9 @@ required status checks (`required_status_checks`), and restricted updates (`upda
 - One command reports whether `repo-plans` is protected, and creates the protection when it is not.
 - Running the command again changes nothing.
 - A new store is offered protection at the end of `/plan-suite-init`.
+- `roborepo doctor` reports an unprotected plans branch, and whether the user can fix it.
+- When protection is missing and the user is not a repo admin, the Plans page and doctor say so
+  and name what to do, instead of offering a button that GitHub would refuse.
 - The Plans page shows a **Protect** button only while GitHub reports protection missing, and the
   button disappears once the rules apply, however they got there.
 - A repo on another host gets the manual steps instead of an error.
@@ -81,10 +86,15 @@ effective-rules endpoint, `GET /repos/{owner}/{repo}/rules/branches/repo-plans`.
 active rule from every ruleset that targets the branch, and it needs only read access. A rule
 removed on GitHub therefore brings the button back, and protection added by hand hides it.
 
+Whether the signed-in account can add the ruleset comes from the same place:
+`GET /repos/{owner}/{repo}` returns `permissions.admin` for that account. The status carries it as
+`admin: true|false` whenever the state is `missing`.
+
 | State | Condition | `plans protect --check` | Plans page |
 | --- | --- | --- | --- |
 | `protected` | All three rules apply and no push-blocking rule does | Reports it; exit 0 | Nothing |
-| `missing` | One or more of the three rules is absent | Lists the absent rules; exit 1 | Warning line with **Protect** |
+| `missing`, admin | One or more of the three rules is absent, and the account is a repo admin | Lists the absent rules; exit 1 | Warning line with **Protect** |
+| `missing`, not admin | One or more rules is absent, and the account is not a repo admin | Lists the absent rules and says an admin must run `roborepo plans protect`; exit 1 | Warning line naming the account and saying an admin must protect the branch, no button |
 | `conflicting` | A rule that refuses direct pushes applies (`pull_request`, `required_status_checks`, `update`) | Names the rule and its ruleset; exit 1 | Warning line naming it, no button |
 | `unavailable` | `gh` missing, not signed in, or GitHub unreachable | Gives the reason; exit 1 | Warning line with the reason and the CLI command, no button |
 | `unsupported` | The remote is not GitHub | Prints the manual steps; exit 1 | Nothing |
@@ -102,8 +112,9 @@ roborepo plans protect [--check] [--json]
 - Every other state is reported and nothing is written. If a ruleset named `repo-plans` already
   exists but its rules are incomplete, the command refuses and names it, rather than edit a ruleset
   someone else may have changed.
-- Creating a ruleset needs repo admin. Without it GitHub refuses, and the command says to run it
-  from an account with admin rights.
+- Creating a ruleset needs repo admin. When the status says `admin: false`, the command refuses
+  before calling GitHub, names the signed-in account, and says to run it from an account with admin
+  rights. If GitHub refuses anyway, the command reports the same message.
 
 ```mermaid
 flowchart TD
@@ -122,14 +133,18 @@ flowchart TD
 
 | Piece | Location | Owns |
 | --- | --- | --- |
-| GitHub calls | `modules/forge/github.mjs` | Running `gh api`, reading effective branch rules, creating a ruleset. The one place RoboRepo runs `gh`, matching Part 01's design |
+| GitHub calls | `modules/forge/github.mjs` | Running `gh api`; reading effective branch rules, the account's repo permissions, and its login; creating a ruleset. The one place RoboRepo runs `gh`, matching Part 01's design |
 | Protection policy | `modules/plan-suite/store-protection.mjs` | The three required rules, the push-blocking rule list, mapping effective rules to a state, and the create-then-recheck flow |
 | CLI | `scripts/cli/plans-command.mjs` | Parsing `protect`, printing, exit codes |
 | Portal API | `scripts/cli/portal-routes-plans.mjs` | `GET /api/plans/protection?repositoryId=` and `POST /api/plans/protection` |
 | Plans page | `portal/plans/app.js`, `portal/plans/templates.js` | The warning line and button |
+| Doctor | `scripts/doctor.sh` | One line for the current repo, from `roborepo plans protect --check --json` |
 
-Whichever of this plan and Part 01 lands first creates `modules/forge/github.mjs`; the second adds to
-it. The policy stays in `plan-suite` because only the plans store needs these rules.
+Whichever of this plan and Part 01 lands first creates `modules/forge/` with its host-name entry
+point and `github.mjs`; the second adds to them. Part 01 keeps a seam rather than a provider
+registry: callers pass a host name, and only GitHub is implemented. This plan uses that seam, so a
+non-GitHub host resolves to `unsupported` at the entry point. The policy stays in `plan-suite`
+because only the plans store needs these rules.
 
 ### The Plans page
 
@@ -139,21 +154,39 @@ not cache the answer. Clicking **Protect** calls the POST route, which runs the 
 command, then the line rerenders from the returned state. Copy follows the repo naming rule: "Repo",
 never "repository".
 
+### `roborepo doctor`
+
+When the current repo has a plans store, doctor adds one line from
+`roborepo plans protect --check --json`. Like doctor's Node release check, it uses `hint`, so it
+never turns doctor red, and test suites skip it with an environment variable to stay off the network.
+
+| State | Doctor line |
+| --- | --- |
+| `protected` | `ok` |
+| `missing`, admin | Hint: run `roborepo plans protect` |
+| `missing`, not admin | Hint: the signed-in account is not an admin of this repo; ask an admin to run `roborepo plans protect` |
+| `conflicting` | Hint naming the rule and ruleset that will refuse plan saves |
+| `unavailable` | Skip line with the reason |
+| `unsupported` | Hint pointing to the manual steps |
+
 ### `/plan-suite-init`
 
-After the store exists, the skill runs `roborepo plans protect --check --json`. For `missing` it
-asks the user whether to protect the branch now and runs `roborepo plans protect` on a yes. Every
+After the store exists, the skill runs `roborepo plans protect --check --json`. For `missing` with
+`admin: true` it asks the user whether to protect the branch now and runs `roborepo plans protect`
+on a yes. For `missing` with `admin: false` it reports that an admin must run the command. Every
 other state goes into its report with the command's reason.
 
 ## Implementation plan
 
-- [ ] Add `modules/forge/github.mjs` with effective-branch-rules and create-ruleset calls through
-      `gh api`, or extend it if Part 01 has already added it.
+- [ ] Add `modules/forge/` with its host-name entry point and `github.mjs`, holding the
+      effective-branch-rules, repo-permissions, login, and create-ruleset calls through `gh api`,
+      or extend them if Part 01 has already added them.
 - [ ] Add `modules/plan-suite/store-protection.mjs` with the state mapping and the
       create-then-recheck flow.
 - [ ] Add `roborepo plans protect [--check] [--json]` to `scripts/cli/plans-command.mjs` and its
       usage text.
 - [ ] Add the two portal routes and the Plans page warning line with its **Protect** button.
+- [ ] Add the doctor line to `scripts/doctor.sh`, with its network skip variable.
 - [ ] Add the check-and-offer step to `/plan-suite-init`.
 - [ ] Add `scripts/test/plans-protect-check.mjs` to the CI group in `scripts/test/check-groups.json`.
 - [ ] Add a portal UI spec for the button.
@@ -165,8 +198,9 @@ Automated, with a fake `gh` executable placed first on `PATH`. It answers from a
 records each request:
 
 - `scripts/test/plans-protect-check.mjs`:
-  - each of the five states maps to the documented output and exit code, for `--check` and
-    `--json`;
+  - each state in the status table, including `missing` with and without admin, maps to the
+    documented output and exit code, for `--check` and `--json`;
+  - `protect` with `admin: false` sends no create request and names the signed-in account;
   - `protect` on `missing` sends one create request with the exact ruleset body: the name, the
     target `refs/heads/repo-plans`, the three rules, and no bypass actors;
   - a second `protect` sends no create request;
@@ -176,7 +210,11 @@ records each request:
 - A portal UI spec, with the fake `gh` on the test server's `PATH`:
   - the warning line and **Protect** button appear for `missing`;
   - clicking the button removes them;
+  - for `missing` without admin, the line names the account and says an admin must protect the
+    branch, with no button;
   - neither appears for `protected`.
+- Doctor, run against a repo with a store and the fake `gh`: `ok` for `protected`, the admin hint
+  and the not-admin hint for the two `missing` cases, and exit 0 in every case.
 - `node scripts/test/docs-reference-check.mjs` passes.
 
 Manual, on a scratch GitHub repo where the user is admin:
@@ -194,18 +232,16 @@ Manual, on a scratch GitHub repo where the user is admin:
 | Risk | Mitigation |
 | --- | --- |
 | The command runs `gh` with whatever token `gh` holds, so an agent that runs it acts as the user | It only reads branch rules or creates this one fixed protective ruleset; it never edits or deletes a ruleset |
-| Under the agent identity from Part 01 (`w7vls1yk`), the bot has no admin rights | Creation is refused with the admin message; the check still works, since it needs only read access |
+| Under the agent identity from Part 01 (`w7vls1yk`), the bot has no admin rights | It reads as `missing`, not admin, and says an admin must run the command; the check still works, since it needs only read access |
 | The effective-rules endpoint omits legacy branch protection | A legacy rule alone reads as `missing`; the created ruleset then duplicates it, which is harmless |
 | A wildcard ruleset elsewhere adds a push-blocking rule to `repo-plans` | Reported as `conflicting`, naming the ruleset, before saves start failing |
 
-## Open questions
+## Decision Log
 
-- Should the Plans page also show the warning for a repo the user is not admin of, or hide it when
-  GitHub reports the user cannot administer the repo? The design above shows it, with the admin
-  message on click.
-- Should `plans protect` also run from `roborepo doctor` for each repo with a store? Part 01 adds a
-  doctor check for GitHub setup; one doctor line here would surface an unprotected branch without
-  opening the Plans page.
+- 2026-11-11, user: `roborepo doctor` reports protection status for the current repo, including
+  when the signed-in account is not an admin.
+- 2026-11-11, user: the Plans page calls out a non-admin account explicitly, instead of offering a
+  button GitHub would refuse.
 
 ## Documentation impact
 
@@ -213,5 +249,6 @@ Manual, on a scratch GitHub repo where the user is admin:
 | --- | --- |
 | `docs/user/reference/roborepo-cli.md` | Add `plans protect`, its states, and exit codes |
 | `docs/user/guides/plan/lifecycle/plan-suite.md` | Replace the manual "Protect the plans branch" steps with the command; add linear history; keep the manual steps for other hosts |
-| `docs/user/reference/plans-portal.md` | Add the protection warning line and button, and the two routes |
+| `docs/user/reference/plans-portal.md` | Add the protection warning line, the button, the not-admin line, and the two routes |
+| `docs/user/reference/roborepo-cli.md`, `roborepo doctor` row | Add the plans-branch protection line and its skip variable |
 | `globals/packages/plan-suite/skills/plan-suite-init/SKILL.md` | Add the check-and-offer step and its report lines |
