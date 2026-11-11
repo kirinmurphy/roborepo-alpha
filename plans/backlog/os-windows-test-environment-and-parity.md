@@ -176,6 +176,12 @@ added without duplicating runner setup.
       explicit safe refusal where Windows capabilities prevent it; record results in the ledger.
       Deferred here by the user during that plan's October 27 review; macOS/Linux results do not
       establish native Windows support.
+- [ ] Verify the guarded `roborepo delivery pr-body`, `pr-ready`, and `retry-ci` commands on
+      Windows for [[vzgsx5vz]]. `scripts/test/delivery-operations-check.mjs` skips its fake
+      GitHub CLI section on `win32` because the fake is a POSIX executable; give it a Windows
+      fake (for example a `.cmd` shim) and assert the same success arguments and pre-mutation
+      refusals. The fetch fixture checks already run cross-platform. Deferred here by the user
+      during that plan's November 11 review.
 
 ### Phase 3 — Gap resolution and follow-up stories
 
