@@ -11,13 +11,14 @@
 // cache, so the install is cheap enough to run on demand. The Chromium browser is not handled here:
 // it lives in Playwright's per-user cache, shared by every checkout.
 //
-// Use as a module (`await ensureDevDependencies(repoRoot)`) before a dynamic import of Playwright,
+// Use as a module (`ensureDevDependencies(repoRoot)`) before a dynamic import of Playwright,
 // or run directly: exits 0 when node_modules is current or the install succeeded, 1 otherwise.
 
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { isMainModule } from "../../cli/roots.mjs";
 
 // npm writes node_modules/.package-lock.json (the "hidden lockfile") describing what it installed.
 // Returns the lockfile entries the hidden lockfile does not match, as "<path>@<version>" strings;
@@ -71,7 +72,7 @@ export function ensureDevDependencies(repoRoot) {
   return true;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMainModule(import.meta.url)) {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
   process.exit(ensureDevDependencies(repoRoot) ? 0 : 1);
 }
