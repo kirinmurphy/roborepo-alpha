@@ -63,6 +63,26 @@ try {
   assert.equal(second.changed, false, "a second init changes nothing");
   assert.equal(git(store, "rev-parse", "HEAD"), head);
 
+  // ---- the branch README
+  assert.ok(remoteHas(root, "README.md"), "a new store carries the README");
+  assert.match(fs.readFileSync(path.join(store, "README.md"), "utf8"), /orphan branch/);
+  // A store created before the README existed gets it on its next init.
+  git(store, "rm", "--quiet", "README.md");
+  git(store, "commit", "--quiet", "-m", "store from before the README");
+  git(store, "push", "--quiet", "origin", "repo-plans:repo-plans");
+  const upgraded = ok(run(root, "init"), "init on a store without a README");
+  assert.equal(upgraded.readme, "added");
+  assert.equal(upgraded.changed, true);
+  assert.ok(remoteHas(root, "README.md"), "the added README reached the remote");
+  // An edited README is the repo's own and stays as written.
+  fs.writeFileSync(path.join(store, "README.md"), "# Our plans\n");
+  git(store, "commit", "--quiet", "-am", "edit README");
+  git(store, "push", "--quiet", "origin", "repo-plans:repo-plans");
+  const kept = ok(run(root, "init"), "init on a store with an edited README");
+  assert.equal(kept.readme, "present");
+  assert.equal(kept.changed, false);
+  assert.equal(fs.readFileSync(path.join(store, "README.md"), "utf8"), "# Our plans\n");
+
   // ---- save, from a linked worktree, without touching either checkout
   const wt = worktree(root, "feat/one");
   const statusBefore = [git(root, "status", "--porcelain"), git(wt.path, "status", "--porcelain")];

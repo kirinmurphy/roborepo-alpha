@@ -38,9 +38,12 @@ roborepo plans init --worktree-root <confirmed path> --json
 Leave out `--worktree-root` when the branch already exists. Pass `--repo-name <name>` only when the
 user asks, or when another repository sharing this root already uses this folder name.
 
-The command creates the branch with its lifecycle folders, `plans/plans-config.json`, and
-`plans/plans-order.json`, or fetches it; creates or recovers the locked worktree; and pushes any
-pending commits. It never reports a local-only success. On a refusal (no remote, failed credentials,
+The command creates the branch with its lifecycle folders, `plans/plans-config.json`,
+`plans/plans-order.json`, and a root `README.md`, or fetches it; creates or recovers the locked
+worktree; and pushes any pending commits. The README tells anyone who opens the branch on the Git
+host that it is an orphan branch holding plans, never merged, and changed only through
+`roborepo plans`. A branch created before the README existed gets it on this run (`readme: "added"`);
+one already there is kept as written. Never write or edit it yourself. It never reports a local-only success. On a refusal (no remote, failed credentials,
 a destination that belongs to another repository), report the command's reason and stop. Never
 replace or delete anything at that path.
 
@@ -90,6 +93,7 @@ remote:
 
 ```text
 Created: origin/repo-plans, worktree at ~/.worktrees/acme/repo_plans, 3 namespaces (synchronized)
+Added: README.md on repo-plans (synchronized)
 ```
 
 When nothing was missing, report "Plan suite already initialized; no changes." When `/plan-write`

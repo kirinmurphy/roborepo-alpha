@@ -29,6 +29,21 @@ export const PLANS_BRANCH = RESERVED_PLANS_BRANCH;
 export const PLANS_DIR = "plans";
 export const PLANS_WORKTREE_NAME = "repo_plans";
 export const PLANS_ORDER_RELATIVE_PATH = `${PLANS_DIR}/plans-order.json`;
+// The one file outside `plans/`. GitHub shows it when someone opens the branch, which otherwise looks
+// like a stale branch thousands of commits behind the default branch.
+export const STORE_README_PATH = "README.md";
+export const STORE_README = `# Plans store
+
+This branch holds this repo's plans, managed by RoboRepo. It is an orphan branch: it shares no
+history with the code branches and is never merged into them, or they into it. The "commits behind"
+count GitHub shows against the default branch is expected and means nothing here.
+
+- Plans live under \`plans/\`, one folder per lifecycle stage: backlog, ready, active, review,
+  completed, and archived.
+- Change plans only with \`roborepo plans\` commands or the RoboRepo Plans page. They commit and push
+  here for you.
+- Do not open pull requests against this branch, merge into it, force-push it, or delete it.
+`;
 
 const LOCAL_REF = `refs/heads/${PLANS_BRANCH}`;
 const TRACKING_REF = `refs/remotes/origin/${PLANS_BRANCH}`;
@@ -133,9 +148,21 @@ export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktr
   if (recovered && state === "connected") state = "recovered";
 
   const store = requireStore(primary);
+  const readme = await addMissingReadme(store);
   const synced = await withStoreLock(store, () => syncRemote(store));
   if (!synced.synchronized) throw initFailure("The plans worktree exists, but its commits could not be pushed.", "Check your credentials, then run `roborepo plans init` again.", { stderr: synced.reason });
-  return { ok: true, state, changed: state !== "connected" || synced.pushed > 0, path: storePath, branch: PLANS_BRANCH, synchronized: true };
+  return { ok: true, state, changed: state !== "connected" || readme.added || synced.pushed > 0, readme: readme.added ? "added" : "present", path: storePath, branch: PLANS_BRANCH, synchronized: true };
+}
+
+// Stores created before the README existed get it on their next init. One already there is kept as is,
+// even when edited.
+async function addMissingReadme(store) {
+  return mutateStore({
+    store,
+    operation: ({ root }) => fs.existsSync(path.join(root, STORE_README_PATH))
+      ? { files: {}, result: { added: false } }
+      : { files: { [STORE_README_PATH]: STORE_README }, message: "Add plans branch README", result: { added: true } },
+  });
 }
 
 function initFailure(message, resolution, result) {
@@ -165,6 +192,7 @@ async function createRemoteBranch({ run, primary, worktreeRoot, repoName }) {
       [PLANS_CONFIG_RELATIVE_PATH, `${JSON.stringify(config, null, 2)}\n`],
       [PLANS_ORDER_RELATIVE_PATH, `${JSON.stringify({ schemaVersion: 1, namespaces: {} }, null, 2)}\n`],
       ...[...LIFECYCLE_MODEL.folders].map((folder) => [`${PLANS_DIR}/${folder}/.gitkeep`, ""]),
+      [STORE_README_PATH, STORE_README],
     ];
     for (const [file, content] of files) {
       const blob = await run(["hash-object", "-w", "--stdin"], { input: content });
@@ -420,7 +448,7 @@ function validatedPaths(files = {}) {
   const paths = Object.keys(files);
   for (const file of paths) {
     const normalized = path.posix.normalize(file);
-    if (normalized !== file || !file.startsWith(`${PLANS_DIR}/`) || file.includes("\0")) {
+    if (normalized !== file || !(file.startsWith(`${PLANS_DIR}/`) || file === STORE_README_PATH) || file.includes("\0")) {
       throw domainError("INVALID_CHANGE", `${file} is outside the plans folder, so it was not written.`);
     }
   }

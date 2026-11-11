@@ -408,7 +408,7 @@ accepts it. `--base` names the code branch the gates compare against:
 
 | Command | What it does |
 | --- | --- |
-| `roborepo plans init [--worktree-root <path>] [--repo-name <name>] [--json]` | Creates or reconnects `origin/repo-plans` and the reserved worktree, recovers a missing local checkout, recreates a deleted remote branch from this clone's copy, and pushes pending commits. Never reports a local-only success, and never replaces an occupied path. Running it again changes nothing. |
+| `roborepo plans init [--worktree-root <path>] [--repo-name <name>] [--json]` | Creates or reconnects `origin/repo-plans` and the reserved worktree, recovers a missing local checkout, recreates a deleted remote branch from this clone's copy, and pushes pending commits. Also adds a root `README.md` explaining the orphan branch when the branch has none; one already there is kept as written (`readme`: `added` or `present` in `--json`). Never reports a local-only success, and never replaces an occupied path. Running it again changes nothing. |
 | `roborepo plans show <plan> [--json]` | Refreshes from the remote and prints a plan. |
 | `roborepo plans save <file.md> [--json]` | Validates and commits a plan: a new one enters `backlog/` under the file's name, and an existing `id` keeps its path whatever the file is called. Refuses a change to `id`, `worktree`, or `### Approval`. |
 | `roborepo plans approve <plan> --commit <sha> --confirmed-by <who> [--json]` | Records `### Approval` for one exact implementation commit. |
