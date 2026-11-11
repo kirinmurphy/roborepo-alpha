@@ -1,9 +1,9 @@
 ---
 id: vzgsx5vz
-next_action: Run /plan-review on the submitted implementation; the owner applies the required-check ruleset settings under Open Questions.
+next_action: Run /plan-review on the submitted implementation.
 blocked_by: []
 depends_on: []
-related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7"]
+related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7", "3xh2sq32"]
 reviewed_commit: 7ab4c5c96b8db028e58d7375b5e23838f805b05f
 worktree: plans-suite-quick-wins-1-cleanup
 ---
@@ -257,8 +257,6 @@ describe the distinction between ordinary merges and owner access.
       refusal for an in-progress run passed against PR 63 (see Verification). The session's
       permission check refused a live `pr-ready` call, and PR 63 is not a draft and has no
       failed run. Live command-prompt suppression in Claude and Gemini is also still unverified.
-- [ ] The owner verifies all three required checks, ordinary merge blocking, and the admin
-      bypass on the next authorized lifecycle push.
 - [ ] In a Claude desktop session in the default permission mode, enter an existing linked
       worktree with `EnterWorktree({ path })` and confirm edits there proceed without per-file
       folder prompts. On 2026-11-11 a session in auto mode entered this plan's worktree that way.
@@ -328,13 +326,16 @@ describe the distinction between ordinary merges and owner access.
 - User decision (2026-11-11): Windows verification of the GitHub delivery commands is deferred
   to Windows Test Environment and Behavior Parity (`l1mz96d9`), which collects Windows checks.
   A task there now covers it, so it is no longer a Not tested entry here.
+- User decision (2026-11-11): applying and verifying the required checks moves to "Protect a
+  repo's plans and main branches on GitHub from one command" (`3xh2sq32`). Its `roborepo protect`
+  creates managed rulesets with the three required checks, 1 approval, and the admin bypass, and its
+  manual checks cover merge blocking and the bypass. The manual procedure in
+  `docs/internal/testing.md` stays until that command replaces it. The owner ruleset entry is
+  therefore no longer a Not tested entry or Open Question here.
 
 ## Open Questions
 
-- The owner must confirm or configure Always allow bypass, retain the existing one-approval
-  review policy, and add the three required checks with up-to-date enforcement off.
-  After confirmation, read the ruleset again and verify ordinary merge blocking and the next
-  authorized lifecycle push. This blocks the live GitHub verification only.
+- None. The owner ruleset question moved to `3xh2sq32`; see Decision Log.
 
 ## Review
 
