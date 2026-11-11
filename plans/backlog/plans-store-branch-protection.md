@@ -86,7 +86,7 @@ effective-rules endpoint, `GET /repos/{owner}/{repo}/rules/branches/repo-plans`.
 active rule from every ruleset that targets the branch, and it needs only read access. A rule
 removed on GitHub therefore brings the button back, and protection added by hand hides it.
 
-Whether the signed-in account can add the ruleset comes from the same place:
+Whether the signed-in account can add the ruleset also comes from GitHub:
 `GET /repos/{owner}/{repo}` returns `permissions.admin` for that account. The status carries it as
 `admin: true|false` whenever the state is `missing`.
 
@@ -126,7 +126,9 @@ flowchart TD
   D -- conflicting / unavailable --> R[report reason, exit 1]
   D -- missing --> E{--check?}
   E -- yes --> M[report missing rules, exit 1]
-  E -- no --> F[create ruleset repo-plans] --> C
+  E -- no --> G{account is admin?}
+  G -- no --> N[report admin needed, exit 1]
+  G -- yes --> F[create ruleset repo-plans] --> C
 ```
 
 ### Where the code goes
