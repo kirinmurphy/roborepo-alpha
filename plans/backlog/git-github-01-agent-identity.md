@@ -3,7 +3,7 @@ id: w7vls1yk
 next_action: Create the bot account and classic token (Phase 2), then run the checks that need them, including the Codex sandbox checks
 blocked_by: []
 depends_on: []
-related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7"]
+related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "3xh2sq32"]
 reviewed_commit:
 worktree:
 ---
@@ -69,9 +69,12 @@ rulesets on the default branch. Checked with `gh ruleset view` on 2026-10-30:
 | `protect-main` | `deletion`, `non_fast_forward` | None. "This ruleset cannot be bypassed" |
 | `no-push-to-main` | `pull_request` with `required_approving_review_count: 0`, `require_last_push_approval: false` | Repository admin role, mode `always` |
 
-Since that check, `vzgsx5vz` adds three required status checks to `no-push-to-main`:
-`check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`. Reread the ruleset before
-changing it, and keep those checks.
+Since that check, the owner raised `no-push-to-main` to 1 required approval so an agent cannot
+merge its own pull request, and bypasses it until the bot exists. "Protect a repo's plans and main
+branches on GitHub from one command" (`3xh2sq32`) adds RoboRepo-managed rulesets that keep the
+1 approval and admin bypass, add the three required CI checks, and protect `repo-plans`. The owner
+then deletes the hand-made rulesets the managed ones cover. Reread the rulesets before changing
+them.
 
 The user is the admin and needs the bypass to push plan-lifecycle commits directly. Agents run
 with the user's credentials: `gh auth status` shows the user's OAuth token, with `repo` and
@@ -172,12 +175,13 @@ tokens possible, or if a long-lived token becomes unacceptable.
 
 ### Ruleset change: agents cannot merge their own PRs
 
-With `gh api` allowed, the bot could merge its own PR through the API, because `no-push-to-main`
-needs zero approvals. Change that ruleset, keeping the admin bypass:
+With `gh api` allowed, the bot could merge its own PR through the API unless the merge rule
+requires another person's approval. The managed `roborepo-main-merge` ruleset from `3xh2sq32`
+carries these settings, and `roborepo protect` applies them:
 
-| Setting | Today | Proposed |
+| Setting | 2026-10-30 (`no-push-to-main`) | Required (`roborepo-main-merge`) |
 | --- | --- | --- |
-| `required_approving_review_count` | 0 | 1 |
+| `required_approving_review_count` | 0 (since raised to 1 by the owner) | 1 |
 | `require_last_push_approval` | false | true |
 | Bypass | Repository admin, `always` | Unchanged |
 
@@ -261,7 +265,7 @@ role and the remaining deny list.
 | --- | --- | --- |
 | The shared Git wrapper drops the identity settings | `gitEnvironment` in `modules/repositories/git-exec.mjs` strips `GIT_CONFIG_COUNT`, and that plan's store runs through this wrapper. Its push would go to SSH, which the sandbox blocks. Under Claude it would push with the user's SSH key instead of as the bot | Add an explicit option that keeps the `GIT_CONFIG_COUNT` pairs, and use it only for the store's `fetch` and `push`. Polling keeps today's stripped environment |
 | Fetches stay on SSH | The store fetches before each write, and `pushInsteadOf` leaves fetches on SSH. Every Codex save would treat that failure as "remote unreachable" and report "not synchronized" | Open question 4's `insteadOf`. Plan saves make this required for Codex, not only useful |
-| No rule covers `repo-plans` | `no-push-to-main` does not apply to this branch, so the bot's token could delete it or force-push it | Add a ruleset on `repo-plans` that blocks deletion and force pushes and still allows the bot's direct pushes |
+| No rule covers `repo-plans` | `no-push-to-main` does not apply to this branch, so the bot's token could delete it or force-push it | `roborepo protect` from `3xh2sq32` adds a `repo-plans` ruleset that blocks deletion and force pushes and still allows the bot's direct pushes |
 
 The store's Git commands run with `-c core.hooksPath=/dev/null`, so the `pre-push` backstop does not run on them. That is safe because the store pushes one explicit refspec for `repo-plans` and never `main`. The `-c` value also wins over the hook path in the identity's `GIT_CONFIG_*` pairs, so keeping those pairs does not turn hooks back on.
 
@@ -302,7 +306,7 @@ already treats hosts generically. Keep a seam, not an adapter:
 
 - the bot is logged in, and its login differs from the user's;
 - the bot's permission on the current repo is write, not admin;
-- `no-push-to-main` requires an approval of the last push;
+- the default branch's effective rules require an approval of the last push (`roborepo-main-merge`);
 - the token's scopes do not include `workflow`, `admin:org`, or `delete_repo`.
 
 ## Implementation plan
@@ -326,8 +330,8 @@ The remaining checks need the bot account, which only a person can create.
       `gh api` for that repo.
 - [ ] The bot can reply to and resolve a review thread. GitHub's docs do not state which
       permission `resolveReviewThread` needs.
-- [ ] Update `no-push-to-main` to require one approval of the most recent push. Keep the admin
-      bypass.
+- [ ] Run `roborepo protect` (`3xh2sq32`) so `roborepo-main-merge` requires one approval of the
+      most recent push, with the admin bypass kept.
 - [ ] From `codex exec`, with the agent environment and the network settings passed as run-only
       `-c` overrides, confirm these work inside the sandbox. If the keychain is unreachable, stop
       and bring the options back; do not fall back to a token in a file:
@@ -351,8 +355,8 @@ The remaining checks need the bot account, which only a person can create.
 - [ ] Update the `go-online` description in `agent-permissions.json` to name the exception.
 - [ ] Update the isolated browser testing plan ([[8bjltk2n]]), whose goal of strict host networking
       needs to name the GitHub hosts as the exception once this lands.
-- [ ] Add the `repo-plans` ruleset to the owner's GitHub setup steps, with the bot allowed to push
-      directly.
+- [ ] Add `roborepo protect` (`3xh2sq32`) to the owner's GitHub setup steps, and confirm the bot
+      can push `repo-plans` directly under the managed ruleset.
 - [ ] Connect plan saves, as described in "Plan saves from Codex". If the plans branch (`pvgx8oh7`)
       has landed, add the `git-exec.mjs` option, use it for the store's `fetch` and `push`, and run
       the Validation checks for plan saves. If it has not landed, add these same items to that
@@ -392,7 +396,7 @@ Manual, on the real repo, after Phase 3:
 
 | Check | Expected |
 | --- | --- |
-| The user, in a terminal with the agent environment exported (`GH_CONFIG_DIR` and the `GIT_CONFIG_*` pairs), runs `git push --no-verify origin HEAD:main`, so that only GitHub decides | GitHub rejects it with a ruleset error naming `no-push-to-main` |
+| The user, in a terminal with the agent environment exported (`GH_CONFIG_DIR` and the `GIT_CONFIG_*` pairs), runs `git push --no-verify origin HEAD:main`, so that only GitHub decides | GitHub rejects it with a ruleset error naming `roborepo-main-merge` |
 | From an agent shell: push a feature branch and open a PR | Push succeeds; the PR and commits show the bot login |
 | In an interactive Codex session and in `codex exec`: push a feature branch and open a PR | Both succeed as the bot, with no prompt and no sandbox escalation |
 | Once the plans branch has landed, in an interactive Codex session and in `codex exec`: `roborepo plans save` on a plan | Reports "synchronized"; the commit is on `origin/repo-plans`, pushed with the bot's token, with no prompt and no sandbox escalation |
