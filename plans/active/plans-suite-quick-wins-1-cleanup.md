@@ -365,6 +365,9 @@ describe the distinction between ordinary merges and owner access.
   ERR_MODULE_NOT_FOUND because the worktree had no installed dependencies, and all four passed
   after `npm ci`. Every EPERM, rollback-assertion, "full gate blocked", and "five Not tested
   advisories / kept active" entry below is superseded by this run.
+- Validation: clean on pass 5 at 2cf0dd68 (fresh-context subagent). It noted that the
+  16/16 native Codex policy assertions and the rule walkthrough assertions were one-off probes,
+  not committed tests; the committed projection coverage is `agent-permission-defaults-check.mjs`.
 - Validation pass 4 (fresh-context subagent) at d9bb970d found three fixes (Copy menu label,
   provider-neutral permission check, stale Verification lines) and one escalation, decided per the
   Decision Log. Fixes in 2cf0dd68; `codex-command-permission-check`,
