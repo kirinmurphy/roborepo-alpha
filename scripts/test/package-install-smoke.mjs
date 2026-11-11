@@ -63,8 +63,8 @@ function main() {
     const appRoot = path.join(dirs.prefix, "lib", "node_modules", packageName);
     assert.ok(fs.existsSync(appRoot), `expected installed application root at ${appRoot}`);
     assert.ok(
-      fs.existsSync(path.join(appRoot, "docs", "plans", "plans-config.json")),
-      "package install must include plans-config.json for package-mode workspace-root derivation",
+      !fs.existsSync(path.join(appRoot, "docs", "plans")),
+      "the package ships no plan documents; plans live on the repo-plans branch",
     );
 
     const codexHome = path.join(dirs.home, ".codex");

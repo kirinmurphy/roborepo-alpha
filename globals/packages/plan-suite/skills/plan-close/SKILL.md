@@ -1,6 +1,6 @@
 ---
 name: plan-close
-description: Use when closing one repository plan after its reviewed pull request has merged, or rerunning closure to confirm completion or resume guarded cleanup. Close from docs/plans/review/; recognize an already committed plan in docs/plans/completed/ without repeating closure. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit completion and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), the human review or approval (plan-review), archiving (plan-archive), ending a session (session-close), reviewing a working diff, or merging branches.
+description: Use when closing one repository plan after its reviewed pull request has merged, or rerunning closure to confirm completion or resume guarded cleanup. Close from the store's review/ folder; recognize a plan already in completed/ without repeating closure. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit completion and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), the human review or approval (plan-review), archiving (plan-archive), ending a session (session-close), reviewing a working diff, or merging branches.
 ---
 
 # Plan Close
@@ -20,7 +20,7 @@ never synchronizes the base branch into the feature branch, and never waits for 
 Resolve:
 
 - the repository root and base branch (`main` unless repository policy names another);
-- the selected plan, by id or path;
+- the selected plan, by id or store-relative path;
 - the repository's canonical completion gate and any plan-specific tests, from `package.json`
   scripts, a `Makefile`, `justfile`, `pyproject.toml`, or CI config — never an invented one — and
   where the repository's CI result for a commit can be read, from its forge when available. A
@@ -29,23 +29,19 @@ Resolve:
 - current Git state, including the plan's `worktree` and that worktree's branch.
 
 The eligible source lifecycle is the one that precedes completion in the lifecycle manifest
-(`manifests/platform/plan-lifecycle.json`): `review/`. A committed `completed/` plan takes the
+(`manifests/platform/plan-lifecycle.json`): `review/`. A `completed/` plan takes the
 idempotent retry path below. A plan in any other lifecycle is refused with
 its current location named and the command that fits it: `/plan-execute` or `/plan-review` for an
 active plan, `/plan-archive` for work that will not be completed.
 
 ### Idempotent retries
 
-Before loading paired skills or running the workflow, resolve the selected plan's current primary
-path by id. If the supplied review path no longer exists, look for the same filename in
+Before loading paired skills or running the workflow, resolve the selected plan's current path by
+id, with `roborepo plans show <plan>`. If the supplied review path no longer exists, look for the same filename in
 `completed/` and verify its id against prior evidence when available; never select a different plan.
 
-When the plan is already in `completed/`, confirm that the same completed document is committed on
-the base branch and its working copy has no pending edits. Report **already closed**, with the
-existing close commit. Do not rerun tests, seek another approval, edit the plan, or make another
+When the plan is already in `completed/`, report **already closed**. Do not rerun tests, seek another approval, edit the plan, or make another
 closure commit. The assigned worktree may already be gone; that is normal after successful cleanup.
-If the completed document is uncommitted or edited, report the discrepancy without overwriting it
-or claiming that closure is durable.
 
 For an already closed plan, inspect whether its named linked worktree still exists. If present,
 resume only steps 9 and 10 with the canonical plan-scoped commands and their current guards. If
@@ -82,46 +78,6 @@ Each row is its own optional package, so check it before loading it:
 
 For a plan not already closed, work through the steps in order. Repairs can return the run to tests and validation; decide the
 verdict only from the resulting state. Read `references/verdict.md` before step 3.
-
-### 0. Confirm the worktree's plan copy is integrated
-
-Do this first, before step 1, from the primary checkout (the first `worktree` entry of
-`git worktree list --porcelain`). While a plan is in `active/` or `review/`, the copy in its assigned
-worktree is the authoritative one; by the time a plan closes its branch has merged, so the worktree
-has nothing left to contribute. This step reads the worktree's copy once, and the rest of the run
-works only in the primary checkout.
-
-The worktree's copy is usable when the primary copy is in `docs/plans/review/` and names a worktree,
-Git has a linked worktree with that administrative name, and that worktree holds a readable copy
-with the same `id`, in `docs/plans/active/` or `docs/plans/review/`, naming the same worktree. A copy
-still in `active/` is expected when the final merge did not carry the review rename. When the plan
-names no worktree, skip this step. When the worktree's copy is not usable, skip the check and state
-in the final report that the worktree's plan state was not available.
-
-Otherwise the copy is integrated when the base branch already has every plan version the worktree
-has: the worktree copy's working bytes equal the primary copy's working bytes, or its blob id is
-the plan at the branch's fork or a plan blob the base branch produced since then. Run in the
-primary checkout:
-
-```text
-git merge-base HEAD <branch>                              # <fork>
-git hash-object <worktree>/<plan path>                    # the worktree copy's blob id
-git rev-parse <fork>:<plan path>                          # the plan at the fork
-git log --raw --no-abbrev --format= <fork>..HEAD -- docs/plans
-```
-
-In the `--raw` lines, the fourth field is the blob each commit produced. The canonical close
-transition command repeats this check before it commits.
-
-- **Not integrated:** the worktree holds a plan version the base branch never had, so the pull
-  request has not merged, or the local base branch has not been updated since it did. Refuse with
-  `plan: not integrated`, naming the worktree and the plan path, and make no plan edits. Never copy
-  the worktree's version into the primary checkout.
-- **Integrated:** authority returns to the primary copy for the rest of the run. Every plan edit in
-  steps 2 through 8 — validator fixes, corrected claims, `## Not tested` evidence, verification —
-  goes to the primary copy, including the notes of a later refusal. Never edit the worktree's copy.
-  Until the plan closes, the portal reports those notes as an outside edit; a rerun of this step
-  still passes, because the base branch has every version the worktree has.
 
 ### 1. Run the tests
 
@@ -205,9 +161,8 @@ unchecked entries remain, refuse and list them; the validator reports `UNCONFIRM
 
 ### 6. Confirm a fresh human approval
 
-Run the repository's canonical approval check for `<plan>`. It reads `### Approval` under
-`## Review` and compares the reviewed implementation commit with the landed branch tip, outside
-`docs/plans/`.
+Run `roborepo plans approval <plan> --json`. It reads `### Approval` under `## Review` and compares
+the reviewed implementation commit with the landed branch tip.
 
 - `fresh`: continue.
 - `stale`: the implementation changed after it was approved, for example when the base branch moved
@@ -256,18 +211,17 @@ The full scan, which the canonical check performs and which a repository without
 
 ### 8. Close
 
-In the primary copy, clear `next_action`, add a completion summary, and write a `## Verification`
+Add a completion summary and write a `## Verification`
 section with the evidence: the test command and result, which affected docs of record were checked
 against the landed code, the approved commit, the absorbing commit as
 `- Absorbing commit: <full commit id>`, what else was checked, and anything that could not be
-verified. Later landing checks verify that recorded line instead of rescanning. Record evidence itself, never a path under `/tmp` or another temporary folder: the OS deletes those within days and the plan outlives them. Run the repository's canonical plan validator and resolve every
-finding.
+verified. Later landing checks verify that recorded line instead of rescanning. Record evidence itself, never a path under `/tmp` or another temporary folder: the OS deletes those within days and the plan outlives them. Save these edits with `roborepo plans save`, run `roborepo plans validate <plan> --json`, and resolve
+every finding.
 
-Then run the repository's canonical close transition command for `<plan>` from the primary checkout.
-It re-verifies integration, approval freshness, and landing, validates the `completed/`
-requirements, moves the plan from `review/` to `completed/` with `git mv`, and commits only the
-plan's old and new paths, even when other paths are staged. Unrelated staged or unstaged work stays
-in place. It never pushes. Report the commit it made. If it refuses, report each reason; the closure
+Then run `roborepo plans close <plan> --json`. It re-verifies approval freshness and landing, clears
+`next_action` (a Review plan must keep one until this move), validates the `completed/` requirements, moves the plan from `review/` to `completed/`, commits only
+the plan's old and new paths to the plans branch, and pushes. Report the commit it made and whether it
+synchronized. If it refuses, report each reason; the closure
 is not durable, so do not proceed with server or worktree cleanup.
 
 The close command verifies the recorded absorbing commit itself, the same way step 7 does, rather
@@ -280,7 +234,7 @@ Only after step 8 committed a complete plan, or the retry path confirmed an exis
 completion, run the repository's canonical linked-worktree server
 cleanup command for `<plan>`. It sends `SIGTERM` to the processes listening on a port from inside
 the plan's linked worktree, and nothing
-else: never the primary checkout, never agent sessions, shells, or editors. Do not ask first; the
+else: never another checkout, never agent sessions, shells, or editors. Do not ask first; the
 work has landed, so these servers run stale code. Report each server with its PID, ports, and
 result. A server that is `still-running` or `failed` is reported, never killed by other means.
 Skip this step for an archived or refused plan.
@@ -334,7 +288,7 @@ in repositories without a canonical cleanup command.
 After successful closure, including an already-closed retry, read the current repository plan
 snapshot using the repository's existing plan discovery. Find unfinished plans whose `depends_on`
 contains the closed plan's stable id; do not infer a dependency from a numbered title or `related`.
-Use each plan's authoritative copy and current lifecycle, title, path, dependencies, and blockers.
+Use each plan's current lifecycle, title, path, dependencies, and blockers.
 
 In the final report, call out the next follow-up by its full title and current path and provide
 the matching instruction: `/plan-promote <path>` for backlog, `/plan-execute <path>` for ready or

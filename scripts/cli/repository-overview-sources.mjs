@@ -32,7 +32,7 @@ export function plansByRepository(snapshot, now, registry) {
     const repositoryId = sourceId && resolveRegistryAlias(registry, sourceId);
     if (!repositoryId || !registry.repositories?.[repositoryId]) continue;
     const group = coverage.get(repositoryId) || { plans: [], worktrees: null };
-    group.plans.push({ ...record.plan, key: record.key });
+    group.plans.push({ ...record.plan, key: record.key, planPath: record.absolutePath || "" });
     coverage.set(repositoryId, group);
   }
   const result = new Map();
@@ -89,7 +89,7 @@ function planSummary(plans, now) {
     .slice(0, 5);
   const active = plans
     .filter((plan) => LIFECYCLE_MODEL.worktreeBound.has(plan.lifecycle))
-    .map((plan) => ({ id: plan.id, key: plan.key, title: plan.title, lifecycle: plan.lifecycle, changedAt: planChangedAt(plan), worktree: plan.worktree || "", relativePath: plan.relativePath || "", taskCounts: { total: plan.taskCounts?.total || 0, complete: plan.taskCounts?.complete || 0 } }))
+    .map((plan) => ({ id: plan.id, key: plan.key, title: plan.title, lifecycle: plan.lifecycle, changedAt: planChangedAt(plan), worktree: plan.worktree || "", planPath: plan.planPath || "", taskCounts: { total: plan.taskCounts?.total || 0, complete: plan.taskCounts?.complete || 0 } }))
     .sort((a, b) => Date.parse(b.changedAt || 0) - Date.parse(a.changedAt || 0) || a.title.localeCompare(b.title));
   return { counts, active, recent };
 }

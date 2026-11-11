@@ -23,7 +23,7 @@ Use it when you want to:
 
 | Command | What you get |
 | --- | --- |
-| `/plan-suite-init` | Set up a repo for the suite once: the `docs/plans` folders and `plans-config.json` with your plan-name namespaces. `/plan-write` runs it for you when the config is missing |
+| `/plan-suite-init` | Set up a repo for the suite once: the plans branch and its worktree, where worktrees go, and `plans-config.json` with your plan-name namespaces. On a new machine it reconnects to the existing plans. `/plan-write` runs it for you when the config is missing |
 | `/plan-write` | Create a plan with its initial checklist, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development, then move it to `ready/` |
 | `/plan-execute` | Start or resume implementation in an isolated worktree, check it with a validator and fix what it finds, then move the plan to `review/`; or fix findings a review sent back |
@@ -88,20 +88,39 @@ The six commands were once six packages (`plan-write`, `plan-promote`, and so on
 any of the six plan skills were installed, the update keeps them and turns on `plan-suite`, which
 installs all seven.
 
-## Where Lifecycle Moves Happen
+## Where Plans Live
 
-Every move between lifecycle folders is one commit in the repository's main checkout, on the base
-branch, made by a `roborepo plans` command that the suite commands run. The commit contains only
-the plan's old and new paths, so other work in the main checkout, staged or not, stays where it is.
-Archiving also clears the plan from the prerequisites of unfinished plans, in the same commit.
-Its message names the plan by its filename, for example
-`Submit plan plan-lifecycle-review-and-ship-workflow for review`, so `git log` reads without
-looking up ids. The suite commands' reports and questions name a plan by its title, with its id in
-parentheses once. A refused move changes nothing, running a move again after it succeeded commits nothing, and
-the base branch is never pushed.
+Plans live under `plans/` on the remote branch `origin/repo-plans`, which never merges into a code
+branch. RoboRepo keeps a reserved, locked worktree of it at
+`<worktreeRoot>/<worktreeRepoName>/repo_plans`. That checkout can always be rebuilt: on a new machine,
+run `/plan-suite-init` after cloning.
 
-While a plan is `active` or in `review`, its worktree's copy is the plan: every progress note,
-finding, and approval is written there and reaches the base branch when you merge.
+Plan files change only through named `roborepo plans` commands, from any checkout. Each change is one
+commit, pushed automatically. A lifecycle move's commit message names the plan by its filename, for
+example `Submit plan plan-lifecycle-review-and-ship-workflow for review`. The suite commands' reports
+and questions name a plan by its title, with its id in parentheses once. A refused move changes
+nothing, and running a move again after it succeeded commits nothing.
+
+If the remote can't be reached, or refuses the push (a hook or branch rule), the commit stays local
+and the command reports **not synchronized** with Git's reason. The next command or portal Refresh
+that reaches the remote pushes it; a refusal keeps recurring until the rule allows the push. If another machine changed the
+same plan, the command refuses rather than overwriting. Backlog order changes from both sides combine:
+added and removed plans from each, and a reorder from either side, unless both reordered the same
+namespace differently, which also refuses.
+
+Direct writes to `repo_plans` are prevented differently per harness. In Claude, Write and Edit follow
+your write-outside-the-repo setting, since that worktree is outside your checkout. In Codex a direct
+write is technically possible, because the CLI runs inside the sandbox and needs that access; the
+skills forbid it, and the next store command refuses uncommitted edits. Neither protects against a
+process with unrestricted shell access deleting local files, which is why the remote is the source
+of truth.
+
+### Protect the plans branch
+
+Where your Git host offers branch rules, add one for `repo-plans` that disallows force pushes and
+branch deletion and still permits direct pushes, including from any agent bot account. RoboRepo never
+force-pushes this branch. Pushes to it start no CI runs as long as your CI, like RoboRepo's, is limited
+to `main` and pull requests.
 
 ## `/plan-write`
 
@@ -109,7 +128,7 @@ Creates a plan, or updates an existing one. The request decides which:
 
 | Request | Work |
 | --- | --- |
-| No plan owns the work yet | Creates a backlog plan in `docs/plans/backlog/`, with a fresh opaque `id`, a namespaced filename, and an initial checklist |
+| No plan owns the work yet | Creates a backlog plan in `plans/backlog/`, with a fresh opaque `id`, a namespaced filename, and an initial checklist |
 | An existing plan, to change scope or design | **Revises** it, following your intent |
 | An existing plan, after work happened | **Syncs** it from evidence: ticks a task only when the code proves it done, records untested gaps, and updates `next_action` and `reviewed_commit` |
 
@@ -121,8 +140,8 @@ for the prose.
 
 Reviews a backlog plan before development: checks its claims against the code, fixes stale
 details, refines the checklist, and asks you only about decisions with real tradeoffs. When no
-material question remains, it runs `roborepo plans promote`, which moves the plan to `ready/` and
-commits the move together with the promotion's edits. A plan that does not meet the Ready
+material question remains, it saves its edits with `roborepo plans save`, then runs
+`roborepo plans promote`, which moves the plan to `ready/` and commits the move. A plan that does not meet the Ready
 requirements is refused with the list of findings and a repair prompt, and stays where it was.
 
 Run it again on a `ready/` plan to refine it in place. It stops before implementation.
@@ -139,7 +158,7 @@ Starts, resumes, or fixes the implementation of a plan, depending on where the p
 | `backlog/` | Refuses and points you to `/plan-promote` |
 
 While implementing, it works through every unblocked task without stopping for check-ins, records
-progress, decisions, and untested work in the worktree's copy of the plan, and reports once at the
+progress, decisions, and untested work in the plan, and reports once at the
 end with every open question in one batch.
 
 When the work is finished it runs a validation loop. A validator with fresh context, a separate
@@ -170,8 +189,7 @@ review. That says the work is complete and checked, not that you accepted it. If
 refused, the plan still moves and the report gives you the command to push it yourself. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
 `escalate` finding is an unchecked task, so it holds the plan in `active/` until you answer it.
 
-The first run in a repository asks you to confirm where worktrees go. Later runs reuse that answer.
-In Claude, each run also asks once for access to the worktree folder, then works inside it, so edits
+Worktrees go where you confirmed in `/plan-suite-init`. In Claude, each run also asks once for access to the worktree folder, then works inside it, so edits
 there do not prompt one file at a time.
 
 ## `/plan-review`
@@ -204,7 +222,7 @@ Then it asks for your approval of the exact commit, and acts on your answer:
 
 | Your answer | What follows |
 | --- | --- |
-| Approve | It immediately commits the approval for the reviewed implementation and checks that it is fresh |
+| Approve | It immediately records the approval for the reviewed implementation with `roborepo plans approve` and checks that it is fresh |
 | Ask for a change, or decide an escalated question, within the requirements | It makes the change in the same chat and shows you the packet again |
 | Want the change done in a separate chat | The plan stays in `review/`. Run `/plan-execute`, then `/plan-review` again |
 | The requirements themselves must change | With your agreement, it revises the plan, invalidates any approval, and moves the plan back to `active/` with `roborepo plans reopen`. The worktree and branch stay |
@@ -234,9 +252,9 @@ The review record looks like this:
 - Confirmed by: human
 ```
 
-Only you can approve; passing tests are not approval. An approval stays **fresh** while nothing
-outside `docs/plans/` changes: recording it, or merging plan-only changes from base, keeps it
-fresh, and a code change makes it stale. Check it with `roborepo plans approval <plan>`.
+Only you can approve; passing tests are not approval. An approval stays **fresh** while the branch's
+code still matches the commit you approved. Plan edits land on the plans branch, so they never make
+it stale, and a code change does. Check it with `roborepo plans approval <plan>`.
 
 For machine-readable evidence, `roborepo plans approval <plan> --json` reports review freshness
 under `review` and human approval under top-level `state`. It returns exit 1 while approval is
@@ -250,11 +268,9 @@ requirements. If implementation changed, it reviews the changes and runs the gat
 before renewing the Result. Older review records can be recovered from their recorded commits and
 verification; incomplete evidence requires only the missing review work.
 
-This approval recovery also works after landing while the plan remains in review. It commits
-Result, Approval, and verified recovery provenance on primary only. The old worktree stays as it
-was. Both precursor documents must already be integrated and all other plan content must agree.
-Independent edits or a later implementation change refuse that exception. The human answer and
-complete review remain required; closure still runs its own test gate.
+This recovery also works after landing while the plan remains in review, because recording approval
+touches nothing on a code branch. Your answer and a complete review remain required, and closure
+still runs its own test gate.
 
 Before merging, `roborepo plans merge-readiness <plan> --json` checks the committed review packet,
 clean worktree, exact implementation, and reviewed base. A failure names the repair; a pass names
@@ -268,9 +284,6 @@ pull request yourself. If base moves again before you merge, run `/plan-review` 
 Closes one plan after you merge it, and refuses rather than closing on incomplete evidence. It
 accepts only a plan in `review/`. In order, it:
 
-0. confirms the plan's worktree copy holds nothing the base branch lacks, and refuses with
-   `plan: not integrated` when it does; from then on every plan edit goes to the main checkout's
-   copy;
 1. runs the repository's test command and stops on a failure;
 2. checks every claim in the plan against the code;
 3. decides complete, incomplete, blocked, superseded, or abandoned; a superseded or abandoned plan
@@ -279,9 +292,9 @@ accepts only a plan in `review/`. In order, it:
 5. refuses unless your approval is fresh for the landed branch tip;
 6. refuses until the work has landed in the base branch, including after a squash or rebase merge,
    with `roborepo plans landed <plan>`;
-7. writes the completion summary and a Verification section, including the absorbing commit as
-   `- Absorbing commit: <full commit id>`, then runs `roborepo plans close`, which rechecks
-   integration, approval, and landing and commits the move to `completed/`;
+7. saves the completion summary and a Verification section, including the absorbing commit as
+   `- Absorbing commit: <full commit id>`, then runs `roborepo plans close`, which rechecks approval
+   and landing, clears `next_action`, and commits the move to `completed/`;
 8. after that commit succeeds, stops the dev servers still running in its worktree and lists them;
 9. runs the repository's worktree cleanup command for the closed plan, removing the worktree and
    local branch without a recovery copy when preservation is proven. Unresolved leftovers receive
@@ -296,7 +309,7 @@ current tip, so work added to the branch afterwards is never covered by it; when
 scan runs. Reusing landing evidence never skips the test run or your approval.
 
 If the close commit fails, `/plan-close` reports that closure is not durable and skips server and
-worktree cleanup. It never merges, never synchronizes base into the branch, and never pushes.
+worktree cleanup. It never merges, never synchronizes base into the branch, and never pushes a code branch.
 
 Step 8 stops only processes listening on a port whose working directory is inside the plan's
 linked worktree. It never touches the main checkout, agent sessions, shells, or editors, and it
@@ -314,10 +327,7 @@ Retires a plan from `backlog/`, `ready/`, `active/`, or `review/` that will not 
 runs `roborepo plans archive <plan> --reason "<why>"`, which writes the reason under an
 `## Archived` heading, clears `next_action`, and commits the move to `archived/`.
 
-Abandoned work never merges, so a worktree copy with progress the base branch never received is
-carried into the main checkout's copy once. If both copies were edited, it refuses with
-`conflicting copies` and you decide which edit wins. Archiving never removes a worktree or branch;
-unmerged code stays where it is.
+Archiving never removes a worktree or branch; unmerged code stays where it is.
 
 ## `/session-close`
 
@@ -376,17 +386,13 @@ or from **Manage repositories** (the repository count in the Plans header opens 
 ~/src/specific-repo
 ```
 
-A folder walk treats the first folder containing `.git` or `docs/plans` as a repository and skips
-hidden and common build folders. Inside each repository, Plans reads every checkout — the main
-checkout and its worktrees:
-
-```text
-docs/plans/**/*.md
-```
+A folder walk treats the first folder containing `.git` as a repository and skips hidden and common
+build folders. Inside each repository, Plans reads `plans/**/*.md` in the
+[plans worktree](#where-plans-live). A repository without one shows a notice to run `/plan-suite-init`.
 
 See [Repository sources](../../../reference/repositories.md#repository-sources) for the walk's limits
 and [Which Repositories Plans Reads](../../../reference/plans-portal.md#which-repositories-plans-reads)
-for how copies in worktrees are shown.
+for what each repository shows.
 
 Plans folders configured before repository sources existed are not carried over; add them again
 under **Manage repositories**.
@@ -396,17 +402,16 @@ under **Manage repositories**.
 Plan lifecycle comes from folders:
 
 ```text
-docs/plans/backlog/
-docs/plans/ready/
-docs/plans/active/
-docs/plans/review/
-docs/plans/completed/
-docs/plans/archived/
+plans/backlog/
+plans/ready/
+plans/active/
+plans/review/
+plans/completed/
+plans/archived/
 ```
 
-Files directly under `docs/plans/*.md` still appear, but they are shown as `unclassified`.
-The portal does not silently treat them as backlog. A repository that has no `ready/` or `review/`
-folder yet gets one the first time a plan moves there.
+Files directly under `plans/*.md` still appear, but they are shown as `unclassified`.
+The portal does not silently treat them as backlog.
 
 Recommended frontmatter:
 
@@ -456,7 +461,7 @@ or **awaiting review**.
 
 ## Copy Actions
 
-The Plans page copies prompts; it never runs a command and never moves a plan for one. Paste the
+The Plans page copies prompts; it never runs a suite command for you. Paste the
 prompt into Claude or Codex in that repository, and the command does the work, including any move
 between lifecycle folders and the commit that records it.
 
@@ -488,12 +493,18 @@ available in every Copy menu. With the suite disabled, the menu offers a **Repo-
 in place of the workflow actions.
 
 Lifecycle tabs switch the list you are browsing. Moving a plan through the suite changes its folder.
+
+The **+** button right of **Filters** opens **Import Plan**, for a plan written elsewhere. It previews
+an uploaded `.md` file's title, id, filename, and target folder. A new plan enters Backlog. For an
+existing id it shows a diff and asks you to confirm; an upload never changes a plan's lifecycle or
+approval.
 A merged worktree shows a **merged** completion badge on its plan card and in the detail drawer.
 
 ## Current Limits
 
-- The portal writes one thing: a namespace's Backlog order, when you press **Save**. All other plan
-  edits happen in your editor or through the suite.
+- The portal writes three things through the same plans store as the CLI: a namespace's Backlog
+  order when you press **Save**, the archive of an unprioritized Backlog plan, and an uploaded
+  Markdown plan from **Import Plan**. All other plan edits go through the suite.
 - Manual refresh is the v1 update model.
 - No database, daemon, cloud sync, direct editor, automatic merge, or automatic LLM prioritization
   is included.

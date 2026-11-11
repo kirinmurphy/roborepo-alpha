@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "init"],
+  "kind": "internal",
+  "title": "Set up the plans store",
+  "description": "Create or reconnect origin/repo-plans and the reserved plans worktree",
+  "usage": "roborepo plans init [--worktree-root <path>] [--repo-name <name>] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["init"]
+  }
+}

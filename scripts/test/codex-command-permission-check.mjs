@@ -88,8 +88,15 @@ for (const command of ["gh pr edit", "gh pr ready"]) {
 for (const command of ["gh pr merge", "gh api", "git push --force"]) {
   assert.ok(claude.deny.includes(`Bash(${command}:*)`));
 }
-for (const command of ["git fetch", "gh run rerun", "git worktree add", "git merge", "roborepo plans archive", "roborepo plans close"]) {
+for (const command of ["git fetch", "gh run rerun", "git worktree add", "git merge"]) {
   assert.ok(!claude.allow.includes(`Bash(${command}:*)`));
+}
+const planStore = defaults.behaviors.find((behavior) => behavior.id === "plan-store-commands");
+assert.equal(planStore?.bucket, "allow");
+for (const subcommand of ["archive", "close"]) {
+  const tokens = ["roborepo", "plans", subcommand];
+  assert.ok(planStore.commands.some((command) => command.join(" ") === tokens.join(" ")));
+  assert.ok(claude.allow.includes(`Bash(${tokens.join(" ")}:*)`));
 }
 assert.ok(!claude.allow.includes("Bash(roborepo delivery:*)"));
 assert.ok(!claude.allow.includes("Bash(roborepo plans:*)"));

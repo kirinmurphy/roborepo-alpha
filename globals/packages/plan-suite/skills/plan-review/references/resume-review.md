@@ -1,17 +1,15 @@
 # Resume a review
 
-Review evidence survives interrupted chats. First resolve the plan in the primary checkout. If its
-completed document is committed on base and has no pending edits, report already closed and stop.
-Do not resolve its old worktree or run the approval check. Report uncommitted completion or pending
-edits as a discrepancy instead of treating them as durable closure.
-If an old active or review path is missing, resolve by the known plan id or the same filename in
-completed and verify its identity against available evidence; never select a different plan.
+Review evidence survives interrupted chats. First read the plan with `roborepo plans show <plan>`. If it
+is in `completed/`, report already closed and stop. Do not resolve its old worktree or run the
+approval check. If an old active or review path is missing, resolve by the known plan id or the same
+filename in completed and verify its identity against available evidence; never select a different
+plan.
 
 For an active plan, run step 1's completion preflight and submit transition first. The resume
-shortcuts below apply only once the primary plan is in review.
+shortcuts below apply only once the plan is in review.
 
-For a review plan, before synchronizing base or running checks, read the authoritative
-plan, resolve the current feature and base tips, and run:
+For a review plan, before synchronizing base or running checks, read the plan, resolve the current feature and base tips, and run:
 
 ```bash
 roborepo plans approval <plan> --json
@@ -20,21 +18,17 @@ roborepo plans approval <plan> --json
 The command is read-only. Exit 1 means approval is not fresh; inspect the JSON rather than treating
 that exit alone as a failed review. Top-level `state` describes human approval. `review.state`
 describes the separate `### Result` record; `review.baseChangedPaths` lists implementation changes
-on base since the recorded base commit. Both comparisons exclude `docs/plans/`.
+on base since the recorded base commit. Both compare code branches, so plans-branch commits never appear.
 
 Read Git status before choosing a resume path. Pending implementation edits prevent reusing the
-review for approval; do not commit or discard someone else's changes. Check approval durability
-in the required plan copies before returning an unchanged success. For post-merge recovery, verify any existing committed primary evidence through the canonical
-approval reader before deciding a write is missing.
-Confirm the Result is committed before asking for approval. If a previous run wrote its own valid
-review evidence but failed to commit it, finish that plan-only commit first; independently edited
-plan content needs reconciliation rather than automatic staging.
+review for approval; do not commit or discard someone else's changes. Confirm the Result is saved
+before asking for approval.
 
 ## Contents
 
 - Choose the remaining work
 - Recover missing records
-- Commit approval durably
+- Record approval durably
 
 ## Choose the remaining work
 
@@ -42,14 +36,14 @@ Resume means continuing the workflow, not just reporting its state. Apply the en
 **Continue until a human decision** contract to every route below: finish authorized work, ask
 for the specific input or action that blocks progress, or ask for exact-commit approval once the
 review is complete. After an answer, continue from that step without requiring a new invocation.
-Fresh approved and committed completed results still return without another approval prompt;
+Fresh approved and completed results still return without another approval prompt;
 an explicit human pause or deferral still stops the workflow.
 
 | Evidence | Resume at |
 | --- | --- |
-| Committed completed plan, without pending edits to that plan | Report already closed; stop without checking a removed worktree or repeating review. |
-| Fresh, durably recorded approval; no pending implementation edits, new findings, or required manual checks; unchanged base implementation | Report already approved with the approved commit; make no commit and ask no new approval question. |
-| Fresh complete review, approval missing, requested, or stale, unchanged base implementation | Approval only: show the reviewed commit, summarized evidence, and any recorded base failures; ask only for the missing human decision on this implementation. |
+| Completed plan | Report already closed; stop without checking a removed worktree or repeating review. |
+| Fresh, durably recorded approval; no pending implementation edits, new findings, or required manual checks; unchanged base implementation | Report already approved with the approved commit; change nothing and ask no new approval question. |
+| Fresh complete review, approval missing or stale, unchanged base implementation | Approval only: show the reviewed commit, summarized evidence, and any recorded base failures; ask only for the missing human decision on this implementation. |
 | Same complete review, with an explicit human approval already available for that implementation | Record the existing answer immediately through step 6a; do not ask again. |
 | Changed implementation, changed requirements, or reopened findings | Review the changes and their effects on the acceptance criteria; run the affected checks, take the full gate from the CI result for the changed commit (the canonical completion gate locally, once, only when no CI result exists for it), and run a Validator pass before another complete Result. Preserve earlier review evidence as history. |
 | Base implementation changed before landing | Synchronize through step 2 and review the resulting changes; do not renew approval for implementation the human has not seen. |
@@ -84,49 +78,19 @@ used. If a commit or a required check cannot be established, run only the missin
 never manufacture a complete Result to skip it. Frontmatter `reviewed_commit` records plan-document
 freshness and is not proof of completed implementation review.
 
-## Commit approval durably
+## Record approval durably
 
 Before recording approval, read the branch tip, plan contents, and Git status again. The explicit
 answer must cover the complete reviewed implementation, with every finding and required manual
 check resolved. If implementation changed while waiting, return to review of those changes.
 
-Before landing, write and commit the approval in the authoritative worktree as in step 6a. Repeated
-approval of identical implementation with the same recorded human answer is a no-op. Preserve an
-existing fresh approval rather than replacing its commit just because a plan-only commit moved HEAD.
+Record the approval with `roborepo plans approve` as in step 6a. Repeated approval of identical
+implementation with the same recorded human answer is a no-op. Preserve an existing fresh approval
+rather than replacing it.
 
-For post-merge recovery while the plan remains in review:
-
-1. Confirm landing before editing. Resolve the assigned worktree and branch from Git; missing or
-   detached worktrees remain unavailable. Record the full current branch tip, base ref and commit,
-   absorbing commit, repository identity, and current primary/worktree plan blob ids. Both
-   precursor versions must already be integrated on base. Requirements, tasks, findings, identity,
-   and assignment must agree; refuse conflicting copies or approval records.
-2. Write Result if established by existing completed review evidence, explicit Approval with the
-   human answer, and `### Post-merge recovery` on primary only. Do not edit, synchronize, or commit
-   the old worktree. The recovery subsection uses exactly these fields:
-
-   ```md
-   ### Post-merge recovery
-   - Repository identity: <canonical repository id>
-   - Worktree: <assigned Git administrative name>
-   - Branch: <assigned branch>
-   - Assessed branch tip: <full commit id>
-   - Base ref: refs/heads/<base>
-   - Base commit: <full pre-recovery base commit id>
-   - Absorbing commit: <full absorbing commit id>
-   - Primary precursor blob: <full pre-recovery primary plan blob id>
-   - Worktree precursor blob: <full pre-recovery worktree plan blob id>
-   ```
-
-3. Recheck Git status and the exact precursor documents immediately before committing only the
-   selected primary plan on base. Only Result, Approval, and the recovery subsection may change.
-   Pending evidence is never durable approval. Refuse independent edits rather than overwriting.
-4. Run `roborepo plans approval <plan> --json`; require fresh approval and complete fresh review.
-   The shared verifier derives identity, integrated precursors, exact implementation, and historical
-   absorption again from Git. Verify the primary commit changes only that plan and the old
-   worktree stayed unchanged. A later implementation change invalidates this exception.
-
-A retry reuses identical committed evidence rather than replacing provenance with newer tips.
-Existing manually aligned copies need no synthetic commit when byte-identical and verified
-landed. Missing, conflicting, or incomplete records require repair, never an inferred human
-answer. This recovery records evidence; it does not close, merge, push, or waive tests.
+A missing approval after the branch merged is recorded the same way, as long as the plan's worktree
+still resolves to its branch: `plans approve` writes the plans branch, so nothing touches the code.
+Then run `roborepo plans approval <plan> --json` and require fresh approval and a complete, fresh
+review. If the worktree is gone, recreate it on the plan's branch first. A later implementation change
+makes the approval stale. Missing or incomplete records require repair, never an inferred human
+answer. This records evidence; it does not close, merge, or waive tests.

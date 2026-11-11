@@ -126,7 +126,7 @@ function refreshRepository(source, { stateRoot, fsApi, now }) {
   const found = identifyRepositoryRoot(source.path, { fsApi });
   if (!found) {
     recordSourceFindings([], source, { stateRoot, fsApi, now, complete: true });
-    return { state: "stale", repositoryCount: 0, message: "The folder exists but has no .git or docs/plans." };
+    return { state: "stale", repositoryCount: 0, message: "The folder exists but has no .git." };
   }
   recordSourceFindings([found], source, { stateRoot, fsApi, now, complete: true });
   return { state: "healthy", repositoryCount: 1, message: null };

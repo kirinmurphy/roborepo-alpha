@@ -165,10 +165,12 @@ flowchart LR
 
 ## Plans
 
-RoboRepo discovers repository planning documents under:
+RoboRepo keeps each repository's planning documents on a dedicated remote branch, `repo-plans`, that
+never merges into your code. Agents and the portal change them through named commands, which commit
+and push automatically:
 
 ```text
-docs/plans/
+plans/
 ├── backlog/
 ├── ready/
 ├── active/

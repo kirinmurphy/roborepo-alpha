@@ -96,7 +96,8 @@ Each row is its own optional package, so check it before loading it:
    - explain their consequences;
    - recommend the strongest option;
    - ask the user for a decision.
-8. Update the existing plan in place, in the primary checkout.
+8. Update the existing plan through `roborepo plans save`, by the "Plan store" rule in `/plan-write`'s
+   `references/plan-schema.md`. It keeps the plan in its current folder.
 9. Preserve the plan ID, filename conventions, frontmatter conventions, and repository-relative paths.
 10. Convert vague implementation phases into an executable sequence without prescribing incidental
     details that can safely be decided during development. `/plan-write` wrote the initial
@@ -109,20 +110,14 @@ Each row is its own optional package, so check it before loading it:
     accurate. The deterministic validator does not replace this semantic reconciliation pass.
 13. Present the resulting plan, related-plan classifications, and any remaining questions to the user.
 14. Promote or hold:
-    - **Ready** (no material question remains unresolved): run the repository's canonical promote
-      transition command for `<plan>` from the primary checkout. From `backlog/` it moves the plan to
-      `ready/` with `git mv` and commits the move together with this run's edits to the plan; in
-      `ready/` it commits the refinements in place. Either way the commit contains only the plan's
-      old and new paths, and unrelated staged or unstaged work stays where it is. It refuses, with
-      the findings and a repair prompt, when the plan does not meet the `ready/` requirements: fix
-      them and run it again. It refuses when the primary checkout is not on the base branch; stop and
-      ask the user. Do not push.
-    - **Not ready** (material questions remain): leave the plan where it is. If this run changed it,
-      show the user the changes and ask whether to commit them; on approval, recheck Git state and
-      commit only the selected plan path. Do not include pre-existing edits or other files without
-      explicit approval.
+    - **Ready** (no material question remains unresolved): run `roborepo plans promote <plan> --json`.
+      From `backlog/` it moves the saved plan to `ready/`, commits, and pushes; in `ready/` there is
+      nothing to move, since the edits are already saved. It refuses, with the findings and a repair
+      prompt, when the plan does not meet the `ready/` requirements: fix them, save, and run it again.
+    - **Not ready** (material questions remain): leave the plan where it is, and report what this run
+      saved.
 15. After the promotion report, show the `/plan-execute` instruction for a promoted plan using its
-    repository-relative path in `ready/`, ready to paste into a new session.
+    store-relative path, such as `plans/ready/x.md`, ready to paste into a new session.
 16. Stop before implementation. Never invoke `/plan-execute` yourself.
 
 ## Decision Policy
@@ -174,7 +169,7 @@ Include this in the promotion report:
 
 ```text
 Promotion result
-- Plan: "<title>" (<id>), <repository-relative path>
+- Plan: "<title>" (<id>), <store-relative path>
 - Repository claims checked: yes/no
 - Plan updated: yes/no
 - Obvious issues fixed: <count>

@@ -11,11 +11,11 @@ export const DEFAULT_IGNORED_DIRECTORIES = Object.freeze([
 export const DISCOVERY_MAX_DEPTH = 6;
 export const DISCOVERY_MAX_REPOSITORIES = 250;
 
-// A folder is a repository root when it has a `.git` entry or a `docs/plans` directory. Linked
+// A folder is a repository root when it has a `.git` entry. Linked
 // worktrees are not roots of their own: the main checkout stands for the repository, and Plans
 // reaches its worktrees through Git.
 export function isRepositoryRoot(dir, { fsApi = fs } = {}) {
-  return fsApi.existsSync(path.join(dir, ".git")) || fsApi.existsSync(path.join(dir, "docs", "plans"));
+  return fsApi.existsSync(path.join(dir, ".git"));
 }
 
 // Walks each root and returns the realpaths of eligible repository roots beneath it, stopping at

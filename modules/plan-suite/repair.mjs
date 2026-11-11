@@ -3,6 +3,7 @@ import path from "node:path";
 import { walkRepositoryRoots } from "../repositories/index.mjs";
 import { parseFrontmatter } from "./index.mjs";
 import { generatePlanId } from "./plan-id.mjs";
+import { PLANS_DIR, locateStore, mutateStore } from "./plan-store.mjs";
 
 // Scaffold text is deliberately generic and non-empty for `next_action`, which every actionable
 // lifecycle requires, so a repaired file reads as a real plan and not only as parseable.
@@ -45,33 +46,37 @@ export function hasNoFrontmatter(markdown) {
 }
 
 // Scans every repository under `discoveryRoot` (the repository domain's bounded walk, so the same
-// eligibility rule as a directory source: a `.git` or `docs/plans` dir) for plan docs with zero
-// frontmatter.
+// eligibility rule as a directory source) that has a plans worktree, for plan docs with zero frontmatter.
 export function findPlansMissingFrontmatter(discoveryRoot) {
   const { repositories: roots, errors } = walkRepositoryRoots([discoveryRoot]);
   const affected = [];
   for (const root of roots) {
-    const repo = { name: path.basename(root), root };
-    const plansDir = path.join(repo.root, "docs", "plans");
+    const store = locateStore(root);
+    if (!store || store.missing) continue;
     const files = [];
-    walkPlanFiles(plansDir, files);
+    walkPlanFiles(path.join(store.root, PLANS_DIR), files);
     for (const absolutePath of files.sort()) {
-      const markdown = fs.readFileSync(absolutePath, "utf8");
-      if (hasNoFrontmatter(markdown)) {
-        affected.push({ repository: repo.name, repositoryRoot: repo.root, absolutePath, relativePath: path.relative(repo.root, absolutePath) });
+      if (hasNoFrontmatter(fs.readFileSync(absolutePath, "utf8"))) {
+        affected.push({ repository: path.basename(root), repositoryRoot: root, store, absolutePath, relativePath: path.relative(store.root, absolutePath).split(path.sep).join("/") });
       }
     }
   }
   return { affected, errors };
 }
 
-export function repairPlansMissingFrontmatter(discoveryRoot, { dryRun = false } = {}) {
+export async function repairPlansMissingFrontmatter(discoveryRoot, { dryRun = false } = {}) {
   const { affected, errors } = findPlansMissingFrontmatter(discoveryRoot);
   const repaired = [];
   for (const item of affected) {
     if (!dryRun) {
-      const markdown = fs.readFileSync(item.absolutePath, "utf8");
-      fs.writeFileSync(item.absolutePath, scaffoldFrontmatter() + markdown);
+      await mutateStore({
+        store: item.store,
+        operation: () => ({
+          files: { [item.relativePath]: scaffoldFrontmatter() + fs.readFileSync(item.absolutePath, "utf8") },
+          message: `Scaffold frontmatter for ${path.basename(item.relativePath, ".md")}`,
+          result: {},
+        }),
+      });
     }
     repaired.push(item);
   }

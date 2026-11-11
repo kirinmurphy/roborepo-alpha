@@ -89,7 +89,7 @@
     {
       "id": "repo-write-boundary",
       "label": "Repository boundary",
-      "description": "Writes inside the repository you are working in proceed; writes outside it follow this setting. Reads are wider: the whole repository family (a worktree, its primary checkout, and its sibling worktrees) is readable, because comparing a branch against main is routine while writing across checkouts is how one session clobbers another's work. Enforced at tool-call time for harnesses with hooks, so the boundary is the current checkout rather than a fixed directory. Claude enforces this with a PreToolUse hook; Codex with a managed-workspace permission profile, whose runtime workspace root is augmented by this repo's derived docs/plans/plans-config.json worktree root.",
+      "description": "Writes inside the repository you are working in proceed; writes outside it follow this setting. Reads are wider: the whole repository family (a worktree, its primary checkout, and its sibling worktrees) is readable, because comparing a branch against main is routine while writing across checkouts is how one session clobbers another's work. Enforced at tool-call time for harnesses with hooks, so the boundary is the current checkout rather than a fixed directory. Claude enforces this with a PreToolUse hook; Codex with a managed-workspace permission profile, whose runtime workspace root is augmented by the current repo's worktree root from its plans config.",
       "kind": "repo-scope",
       "tools": [
         "Read",
@@ -490,6 +490,96 @@
       "category": "observability"
     },
     {
+      "id": "plan-store-commands",
+      "label": "Read and change plans",
+      "description": "The named roborepo plans commands: read, save, order, approve, lifecycle moves, and their gates. These are the only way plan files change: each one validates the change and commits it to the plans branch, so an agent needs neither direct writes to the plans worktree nor arbitrary Git commands there.",
+      "kind": "commands",
+      "commands": [
+        [
+          "roborepo",
+          "plans",
+          "init"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "show"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "save"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "approve"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "config"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "order"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "promote"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "start"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "submit"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "reopen"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "close"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "archive"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "preflight"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "merge-readiness"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "approval"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "landed"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "files"
+    },
+    {
       "id": "mutate-harness-config",
       "label": "Change harness configuration",
       "description": "roborepo namespaces that rewrite generated config or installed state (update, maintenance, mcp, package enable/disable/reconcile/adopt-live/manage/dev, skill, config set). Prompts. Anything NOT listed here — including namespaces added later — falls through to a prompt by default, so new subcommands never silently gain access.",
@@ -637,36 +727,10 @@
     },
     {
       "id": "plan-lifecycle",
-      "label": "Run guarded plan lifecycle steps",
-      "description": "Run named plan checks and transitions with their existing guards. Archive and close keep their approval gates.",
+      "label": "Run guarded plan worktree steps",
+      "description": "Synchronize a plan worktree with its base or stop its matching servers. Both commands retain their existing guards.",
       "kind": "commands",
       "commands": [
-        [
-          "roborepo",
-          "plans",
-          "preflight"
-        ],
-        [
-          "roborepo",
-          "plans",
-          "approval"
-        ],
-        [
-          "roborepo",
-          "plans",
-          "merge-readiness"
-        ],
-        [
-          "roborepo",
-          "plans",
-          "landed"
-        ],
-        [
-          "roborepo",
-          "plans",
-          "order",
-          "place"
-        ],
         [
           "roborepo",
           "plans",
@@ -676,26 +740,6 @@
           "roborepo",
           "plans",
           "stop-servers"
-        ],
-        [
-          "roborepo",
-          "plans",
-          "promote"
-        ],
-        [
-          "roborepo",
-          "plans",
-          "start"
-        ],
-        [
-          "roborepo",
-          "plans",
-          "submit"
-        ],
-        [
-          "roborepo",
-          "plans",
-          "reopen"
         ]
       ],
       "bucket": "allow",

@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "save"],
+  "kind": "internal",
+  "title": "Save a plan",
+  "description": "Validate, commit, and push a new or updated plan without changing its lifecycle or approval",
+  "usage": "roborepo plans save <file.md> [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["save"]
+  }
+}

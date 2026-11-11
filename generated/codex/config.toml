@@ -11,9 +11,6 @@ default_permissions = "managed-workspace"
 [permissions.managed-workspace]
 extends = ":workspace"
 
-[permissions.managed-workspace.workspace_roots]
-"~/.worktrees/roborepo" = true
-
 [permissions.managed-workspace.filesystem]
 "~/.ssh/**" = "deny"
 "~/.aws/**" = "deny"

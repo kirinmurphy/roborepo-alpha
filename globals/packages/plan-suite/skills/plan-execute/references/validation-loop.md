@@ -40,7 +40,7 @@ disk, and record in the plan that the Validator ran in-session.
 
 1. **Validator pass.** The Validator applies the rubric to the current work and reports.
 2. **Record.** Add each `fix` and `escalate` finding as an unchecked checkbox under `## Review` →
-   `### Findings` in the worktree's copy of the plan, and each `base` result under
+   `### Findings` in the plan, saved with `roborepo plans save`, and each `base` result under
    `### Verification`. `Outside this plan` items stay out of the plan and go to the user in the
    final report.
 3. **Fix.** Fix every `fix` finding, rerun the checks it affects, commit, and check the finding off

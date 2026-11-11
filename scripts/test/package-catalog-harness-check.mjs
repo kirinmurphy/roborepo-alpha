@@ -102,6 +102,8 @@ fs.writeFileSync(path.join(capAppRoot, "package.json"), JSON.stringify({ version
 // those resolve normally, then overwrite just the codex manifest's capabilities in place inside
 // this isolated app root copy.
 fs.cpSync(path.resolve("scripts"), path.join(capAppRoot, "scripts"), { recursive: true });
+fs.cpSync(path.resolve("modules"), path.join(capAppRoot, "modules"), { recursive: true });
+fs.cpSync(path.resolve("manifests/platform/plan-lifecycle.json"), path.join(capAppRoot, "manifests", "platform", "plan-lifecycle.json"));
 fs.cpSync(path.resolve("globals/harnesses"), path.join(capAppRoot, "globals", "harnesses"), { recursive: true });
 const codexManifestPath = path.join(capAppRoot, "globals", "harnesses", "codex", "provider.json");
 const codexManifest = JSON.parse(fs.readFileSync(codexManifestPath, "utf8"));

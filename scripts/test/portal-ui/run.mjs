@@ -75,6 +75,12 @@ const server = spawn(
       ...process.env,
       ...hostHarnessIsolationEnv(tmp),
       HOME: tmp,
+      // Plan saves commit to the plans store from this server. The temp HOME has no Git identity, and
+      // on a CI runner Git cannot derive one from the hostname, so every save would fail there.
+      GIT_AUTHOR_NAME: "Portal UI",
+      GIT_AUTHOR_EMAIL: "portal-ui@example.invalid",
+      GIT_COMMITTER_NAME: "Portal UI",
+      GIT_COMMITTER_EMAIL: "portal-ui@example.invalid",
       ROBOREPO_STATE_ROOT: stateDir,
       PORTAL_READY_FILE: readyFile,
     },

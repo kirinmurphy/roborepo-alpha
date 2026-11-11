@@ -4,7 +4,7 @@ import { inventoryWorktree, listWorktreeSnapshots, restoreWorktreeSnapshot } fro
 import { discoverInstances } from "../../modules/developer-runtime/discovery.mjs";
 import { stopCheckoutServers } from "../../modules/developer-runtime/stop.mjs";
 import { findProjectRoot, mainCheckoutPath, resolveGitDir } from "../../modules/repositories/identity.mjs";
-import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
+import { RESERVED_PLANS_BRANCH, linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
 import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards.mjs";
 import { removeLandedBranch, removeWorktree, retryBranchRetirement } from "../../modules/repositories/worktree-removal.mjs";
@@ -55,7 +55,7 @@ export async function cleanupWorktrees({ cwd = process.cwd(), stateRoot = STATE_
         preservationEvidence: preservation?.state === "preserved",
       });
       if (preservation?.state !== "preserved") { guard.ok = false; guard.reason = `${preservation?.reason || "preservation unknown"}; use roborepo git worktrees discard for explicit loss preview`; }
-      const row = { cleanupWarnings: preservation?.cleanupWarnings || landing.cleanupWarnings || [], preservation: preservation?.state || null, remainingPaths: preservation?.remainingPaths || [], blockingPaths: preservation?.blockingPaths || [], assessedTip: preservation?.tip || surveyTip, assessedBase: preservation?.baseCommit || null, evidenceCommit: preservation?.evidenceCommit || null, outcomes: [], path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : guard.reason, warning: guard.warning, landingEvidence: landing.landed ? (landing.reused ? "reused" : "scanned") : null, action: "kept" };
+      const row = { cleanupWarnings: preservation?.cleanupWarnings || landing.cleanupWarnings || [], preservation: preservation?.state || null, remainingPaths: preservation?.remainingPaths || [], blockingPaths: preservation?.blockingPaths || [], assessedTip: preservation?.tip || surveyTip, assessedBase: preservation?.baseCommit || null, evidenceCommit: preservation?.evidenceCommit || null, outcomes: [], path: worktree.path, name: worktree.name, branch: worktree.branch, state: landing.landed ? "landed" : landing.reason === "scan unavailable" ? "unknown" : "not landed", eligible: guard.ok, reason: landing.reason === "scan unavailable" ? "landed scan unavailable" : activePlans.unreadable && guard.reason === "plan not closed" ? "plans store unreadable" : guard.reason, warning: guard.warning, landingEvidence: landing.landed ? (landing.reused ? "reused" : "scanned") : null, action: "kept" };
       if (apply && guard.ok) {
         if (preservation?.fingerprint) {
           const current = await inventoryWorktree(worktree.path).catch(() => null);
@@ -122,7 +122,7 @@ async function worktreeTip(mainPath, worktree) {
 async function cleanupDetachedBranches(mainPath, worktrees, { apply, stateRoot }) {
   const refs = await runGitProcess(mainPath, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]);
   if (!refs.ok) return [];
-  const occupied = new Set(worktrees.map((item) => item.branch).filter(Boolean));
+  const occupied = new Set([RESERVED_PLANS_BRANCH, ...worktrees.map((item) => item.branch).filter(Boolean)]);
   const current = await runGitProcess(mainPath, ["symbolic-ref", "--short", "HEAD"]);
   if (current.ok) occupied.add(current.stdout.trim());
   for (const base of ["main", "master"]) occupied.add(base);

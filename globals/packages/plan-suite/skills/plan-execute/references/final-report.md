@@ -106,7 +106,7 @@ A short closing block for lookup, with only facts the prose did not already stat
 
 ```text
 Implementation result
-- Plan: "<title>" (<id>), <repository-relative path>
+- Plan: "<title>" (<id>), <store-relative path>
 - Lifecycle: stays active | moved to review | stays review
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)

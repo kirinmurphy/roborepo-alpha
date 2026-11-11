@@ -18,7 +18,7 @@ Use this split:
 | End user learning the package | `docs/user/guides/` | install flow, daily use, telemetry walkthrough |
 | End user needing exact behavior | `docs/user/reference/` | CLI commands, telemetry service, hooks behavior |
 | Repo maintainer or contributor | `docs/internal/` | release workflow, config collision internals, harness anatomy |
-| Active implementation work | `docs/plans/` | planned or completed implementation records |
+| Active implementation work | `plans/` on the `repo-plans` branch | planned or completed implementation records |
 
 ## Release Commands
 

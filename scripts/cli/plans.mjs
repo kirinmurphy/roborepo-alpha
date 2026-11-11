@@ -1,6 +1,9 @@
 // The Plans portal's snapshot API: cached plan snapshots, documents, prompts, and Backlog order saves,
 // with private fields stripped before they cross the HTTP boundary. `roborepo plans` lives in
 // plans-command.mjs.
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { packageStatusSummary } from "./package-status.mjs";
 import { stateRoot } from "./paths.mjs";
 import { autoDiscoveryEnabled } from "./repository-sources.mjs";
@@ -13,8 +16,13 @@ import {
   domainError,
 } from "../../modules/plan-suite/index.mjs";
 import { saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
+import { plannableRepositories } from "../../modules/plan-suite/canonical-scan.mjs";
+import { repositoryCheckouts } from "../../modules/plan-suite/checkouts.mjs";
 import { pathFreeFileError } from "../../modules/plan-suite/naming.mjs";
-import { primaryCheckout, repositoryBaseBranch, topLevel } from "../../modules/plan-suite/plan-git.mjs";
+import { PLANS_ORDER_RELATIVE_PATH, locateStore, refreshStore } from "../../modules/plan-suite/plan-store.mjs";
+import { git, repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
+import { SHORT_ID_PATTERN } from "../../modules/plan-suite/plan-id.mjs";
+import { planSaveChange, savePlan } from "../../modules/plan-suite/plan-writes.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { loadRegistry } from "../../modules/repositories/index.mjs";
 import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockPlanDocument, mockPlansSnapshot } from "./mock-home.mjs";
@@ -66,7 +74,10 @@ export function loadCachedPlansSnapshot() {
   const registry = loadRegistry({ stateRoot });
   const fingerprint = planSnapshotFingerprint({ registry });
   if (!cachedSnapshot || cachedSnapshotIsMock || fingerprint !== cachedFingerprint) rebuildSnapshot(registry, fingerprint);
-  return publicSnapshot(cachedSnapshot);
+  // Home offers each plan's file path to copy, as it already does each checkout's. /api/plans does not.
+  const paths = new Map(cachedSnapshot.plans.map((record) => [record.key, record.absolutePath]));
+  const snapshot = publicSnapshot(cachedSnapshot);
+  return { ...snapshot, plans: snapshot.plans.map((record) => ({ ...record, absolutePath: paths.get(record.key) })) };
 }
 
 export function loadPlanDocument({ key }) {
@@ -89,28 +100,35 @@ export function buildPlansPrompt({ action, keys, mode }) {
 }
 
 // A Backlog Save: one namespace's whole order, against the revision the draft was opened from.
-export function saveBacklogOrder({ repositoryId, namespace, order, unprioritized, revision }) {
+export async function saveBacklogOrder({ repositoryId, namespace, order, unprioritized, revision }) {
   const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
   const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
   if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
-  const records = snapshot.plans.filter((record) => record.repository.repositoryId === repositoryId);
-  const result = saveNamespaceOrder({ root: repository.root, records, namespace, order, unprioritized, revision });
-  cachedSnapshot = null;
-  return result;
+  try {
+    return await saveNamespaceOrder({ store: locateStore(repository.root), namespace, order, unprioritized, revision });
+  } catch (err) {
+    throw browserSafeOrderError(err);
+  } finally {
+    cachedSnapshot = null;
+  }
 }
 
 // Lifts one namespace to the top of its repo's Backlog, or returns it to alphabetical order.
-export function setBacklogNamespacePinned({ repositoryId, namespace, pinned }) {
+export async function setBacklogNamespacePinned({ repositoryId, namespace, pinned }) {
   const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
   const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
   if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
-  const result = setNamespacePinned({ root: repository.root, namespace, pinned });
-  cachedSnapshot = null;
-  return result;
+  try {
+    return await setNamespacePinned({ store: locateStore(repository.root), namespace, pinned });
+  } catch (err) {
+    throw browserSafeOrderError(err);
+  } finally {
+    cachedSnapshot = null;
+  }
 }
 
 // Retires one unprioritized Backlog plan through the same transition `roborepo plans archive` runs: a
-// commit on the base branch, nothing pushed. A ranked plan is refused, so a page working from an older
+// commit on the plans branch, pushed. A ranked plan is refused, so a page working from an older
 // snapshot cannot archive what has since been prioritized.
 export async function archiveBacklogPlan({ repositoryId, id, reason }) {
   if (typeof id !== "string" || !id) throw domainError("INVALID_CHANGE", "id must name the plan to archive.");
@@ -120,17 +138,10 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
   if (!repository || !entry) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
   const unprioritized = new Set(entry.namespaces.flatMap((view) => view.needsPrioritization.flatMap((block) => block.ids)));
   if (!unprioritized.has(id)) throw domainError("INVALID_CHANGE", `Only unprioritized Backlog plans can be archived here: ${id}.`);
-  const primary = gitCheckoutForArchive(repository.root);
-  const base = repositoryBaseBranch(primary);
-  if (!base) {
-    throw domainError("INVALID_CHANGE", "This repo's base branch can't be determined, so nothing was archived.", {
-      resolution: "Run `git remote set-head origin --auto`, or archive it with `roborepo plans archive <plan> --reason <text> --base <branch>`.",
-    });
-  }
   try {
-    const result = await transitionPlan({ cwd: primary, transition: "archive", selector: id, reason, base });
+    const result = await transitionPlan({ cwd: repository.root, transition: "archive", selector: id, reason, base: repositoryBaseBranch(repository.root) || "main" });
     if (result.verdict !== "APPROVED") throw domainError("INVALID_CHANGE", `${id} moved, but its post-commit checks failed.`);
-    return { archived: id, references: result.references };
+    return { archived: id, references: result.references, synchronized: result.synchronized };
   } catch (err) {
     throw browserSafeArchiveError(err);
   } finally {
@@ -138,24 +149,52 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
   }
 }
 
-// Git's stderr and filesystem messages embed absolute paths, and this answer reaches the browser. The
-// `roborepo plans archive` command keeps them, since its reader is at the machine they name.
-function gitCheckoutForArchive(root) {
+// What a portal upload would do, for the dialog's preview. Reads the local store and writes nothing;
+// the save validates again against the fresh tree.
+export function previewPlanImport({ repositoryId, filename, markdown }) {
+  const root = importStoreRoot(repositoryId, markdown);
+  const change = planSaveChange({ root, markdown, filename });
+  return { action: change.action, id: change.id, title: change.title, lifecycle: change.lifecycle, path: change.target, diff: change.action === "update" ? textDiff(change.before, change.after) : "" };
+}
+
+// The upload's save: the same operation as `roborepo plans save`, so it cannot change a lifecycle or an approval.
+export async function savePlanImport({ repositoryId, filename, markdown, newId }) {
+  const root = importStoreRoot(repositoryId, markdown);
   try {
-    const primary = primaryCheckout(root);
-    // A bare repo has no checkout to commit from, and the transition's refusal would name a path.
-    if (!topLevel(primary)) throw new Error("no work tree");
-    return primary;
-  } catch {
-    throw domainError("INVALID_CHANGE", "This repo can't be read as a Git checkout, so nothing was archived.", {
-      resolution: "Run `git status` in the repo, resolve what it shows, then try again.",
-    });
+    return await savePlan({ store: locateStore(root), filename, markdown, ...(SHORT_ID_PATTERN.test(newId || "") ? { newId } : {}) });
+  } catch (err) {
+    if (err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) throw withoutStorePath(err);
+    throw domainError("PLAN_STORE_FAILED", "This plan could not be saved.", { resolution: "Press Refresh, then try again. `roborepo plans init` repairs a damaged plans worktree." });
+  } finally {
+    cachedSnapshot = null;
   }
 }
 
+function importStoreRoot(repositoryId, markdown) {
+  if (typeof markdown !== "string") throw domainError("INVALID_CHANGE", "Choose a Markdown file to upload.");
+  const snapshot = buildPlanSnapshot({ stateRoot, packageState: planSuitePackageState() });
+  const repository = snapshot.repositories.find((item) => item.repositoryId === repositoryId);
+  if (!repository) throw domainError("PLAN_NOT_FOUND", "This repo can no longer be found. Refresh and try again.");
+  return repository.root;
+}
+
+// A unified diff without Git's header lines, which name the temporary files.
+function textDiff(before, after) {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-plan-diff-"));
+  try {
+    fs.writeFileSync(path.join(folder, "before"), before);
+    fs.writeFileSync(path.join(folder, "after"), after);
+    const { raw } = git(folder, ["diff", "--no-index", "--no-color", "--", "before", "after"]);
+    return raw.slice(Math.max(raw.indexOf("@@"), 0));
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+// Git's stderr and filesystem messages embed absolute paths, and this answer reaches the browser. The
+// `roborepo plans archive` command keeps them, since its reader is at the machine they name.
 function browserSafeArchiveError(err) {
-  if (err?.code === "MOVE_NOT_COMMITTED") return domainError(err.code, err.message, { resolution: err.resolution });
-  if (err?.code !== "MOVE_FAILED" && !err?.syscall) {
+  if (err?.code !== "MOVE_FAILED" && err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) {
     // A transition's refusals advise the agent running the command, which the dialog's reader is not.
     delete err.resolution;
     return err;
@@ -166,10 +205,46 @@ function browserSafeArchiveError(err) {
   });
 }
 
-export function refreshPlans({ repositoryId = null } = {}) {
+// These store errors' resolutions name the plans worktree's absolute path, for a person at a terminal.
+// The browser gets a next step that finds the same place without it.
+const STORE_ERRORS_NAMING_PATHS = new Set(["PLAN_STORE_DIVERGED", "PLAN_STORE_DIRTY"]);
+export function withoutStorePath(err) {
+  if (STORE_ERRORS_NAMING_PATHS.has(err?.code)) {
+    err.resolution = "Run `roborepo plans init` in a terminal inside this repo. It names the plans worktree to resolve this in.";
+  }
+  return err;
+}
+
+function browserSafeOrderError(err) {
+  if (err?.code !== "PLAN_STORE_FAILED" && !err?.syscall) return withoutStorePath(err);
+  return domainError("PLAN_STORE_FAILED", `${PLANS_ORDER_RELATIVE_PATH} could not be written${err.syscall ? ` (${err.code})` : ""}.`, {
+    resolution: "Press Refresh, then try again. `roborepo plans init` repairs a damaged plans worktree.",
+  });
+}
+
+// Fetches each store and pushes pending commits, so remote changes and sandboxed saves arrive here,
+// not on every render. Awaits network Git without blocking the server's event loop. A remote that
+// cannot be reached leaves the local plans showing; a pending commit that needs a person is reported
+// for its repo.
+export async function refreshPlans({ repositoryId = null } = {}) {
+  const registry = loadRegistry({ stateRoot });
+  const sync = {};
+  for (const record of plannableRepositories(registry)) {
+    if (repositoryId && record.id !== repositoryId) continue;
+    const [checkout] = repositoryCheckouts(registry, record.id);
+    const store = checkout ? locateStore(checkout.path) : null;
+    if (!store || store.missing) continue;
+    try {
+      const { synchronized, reason } = await refreshStore(store);
+      sync[record.id] = { synchronized, reason };
+    } catch (err) {
+      if (!err?.code) throw err;
+      sync[record.id] = { synchronized: false, reason: err.message };
+    }
+  }
   cachedSnapshot = null;
   cachedSnapshotIsMock = false;
-  return loadPlansSnapshot({ repositoryId });
+  return { ...loadPlansSnapshot({ repositoryId }), sync };
 }
 
 // The fingerprint is taken before the build, so a file that changes mid-build shows up as a

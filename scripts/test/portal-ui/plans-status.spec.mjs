@@ -2,11 +2,10 @@
 // badge once every task is checked, and beside either the `merged` badge once the plan's worktree
 // has landed — the same join Home draws from its overview. The card keeps lifecycle, review state, and the next
 // action out of the strip; the next action stays in the plan drawer.
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { test, expect } from "@playwright/test";
+import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
 import {
+  removeFixtureContents,
   addRepositorySource,
   backlogUrlFor,
   enablePlanBoard,
@@ -41,34 +40,35 @@ async function planRecord(page, title) {
 }
 
 test.describe("Plans card status", () => {
+  let fx;
   let planRoot;
   test.beforeAll(() => {
-    planRoot = fs.mkdtempSync(path.join(os.tmpdir(), "portal-ui-status-"));
-    fs.mkdirSync(path.join(planRoot, ".git"));
-    for (const lifecycle of ["backlog", "active", "review", "completed"]) fs.mkdirSync(path.join(planRoot, "docs", "plans", lifecycle), { recursive: true });
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "review", "status-review.md"),
-      plan({ id: "streview", title: "Review status plan", nextAction: "Fix the finding", tasks: ["- [x] One", "", "## Review", "", "### Findings", "", "- [ ] Missing retry test"] }));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "status-ring.md"),
-      plan({ id: "string01", title: "Ring status plan", nextAction: "Ship the ring step", tasks: ["- [x] One", "- [ ] Two"] }));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "active", "status-merged.md"),
-      plan({ id: "stmerg01", title: "Merged status plan", nextAction: "Close it out", tasks: ["- [x] One", "- [ ] Two", "- [ ] Three"] }));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-done.md"),
-      plan({ id: "stdone01", title: "Done status plan", nextAction: "Nothing left", tasks: ["- [x] One", "- [x] Two"] }));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-blocker.md"),
-      plan({ id: "stblkr01", title: "Blocker target plan", nextAction: "Land the prerequisite", tasks: ["- [ ] One"] }));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "completed", "status-completed.md"),
-      plan({ id: "stcmp001", title: "Completed dependency plan", nextAction: "Done", tasks: ["- [x] One"] }));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-satisfied.md"),
-      plan({ id: "stsat001", title: "Satisfied dependency plan", nextAction: "Promote", tasks: ["- [ ] One"],
-        frontmatter: ['depends_on: [stcmp001]'] }));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-dependent.md"),
-      plan({ id: "stdep001", title: "Dependent status plan", nextAction: "Wait", tasks: ["- [ ] One"],
-        frontmatter: ['depends_on: [stblkr01, stcmp001, string01, missing1]'] }));
-    fs.writeFileSync(path.join(planRoot, "docs", "plans", "backlog", "status-blocked.md"),
-      plan({ id: "stblkd01", title: "Blocked status plan", nextAction: "Wait for the prerequisite", tasks: ["- [ ] One"],
-        frontmatter: ['blocked_by: [stblkr01, "upstream: vendor API is not ready"]'] }));
+    fx = createPlanFixture("portal-ui-status-store-");
+    planRoot = fx.repository("status-fixture", {
+      "plans/review/status-review.md":
+        plan({ id: "streview", title: "Review status plan", nextAction: "Fix the finding", tasks: ["- [x] One", "", "## Review", "", "### Findings", "", "- [ ] Missing retry test"] }),
+      "plans/active/status-ring.md":
+        plan({ id: "string01", title: "Ring status plan", nextAction: "Ship the ring step", tasks: ["- [x] One", "- [ ] Two"] }),
+      "plans/active/status-merged.md":
+        plan({ id: "stmerg01", title: "Merged status plan", nextAction: "Close it out", tasks: ["- [x] One", "- [ ] Two", "- [ ] Three"] }),
+      "plans/backlog/status-done.md":
+        plan({ id: "stdone01", title: "Done status plan", nextAction: "Nothing left", tasks: ["- [x] One", "- [x] Two"] }),
+      "plans/backlog/status-blocker.md":
+        plan({ id: "stblkr01", title: "Blocker target plan", nextAction: "Land the prerequisite", tasks: ["- [ ] One"] }),
+      "plans/completed/status-completed.md":
+        plan({ id: "stcmp001", title: "Completed dependency plan", nextAction: "Done", tasks: ["- [x] One"] }),
+      "plans/backlog/status-satisfied.md":
+        plan({ id: "stsat001", title: "Satisfied dependency plan", nextAction: "Promote", tasks: ["- [ ] One"],
+          frontmatter: ['depends_on: [stcmp001]'] }),
+      "plans/backlog/status-dependent.md":
+        plan({ id: "stdep001", title: "Dependent status plan", nextAction: "Wait", tasks: ["- [ ] One"],
+          frontmatter: ['depends_on: [stblkr01, stcmp001, string01, missing1]'] }),
+      "plans/backlog/status-blocked.md":
+        plan({ id: "stblkd01", title: "Blocked status plan", nextAction: "Wait for the prerequisite", tasks: ["- [ ] One"],
+          frontmatter: ['blocked_by: [stblkr01, "upstream: vendor API is not ready"]'] }),
+    });
   });
-  test.afterAll(() => fs.rmSync(planRoot, { recursive: true, force: true }));
+  test.afterAll(() => removeFixtureContents(fx));
   test.beforeEach(async ({ page }) => {
     await addRepositorySource(page, planRoot);
     await enablePlanBoard(page);
@@ -212,7 +212,7 @@ test.describe("Plans card status", () => {
     await expect(copy.getByRole("button", { name: "Copied", exact: true })).toBeVisible();
     await expect(copy.locator('portal-icon[name="check"]')).toBeVisible();
     await expect(copy).toHaveText("");
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^\/.*\/docs\/plans\/backlog\/status-dependent\.md$/);
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/^\/.*\/plans\/backlog\/status-dependent\.md$/);
   });
 
   test("the drawer keeps the lifecycle and next action the card leaves out", async ({ page }) => {

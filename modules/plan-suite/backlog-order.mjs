@@ -1,7 +1,7 @@
 // The Backlog ordering calculations: which same-namespace plans must move together, and what the
 // effective order is once the saved order meets the current plans. Everything here is pure, so a
 // portal read, a Save, and `roborepo plans order place` all reach the same answer from the same
-// inputs. Reading and writing docs/plans/plans-order.json lives in backlog-registry.mjs.
+// inputs. Reading and writing plans/plans-order.json lives in backlog-registry.mjs.
 //
 // A plan's namespace is the only scope a rank has. Dependency edges connect plans into one movable
 // group only when both ends are in the same namespace's Backlog, so a prerequisite that has left

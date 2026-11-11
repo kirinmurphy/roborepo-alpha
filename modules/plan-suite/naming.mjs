@@ -48,7 +48,7 @@ const DATE_SUFFIX = /-\d{4}(-\d{2}){0,2}$/;
 // segment has no namespace at all, which is the case this catches most often.
 const STEM_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)+$/;
 
-export const PLANS_CONFIG_RELATIVE_PATH = "docs/plans/plans-config.json";
+export const PLANS_CONFIG_RELATIVE_PATH = "plans/plans-config.json";
 
 // Cached per repository root and invalidated on the config file's own mtime, matching the plan
 // record cache's contract: edits are always picked up, but a scan of hundreds of plans reads and
@@ -110,7 +110,7 @@ export function readProjectNamespaces(repositoryRoot) {
 export function validatePlanNaming({ filename, lifecycle, projectNamespaces = [] }) {
   if (!projectNamespaces.length) return [];
   if (!VALIDATED_LIFECYCLES.has(lifecycle)) return [];
-  // Non-Markdown entries are not plans. `docs/plans` legitimately holds `.DS_Store`, archives, and
+  // Non-Markdown entries are not plans. The plans folder legitimately holds `.DS_Store`, archives, and
   // nested directories; reporting those as malformed plans would be noise, not a finding.
   if (typeof filename !== "string" || !filename.endsWith(".md")) return [];
 

@@ -365,3 +365,21 @@ This provider-specific boundary has a dedicated deterministic check,
 new method. Projection checks do not establish enforcement: a coverage claim must name the
 binary/version, platform, policy source, profile, surface, and positive and negative controls.
 See [testing](testing.md#codex-credential-verification) for measured coverage and unavailable states.
+
+## Provider-owned sandbox additions
+
+`permissions.workspaceRoots({ cwd })` and `permissions.writablePaths({ cwd })` are optional adapter
+methods. `renderPermissionsTo` calls them with the current directory and passes the results to the
+same provider's `permissions.render` as `options.workspaceRoots` and `options.writablePaths`. The
+platform never inspects the values, so a provider decides what its own sandbox needs.
+
+Codex is the only implementer. Its sandbox stops writes outside the workspace roots, so it needs both:
+
+- **Workspace roots:** `scripts/harnesses/permission-workspace-roots.mjs` reads the current
+  repository's plans config through the plan store.
+- **Writable paths:** `scripts/harnesses/codex/plans-store-grants.mjs` lists the exact paths a plans
+  store commit and fetch write in the common Git directory. `hooks/`, `config`, and `packed-refs`
+  stay denied. `scripts/test/codex-plans-store-grants-check.mjs` pins the list.
+
+Both depend on the repository the render runs in, so they appear only after `roborepo update` runs
+inside a repository that has a plans store. The tracked `generated/codex/config.toml` has neither.

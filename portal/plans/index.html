@@ -20,6 +20,9 @@
           <button type="button" class="icon-action" id="filters-toggle" aria-label="Filters" title="Filters">
             <portal-icon name="sliders" size="md"></portal-icon>
           </button>
+          <button type="button" class="icon-action" id="plan-import-toggle" aria-label="Import Plan" title="Import Plan">
+            <portal-icon name="plus" size="md"></portal-icon>
+          </button>
         </div>
       </div>
     </div>
@@ -57,6 +60,37 @@
       <div class="filters-dialog-actions">
         <button id="filters-cancel" type="button" data-btn="secondary">Cancel</button>
         <button id="filters-update" type="button" data-btn="cta" disabled>Update</button>
+      </div>
+    </dialog>
+    <!-- Import Plan: previews what a Markdown file would do before anything is saved. -->
+    <dialog id="plan-import-dialog" data-dialog-size="md" aria-labelledby="plan-import-title">
+      <div class="modal-head">
+        <h2 class="modal-title" id="plan-import-title">Import Plan</h2>
+        <portal-close-button data-slot="close" aria-label="Close"></portal-close-button>
+      </div>
+      <div class="modal-body filters-dialog-body">
+        <div class="filter-row" data-slot="repo-row" hidden>
+          <label for="plan-import-repo">Repo</label>
+          <select id="plan-import-repo" data-slot="repo"></select>
+        </div>
+        <div class="filter-row">
+          <label for="plan-import-file">File</label>
+          <input id="plan-import-file" data-slot="file" type="file" accept=".md,text/markdown">
+        </div>
+        <dl class="plan-import-preview" data-slot="preview" hidden>
+          <dt>Title</dt><dd data-slot="title"></dd>
+          <dt>Plan ID</dt><dd data-slot="id"></dd>
+          <dt>Filename</dt><dd data-slot="filename"></dd>
+          <dt>Folder</dt><dd data-slot="folder"></dd>
+        </dl>
+        <p data-slot="notice" hidden></p>
+        <pre class="plan-import-diff" data-slot="diff" hidden></pre>
+        <div class="backlog-dialog-error" data-slot="error" role="alert"></div>
+        <p class="plan-import-status" data-slot="status" role="status" hidden></p>
+      </div>
+      <div class="filters-dialog-actions">
+        <button type="button" data-btn="secondary" data-slot="cancel">Cancel</button>
+        <button type="button" data-btn="cta" data-slot="confirm" disabled>Add to Backlog</button>
       </div>
     </dialog>
     <!-- Backlog Prioritize: every way out of a dirty draft asks here first. -->

@@ -81,10 +81,9 @@ function cardRows(domains, actions) {
   const checkouts = domains.runtime.data?.checkouts || [];
   const hookInstalled = domains.runtime.data?.worktreeCleanup?.hook === "installed";
   const byRootId = new Map(checkouts.filter((checkout) => checkout.isWorktree && checkout.rootId).map((checkout) => [checkout.rootId, checkout]));
-  const mainCheckouts = checkouts.filter((checkout) => !checkout.isWorktree);
   const consumed = new Set();
   const rows = checkouts.length
-    ? mainCheckouts.map((checkout) => checkoutRow(checkout, actions, { hookInstalled, mainCheckouts }))
+    ? checkouts.filter((checkout) => !checkout.isWorktree).map((checkout) => checkoutRow(checkout, actions, { hookInstalled }))
     : [noCheckoutRow()];
   for (const plan of domains.plans.data?.active || []) {
     const checkout = byRootId.get(plan.checkoutRootId);
@@ -98,13 +97,13 @@ function cardRows(domains, actions) {
       onOpenPlan: actions.onOpenPlan,
       onCopyPrompt: actions.onCopyPlanPrompt,
     });
-    rows.push(checkoutRow(checkout, actions, { hookInstalled, identity, plan, mainCheckouts }));
+    rows.push(checkoutRow(checkout, actions, { hookInstalled, identity, plan }));
   }
-  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions, { hookInstalled, mainCheckouts })));
+  rows.push(...checkouts.filter((checkout) => checkout.isWorktree && !consumed.has(checkout)).map((checkout) => checkoutRow(checkout, actions, { hookInstalled })));
   return rows;
 }
 
-function checkoutRow(checkout, actions, { identity = null, hookInstalled = false, plan = null, mainCheckouts = [] } = {}) {
+function checkoutRow(checkout, actions, { identity = null, hookInstalled = false, plan = null } = {}) {
   const row = buildRootSection({
     root: {
       rootId: checkout.rootId,
@@ -125,7 +124,7 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
     repository: { name: "Repo" },
     mode: "home",
     onMountLinks: actions.onMountLinks,
-    onMountWorktreeDetails: (slot) => slot.append(worktreeDetails(checkout, actions, { plan, mainCheckouts })),
+    onMountWorktreeDetails: (slot) => slot.append(worktreeDetails(checkout, actions, { plan })),
     identity,
   });
   // Home's row glyphs match the repo header's shortcut icons; Runtime keeps the shared default.
@@ -134,10 +133,9 @@ function checkoutRow(checkout, actions, { identity = null, hookInstalled = false
 }
 
 // A worktree no plan claims gets the same dropdown as a plan's worktree, minus the plan file.
-function worktreeDetails(checkout, actions, { plan, mainCheckouts }) {
+function worktreeDetails(checkout, actions, { plan }) {
   const target = { repositoryId: actions.repositoryId, checkout, plan };
   return worktreeDetailsButton(plan, checkout, {
-    mainCheckouts,
     onStopServers: () => actions.onStopServers(target),
     onDelete: () => actions.onRemoveWorktree(target),
   });

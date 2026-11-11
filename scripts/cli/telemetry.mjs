@@ -28,7 +28,7 @@ import { launchHookReview, loadHookReviewStatus } from "./hook-review-launch.mjs
 import { installCoreHooks } from "./hook-core-install.mjs";
 import { refreshHarnessesAndApply } from "./portal-harness-refresh.mjs";
 import { mutatePackage, setSkillInstalled, setBehaviorBucket, setCommandBucket } from "./config-mutate.mjs";
-import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, saveBacklogOrder, setBacklogNamespacePinned, archiveBacklogPlan, refreshPlans } from "./plans.mjs";
+import { loadPlansSnapshot, loadCachedPlansSnapshot, loadPlanDocument, buildPlansPrompt, previewPlanImport, savePlanImport, saveBacklogOrder, setBacklogNamespacePinned, archiveBacklogPlan, refreshPlans } from "./plans.mjs";
 import { loadRepositorySources, addRepositorySource, removeRepositorySource, setRepositorySourceEnabled, refreshRepositorySources, wipeRepositoryList, autoDiscoveryEnabled } from "./repository-sources.mjs";
 import {
   loadDeveloperRuntimeSnapshot,
@@ -841,6 +841,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     loadPlans: (params) => loadPlansSnapshot(params),
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
+    previewPlanImport: (params) => previewPlanImport(params),
+    savePlanImport: (params) => savePlanImport(params),
     saveBacklogOrder: (params) => saveBacklogOrder(params),
     setBacklogNamespacePinned: (params) => setBacklogNamespacePinned(params),
     archiveBacklogPlan: (params) => archiveBacklogPlan(params),
@@ -902,7 +904,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       // is that the server is now listening while it happens.
       setTimeout(() => {
         reconcileTelemetryRepositories();
-        try { refreshPlans(); } catch {}
+        refreshPlans().catch(() => {});
         startAnalysisRefresh();
       }, 0);
     },
@@ -910,7 +912,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
 }
 
 function startAutoDiscoveryScan() {
-  refreshDeveloperRuntimeSnapshot().then(() => { try { refreshPlans(); } catch {} }).catch(() => {});
+  refreshDeveloperRuntimeSnapshot().then(() => { refreshPlans().catch(() => {}); }).catch(() => {});
 }
 
 // A worktree removal or a cleanup opt-in changes what Home's next poll should show, so Runtime
@@ -922,7 +924,7 @@ async function afterWorktreeChange(pending) {
 }
 
 function afterSourceChange(payload) {
-  try { refreshPlans(); } catch {}
+  refreshPlans().catch(() => {});
   return payload;
 }
 

@@ -1,6 +1,6 @@
 ---
 name: plan-archive
-description: Use to retire one repository plan that will not be completed because it was superseded or abandoned. Accepts a plan in backlog, ready, active, or review. Records the reason in the plan, carries the worktree copy's unmerged plan progress to the base branch once, refuses conflicting copies, and commits the move to docs/plans/archived/ without removing any worktree or branch that holds unmerged work. Trigger on explicit /plan-archive or requests to archive this plan or retire this plan. Do not use for closing finished work (plan-close), cleaning up worktrees, deleting branches, or revising a plan (plan-write).
+description: Use to retire one repository plan that will not be completed because it was superseded or abandoned. Accepts a plan in backlog, ready, active, or review. Records the reason in the plan and commits the move to the store's archived/ folder without removing any worktree or branch that holds unmerged work. Trigger on explicit /plan-archive or requests to archive this plan or retire this plan. Do not use for closing finished work (plan-close), cleaning up worktrees, deleting branches, or revising a plan (plan-write).
 ---
 
 # Plan Archive
@@ -14,11 +14,9 @@ finished work to avoid the completion checks hides it from the reader who trusts
 
 Resolve:
 
-- the repository root, the primary checkout (first `worktree` entry of
-  `git worktree list --porcelain`), and the base branch (`main` unless repository policy names
-  another);
-- the selected plan, by id or path, and its folder in the primary checkout: `backlog/`, `ready/`,
-  `active/`, or `review/`. Refuse any other folder, naming it;
+- the repository root and the base branch (`main` unless repository policy names another);
+- the selected plan, by id or store-relative path, and its folder: `backlog/`, `ready/`, `active/`,
+  or `review/`. Refuse any other folder, naming it;
 - the reason: superseded (by which plan) or abandoned (why). Ask the user when the request does not
   state it; never invent one;
 - the worktree the plan names, if any, and whether its branch holds commits the base branch does not.
@@ -52,36 +50,23 @@ Each row is its own optional package, so check it before loading it:
 
 ### 2. Archive
 
-Run the repository's canonical archive transition command for `<plan>` from the primary checkout,
-passing the reason. Do not compose the Git commands yourself. The command:
+Run `roborepo plans archive <plan> --reason <text> --json`. Do not compose the Git commands yourself. The command:
 
 - writes the reason under a `## Archived` heading in the plan body, dated, and clears `next_action`;
   it adds no frontmatter;
-- applies the copy table below, because abandoned work never merges, so Git never brings the
-  worktree's plan copy to the base branch on its own;
-- removes the plan's id from `depends_on` and `blocked_by` in every unfinished plan, except one bound
-  to a worktree, which it leaves and reports. It does not rewire chains: archiving B in A -> B -> C leaves
+- removes the plan's id from `depends_on` and `blocked_by` in every unfinished plan. It does not
+  rewire chains: archiving B in A -> B -> C leaves
   C with no link to A;
-- commits only the plan's old and new paths and those cleared plans on the base branch, and never pushes.
-
-| Copies | The command does |
-| --- | --- |
-| The plan names no worktree, or the worktree copy is integrated | Records the reason in the primary copy and moves it |
-| Worktree copy not integrated, and the primary copy is a version the worktree branch already had | Writes the worktree copy's content into the primary copy, records the reason, and moves it, as one archive change on the base branch |
-| Worktree copy not integrated, and the primary copy holds a version the worktree never had | Refuses with `conflicting copies`, naming both |
-| Worktree copy unavailable | Archives the primary copy and reports that the worktree's plan state was not available |
-
-This is the only time plan content is copied between checkouts: once, one way, at the archive
-transition. Never merge two edited copies.
+- commits only the plan's old and new paths and those cleared plans to the plans branch, and pushes.
 
 ### 3. Handle a refusal
 
-- **Conflicting copies:** the user decides. Either merge the base branch into the worktree, or move
-  the primary copy's edit into the worktree's copy and revert it in the primary checkout. Then run
-  this command again.
-- **The plan's own path, or a plan that depends on it, has uncommitted changes:** someone else is
-  editing it; ask the user how to handle them.
-- Never force the move, edit the other copy yourself to make the check pass, or reset a branch.
+- **Another clone changed this plan, or a pending local commit conflicts:** read the plan again and
+  rerun, or for a pending commit show the user both versions; see "Plan store" in `/plan-write`'s
+  `references/plan-schema.md`.
+- **The plan's own path, or a plan that depends on it, has uncommitted changes in the plans
+  worktree:** someone wrote there directly; ask the user how to handle them.
+- Never force the move or reset a branch.
 
 ### 4. Leave the work in place
 
@@ -110,5 +95,5 @@ Do not:
 - archive a plan whose work has landed;
 - remove, reset, or delete a worktree or branch without the user's explicit authorization;
 - add archive fields to the frontmatter;
-- push or merge;
+- merge a code branch;
 - archive more than the one named plan.

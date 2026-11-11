@@ -66,7 +66,7 @@ Each user reference below has a maintainer companion for module maps, routes, an
 
 ## Maintenance Notes
 
-Use live reference docs for current behavior. Files under `docs/plans/` are working notes or
+Use live reference docs for current behavior. Plans on the `repo-plans` branch are working notes or
 historical implementation records; they can explain why a decision happened, but they should not be
 the only source for current behavior.
 
