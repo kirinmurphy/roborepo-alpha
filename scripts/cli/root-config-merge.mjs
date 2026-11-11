@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { isMainModule } from "./roots.mjs";
+import { PERMISSION_BLOCK_BEGIN, PERMISSION_BLOCK_END, ownedTable } from "../harnesses/permissions-render.mjs";
 
 function isPlainObject(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -232,13 +233,27 @@ export function mergeCodexConfig(repoText, localText) {
     out.push(...mergeTomlSection(repoSection, localSection), "");
   }
 
+  const regenerated = permissionBlockTables(localText);
   for (const localSection of localSections) {
-    if (emitted.has(localSection.header)) continue;
+    if (emitted.has(localSection.header) || regenerated.has(localSection.header)) continue;
     out.push(...localSection.lines, "");
   }
 
   const output = out.join("\n").trimEnd();
   return `${output}\n`;
+}
+
+// Tables the live file's generated permissions block owns. The permissions render rebuilds them after
+// this merge, from the repo the update runs in, so a template without one (workspace roots, which are
+// per-repo) must not make the merge keep the live copy as a user table: it would land below the block
+// and the render would add a second, which Codex refuses as a duplicate table.
+function permissionBlockTables(localText) {
+  const start = localText.indexOf(PERMISSION_BLOCK_BEGIN);
+  const finish = localText.indexOf(PERMISSION_BLOCK_END);
+  if (start === -1 || finish < start) return new Set();
+  return new Set(splitTomlSections(localText.slice(start, finish))
+    .map((section) => section.header)
+    .filter((header) => header && ownedTable(header.replace(/^\[+\s*|\s*\]+$|"/g, ""))));
 }
 
 // Split at value boundaries, not physical lines. Brackets and table-looking lines inside quoted

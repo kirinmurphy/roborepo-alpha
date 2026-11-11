@@ -12,8 +12,10 @@
 import os from "node:os";
 import { codexCredentialPermissions } from "./codex/credential-permissions.mjs";
 
-const begin = "# BEGIN GENERATED AGENT PERMISSIONS";
-const end = "# END GENERATED AGENT PERMISSIONS";
+export const PERMISSION_BLOCK_BEGIN = "# BEGIN GENERATED AGENT PERMISSIONS";
+export const PERMISSION_BLOCK_END = "# END GENERATED AGENT PERMISSIONS";
+const begin = PERMISSION_BLOCK_BEGIN;
+const end = PERMISSION_BLOCK_END;
 
 // Merge personal overrides (keyed by behavior id) on top of the manifest's default buckets for
 // the small set of named behaviors. Returns a NEW array; never mutates the manifest's own
@@ -119,7 +121,7 @@ function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoo
 
 // Keys and tables the generated block owns, in this format and the older CODEX PERMISSIONS one.
 const OWNED_ROOT_KEYS = new Set(["approval_policy", "default_permissions", "sandbox_mode"]);
-const ownedTable = (name) => name === "sandbox_workspace_write" || name === "permissions" || name.startsWith("permissions.");
+export const ownedTable = (name) => name === "sandbox_workspace_write" || name === "permissions" || name.startsWith("permissions.");
 
 // TOML requires top-level keys before the first table, and this block carries tables, so the block
 // sits exactly where another tool adds a new top-level key. Codex placed the user's `notify` hook
