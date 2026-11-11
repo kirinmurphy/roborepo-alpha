@@ -252,18 +252,18 @@ describe the distinction between ordinary merges and owner access.
 
 ## Not tested
 
-- [ ] Exercise GitHub mutations with authenticated credentials against an authorized feature PR.
-      Disposable Git repositories and a fake GitHub CLI covered success and refusal behavior.
-      The local GitHub login reports an invalid token. Native Codex policy assertions passed
-      16/16. Claude and Gemini default projections were asserted, while their live command
-      prompt suppression remains unverified.
-- [ ] Exercise the GitHub delivery commands on Windows. The POSIX fake-executable checks
-      skip on Windows, while fetch fixture checks remain cross-platform.
+- [ ] Mark a draft PR ready with `roborepo delivery pr-ready`, and rerun a real failed CI run
+      with `roborepo delivery retry-ci <run-id>`. Live `fetch`, `pr-body`, and the `retry-ci`
+      refusal for an in-progress run passed against PR 63 (see Verification). The session's
+      permission check refused a live `pr-ready` call, and PR 63 is not a draft and has no
+      failed run. Live command-prompt suppression in Claude and Gemini is also still unverified.
 - [ ] The owner verifies all three required checks, ordinary merge blocking, and the admin
       bypass on the next authorized lifecycle push.
-- [ ] In a fresh Claude desktop session after `roborepo update`, enter an existing linked
-      worktree with `EnterWorktree({ path })`. Confirm the session stays filed under the primary
-      checkout and edits proceed without per-file folder prompts.
+- [ ] In a Claude desktop session in the default permission mode, enter an existing linked
+      worktree with `EnterWorktree({ path })` and confirm edits there proceed without per-file
+      folder prompts. On 2026-11-11 a session in auto mode entered this plan's worktree that way.
+      The app still filed it under the primary checkout (`cwd` unchanged in session metadata),
+      and its edits ran without prompts. Auto mode alone may explain the missing prompts, though.
 
 ## Documentation impact
 
@@ -325,6 +325,9 @@ describe the distinction between ordinary merges and owner access.
   commands now so agents avoid raw-command prompts. Kept generic because the plan's Proposed design
   fixes the rule's wording and assigns the command forms to the delivery follow-up (`i5mnkm7z`),
   and the guarded commands are GitHub-only while the rule applies to any remote.
+- User decision (2026-11-11): Windows verification of the GitHub delivery commands is deferred
+  to Windows Test Environment and Behavior Parity (`l1mz96d9`), which collects Windows checks.
+  A task there now covers it, so it is no longer a Not tested entry here.
 
 ## Open Questions
 
@@ -357,6 +360,12 @@ describe the distinction between ordinary merges and owner access.
 
 ### Verification
 
+- Live GitHub (2026-11-11, PR 63 at 2cf0dd68, authenticated `gh`): `roborepo delivery fetch
+  origin` refreshed `refs/remotes/origin/*`. `pr-body` rewrote the PR's empty body with the same
+  empty content, and read-back showed the body and head unchanged. `retry-ci` on the in-progress
+  run 43086685164 was refused with exit 1 before any mutation. No new regression test was added:
+  these paths need real GitHub credentials, and `delivery-operations-check.mjs` already asserts
+  the same arguments and refusals against a fake GitHub CLI.
 - Current (2026-11-11, Claude session, at d9bb970d): the
   four previously blocked scoped checks (`delivery-operations-check`,
   `repositories-branch-sync-check`, `cli-command-catalog-check`,
