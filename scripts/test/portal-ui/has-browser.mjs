@@ -8,6 +8,13 @@
 // unlike, say, checking that the `playwright` npm package is present (it is: it's a devDependency).
 
 import fs from "node:fs";
-import { chromium } from "@playwright/test";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { ensureDevDependencies } from "./ensure-deps.mjs";
+
+// Playwright must be installed before it can report where Chromium lives.
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+if (!ensureDevDependencies(repoRoot)) process.exit(1);
+const { chromium } = await import("@playwright/test");
 
 process.exit(fs.existsSync(chromium.executablePath()) ? 0 : 1);

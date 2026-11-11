@@ -53,6 +53,7 @@
     "portal-dev-fixtures-startup-check.mjs",
     "portal-pages-check.mjs",
     "portal-ui-host-isolation-check.mjs",
+    "portal-ui-deps-check.mjs",
     "portal-surface-layers-check.mjs",
     "repositories-sources-check.mjs",
     "repository-overview-check.mjs",
