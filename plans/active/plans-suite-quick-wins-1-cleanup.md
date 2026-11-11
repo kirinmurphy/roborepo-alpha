@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Resolve the session restriction on removing temporary directories, rerun the blocked checks, and resume /plan-execute.
+next_action: Run /plan-review on the submitted implementation; the owner applies the required-check ruleset settings under Open Questions.
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7"]
@@ -252,12 +252,6 @@ describe the distinction between ordinary merges and owner access.
 
 ## Not tested
 
-- [ ] Rerun `node scripts/test/delivery-operations-check.mjs`,
-      `node scripts/test/repositories-branch-sync-check.mjs`,
-      `node scripts/test/cli-command-catalog-check.mjs`,
-      `node scripts/test/permissions-render-live-characterization-check.mjs`, and
-      `npm run check` in a session that permits removal of disposable directories.
-      Scoped reruns still exit with EPERM during cleanup. The full gate stops in the CLI suite.
 - [ ] Exercise GitHub mutations with authenticated credentials against an authorized feature PR.
       Disposable Git repositories and a fake GitHub CLI covered success and refusal behavior.
       The local GitHub login reports an invalid token. Native Codex policy assertions passed
@@ -265,8 +259,6 @@ describe the distinction between ordinary merges and owner access.
       prompt suppression remains unverified.
 - [ ] Exercise the GitHub delivery commands on Windows. The POSIX fake-executable checks
       skip on Windows, while fetch fixture checks remain cross-platform.
-
-
 - [ ] The owner verifies all three required checks, ordinary merge blocking, and the admin
       bypass on the next authorized lifecycle push.
 - [ ] In a fresh Claude desktop session after `roborepo update`, enter an existing linked
@@ -321,14 +313,16 @@ describe the distinction between ordinary merges and owner access.
 - Procedural rule and doc edits used subagents with the current session model. The named
   Claude-only cheaper model was unavailable in this harness. The shared wording is now portable.
 
+- Resolved: the earlier EPERM verification blocker came from the previous session's sandbox.
+  A Claude session on 2026-11-11 removed disposable directories normally, and every blocked
+  scoped check and the full gate then ran (see Verification).
+- `plan-store-commands` on main already allows `preflight`, `approval`, `merge-readiness`,
+  `landed`, `order`, `promote`, `start`, `submit`, `reopen`, `close`, and `archive`, so the new
+  `plan-lifecycle` behavior adds only `sync-base` and `stop-servers`. Archive and close keep their
+  approval gates inside the skills, not as command prompts; the existing allow was left as is.
+
 ## Open Questions
 
-- Verification is blocked by directory removal returning EPERM, including after escalation.
-  The same existing CLI catalog check fails on unchanged main at its cleanup step. Required
-  full and scoped checks must be rerun after the session restriction is resolved. This blocks
-  completion and submission, so the plan stays active.
-  On the resumed run, directory removal also failed in the linked worktree, and Docker
-  socket access was denied even with expanded permissions.
 - The owner must confirm or configure Always allow bypass, retain the existing one-approval
   review policy, and add the three required checks with up-to-date enforcement off.
   After confirmation, read the ruleset again and verify ordinary merge blocking and the next
@@ -343,9 +337,24 @@ describe the distinction between ordinary merges and owner access.
       target. Fix compares a fresh local delivery target, including upstream remote, merge ref,
       fetch URL, and push URL, and adds four refusal regressions. All operation assertions
       completed after the fix, followed by the same EPERM cleanup blocker.
+- [x] Pass line printed before the new projection assertions in
+      `codex-command-permission-check.mjs` — fixed (d9bb970d)
+- [x] Stale plan record: EPERM Not tested entry, EPERM Open Question, `next_action`, superseded
+      gate results, and the pre-existing lifecycle allows — fixed in this plan update
 
 ### Verification
 
+- Current (2026-11-11, Claude session, at d9bb970d): the
+  four previously blocked scoped checks (`delivery-operations-check`,
+  `repositories-branch-sync-check`, `cli-command-catalog-check`,
+  `permissions-render-live-characterization-check`) passed, cleanup included. `npm run check`
+  passed 73/77 suites with doctor passing; the four browser suites failed only with
+  ERR_MODULE_NOT_FOUND because the worktree had no installed dependencies, and all four passed
+  after `npm ci`. The EPERM, rollback-assertion, and "full gate blocked" entries below are
+  superseded by this run.
+- Validation pass 3 (fresh-context subagent) found no code defects. Its fixes were stale plan
+  records and the order of the pass line in `codex-command-permission-check.mjs` (fixed in
+  d9bb970d, rerun passed).
 - On the resumed run, delivery and branch-sync assertions reached their success messages
   before exiting at fixture cleanup. The catalog and live permissions checks also stopped
   at fixture cleanup. The standalone directory removal probe returned EPERM with expanded
