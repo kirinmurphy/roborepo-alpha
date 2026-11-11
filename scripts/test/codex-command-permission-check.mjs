@@ -63,7 +63,6 @@ for (const reviewer of ["user", "auto_review"]) {
   const config = renderCodexConfig(`approvals_reviewer = "${reviewer}"\n`, manifest.behaviors, [], "fixture");
   assert.match(config, new RegExp(`approvals_reviewer = "${reviewer}"`));
 }
-console.log("codex-command-permission-check passed");
 
 // Assert shipped defaults in clean projections, independent of local provider overrides.
 const { claudePermissions } = await import("../harnesses/permissions-render.mjs");
@@ -100,4 +99,4 @@ for (const subcommand of ["archive", "close"]) {
 }
 assert.ok(!claude.allow.includes("Bash(roborepo delivery:*)"));
 assert.ok(!claude.allow.includes("Bash(roborepo plans:*)"));
-console.log("Guarded delivery projections passed for Claude, Codex, and Gemini.");
+console.log("codex-command-permission-check passed, including guarded delivery projections for Claude, Codex, and Gemini.");
