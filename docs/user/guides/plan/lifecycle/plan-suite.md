@@ -488,7 +488,7 @@ With the suite enabled, the Copy menu offers these commands.
 | Review | **Review** (`/plan-review`), **Fix findings** (`/plan-execute`), **Close** (`/plan-close`), **Archive** (`/plan-archive`) |
 | Completed, Archived, or Unclassified | — |
 
-Use `/plan-write` in an agent chat to update an existing plan. **Copy Document Filename** is
+Use `/plan-write` in an agent chat to update an existing plan. **Copy file path** is
 available in every Copy menu. With the suite disabled, the menu offers a **Repo-aware prompt**
 in place of the workflow actions.
 

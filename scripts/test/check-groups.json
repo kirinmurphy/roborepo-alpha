@@ -26,6 +26,7 @@
     "pre-push-gate-check.mjs",
     "minimize-bash-output-check.mjs",
     "codex-command-permission-check.mjs",
+    "agent-permission-defaults-check.mjs",
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",
     "hook-review-cli-check.mjs",
