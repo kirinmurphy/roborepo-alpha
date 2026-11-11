@@ -81,13 +81,13 @@ effective-rules endpoint, `GET /repos/{owner}/{repo}/rules/branches/repo-plans`.
 active rule from every ruleset that targets the branch, and it needs only read access. A rule
 removed on GitHub therefore brings the button back, and protection added by hand hides it.
 
-| State | Condition | CLI | Plans page |
+| State | Condition | `plans protect --check` | Plans page |
 | --- | --- | --- | --- |
 | `protected` | All three rules apply and no push-blocking rule does | Reports it; exit 0 | Nothing |
-| `missing` | One or more of the three rules is absent; lists which | Reports which | Warning line with **Protect** |
+| `missing` | One or more of the three rules is absent | Lists the absent rules; exit 1 | Warning line with **Protect** |
 | `conflicting` | A rule that refuses direct pushes applies (`pull_request`, `required_status_checks`, `update`) | Names the rule and its ruleset; exit 1 | Warning line naming it, no button |
-| `unavailable` | `gh` missing, not signed in, or GitHub unreachable | Gives the reason | Warning line with the reason and the CLI command, no button |
-| `unsupported` | The remote is not GitHub | Prints the manual steps | Nothing |
+| `unavailable` | `gh` missing, not signed in, or GitHub unreachable | Gives the reason; exit 1 | Warning line with the reason and the CLI command, no button |
+| `unsupported` | The remote is not GitHub | Prints the manual steps; exit 1 | Nothing |
 
 ### The command
 
