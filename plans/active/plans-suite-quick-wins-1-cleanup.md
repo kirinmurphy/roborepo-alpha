@@ -320,6 +320,11 @@ describe the distinction between ordinary merges and owner access.
   `landed`, `order`, `promote`, `start`, `submit`, `reopen`, `close`, and `archive`, so the new
   `plan-lifecycle` behavior adds only `sync-base` and `stop-servers`. Archive and close keep their
   approval gates inside the skills, not as command prompts; the existing allow was left as is.
+- The shared delivery rule keeps generic wording (refresh tracking refs, open or update the PR)
+  rather than naming `roborepo delivery fetch|pr-body|pr-ready`. Alternative: name the guarded
+  commands now so agents avoid raw-command prompts. Kept generic because the plan's Proposed design
+  fixes the rule's wording and assigns the command forms to the delivery follow-up (`i5mnkm7z`),
+  and the guarded commands are GitHub-only while the rule applies to any remote.
 
 ## Open Questions
 
@@ -341,6 +346,14 @@ describe the distinction between ordinary merges and owner access.
       `codex-command-permission-check.mjs` — fixed (d9bb970d)
 - [x] Stale plan record: EPERM Not tested entry, EPERM Open Question, `next_action`, superseded
       gate results, and the pre-existing lifecycle allows — fixed in this plan update
+- [x] `plan-suite.md` named a nonexistent **Copy Document Filename** menu item — renamed to
+      **Copy file path**, the portal's label (2cf0dd68)
+- [x] Claude and Gemini default-projection assertions lived in a Codex-named check — moved to
+      `agent-permission-defaults-check.mjs` and registered in `check-groups.json` (2cf0dd68)
+- [x] Stale Verification lines (five Not tested advisories, live characterization EPERM) —
+      marked superseded in this plan update
+- [x] The delivery rule does not name the guarded `roborepo delivery` commands — kept as
+      designed; see Decision Log
 
 ### Verification
 
@@ -350,8 +363,12 @@ describe the distinction between ordinary merges and owner access.
   `permissions-render-live-characterization-check`) passed, cleanup included. `npm run check`
   passed 73/77 suites with doctor passing; the four browser suites failed only with
   ERR_MODULE_NOT_FOUND because the worktree had no installed dependencies, and all four passed
-  after `npm ci`. The EPERM, rollback-assertion, and "full gate blocked" entries below are
-  superseded by this run.
+  after `npm ci`. Every EPERM, rollback-assertion, "full gate blocked", and "five Not tested
+  advisories / kept active" entry below is superseded by this run.
+- Validation pass 4 (fresh-context subagent) at d9bb970d found three fixes (Copy menu label,
+  provider-neutral permission check, stale Verification lines) and one escalation, decided per the
+  Decision Log. Fixes in 2cf0dd68; `codex-command-permission-check`,
+  `agent-permission-defaults-check`, `orphan-test-check`, and `docs-reference-check` passed.
 - Validation pass 3 (fresh-context subagent) found no code defects. Its fixes were stale plan
   records and the order of the pass line in `codex-command-permission-check.mjs` (fixed in
   d9bb970d, rerun passed).
