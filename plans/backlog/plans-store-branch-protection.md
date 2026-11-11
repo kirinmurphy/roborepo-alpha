@@ -250,7 +250,10 @@ It opens a panel that fetches the current status and shows it in full:
 - the state, and each rule missing or drifted;
 - covered hand-made rulesets;
 - **Protect** for admins, or the command for an admin to run;
-- **Skip merge rules** / **Use merge rules** for the merge policy.
+- **Skip merge rules** / **Use merge rules** for admins, through the same write route as
+  **Protect**. **Skip merge rules** asks for confirmation first, naming what turns off: the required
+  approval and the required CI checks on the default branch. The plans and integrity rules stay on.
+  Non-admins see `skipped` and the command an admin would run.
 
 **Protect** in either place runs the same flow as the command.
 
@@ -333,7 +336,10 @@ records each request.
   - the notice shows once for `missing`, and a reload with the same state does not show it again;
   - changing the fake from non-admin to admin brings the notice back with **Protect**;
   - **Protect** clears the notice and the panel reads `protected`;
-  - the ⋮ **Branch protection** item opens the panel in every state.
+  - the ⋮ **Branch protection** item opens the panel in every state;
+  - **Skip merge rules** writes nothing until the confirmation is accepted, then the panel reads
+    `skipped`, and **Use merge rules** restores `protected`;
+  - a non-admin sees no skip buttons, only the state and the command.
 - `node scripts/test/docs-reference-check.mjs` passes.
 
 Manual, on a scratch GitHub repo where the user is admin:
@@ -398,15 +404,12 @@ Manual, on a scratch GitHub repo where the user is admin:
   request it pushed last. Part 01 now relies on `roborepo-main-merge` for that rule.
 - Portal routes join the per-repo routes in `portal-routes-repositories.mjs` as
   `/api/repositories/:id/protection`, matching `worktree-cleanup/dismiss`.
+- 2026-11-11, user: the merge-policy opt-out is available both from the CLI (`--skip` /
+  `--unskip`) and from the portal panel for admins. The alternative was CLI-only, which saves a
+  button pair and its tests. The portal already has the write route for **Protect**, so the toggle
+  costs little, and a confirmation step guards the one action that loosens protection.
 
 ## Open questions
-
-- Whether the merge-policy opt-out needs `--skip`/`--unskip` and the panel's **Skip merge rules**
-  buttons, or only the read rule: a disabled `roborepo-main-merge` reads as `skipped`, and the owner
-  disables it on GitHub's ruleset page. The read-only form drops two flags, two buttons, a write
-  path, and their tests, but loses the in-app toggle and skipping before the first apply.
-  Recommendation: keep the CLI flags and drop the portal buttons; the panel shows `skipped` and the
-  command. Decide before `/plan-promote`.
 
 - Whether rulesets are enforced on private repos under the owner's GitHub plan. If they are not,
   the command needs an `unsupported` reason for that case. The first implementation task settles it.
