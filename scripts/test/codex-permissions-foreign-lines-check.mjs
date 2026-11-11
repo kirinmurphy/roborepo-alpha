@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderCodexConfig, resolveArbitraryCommands, resolveBehaviors } from "../harnesses/permissions-render.mjs";
+import { mergeCodexConfig } from "../cli/root-config-merge.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifests", "inventory", "agent-permissions.json"), "utf8"));
@@ -87,5 +88,19 @@ for (const bucket of ["allow", "deny"]) {
   assert.match(after(output), /\[notice\.model_migrations\]/);
   assert.match(before(renderProfile(realLayout)), /^notify =/m);
   assert.equal(renderProfile(output), output);
+}
+// `roborepo update` merges the repo's template into the live file, then renders the block. The
+// template carries no workspace roots, because they come from the repo the update runs in. The merge
+// must not carry the live block's roots table out of the block as a setting of the user's own, or the
+// render adds a second copy and Codex refuses the duplicate table.
+const template = fs.readFileSync(path.join(repoRoot, "generated", "codex", "config.toml"), "utf8");
+assert.doesNotMatch(template, /workspace_roots/, "the template has no roots, as in a real update");
+const firstUpdate = render(template);
+let live = `${firstUpdate}\n[tui]\nstatus_line = ["model-with-reasoning"]\n`;
+for (let update = 2; update <= 3; update += 1) {
+  live = render(mergeCodexConfig(template, live));
+  assert.equal((live.match(/^\[permissions\.managed-workspace\.workspace_roots\]$/gm) || []).length, 1, `update ${update} keeps one roots table`);
+  assert.doesNotMatch(after(live), /\[permissions\./, `update ${update} leaves no block-owned table below the block`);
+  assert.match(after(live), /\[tui\]\nstatus_line/, `update ${update} keeps the user's own table`);
 }
 console.log("codex-permissions-foreign-lines ok");
