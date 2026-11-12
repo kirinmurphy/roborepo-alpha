@@ -63,7 +63,11 @@ async function localDeliveryTarget(cwd) {
   const remote = await git(cwd, ["config", "--get", `branch.${branch}.remote`]);
   await requireConfiguredRemote(cwd, remote);
   const upstream = await git(cwd, ["config", "--get-all", `branch.${branch}.merge`]);
-  if (upstream !== `refs/heads/${branch}`) throw new Error(`Upstream must name the current branch: ${upstream || "none"}, expected refs/heads/${branch}`);
+  if (upstream !== `refs/heads/${branch}`) {
+    // The merge setting is free-form config and can hold a credentialed URL; print only a ref.
+    const shown = /^refs\/[A-Za-z0-9._/-]+$/.test(upstream) ? upstream : upstream ? "a non-ref value (not printed)" : "none";
+    throw new Error(`Upstream must name the current branch: ${shown}, expected refs/heads/${branch}`);
+  }
   const fetchUrls = await git(cwd, ["remote", "get-url", "--all", remote]);
   const pushUrls = await git(cwd, ["remote", "get-url", "--push", "--all", remote]);
   const githubTransport = /^(?:https:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com\/|git@github\.com:)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;

@@ -123,6 +123,11 @@ try {
     }
 
     const secret = "ghp_deliveryCheckSecret";
+    git(checkout, "config", "branch.feature/check.merge", `https://x-access-token:${secret}@github.com/example/project`);
+    const credentialedMerge = runDelivery(["pr-ready"]);
+    refused(credentialedMerge, /Upstream must name the current branch: a non-ref value \(not printed\)/);
+    assert.ok(!credentialedMerge.stderr.includes(secret), "a refusal never prints a credentialed merge setting");
+    git(checkout, "config", "branch.feature/check.merge", "refs/heads/feature/check");
     for (const url of [
       `https://x-access-token:${secret}@github.com/example/project.git`,
       `https://me@example.com:${secret}@github.com/example/project.git`,
