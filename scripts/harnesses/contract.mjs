@@ -10,7 +10,7 @@ export const HARNESS_CAPABILITIES = Object.freeze([
   "slash-commands",
   "hooks",
   "mcp",
-  "package-config",
+  "config-edit",
   "telemetry-capture",
   "telemetry-rate-limits",
   "telemetry-transcripts",
@@ -42,7 +42,9 @@ export const CAPABILITY_REQUIRED_METHODS = Object.freeze({
   // write: "remove" was already claimed by bulk-removal semantics first, so reusing it
   // for a single-server op would make one name mean two different things depending on caller.
   mcp: { group: "mcp", methods: ["add", "remove", "addServer", "removeServer", "list"] },
-  "package-config": { group: "rootConfig", methods: ["mergePackageComponent", "unmergePackageComponent"] },
+  // Path-based get/set/delete on the root config's own format (JSON, TOML), text in and text out.
+  // Package config patches are built on it, so a provider never carries one package's setting.
+  "config-edit": { group: "configEdit", methods: ["get", "set", "delete"] },
   "telemetry-capture": { group: "telemetry", methods: ["wireCaptureHooks"] },
   "telemetry-rate-limits": { group: "telemetry", methods: ["parseRateLimits"] },
   "telemetry-transcripts": { group: "transcripts", methods: ["locate", "parse"] },

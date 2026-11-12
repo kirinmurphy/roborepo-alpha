@@ -321,8 +321,8 @@ test.describe("Agents page", () => {
     pkg.status = "external";
     pkg.componentStatus = [
       { type: "mcp", id: "context7", state: "external" },
-      { type: "harness-config", id: "claude/statusline.json", state: "external" },
-      { type: "harness-config", id: "codex/status-line.json", state: "external" },
+      { type: "config-patch", id: "status line", state: "external" },
+      { type: "config-patch", id: "status line", state: "external" },
     ];
     // Rebuilt by the server's own view builder, so this covers its copy as well as the card.
     snapshot.behaviorView = buildBehaviorView(snapshot);

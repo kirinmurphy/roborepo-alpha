@@ -145,7 +145,7 @@ Each capability maps to a required adapter group and method set, defined in
 | `slash-commands` | `commands` | `render` |
 | `hooks` | `hooks` | `read`, `write`, `merge`, `unmerge` |
 | `mcp` | `mcp` | `add`, `remove`, `addServer`, `removeServer`, `list` |
-| `package-config` | `rootConfig` | `mergePackageComponent`, `unmergePackageComponent` |
+| `config-edit` | `configEdit` | `get`, `set`, `delete` (text in, text out, on the root config's own format) |
 | `telemetry-capture` | `telemetry` | `wireCaptureHooks` |
 | `telemetry-rate-limits` | `telemetry` | `parseRateLimits` |
 | `telemetry-transcripts` | `transcripts` | `locate`, `parse` |

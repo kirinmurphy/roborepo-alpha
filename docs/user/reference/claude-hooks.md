@@ -23,8 +23,13 @@ Caveman mode on Claude comes from the `caveman` plugin, not a hook.
 ## Protected Branches
 
 Agents can push to feature branches without a prompt. They cannot push to a protected branch:
-`main`, `master`, the remote's default branch, and any names in the `ROBOREPO_PROTECTED_BRANCHES`
-environment variable (comma-separated). They cannot force-push to any branch.
+`main`, `master`, the remote's default branch, any names in the `ROBOREPO_PROTECTED_BRANCHES`
+environment variable (comma-separated), and `repo-plans`, the plans store branch. They cannot
+force-push to any branch.
+
+`repo-plans` changes only through `roborepo plans` commands, which run their own Git with hooks off.
+So the same hooks also refuse a hand-made commit or merge commit in a checkout of `repo-plans`: the
+`pre-commit` and `pre-merge-commit` hooks in the same folder stop it before it is recorded.
 
 The permission settings leave `git push` at **ask**. The protected-branch hook is what approves a
 push, and only one it has checked. So an install without the hooks, a harness without them (Gemini),

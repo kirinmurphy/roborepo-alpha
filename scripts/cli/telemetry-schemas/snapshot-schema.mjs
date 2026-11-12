@@ -73,7 +73,7 @@ export function buildEffectiveSnapshot(configSnapshot, { harness = null, harness
   const unavailable = ["hook_command_strings", "mcp_server_registration", "rules", "commands", "feature_flags"];
   if (harness === "codex") unavailable.push("codex_config_toml_parsed");
 
-  const ambientTypes = new Set(["rules", "hooks", "permissions", "codex_tool_approvals", "mcp", "plugin", "harness-config", "service", "runtime-asset"]);
+  const ambientTypes = new Set(["rules", "hooks", "mcp", "config-patch", "service", "runtime-asset"]);
   const packages = configSnapshot.packages || [];
   const ambientPackages = packages.filter((pkg) => pkg.enabled && (pkg.resources || []).some((type) => ambientTypes.has(type)))
     .map((pkg) => ({ id: pkg.id, resources: [...new Set(pkg.resources.filter((type) => ambientTypes.has(type)))].sort() })).sort((a, b) => a.id.localeCompare(b.id));

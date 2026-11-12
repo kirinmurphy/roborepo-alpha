@@ -23,7 +23,8 @@ const gitHooks = path.join(repoRoot, "globals/system/git-hooks");
 // other. The git hooks have one source, installed into each harness home.
 assert.equal(fs.readFileSync(path.join(codexHooks, "protected-branch-push.mjs"), "utf8"), fs.readFileSync(hook, "utf8"),
   "protected-branch-push.mjs differs between Claude and Codex");
-for (const name of fs.readdirSync(gitHooks).filter((name) => name !== "chain.sh")) {
+// The .sh files are helpers the hooks source, not hooks git runs.
+for (const name of fs.readdirSync(gitHooks).filter((name) => !name.endsWith(".sh"))) {
   assert.ok(fs.statSync(path.join(gitHooks, name)).mode & 0o111, `git hook ${name} is executable`);
 }
 
@@ -104,6 +105,10 @@ const cases = [
   ["git push origin :main", "deny"],
   ["git push origin --delete main", "deny"],
   ["git push origin master", "deny"],
+  // The plans store branch: only `roborepo plans` pushes it, with hooks off.
+  ["git push origin repo-plans", "deny"],
+  ["git push origin HEAD:repo-plans", "deny"],
+  ["git push origin --delete repo-plans", "deny"],
   // The remote's default branch is protected even when it is not named main or master.
   ["git push origin feat:trunk", "deny"],
   ["git -C . push origin main", "deny"],
@@ -298,6 +303,23 @@ gitOk(work, "remote", "set-head", "origin", "trunk");
 // Without the agent override, the same push goes through: the backstop only applies to agent shells.
 r = git(work, ["push", "-q", "origin", "feature:main"]);
 assert.equal(r.status, 0, `a human push is not affected: ${r.stderr}`);
+
+// The plans store branch is refused by the backstop too, and so are hand-made commits and merges in a
+// checkout of it. `roborepo plans` runs its own Git with hooks off, so only hand-made ones get here.
+r = git(work, ["push", "-q", "origin", "HEAD:repo-plans"], agentEnv);
+assert.notEqual(r.status, 0, "pushing to repo-plans should be refused");
+assert.match(r.stderr, /plans store/, "the refusal names the plans store");
+gitOk(work, "switch", "-q", "-c", "repo-plans", "HEAD~1");
+r = git(work, ["commit", "-q", "--allow-empty", "-m", "by hand"], agentEnv);
+assert.notEqual(r.status, 0, "a commit on repo-plans should be refused");
+assert.match(r.stderr, /roborepo plans/, "the commit refusal points at the plans commands");
+r = git(work, ["merge", "-q", "--no-ff", "--no-edit", "feature"], agentEnv);
+assert.notEqual(r.status, 0, "a merge commit on repo-plans should be refused");
+assert.match(r.stderr, /plans store/);
+gitOk(work, "merge", "--abort");
+gitOk(work, "switch", "-q", "feature");
+assert.equal(git(work, ["commit", "-q", "--allow-empty", "-m", "elsewhere"], agentEnv).status, 0, "other branches still commit");
+gitOk(work, "branch", "-q", "-D", "repo-plans");
 
 // The repo's own hooks still run under the override, from .git/hooks or its own core.hooksPath.
 const log = path.join(tmp, "hook.log");

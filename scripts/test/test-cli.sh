@@ -144,7 +144,7 @@ workspace_resource_root="${work}/workspace-resource"
 mkdir -p "${workspace_resource_home}" "${workspace_resource_root}/skills/custom-skill" "${workspace_resource_root}/commands" "${workspace_resource_root}/packages/workspace-pack"
 printf -- '---\nname: custom-skill\ndescription: custom\n---\n' > "${workspace_resource_root}/skills/custom-skill/SKILL.md"
 printf 'custom command\n' > "${workspace_resource_root}/commands/custom-command.md"
-printf '%s\n' '{"schemaVersion":1,"id":"workspace-pack","label":"Workspace Pack","description":"Workspace pack.","lifecycle":"optional","presentation":{"category":"skills-dev-lifecycle","order":100},"resources":[{"type":"permissions","allow":["Bash(echo:*)"]}]}' > "${workspace_resource_root}/packages/workspace-pack/package.config.json"
+printf '%s\n' '{"schemaVersion":1,"id":"workspace-pack","label":"Workspace Pack","description":"Workspace pack.","lifecycle":"optional","presentation":{"category":"skills-dev-lifecycle","order":100},"resources":[{"type":"config-patch","harness":"claude","patches":[{"op":"union","path":["permissions","allow"],"value":["Bash(echo:*)"]}]}]}' > "${workspace_resource_root}/packages/workspace-pack/package.config.json"
 assert "workspace resources: validate accepts custom typed resources" \
   bash -c "HOME='${workspace_resource_home}' ROBOREPO_STATE_ROOT='${workspace_resource_home}/.roborepo' ROBOREPO_WORKSPACE_ROOT='${workspace_resource_root}' node '${cli}' workspace validate >/dev/null"
 assert "workspace resources: package catalog includes workspace package" \
@@ -563,7 +563,7 @@ assert "config: Claude rules use managed inline block" \
 assert "config: package snapshot includes runtime status and component status" \
   bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-tool');process.exit(p?.enabled===true&&p?.status==='partial'&&Array.isArray(p.componentStatus)&&p.componentStatus.some(x=>x.type==='mcp'&&x.state==='missing')?0:1)})\""
 assert "config: package snapshot tracks package-owned Codex tool approvals" \
-  bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-tool');process.exit(p?.componentStatus?.some(x=>x.type==='codex_tool_approvals'&&x.state==='present')?0:1)})\""
+  bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-tool');process.exit(p?.componentStatus?.some(x=>x.type==='config-patch'&&x.id==='tool approvals'&&x.state==='present')?0:1)})\""
 bash -c "${cfg_env} node '${fixture_cli}' package disable fixture-tool >/dev/null 2>&1" || true
 assert "config: disable removes package permissions" \
   bash -c "[ \"\$(node -e \"console.log((require('${cfg_home}/.claude/settings.json').permissions?.allow||[]).length)\")\" = 0 ]"
@@ -1716,20 +1716,10 @@ assert "harness: CLI list/inspect/refresh/enable/disable end to end" \
 assert "harness: root-config merge characterization" \
   node "${repo_root}/scripts/test/root-config-merge-characterization-check.mjs"
 
-# Package-harness-config characterization: pins mergeHarnessConfig/
-# unmergeHarnessConfig's exact current behavior (Claude statusLine conflict preservation, Codex TUI
-# status_line array dedupe/table-creation-from-scratch, the color-scalar ownership-provenance
-# round-trip) BEFORE package-harness-config.mjs's orchestrator refactor. Must keep passing
-# unchanged through that refactor.
-assert "harness: package-harness-config characterization (pre-refactor baseline)" \
-  node "${repo_root}/scripts/test/package-harness-config-characterization-check.mjs"
-
-# Package-config round-trip: author a package config, enable it, disable
-# it, re-enable it, and assert the final state matches the first-enable state byte-for-byte, for
-# both Claude and Codex, including a Codex case with an unowned neighbor entry that must survive
-# the whole cycle untouched.
-assert "harness: package-config round-trip (enable/disable/enable parity)" \
-  node "${repo_root}/scripts/test/harness-package-config-roundtrip-check.mjs"
+# Package config patches: the JSON/TOML config editors and the set/union patch semantics
+# (conflict preservation, provenance restore, removing only owned items, round trip, probes).
+assert "harness: package config patches" \
+  node "${repo_root}/scripts/test/package-config-patches-check.mjs"
 
 # Claude mcp.remove adapter characterization: pins the ported behavior of
 # scripts/install/uninstall.sh's former remove_mcp_servers before uninstall.sh calls the adapter

@@ -3,7 +3,7 @@
 // (scripts/harnesses/claude/hooks-withdraw.mjs), ported from scripts/install/uninstall-lib.sh's
 // strip_package_hooks. Pins: strips hook entries matching a claude-harness "hooks" resource's
 // commands from every event array (deleting the event key entirely once empty), strips permission
-// allow-entries matching a "permissions" resource's allow list, both in one settings.json read/
+// allow-entries a Claude config patch adds to permissions.allow, both in one settings.json read/
 // write pass, and leaves unrelated hooks/permissions/settings keys untouched.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -13,7 +13,7 @@ import path from "node:path";
 import { makeAppRoot } from "./app-root-fixture.mjs";
 
 // hooksWriteRemove reads packages from the app root, so point it at an isolated copy carrying the
-// fixture-tool package (a claude hooks resource plus a permissions resource) before loading it.
+// fixture-tool package (a claude hooks resource plus a permissions config patch) before loading it.
 const appRoot = makeAppRoot({ prefix: "roborepo-hooks-write-remove-app-", fixturePackages: true });
 process.env.ROBOREPO_APP_ROOT = appRoot;
 process.on("exit", () => fs.rmSync(appRoot, { recursive: true, force: true }));
@@ -28,7 +28,9 @@ function testStripsRealPackageHooksAndPermissions() {
 
   const pkgConfig = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, "package.config.json"), "utf8"));
   const hooksResource = pkgConfig.resources.find((r) => r.type === "hooks" && r.harness === "claude");
-  const permissionsResource = pkgConfig.resources.find((r) => r.type === "permissions");
+  const permissionsResource = {
+    allow: pkgConfig.resources.find((r) => r.type === "config-patch" && r.label === "permissions").patches[0].value,
+  };
   const fragment = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, hooksResource.source), "utf8"));
   const firstEvent = Object.keys(fragment)[0];
   const firstCommand = fragment[firstEvent][0].hooks[0].command;
@@ -59,7 +61,9 @@ function testStrippingEveryAllowEntryKeepsOtherPermissionKeys() {
   const settingsPath = path.join(homePath, "settings.json");
 
   const pkgConfig = JSON.parse(fs.readFileSync(path.join(FIXTURE_DIR, "package.config.json"), "utf8"));
-  const permissionsResource = pkgConfig.resources.find((r) => r.type === "permissions");
+  const permissionsResource = {
+    allow: pkgConfig.resources.find((r) => r.type === "config-patch" && r.label === "permissions").patches[0].value,
+  };
 
   fs.writeFileSync(settingsPath, JSON.stringify({
     permissions: { allow: [...permissionsResource.allow], deny: ["Bash(rm -rf:*)"], ask: ["Bash(git push:*)"], defaultMode: "acceptEdits" },

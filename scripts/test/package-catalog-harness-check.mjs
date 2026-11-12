@@ -38,13 +38,13 @@ function writePackage(id, resource) {
   return root;
 }
 
-// harness-config resource with an unknown harness id must be rejected.
+// config-patch resource with an unknown harness id must be rejected.
+const patches = [{ op: "set", path: ["statusLine"], value: { type: "command", command: "x" } }];
 const badRoot = writePackage("bad-harness-pkg", {
-  type: "harness-config",
-  source: "hooks.json",
+  type: "config-patch",
   harness: "totally-not-a-real-harness",
+  patches,
 });
-fs.writeFileSync(path.join(badRoot, "hooks.json"), "{}");
 
 process.env.HOME = tmp;
 process.env.ROBOREPO_APP_ROOT = appRoot;
@@ -63,12 +63,11 @@ assert.throws(
 // Registered provider ids (claude, codex) must remain accepted — proves the swap from a hardcoded
 // Set to a registry lookup didn't narrow acceptance.
 fs.rmSync(badRoot, { recursive: true, force: true });
-const goodRoot = writePackage("good-harness-pkg", {
-  type: "harness-config",
-  source: "hooks.json",
+writePackage("good-harness-pkg", {
+  type: "config-patch",
   harness: "codex",
+  patches: [{ op: "union", path: ["tui", "status_line"], value: ["model"] }],
 });
-fs.writeFileSync(path.join(goodRoot, "hooks.json"), "{}");
 
 const catalog = loadPackageCatalog({ includeUnavailable: true });
 assert.ok(catalog.some((pkg) => pkg.id === "good-harness-pkg"), "package with a registered harness id must load");

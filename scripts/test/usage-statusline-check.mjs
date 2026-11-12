@@ -70,6 +70,12 @@ function runFormatter(input, env = {}) {
     const entrypoint = path.join(home, ".roborepo", "package-runtime", "usage-statusline", "claude-statusline.mjs");
     const settings = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
     assert.equal(settings.statusLine.command, `node "${entrypoint}"`, "Claude command references managed entrypoint");
+    const installedRun = spawnSync(process.execPath, [entrypoint], {
+      input: JSON.stringify({ context_window: { used_percentage: 70 } }),
+      encoding: "utf8",
+      env: { ...env, NO_COLOR: "" },
+    });
+    assert.equal(installedRun.status, 0, `the installed entrypoint resolves its imports and runs:\n${installedRun.stderr}`);
 
     // Codex footer stays fully native until an upstream footer-command hook exists.
     // No used-direction / pacing / scalar

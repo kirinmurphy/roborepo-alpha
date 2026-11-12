@@ -30,18 +30,65 @@
       "source": "scripts/usage-snapshot-store.mjs"
     },
     {
-      "type": "harness-config",
-      "source": "claude/statusline.json",
-      "harness": "claude"
-    },
-    {
-      "type": "harness-config",
-      "source": "codex/status-line.json",
-      "harness": "codex"
-    },
-    {
-      "type": "claude-plugin-dir",
+      "type": "package-runtime-asset",
       "source": "claude/context-row"
+    },
+    {
+      "type": "config-patch",
+      "harness": "claude",
+      "label": "status line",
+      "patches": [
+        {
+          "op": "set",
+          "path": [
+            "statusLine"
+          ],
+          "value": {
+            "type": "command",
+            "command": "node \"${package-runtime:claude-statusline.mjs}\"",
+            "padding": 1
+          }
+        }
+      ]
+    },
+    {
+      "type": "config-patch",
+      "harness": "claude",
+      "label": "desktop context row plugin folder",
+      "patches": [
+        {
+          "op": "union",
+          "path": [
+            "env",
+            "CLAUDE_CODE_PLUGIN_DIRS"
+          ],
+          "value": [
+            "${package-runtime:context-row}"
+          ],
+          "delimiter": "path"
+        }
+      ]
+    },
+    {
+      "type": "config-patch",
+      "harness": "codex",
+      "label": "status line",
+      "patches": [
+        {
+          "op": "union",
+          "path": [
+            "tui",
+            "status_line"
+          ],
+          "value": [
+            "model-with-reasoning",
+            "context-remaining",
+            "five-hour-limit",
+            "weekly-limit",
+            "git-branch"
+          ]
+        }
+      ]
     }
   ],
   "defaultEnabled": false

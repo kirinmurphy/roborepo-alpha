@@ -98,6 +98,8 @@
       "Read(//**/*.pem)",
       "Read(//**/id_rsa)",
       "Read(//**/id_ed25519)",
+      "Edit(//**/repo_plans/**)",
+      "Write(//**/repo_plans/**)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(git push --force-with-lease:*)",

@@ -151,8 +151,7 @@ node scripts/test/package-lifecycle-check.mjs
 node scripts/test/package-default-enabled-check.mjs
 node scripts/test/initialization-lifecycle-check.mjs
 node scripts/test/package-catalog-harness-check.mjs
-node scripts/test/package-harness-config-characterization-check.mjs
-node scripts/test/harness-package-config-roundtrip-check.mjs
+node scripts/test/package-config-patches-check.mjs
 node scripts/test/root-config-merge-characterization-check.mjs
 node scripts/test/root-config-state-check.mjs
 node scripts/test/harness-hooks-write-remove-characterization-check.mjs
