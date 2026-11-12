@@ -1,10 +1,10 @@
 ---
 id: 9njvfh5z
-next_action: Confirm in a linked worktree whether sandboxed git commits can write the main checkout's Git directory, then settle the open questions with /plan-promote.
+next_action: Run the two sandbox checks (excluded commands honored in the desktop app and CLI; git commit from a linked worktree), record results in the Decision Log, then add the shared behaviors.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting"]
-reviewed_commit: c77b4649029ff85a35ff29c648c5a9d0642b1162
+reviewed_commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
 worktree:
 ---
 
@@ -18,14 +18,7 @@ and lets confined commands run without a prompt. RoboRepo does not turn it on.
 
 This plan makes the Claude provider render that sandbox from the shared permission source, the same
 way the Codex provider already renders its sandbox profile. A hand-written trial in one checkout
-showed the prompt-free behavior and exposed three gaps the generated version must close.
-
-Two companion plans cover neighboring ground. Keep local agent work within useful boundaries: Claude
-(`46qth5z8`) owns worktree entry and moving Claude-specific details behind provider data. Keep local
-agent work within useful boundaries: Codex, Part 2 (`4zyo2woj`) built the Codex credential denial
-this plan mirrors. The global permissions audit (`permva27`) decides whether RoboRepo keeps managing
-permissions or defers to native tools; this plan renders a native control, which fits either
-outcome, so the audit is related and not a prerequisite.
+showed the prompt-free behavior and exposed gaps the generated version must close.
 
 ## Context
 
@@ -36,8 +29,9 @@ outcome, so the audit is related and not a prerequisite.
 | Shared permission source | `manifests/inventory/agent-permissions.json`: harness-neutral behaviors such as `write-scope`, `read-secrets`, and `go-online` |
 | Provider | The per-harness code under `scripts/harnesses/<id>/` and `globals/harnesses/<id>/` that turns shared behaviors into native config |
 | Native sandbox | Claude Code's `sandbox` settings block. On macOS it wraps each shell command in Seatbelt; file writes and network access outside the configured bounds fail in the kernel |
-| Excluded command | A command pattern in `sandbox.excludedCommands` that runs outside the sandbox, under the ordinary allow, ask, and deny rules |
+| Excluded command | A command pattern in `sandbox.excludedCommands` that is meant to run outside the sandbox, under the ordinary allow, ask, and deny rules |
 | Public CA bundle | A file of public certificate authorities that TLS clients read to verify servers, such as `/private/etc/ssl/cert.pem` |
+| Plans store worktree | The reserved `repo-plans` worktree outside the checkout, which `roborepo plans` commands lock and commit to |
 
 ### Why prompts happen today
 
@@ -62,15 +56,43 @@ flowchart TD
 ```
 
 Codex confines every command and treats approval as an escalation. Claude checks rules first, and
-its sandbox is optional. `claudePermissions` in `scripts/harnesses/permissions-render.mjs` skips the
-`network` behavior with the comment "Codex-only concept; no Claude equivalent to render", and
-`renderClaudeSettings` writes only the `permissions` key. `docs/internal/harness-provider-interface.md`
-states that Codex is the only implementer of provider-owned sandbox additions.
+its sandbox is optional. Current code reflects that:
+
+| Location | Current statement |
+| --- | --- |
+| `claudePermissions` in `scripts/harnesses/permissions-render.mjs` | Skips `network` behaviors: "Codex-only concept; no Claude equivalent to render" |
+| Comment above the Codex network rendering in the same file | "Claude has no sandbox network gate at all" |
+| `renderClaudeSettings` in the same file | Writes only the `permissions` key and preserves every other key except `model` |
+| `renderClaudeRootConfig` in `scripts/harnesses/claude/index.mjs` | Calls `renderClaudeSettings`, then merges core hooks; this is the Claude provider's `permissions.render` |
+| `go-online` in the shared permission source | `codexOnly: true`, default `deny`, described as "Claude does not sandbox network egress" |
+| Permission rows in `scripts/cli/config.mjs` | Pass `codexOnly` through with the comment that `go-online` has no Claude equivalent |
+| "Provider-owned sandbox additions" in `docs/internal/harness-provider-interface.md` | Names Codex as the only implementer of `permissions.workspaceRoots` and `permissions.writablePaths` |
 
 ### What the trial showed
 
 The trial added a `sandbox` block to the untracked `.claude/settings.local.json` of the main
 checkout, on Claude Code 2.1.309 and macOS. It took effect in the running session without a restart.
+The block, with the credential `denyRead` entries omitted:
+
+```json
+{
+  "enabled": true,
+  "autoAllowBashIfSandboxed": true,
+  "filesystem": {
+    "allowWrite": ["<claude-temp-folder>", "~/.npm"],
+    "allowRead": [
+      "/private/etc/ssl/cert.pem",
+      "/opt/homebrew/etc/ca-certificates/cert.pem",
+      "/opt/homebrew/etc/openssl@4/cert.pem"
+    ]
+  },
+  "network": {
+    "allowedDomains": ["registry.npmjs.org", "github.com", "*.githubusercontent.com"],
+    "allowLocalBinding": false
+  },
+  "excludedCommands": ["docker *", "gh *", "git push *", "git pull *", "git fetch *", "roborepo *", "./bin/roborepo *"]
+}
+```
 
 | Check | Result |
 | --- | --- |
@@ -82,10 +104,11 @@ checkout, on Claude Code 2.1.309 and macOS. It took effect in the running sessio
 | `curl` to a host missing from `allowedDomains` | Succeeded; in manual permission mode an unlisted host prompts and is not refused |
 | `git ls-remote` over SSH | Failed; Claude's documentation says SSH cannot pass the sandbox proxy on macOS |
 | Headless `claude -p` started from a sandboxed command | Reported "Not logged in"; cause not confirmed |
+| `roborepo plans show` from a desktop-app session, with `roborepo *` excluded | Ran inside the sandbox anyway: it reported "The plans worktree could not be locked" and returned unsynchronized output. The same command with the sandbox bypassed synchronized normally |
 
 Whether the session prompted less was not measured: the agent cannot observe prompts.
 
-Three findings shape the design:
+Four findings shape the design:
 
 - **Claude merges permission rules into the sandbox.** `Edit` allow rules became writable paths, and
   `Read` deny rules became unreadable paths. The `write-scope` and `read-secrets` behaviors
@@ -94,8 +117,24 @@ Three findings shape the design:
   `/private/etc/ssl/cert.pem`, `/opt/homebrew/etc/ca-certificates/cert.pem`, and the
   `/opt/homebrew/etc/openssl@4/cert.pem` link to it. The generated Codex profile carries the same
   pattern. Its network is off, so the effect there is untested.
+- **Excluded commands were not honored in the desktop app.** Why is unconfirmed: the desktop app may
+  apply its own sandbox configuration, or the exclusion may need a different pattern. Until this is
+  settled, any command on the excluded list must be assumed to run sandboxed, and `roborepo plans`
+  commands then fail to write the plans store worktree.
 - **Local settings do not reach worktrees.** The trial file is untracked, so a session in a linked
   worktree runs without the sandbox.
+
+### Related plans
+
+| Plan | Status | Relationship |
+| --- | --- | --- |
+| Keep local agent work within useful boundaries: Codex — Part 2 (`4zyo2woj`) | Completed; commit `60d2ba76` is in `main` | Landed dependency. Built `scripts/harnesses/codex/credential-permissions.mjs`, the pattern this plan's projection module follows |
+| Repo-Scoped Write Permissions (`ia1q1z9`) | Completed; `globals/harnesses/claude/hooks/repo-write-scope.mjs` is present | Landed dependency. Its hook bounds `Write` and `Edit` to the checkout; the sandbox bounds shell commands. The two do not overlap |
+| Keep local agent work within useful boundaries: Claude (`46qth5z8`) | Backlog | Neighbor. Owns worktree entry and moving Claude hook sources; no shared files with this plan |
+| Keep local agent work within useful boundaries: Codex — Part 3 (`8bjltk2n`) | Backlog | Neighbor. Owns isolated app and browser test runs |
+| Audit Global Agent Permissions Management (`permva27`) | Backlog | Related, not a prerequisite. This plan renders a native control, which fits either audit outcome |
+| Permissions UI Revamp (`permissions-ui-revamp`) | Backlog, depends on `permva27` | Neighbor. Will redesign the rows this plan adds to `scripts/cli/config.mjs`; this plan adds rows in the current shape only |
+| Capability-Derived Resource Targeting (`harness-capability-derived-resource-targeting`) | Backlog | No overlap found |
 
 ## Goals
 
@@ -104,17 +143,15 @@ Three findings shape the design:
 - A command that stays inside the repository and temp folders runs without a permission prompt.
 - Credential paths in `read-secrets` stay unreadable from shell commands, while public CA bundles
   stay readable so allowed network tools work.
-- Commands that cannot work in the sandbox run outside it under the existing allow, ask, and deny
-  rules.
+- Commands that cannot work in the sandbox, including `roborepo plans` writes to the plans store,
+  keep working.
 - The shared permission source states the intent; the Claude provider owns every Claude-native key.
 
 ## Non-goals
 
-- Changing Claude's default permission mode, including auto mode. That is a separate decision.
-- Changing the Codex profile. Codex parity for readable exceptions and allowed hosts is an open
-  question below.
-- Isolating app and browser test runs. Part 3 of the Codex series (`8bjltk2n`) owns that with a
-  container.
+- Changing Claude's default permission mode, including auto mode.
+- Changing the Codex profile, including what `go-online` does for Codex.
+- Isolating app and browser test runs (`8bjltk2n`).
 - Relaxing ask rules such as `push-code`, or redesigning the permissions editor
   (`permissions-ui-revamp`).
 
@@ -137,56 +174,73 @@ flowchart TD
 | Writable temp folders | Existing `write-scope` | None; Claude merges the `Edit` allow rules |
 | Unreadable credentials | Existing `read-secrets` | None; Claude merges the `Read` deny rules |
 | Readable public CA bundles | New exception list beside `read-secrets` | `sandbox.filesystem.allowRead` |
-| Hosts reachable without a prompt | New host list tied to `go-online` | `sandbox.network.allowedDomains` |
+| Hosts reachable without a prompt | New allowed-host list, default `registry.npmjs.org`, `github.com`, `*.githubusercontent.com` | `sandbox.network.allowedDomains` |
 
-`go-online` loses its `codexOnly` flag only if the open question on its meaning resolves that way.
+`go-online` keeps its meaning: Codex's network on/off switch, still `codexOnly`, default `deny`. The
+allowed-host list is independent of it, and Codex ignores the list until a separate plan adopts it.
+Only `go-online`'s description changes, because "Claude does not sandbox network egress" becomes
+false.
 
 ### Provider-owned details
 
 These carry Claude-native names or Claude-specific limits, so they live with the Claude provider and
 never in platform code, as `docs/internal/harness-provider-interface.md` requires:
 
-- The excluded command list: `docker`, `gh`, the `git` network commands, and `roborepo` commands
-  that write under `~/.roborepo` or `~/.claude`.
-- The mapping from shared intent to `sandbox.*` keys, as one pure function in a new module under
-  `scripts/harnesses/claude/`, called where `renderClaudeSettings` builds the settings object. It
-  follows `scripts/harnesses/codex/credential-permissions.mjs`.
-- Extra writable paths for linked worktrees, through the existing optional adapter methods
-  `permissions.workspaceRoots` and `permissions.writablePaths`, if the first checklist item shows
-  they are needed.
+- **Projection module.** One pure function in a new module under `scripts/harnesses/claude/`,
+  following `scripts/harnesses/codex/credential-permissions.mjs`. It takes resolved behaviors and
+  provider options and returns the `sandbox` object. `renderClaudeRootConfig` in
+  `scripts/harnesses/claude/index.mjs` sets `rendered.sandbox` from it, beside the hooks merge, so
+  the platform's `renderClaudeSettings` stays free of Claude sandbox keys.
+- **Fixed settings.** `allowLocalBinding: false`; `strictAllowlist` unset, so unlisted hosts prompt.
+- **Excluded commands.** `docker`, `gh`, the `git` network commands, and `roborepo`, as in the trial,
+  if the first checklist item shows exclusions work. Otherwise the commands that need writes outside
+  the sandbox get those paths through writable paths instead.
+- **Extra writable paths.** `~/.npm` for the npm cache, which the trial added. The plans store paths
+  that `scripts/harnesses/codex/plans-store-grants.mjs` already lists for Codex, if `roborepo plans`
+  must run sandboxed. A second consumer moves that module out of the Codex folder to a shared
+  location. Wire them through the optional adapter methods `permissions.workspaceRoots` and
+  `permissions.writablePaths`, which `permissionOptionsForProvider` in
+  `scripts/cli/permissions-render.mjs` already calls with the current directory.
 
 ### Ownership of the generated key
 
-RoboRepo owns `sandbox` in the generated `~/.claude/settings.json` the way it owns `permissions`.
-Claude merges array settings across scopes, so a repository's `.claude/settings.local.json` can
-still add entries.
+RoboRepo owns `sandbox` in the generated `~/.claude/settings.json` the way it owns `permissions`:
+each render replaces it, and hand edits there are lost. Claude merges array settings across scopes,
+so a repository's `.claude/settings.local.json` can still add entries.
 
 ## Implementation plan
 
+- [ ] With the trial block active, check whether `sandbox.excludedCommands` is honored, in a
+      desktop-app session and in a CLI session, using `roborepo plans show <id> --json` and its
+      `synchronized` field. Record the result and the pattern that works in the Decision Log.
 - [ ] In a linked worktree with the trial block copied in, run `git commit` and record whether
       writes to the main checkout's `.git` succeed.
-- [ ] Add the confined-shell behavior, the readable exception list, and the allowed host list to
-      `manifests/inventory/agent-permissions.json`.
-- [ ] Add the Claude sandbox projection module and its excluded command list under the Claude
-      provider.
-- [ ] Render the `sandbox` key from `renderClaudeSettings`, preserving unrelated keys.
-- [ ] Implement `permissions.workspaceRoots` and `permissions.writablePaths` for Claude if the
-      worktree check requires them.
-- [ ] Correct the two "Codex-only" comments in `scripts/harnesses/permissions-render.mjs`.
-- [ ] Show the new behaviors in the permissions rows built by `scripts/cli/config.mjs`.
-- [ ] Add the projection check and the native enforcement runner described under Validation.
-- [ ] Remove the trial block from the main checkout's `.claude/settings.local.json` once the
-      generated settings carry it.
+- [ ] Add the confined-shell behavior, the readable CA exception list, and the allowed-host list to
+      `manifests/inventory/agent-permissions.json`. Correct the `go-online` description.
+- [ ] Add the Claude sandbox projection module and its excluded command list under
+      `scripts/harnesses/claude/`.
+- [ ] Set `rendered.sandbox` in `renderClaudeRootConfig`, preserving unrelated keys.
+- [ ] Implement `permissions.writablePaths`, and `permissions.workspaceRoots` if needed, for Claude
+      according to the two checks above. Move `plans-store-grants.mjs` to a shared location if
+      Claude reuses it.
+- [ ] Correct the two "Codex-only" comments in `scripts/harnesses/permissions-render.mjs` and the
+      `go-online` comment in `scripts/cli/config.mjs`.
+- [ ] Show the new behaviors in the permission rows built by `scripts/cli/config.mjs`.
+- [ ] Add the projection check to `scripts/test/check-groups.json` and the enforcement runner to the
+      explicit-runner list in `scripts/test/orphan-test-check.mjs`, as described under Validation.
+- [ ] Update the documents under Documentation impact.
+- [ ] Remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json` once
+      the generated settings carry it.
 
 ## Validation
 
-Projection and enforcement need separate evidence, following the Codex credential checks in
+Projection and enforcement need separate evidence, following "Codex credential verification" in
 `docs/internal/testing.md`.
 
 | Check | Establishes | Where it runs |
 | --- | --- | --- |
-| New `scripts/test/claude-sandbox-projection-check.mjs` | The rendered `sandbox` key for default and overridden behaviors; unrelated settings keys preserved; a second render changes nothing | Deterministic CI group |
-| New `scripts/test/claude-sandbox-enforcement-check.mjs` | On a real Claude binary: temp and repository writes succeed, a home-folder write fails, a credential read fails, a public CA bundle reads, an allowed host connects | Explicit macOS probe |
+| New `scripts/test/claude-sandbox-projection-check.mjs` | The rendered `sandbox` key for default and overridden behaviors; unrelated settings keys and hooks preserved; a second render changes nothing | Deterministic CI group |
+| New `scripts/test/claude-sandbox-enforcement-check.mjs` | On a real Claude binary: temp and repository writes succeed, a home-folder write fails, a credential read fails, a public CA bundle reads, an allowed host connects, an excluded command runs unsandboxed | Explicit macOS probe; exits 2 when no sandbox is available, like the Codex runner |
 | `scripts/test/permissions-render-live-characterization-check.mjs` | Existing live render output changes only by the new key | Deterministic CI group |
 
 Acceptance criteria:
@@ -196,7 +250,8 @@ Acceptance criteria:
 - [ ] The enforcement runner passes and records the Claude version, platform, and each positive and
       negative control.
 - [ ] `git commit` succeeds from a linked worktree session with the sandbox on.
-- [ ] `git push`, `gh pr view`, and `roborepo plans show` behave as they do today.
+- [ ] `git push`, `gh pr view`, and `roborepo plans show <id> --json` behave as they do today;
+      `roborepo plans show` reports `"synchronized": true`.
 - [ ] `npm run check` passes.
 
 ## Risks
@@ -205,6 +260,9 @@ Acceptance criteria:
   enforcement runner is required before the docs claim coverage.
 - **Excluded commands are a gap by design.** They run with full access, and the git network
   commands can reach any host. Keep the list short and reviewed.
+- **Writable paths are rendered per checkout.** `~/.claude/settings.json` is user-level, so paths
+  derived from the current directory at `roborepo update` apply to every session. Prefer paths that
+  hold for any checkout.
 - **Claude version drift.** Sandbox keys and merge rules may change between releases. The
   enforcement runner names the version it verified.
 - **macOS-only evidence.** Linux uses a different mechanism and needs extra packages; Windows runs
@@ -218,20 +276,23 @@ Acceptance criteria:
   hosts, and what runs outside the sandbox.
 - `docs/internal/harness-provider-interface.md`: "Provider-owned sandbox additions" names Codex as
   the only implementer; add Claude.
-- `docs/internal/testing.md`: add the Claude projection and enforcement checks beside the Codex
-  credential verification table.
+- `docs/internal/testing.md`: add the Claude projection and enforcement checks beside "Codex
+  credential verification".
 - `docs/internal/config-panel-internals.md`: record the new behaviors and their Claude projection.
+
+## Decision Log
+
+- **2026-11-12 — `go-online` stays Codex-only; Claude reads a separate allowed-host list.** Making
+  `go-online` gate Claude would, with its `deny` default, make every network command prompt; flipping
+  the default would turn on Codex network access. Chosen by the user during promotion.
+- **2026-11-12 — Local port binding stays off.** The Codex series rejected wildcard listeners, and
+  whether `allowLocalBinding` is narrower is unverified. Dev servers started through the app's
+  preview tools do not run in the shell sandbox.
+- **2026-11-12 — Unlisted hosts prompt rather than fail.** `strictAllowlist` stays unset at first;
+  revisit once the host list has proven complete.
+- **2026-11-12 — Codex parity for the CA exceptions and host list is a separate plan.** Codex's
+  network is off by default, so the `*.pem` denial has no observed effect there yet.
 
 ## Open questions
 
-- **What should `go-online` mean for Claude?** For Codex, `deny` turns the network off. For Claude,
-  an empty host list makes every host prompt in manual mode. Recommendation: keep `go-online` as
-  the on/off gate and add a separate host list that defaults to the npm registry and GitHub.
-- **Should local port binding be allowed?** Dev servers need it. The Codex series rejected wildcard
-  listeners, and whether Claude's `allowLocalBinding` is narrower is unverified. Recommendation:
-  leave it off, so dev servers run as excluded or retried commands, until that is checked.
-- **Should unlisted hosts be refused instead of prompted?** `strictAllowlist` does that and only
-  takes effect from user-level settings, which RoboRepo generates. Recommendation: off at first.
-- **Does Codex need the same readable exceptions and host list?** Its profile carries the same
-  `*.pem` denial. Recommendation: test it when Codex network access is next enabled, as its own
-  plan.
+None. The two checks at the top of the implementation plan decide provider details, not scope.
