@@ -88,6 +88,7 @@ try {
       [{ headRefName: "another-branch" }, /head branch is another-branch/], [{ headRefOid: latest }, /head commit is/],
       [{ isCrossRepository: true }, /another repository/], [{ url: "https://github.com/other/project/pull/42" }, /url is/],
       [{ state: "CLOSED" }, /state is CLOSED/], [{ baseRefName: "feature/check" }, /base branch/],
+      [{ number: 0, url: "https://github.com/example/project/pull/0" }, /number 0 is not a valid pull request number/],
     ]) {
       const result = runDelivery(["pr-ready"], [{ ...pr, ...patch }]);
       refused(result, /pull request/i);
