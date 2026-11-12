@@ -34,6 +34,7 @@ try {
   for (const args of [["--all"], ["origin", "--tags"], ["origin", "main:sentinel"], [source], ["missing"]]) {
     refused(delivery(checkout, ["fetch", ...args]), /remote|usage/i);
   }
+  assert.match(delivery(checkout, ["fetch", "-bad"]).stderr, /remote name, got "-bad"/, "an invalid remote name is quoted in the refusal");
   console.log("✓ Guarded fetch refreshed origin/main and preserved local branches and tags.");
 
   git(checkout, "switch", "-c", "feature/check");
@@ -111,17 +112,26 @@ try {
     ]) {
       const result = runDelivery(["pr-ready"], [pr], run, [key, changed]);
       assert.equal(result.status, 1, result.stderr || result.stdout);
+      // A change can also fail the re-read's own checks, which name the problem themselves.
+      assert.match(result.stderr, /changed during pull request validation: \w|Upstream must name|Unknown configured remote|URL/,
+        "the refusal names the changed configuration");
       assert.equal(calls().length, 2, "changed upstream configuration stops before mutation");
       if (original === null) git(checkout, "config", "--unset", key);
       else git(checkout, "config", key, original);
     }
 
+    const secret = "ghp_deliveryCheckSecret";
+    git(checkout, "remote", "set-url", "origin", `https://x-access-token:${secret}@github.com/example/project.git`);
+    const credentialed = runDelivery(["pr-ready"]);
+    refused(credentialed, /fetch URL https:\/\/\*\*\*@github\.com/);
+    assert.ok(!credentialed.stderr.includes(secret), "a refusal never prints remote URL credentials");
+    assert.deepEqual(calls(), []);
     git(checkout, "remote", "set-url", "origin", "file://github.com/example/project.git");
     refused(runDelivery(["pr-ready"]), /remote|repository/i);
     assert.deepEqual(calls(), []);
     git(checkout, "remote", "set-url", "origin", "git@github.com:example/project.git");
     git(checkout, "switch", "main");
-    refused(runDelivery(["pr-ready"]), /feature branch/i);
+    refused(runDelivery(["pr-ready"]), /current branch main is the default branch/);
     assert.equal(calls().length, 1);
     git(checkout, "switch", "feature/check");
     git(checkout, "config", "remote.origin.pushurl", "git@github.com:other/project.git");

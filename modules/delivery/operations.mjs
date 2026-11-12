@@ -14,7 +14,7 @@ async function git(cwd, args) {
 
 async function requireConfiguredRemote(cwd, remote) {
   if (typeof remote !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(remote)) {
-    throw new Error("Expected a configured remote name");
+    throw new Error(`Expected a configured remote name, got ${JSON.stringify(redactRemoteUrls(String(remote)))}`);
   }
   await git(cwd, ["check-ref-format", `refs/remotes/${remote}/probe`]);
   const remotes = (await git(cwd, ["remote"])).split("\n");
@@ -44,6 +44,11 @@ async function gh(cwd, args, input = "") {
   return result.stdout;
 }
 
+// Remote URLs can carry tokens in their user-info, and refusals reach agent transcripts.
+function redactRemoteUrls(urls) {
+  return urls.split("\n").map((url) => url.replace(/^([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^/@]*@/, "$1***@")).join(", ");
+}
+
 // Names every failed condition so a refusal shows which target mismatched, not only that one did.
 function refuseMismatches(summary, checks) {
   const failed = checks.filter(([ok]) => !ok).map(([, detail]) => detail);
@@ -61,11 +66,15 @@ async function localDeliveryTarget(cwd) {
   const pushUrls = await git(cwd, ["remote", "get-url", "--push", "--all", remote]);
   const githubTransport = /^(?:https:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com\/|git@github\.com:)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;
   const repository = normalizeGitRemote(fetchUrls)?.toLowerCase();
-  if (!/^git:github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository || "")
-    || !githubTransport.test(fetchUrls) || !githubTransport.test(pushUrls)
-    || normalizeGitRemote(pushUrls)?.toLowerCase() !== repository || fetchUrls.includes("\n") || pushUrls.includes("\n")) {
-    throw new Error(`Remote ${remote} must resolve to one matching GitHub fetch and push repository: fetch ${fetchUrls}, push ${pushUrls}`);
-  }
+  const fetchValid = !fetchUrls.includes("\n") && githubTransport.test(fetchUrls)
+    && /^git:github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository || "");
+  const pushValid = !pushUrls.includes("\n") && githubTransport.test(pushUrls);
+  refuseMismatches(`Remote ${remote} must resolve to one matching GitHub fetch and push repository`, [
+    [fetchValid, `fetch URL ${redactRemoteUrls(fetchUrls)} is not one GitHub repository URL`],
+    [pushValid, `push URL ${redactRemoteUrls(pushUrls)} is not one GitHub repository URL`],
+    [!fetchValid || !pushValid || normalizeGitRemote(pushUrls)?.toLowerCase() === repository,
+      `push URL ${redactRemoteUrls(pushUrls)} names a different repository than fetch URL ${redactRemoteUrls(fetchUrls)}`],
+  ]);
   const repo = repository.slice(4);
   return { branch, head, remote, upstream, fetchUrls, pushUrls, repo };
 }
@@ -76,10 +85,13 @@ async function currentPullRequest(cwd) {
   const repoInfo = JSON.parse(await gh(cwd, [
     "repo", "view", repo, "--json", "defaultBranchRef,nameWithOwner,url",
   ]));
-  if (repoInfo.url?.toLowerCase() !== `https://${repo}` || repoInfo.nameWithOwner?.toLowerCase() !== repo.slice("github.com/".length)
-    || !repoInfo.defaultBranchRef?.name || repoInfo.defaultBranchRef.name === branch) {
-    throw new Error("Pull request delivery requires a feature branch in the configured repository");
-  }
+  refuseMismatches("Pull request delivery requires a feature branch in the configured repository", [
+    [repoInfo.url?.toLowerCase() === `https://${repo}`, `repository url is ${repoInfo.url}, expected https://${repo}`],
+    [repoInfo.nameWithOwner?.toLowerCase() === repo.slice("github.com/".length),
+      `repository is ${repoInfo.nameWithOwner}, expected ${repo.slice("github.com/".length)}`],
+    [Boolean(repoInfo.defaultBranchRef?.name), "repository reports no default branch"],
+    [repoInfo.defaultBranchRef?.name !== branch, `current branch ${branch} is the default branch`],
+  ]);
   const prs = JSON.parse(await gh(cwd, [
     "pr", "list", "--repo", repo, "--head", branch, "--state", "open",
     "--json", "number,headRefName,headRefOid,baseRefName,isCrossRepository,state,url",
@@ -121,8 +133,11 @@ export async function updatePullRequest(cwd, operation, value) {
     ]);
   }
   // GitHub reads can take long enough for another session to change the selected repository.
-  if (!isDeepStrictEqual(await localDeliveryTarget(cwd), target)) {
-    throw new Error("Current branch, head, or upstream configuration changed during pull request validation");
+  const current = await localDeliveryTarget(cwd);
+  // Names only the changed keys: the target holds remote URLs, which can carry tokens.
+  const changed = Object.keys(target).filter((key) => !isDeepStrictEqual(current[key], target[key]));
+  if (changed.length > 0) {
+    throw new Error(`Current branch, head, or upstream configuration changed during pull request validation: ${changed.join(", ")}`);
   }
   if (operation === "pr-body") {
     await gh(cwd, ["pr", "edit", String(pr.number), "--repo", repo, "--body-file", "-"], value);
