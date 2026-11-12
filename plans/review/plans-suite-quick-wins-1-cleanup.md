@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Run /plan-review on the submitted implementation.
+next_action: Finish /plan-review fixes for the three review findings, then request approval.
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7", "3xh2sq32"]
@@ -358,6 +358,14 @@ describe the distinction between ordinary merges and owner access.
       marked superseded in this plan update
 - [x] The delivery rule does not name the guarded `roborepo delivery` commands — kept as
       designed; see Decision Log
+- [ ] Delivery refusals in `modules/delivery/operations.mjs` print one generic message per
+      `||` chain, while `roborepo-cli.md` promises the mismatched target — name the failing field
+      with expected and actual values (plan review, Validator pass 6)
+- [ ] `scripts/cli/delivery.mjs` returns 0 on success but nothing on failure (sets
+      `process.exitCode`) — return 1 from the catch (plan review, Validator pass 6)
+- [ ] No committed test pins the new rule text (delivery fragment, branch-safety exception in
+      both copies, `EnterWorktree` wording) or keeps the two branch-safety copies identical — add a
+      rule content check (plan review, Validator pass 6)
 
 ### Verification
 
