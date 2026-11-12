@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Finish /plan-review fixes for the three review findings, then request approval.
+next_action: Human approval of the reviewed commit; confirm or defer the two Not tested entries.
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7", "3xh2sq32"]
@@ -358,17 +358,60 @@ describe the distinction between ordinary merges and owner access.
       marked superseded in this plan update
 - [x] The delivery rule does not name the guarded `roborepo delivery` commands — kept as
       designed; see Decision Log
-- [ ] Delivery refusals in `modules/delivery/operations.mjs` print one generic message per
-      `||` chain, while `roborepo-cli.md` promises the mismatched target — name the failing field
-      with expected and actual values (plan review, Validator pass 6)
-- [ ] `scripts/cli/delivery.mjs` returns 0 on success but nothing on failure (sets
-      `process.exitCode`) — return 1 from the catch (plan review, Validator pass 6)
-- [ ] No committed test pins the new rule text (delivery fragment, branch-safety exception in
-      both copies, `EnterWorktree` wording) or keeps the two branch-safety copies identical — add a
-      rule content check (plan review, Validator pass 6)
+- [x] Delivery refusals in `modules/delivery/operations.mjs` print one generic message per
+      `||` chain, while `roborepo-cli.md` promises the mismatched target — fixed in review
+      (243489cc, ec7034b0); each refusal names the failing field
+- [x] `scripts/cli/delivery.mjs` exit paths inconsistent — fixed in review (243489cc) by dropping
+      the unused `return 0`; the module adapter ignores return values, so `process.exitCode` is the
+      only exit signal
+- [x] No committed test pinned the new rule text — fixed in review (06666225):
+      `agent-workflow-rules-check.mjs` pins the delivery clauses, the identical worktree exception
+      in both branch-safety copies, and the `EnterWorktree` wording
+- [x] The detailed remote refusal from 243489cc printed raw remote URLs, leaking a token in a
+      credentialed URL — redaction in ec7034b0 still missed email usernames, leading whitespace,
+      and tokens with `/`; fixed in review (6ed1005b) by never printing remote URLs, with
+      regressions for three credentialed forms and a URL passed as the remote argument
+- [x] The upstream refusal printed a raw `branch.<name>.merge` value, which can hold a
+      credentialed URL — fixed in review (8690c625); only a ref-shaped value is printed
+- [x] A path-valued remote was printed, a missing remote or merge setting or a detached HEAD
+      surfaced as a raw git command failure, and two merge values were mislabelled — fixed in
+      review (ce363825), with a regression for each case
+- [x] Any `symbolic-ref` failure read as a detached HEAD, any `git config` failure as an unset
+      key, an invalid tracking-ref namespace surfaced as a raw command failure, and several
+      refusal details were unasserted — fixed in review (468674fe)
+- [x] The invalid pull request number refusal had no test — fixed in review (502eacb1)
+- [x] A failed `git fetch` passes git's own stderr through, which can include a URL path or
+      query — not changed: it matches raw `git fetch` output and is a git failure, not a guard
+      refusal; hiding it would drop git's diagnostics
+- [x] Repository, changed-configuration, invalid-remote, PR-count, and disallowed-operation
+      refusals stayed generic — fixed in review (ec7034b0, 6ed1005b); the changed-configuration
+      refusal names keys only, and the test asserts the key for each case
 
 ### Verification
 
+- Plan review (2026-11-12): base synchronized three times — `c3c54c00` (main 37af5648),
+  `e64a5e27` (main c77b4649, merged by another session during review), and `be88642f`
+  (main cedc1ebe). All merges were clean; main's changes touch regions separate from this plan.
+- PR 63 CI passed at 2cf0dd68 (`check (ubuntu-latest)`, `check (macos-latest)`,
+  `windows-installer`). No CI exists for the review commits, which are not pushed.
+- `npm run check` passed at be88642f (doctor 98 checks, CLI 426/426, portal UI 255/255), the
+  final reviewed commit. It also passed at c3c54c00 and at 502eacb1 (doctor 98 checks, CLI 426/426, portal UI
+  254/254). Runs at 8690c625 and ce363825 failed only on sandbox write and local-port denials
+  (plan-store worktree creation, fixture writes, `listen EPERM`); the same commit passed outside
+  the sandbox. Runs on superseded fix commits were stopped.
+- Scoped checks passed at 502eacb1: `delivery-operations-check`, `agent-workflow-rules-check`,
+  `plan-suite-skills-check`, `agent-permission-defaults-check`,
+  `codex-command-permission-check`, `cli-command-catalog-check`, `docs-reference-check`,
+  `orphan-test-check`, both render `--check` commands, `doctor.sh --quiet`, `git diff --check`.
+- A mutation check confirmed `agent-workflow-rules-check` fails when the two branch-safety
+  exception copies drift.
+- Validator passes 6–13 (fresh-context subagents, this review): pass 6 at c3c54c00 found three
+  fixes; passes 7–12 each found refusal-detail or credential-printing gaps introduced or left by
+  the previous fix; pass 13 (the eighth this review, at 502eacb1) found only the stale plan
+  record, fixed in this update. That record fix was not revalidated.
+- 2026-11-12: this review session, in auto mode, entered the worktree with
+  `EnterWorktree({ path })`. Edits before entering prompted per file; edits after it did not.
+  Auto mode again limits what this shows, so the Not tested entry stays open.
 - Live GitHub (2026-11-11, PR 63 at 2cf0dd68, authenticated `gh`): `roborepo delivery fetch
   origin` refreshed `refs/remotes/origin/*`. `pr-body` rewrote the PR's empty body with the same
   empty content, and read-back showed the body and head unchanged. `retry-ci` on the in-progress
@@ -445,3 +488,9 @@ describe the distinction between ordinary merges and owner access.
   blocked, so the implementation is kept active.
 - No server was needed for this CLI and policy change. The actual CLI help and command fixtures
   exercise the normal entry point.
+
+### Result
+
+- Status: pending
+- Reviewed implementation commit: be88642fae8a36fe6a9e986bbe79436ac93b6c98
+- Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
