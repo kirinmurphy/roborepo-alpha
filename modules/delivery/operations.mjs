@@ -12,17 +12,21 @@ async function git(cwd, args) {
   return result.stdout.trim();
 }
 
-// A missing key fails `git config`; callers report it as unset rather than as a command failure.
+// `git config` exits 1 for a missing key; callers report that as unset rather than as a command
+// failure. Any other failure is a real error.
 async function gitConfigValues(cwd, key) {
   const result = await runGitProcess(cwd, ["config", "--get-all", key], { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
-  return result.ok ? result.stdout.trim().split("\n").filter(Boolean) : [];
+  if (result.ok) return result.stdout.trim().split("\n").filter(Boolean);
+  if (result.code === 1) return [];
+  throw new Error(result.stderr || result.error || "Git operation failed");
 }
 
 async function requireConfiguredRemote(cwd, remote) {
   if (typeof remote !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(remote)) {
     throw new Error(`Expected a configured remote name, got ${describeRemoteArgument(remote)}`);
   }
-  await git(cwd, ["check-ref-format", `refs/remotes/${remote}/probe`]);
+  const refFormat = await runGitProcess(cwd, ["check-ref-format", `refs/remotes/${remote}/probe`], { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
+  if (!refFormat.ok) throw new Error(`Remote name ${JSON.stringify(remote)} is not a valid tracking-ref namespace`);
   const remotes = (await git(cwd, ["remote"])).split("\n");
   if (!remotes.includes(remote)) throw new Error(`Unknown configured remote: ${remote}`);
 }
@@ -66,7 +70,9 @@ function refuseMismatches(summary, checks) {
 
 async function localDeliveryTarget(cwd) {
   const symbolic = await runGitProcess(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"], { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
-  if (!symbolic.ok) throw new Error("HEAD is detached; delivery needs a checked-out feature branch");
+  // `symbolic-ref --quiet` exits 1 only for a detached HEAD; anything else is a repository error.
+  if (symbolic.code === 1) throw new Error("HEAD is detached; delivery needs a checked-out feature branch");
+  if (!symbolic.ok) throw new Error(symbolic.stderr || symbolic.error || "Git operation failed");
   const branch = symbolic.stdout.trim();
   const head = await git(cwd, ["rev-parse", "--verify", "HEAD"]);
   const remotes = await gitConfigValues(cwd, `branch.${branch}.remote`);

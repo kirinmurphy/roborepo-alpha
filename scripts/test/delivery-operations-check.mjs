@@ -31,9 +31,11 @@ try {
   assert.equal(git(checkout, "rev-parse", "refs/heads/sentinel"), initial);
   assert.equal(git(checkout, "tag", "--list"), "local-tag");
 
-  for (const args of [["--all"], ["origin", "--tags"], ["origin", "main:sentinel"], [source], ["missing"]]) {
+  for (const args of [["--all"], ["origin", "--tags"], ["origin", "main:sentinel"], [source]]) {
     refused(delivery(checkout, ["fetch", ...args]), /remote|usage/i);
   }
+  refused(delivery(checkout, ["fetch", "missing"]), /Unknown configured remote: missing/);
+  refused(delivery(checkout, ["fetch", "a..b"]), /Remote name "a\.\.b" is not a valid tracking-ref namespace/);
   assert.match(delivery(checkout, ["fetch", "-bad"]).stderr, /remote name, got "-bad"/, "an invalid remote name is quoted in the refusal");
   const urlArgument = delivery(checkout, ["fetch", "https://u:ghp_argSecret@github.com/x/y"]);
   assert.match(urlArgument.stderr, /non-name value \(not printed\)/);
@@ -56,11 +58,13 @@ try {
     console.log("skip: fake gh executable checks require a POSIX executable fixture");
   } else {
     const gh = createFakeGh();
-    const runDelivery = (args, prs = [pr], workflow = run, configChange = null) => {
+    const repository = { defaultBranchRef: { name: "main" }, nameWithOwner: "example/project", url: "https://github.com/example/project" };
+    const runDelivery = (args, prs = [pr], workflow = run, configChange = null, repo = repository) => {
       fs.writeFileSync(gh.log, "");
       return delivery(checkout, args, {
         PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`,
         FAKE_GH_LOG: gh.log,
+        FAKE_GH_REPO: JSON.stringify(repo),
         FAKE_GH_PRS: JSON.stringify(prs),
         FAKE_GH_RUN: JSON.stringify(workflow),
         FAKE_GH_CONFIG_CHANGE: JSON.stringify(configChange),
@@ -141,8 +145,15 @@ try {
     git(checkout, "config", "--unset", "branch.feature/check.remote");
     refused(runDelivery(["pr-ready"]), /No branch\.feature\/check\.remote is configured/);
     git(checkout, "config", "branch.feature/check.remote", "origin");
+    git(checkout, "config", "--add", "branch.feature/check.remote", "origin");
+    refused(runDelivery(["pr-ready"]), /Multiple branch\.feature\/check\.remote values are configured/);
+    git(checkout, "config", "--unset-all", "branch.feature/check.remote");
+    git(checkout, "config", "branch.feature/check.remote", "origin");
     git(checkout, "switch", "--detach");
     refused(runDelivery(["pr-ready"]), /HEAD is detached/);
+    const outsideRepository = delivery(gh.dir, ["pr-ready"], { GIT_CEILING_DIRECTORIES: root });
+    refused(outsideRepository, /not a git repository/i);
+    assert.doesNotMatch(outsideRepository.stderr, /detached/, "only a detached HEAD is reported as detached");
     git(checkout, "switch", "feature/check");
     assert.deepEqual(calls(), [], "configuration refusals stop before any GitHub call");
     for (const url of [
@@ -164,8 +175,21 @@ try {
     refused(runDelivery(["pr-ready"]), /current branch main is the default branch/);
     assert.equal(calls().length, 1);
     git(checkout, "switch", "feature/check");
+    for (const [patch, detail] of [
+      [{ url: "https://github.com/other/project" }, /repository url is https:\/\/github\.com\/other\/project/],
+      [{ nameWithOwner: "other/project" }, /repository is other\/project, expected example\/project/],
+      [{ defaultBranchRef: null }, /repository reports no default branch/],
+    ]) {
+      refused(runDelivery(["pr-ready"], [pr], run, null, { ...repository, ...patch }), detail);
+      assert.equal(calls().length, 1, "a repository mismatch stops before listing pull requests");
+    }
     git(checkout, "config", "remote.origin.pushurl", "git@github.com:other/project.git");
-    refused(runDelivery(["pr-ready"]), /remote|repository/i);
+    refused(runDelivery(["pr-ready"]), /its push URL names a different repository than its fetch URL/);
+    assert.deepEqual(calls(), []);
+    git(checkout, "config", "remote.origin.pushurl", `https://x-access-token:${secret}@github.com/example/project.git`);
+    const credentialedPush = runDelivery(["pr-ready"]);
+    refused(credentialedPush, /its push URL is not one GitHub repository URL/);
+    assert.ok(!credentialedPush.stderr.includes(secret), "a refusal never prints push URL credentials");
     assert.deepEqual(calls(), []);
     console.log("✓ GitHub guards accepted the current PR head and refused mismatched PRs and stale runs.");
   }
@@ -202,7 +226,7 @@ const fs = require("node:fs");
 const args = process.argv.slice(2);
 const input = args.includes("--body-file") ? fs.readFileSync(0, "utf8") : "";
 fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ args, input }) + "\\n");
-if (args[0] === "repo" && args[1] === "view") process.stdout.write(JSON.stringify({ defaultBranchRef: { name: "main" }, nameWithOwner: "example/project", url: "https://github.com/example/project" }));
+if (args[0] === "repo" && args[1] === "view") process.stdout.write(process.env.FAKE_GH_REPO);
 if (args[0] === "pr" && args[1] === "list") {
   const change = JSON.parse(process.env.FAKE_GH_CONFIG_CHANGE || "null");
   if (change) {
