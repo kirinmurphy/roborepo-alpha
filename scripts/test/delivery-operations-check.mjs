@@ -36,7 +36,7 @@ try {
   }
   assert.match(delivery(checkout, ["fetch", "-bad"]).stderr, /remote name, got "-bad"/, "an invalid remote name is quoted in the refusal");
   const urlArgument = delivery(checkout, ["fetch", "https://u:ghp_argSecret@github.com/x/y"]);
-  assert.match(urlArgument.stderr, /URL-like value \(not printed\)/);
+  assert.match(urlArgument.stderr, /non-name value \(not printed\)/);
   assert.ok(!urlArgument.stderr.includes("ghp_argSecret"), "a URL passed as the remote is never echoed");
   console.log("✓ Guarded fetch refreshed origin/main and preserved local branches and tags.");
 
@@ -128,6 +128,23 @@ try {
     refused(credentialedMerge, /Upstream must name the current branch: a non-ref value \(not printed\)/);
     assert.ok(!credentialedMerge.stderr.includes(secret), "a refusal never prints a credentialed merge setting");
     git(checkout, "config", "branch.feature/check.merge", "refs/heads/feature/check");
+    git(checkout, "config", "--add", "branch.feature/check.merge", "refs/heads/feature/check");
+    refused(runDelivery(["pr-ready"]), /Upstream must name the current branch: 2 merge values/);
+    git(checkout, "config", "--unset-all", "branch.feature/check.merge");
+    refused(runDelivery(["pr-ready"]), /Upstream must name the current branch: none configured/);
+    git(checkout, "config", "branch.feature/check.merge", "refs/heads/feature/check");
+
+    git(checkout, "config", "branch.feature/check.remote", `/srv/${secret}/repo.git`);
+    const pathRemote = runDelivery(["pr-ready"]);
+    refused(pathRemote, /remote name, got a URL, path, or other non-name value \(not printed\)/);
+    assert.ok(!pathRemote.stderr.includes(secret), "a refusal never prints a path-valued remote");
+    git(checkout, "config", "--unset", "branch.feature/check.remote");
+    refused(runDelivery(["pr-ready"]), /No branch\.feature\/check\.remote is configured/);
+    git(checkout, "config", "branch.feature/check.remote", "origin");
+    git(checkout, "switch", "--detach");
+    refused(runDelivery(["pr-ready"]), /HEAD is detached/);
+    git(checkout, "switch", "feature/check");
+    assert.deepEqual(calls(), [], "configuration refusals stop before any GitHub call");
     for (const url of [
       `https://x-access-token:${secret}@github.com/example/project.git`,
       `https://me@example.com:${secret}@github.com/example/project.git`,

@@ -12,6 +12,12 @@ async function git(cwd, args) {
   return result.stdout.trim();
 }
 
+// A missing key fails `git config`; callers report it as unset rather than as a command failure.
+async function gitConfigValues(cwd, key) {
+  const result = await runGitProcess(cwd, ["config", "--get-all", key], { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
+  return result.ok ? result.stdout.trim().split("\n").filter(Boolean) : [];
+}
+
 async function requireConfiguredRemote(cwd, remote) {
   if (typeof remote !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(remote)) {
     throw new Error(`Expected a configured remote name, got ${describeRemoteArgument(remote)}`);
@@ -44,11 +50,12 @@ async function gh(cwd, args, input = "") {
   return result.stdout;
 }
 
-// Remote URLs can carry tokens in forms no redaction pattern reliably catches, and refusals reach
-// agent transcripts, so refusals name the remote and which URL failed but never print a URL.
+// Remote URLs and paths can carry tokens in forms no redaction pattern reliably catches, and
+// refusals reach agent transcripts, so refusals name the remote and which URL failed but never
+// print a URL or path.
 function describeRemoteArgument(value) {
   const text = String(value);
-  return /[@:]/.test(text) ? "a URL-like value (not printed)" : JSON.stringify(text);
+  return /^[A-Za-z0-9._-]+$/.test(text) ? JSON.stringify(text) : "a URL, path, or other non-name value (not printed)";
 }
 
 // Names every failed condition so a refusal shows which target mismatched, not only that one did.
@@ -58,14 +65,23 @@ function refuseMismatches(summary, checks) {
 }
 
 async function localDeliveryTarget(cwd) {
-  const branch = await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
+  const symbolic = await runGitProcess(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"], { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
+  if (!symbolic.ok) throw new Error("HEAD is detached; delivery needs a checked-out feature branch");
+  const branch = symbolic.stdout.trim();
   const head = await git(cwd, ["rev-parse", "--verify", "HEAD"]);
-  const remote = await git(cwd, ["config", "--get", `branch.${branch}.remote`]);
+  const remotes = await gitConfigValues(cwd, `branch.${branch}.remote`);
+  if (remotes.length !== 1) {
+    throw new Error(remotes.length === 0 ? `No branch.${branch}.remote is configured` : `Multiple branch.${branch}.remote values are configured`);
+  }
+  const [remote] = remotes;
   await requireConfiguredRemote(cwd, remote);
-  const upstream = await git(cwd, ["config", "--get-all", `branch.${branch}.merge`]);
+  const merges = await gitConfigValues(cwd, `branch.${branch}.merge`);
+  const upstream = merges.join("\n");
   if (upstream !== `refs/heads/${branch}`) {
     // The merge setting is free-form config and can hold a credentialed URL; print only a ref.
-    const shown = /^refs\/[A-Za-z0-9._/-]+$/.test(upstream) ? upstream : upstream ? "a non-ref value (not printed)" : "none";
+    const shown = merges.length === 0 ? "none configured"
+      : merges.length > 1 ? `${merges.length} merge values`
+        : /^refs\/[A-Za-z0-9._/-]+$/.test(upstream) ? upstream : "a non-ref value (not printed)";
     throw new Error(`Upstream must name the current branch: ${shown}, expected refs/heads/${branch}`);
   }
   const fetchUrls = await git(cwd, ["remote", "get-url", "--all", remote]);
