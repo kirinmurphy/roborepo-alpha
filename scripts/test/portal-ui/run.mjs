@@ -19,7 +19,6 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { chromium } from "@playwright/test";
 import { guardPortal } from "../lib/portal-cleanup.mjs";
 import { hostHarnessIsolationEnv } from "./host-harness-isolation.mjs";
 import {
@@ -28,9 +27,15 @@ import {
   upsertRepository,
   writeRegistry,
 } from "../../../modules/repositories/index.mjs";
+import { ensureDevDependencies } from "./ensure-deps.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..", "..");
+
+// Install this checkout's dev dependencies first: a static import of Playwright would fail (or load
+// another checkout's copy) before this line could run.
+if (!ensureDevDependencies(repoRoot)) process.exit(1);
+const { chromium } = await import("@playwright/test");
 
 const browserPath = chromium.executablePath();
 if (!fs.existsSync(browserPath)) {
