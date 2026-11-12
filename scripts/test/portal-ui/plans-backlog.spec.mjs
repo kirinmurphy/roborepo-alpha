@@ -1543,6 +1543,14 @@ test.describe("Backlog directory and ordering", () => {
     }
   });
 
+  test("a warning about an unknown plan uses the notice's padding", async ({ page }) => {
+    setOrder([...savedOrder(), "missing1"]);
+    await page.goto(`/plans?lifecycle=backlog&repo=${await repoKey(page, repoName)}`);
+    const warning = page.getByRole("paragraph").filter({ hasText: "plans-order.json names an unknown plan in alpha: missing1." });
+    await expect(warning).toBeVisible();
+    await expect(warning).toHaveCSS("margin-block", "0px");
+  });
+
   test("an unparseable order file locks Prioritize and says why, and is left alone", async ({ page }) => {
     write("plans/plans-order.json", "{ nope");
     await openOrdering(page);

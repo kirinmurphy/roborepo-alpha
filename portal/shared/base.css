@@ -1559,6 +1559,7 @@ portal-menu-button {
   min-width: 0;
   flex: 1 1 0%;
 }
+.portal-notice > p { margin: 0; }
 .portal-notice.notice-alert {
   border-color: var(--alert-line);
   background: var(--alert-bg);
