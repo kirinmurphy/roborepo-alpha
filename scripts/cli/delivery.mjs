@@ -16,7 +16,6 @@ export async function deliveryCommand(argv) {
       ? await fetchTrackingRefs(process.cwd(), value)
       : await updatePullRequest(process.cwd(), operation, body);
     console.log(message);
-    return 0;
   } catch (error) {
     console.error(error.message);
     process.exitCode = 1;

@@ -44,13 +44,19 @@ async function gh(cwd, args, input = "") {
   return result.stdout;
 }
 
+// Names every failed condition so a refusal shows which target mismatched, not only that one did.
+function refuseMismatches(summary, checks) {
+  const failed = checks.filter(([ok]) => !ok).map(([, detail]) => detail);
+  if (failed.length > 0) throw new Error(`${summary}: ${failed.join("; ")}`);
+}
+
 async function localDeliveryTarget(cwd) {
   const branch = await git(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"]);
   const head = await git(cwd, ["rev-parse", "--verify", "HEAD"]);
   const remote = await git(cwd, ["config", "--get", `branch.${branch}.remote`]);
   await requireConfiguredRemote(cwd, remote);
   const upstream = await git(cwd, ["config", "--get-all", `branch.${branch}.merge`]);
-  if (upstream !== `refs/heads/${branch}`) throw new Error("Upstream must name the current branch");
+  if (upstream !== `refs/heads/${branch}`) throw new Error(`Upstream must name the current branch: ${upstream || "none"}, expected refs/heads/${branch}`);
   const fetchUrls = await git(cwd, ["remote", "get-url", "--all", remote]);
   const pushUrls = await git(cwd, ["remote", "get-url", "--push", "--all", remote]);
   const githubTransport = /^(?:https:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com\/|git@github\.com:)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;
@@ -58,7 +64,7 @@ async function localDeliveryTarget(cwd) {
   if (!/^git:github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository || "")
     || !githubTransport.test(fetchUrls) || !githubTransport.test(pushUrls)
     || normalizeGitRemote(pushUrls)?.toLowerCase() !== repository || fetchUrls.includes("\n") || pushUrls.includes("\n")) {
-    throw new Error("Remote must resolve to one matching GitHub fetch and push repository");
+    throw new Error(`Remote ${remote} must resolve to one matching GitHub fetch and push repository: fetch ${fetchUrls}, push ${pushUrls}`);
   }
   const repo = repository.slice(4);
   return { branch, head, remote, upstream, fetchUrls, pushUrls, repo };
@@ -80,11 +86,15 @@ async function currentPullRequest(cwd) {
   ]));
   if (!Array.isArray(prs) || prs.length !== 1) throw new Error("Expected exactly one open pull request for the current branch");
   const pr = prs[0];
-  if (!Number.isSafeInteger(pr.number) || pr.number < 1 || pr.state !== "OPEN"
-    || pr.isCrossRepository !== false || pr.headRefName !== branch || pr.headRefOid !== head
-    || !pr.baseRefName || pr.baseRefName === branch || pr.url?.toLowerCase() !== `https://${repo}/pull/${pr.number}`) {
-    throw new Error("Pull request repository, branch, or pushed head does not match the current feature branch");
-  }
+  refuseMismatches("Pull request does not match the current feature branch", [
+    [Number.isSafeInteger(pr.number) && pr.number >= 1, `number ${pr.number} is not a valid pull request number`],
+    [pr.state === "OPEN", `state is ${pr.state}, expected OPEN`],
+    [pr.isCrossRepository === false, "head is in another repository"],
+    [pr.headRefName === branch, `head branch is ${pr.headRefName}, expected ${branch}`],
+    [pr.headRefOid === head, `head commit is ${pr.headRefOid}, expected pushed head ${head}`],
+    [Boolean(pr.baseRefName) && pr.baseRefName !== branch, `base branch ${pr.baseRefName} must differ from ${branch}`],
+    [pr.url?.toLowerCase() === `https://${repo}/pull/${pr.number}`, `url is ${pr.url}, expected https://${repo}/pull/${pr.number}`],
+  ]);
   return { pr, target };
 }
 
@@ -101,11 +111,14 @@ export async function updatePullRequest(cwd, operation, value) {
       "run", "view", value, "--repo", repo,
       "--json", "databaseId,headBranch,headSha,status,conclusion,url",
     ]));
-    if (String(run.databaseId) !== value || run.headBranch !== branch || run.headSha !== head
-      || run.url?.toLowerCase() !== `https://${repo}/actions/runs/${value}`
-      || run.status !== "completed" || run.conclusion !== "failure") {
-      throw new Error("Workflow run must be a failed completed run for this repository and current PR head");
-    }
+    refuseMismatches("Workflow run must be a failed completed run for this repository and current PR head", [
+      [String(run.databaseId) === value, `run id is ${run.databaseId}, expected ${value}`],
+      [run.headBranch === branch, `run branch is ${run.headBranch}, expected ${branch}`],
+      [run.headSha === head, `run commit is ${run.headSha}, expected pushed head ${head}`],
+      [run.url?.toLowerCase() === `https://${repo}/actions/runs/${value}`, `run url is ${run.url}, expected https://${repo}/actions/runs/${value}`],
+      [run.status === "completed", `run status is ${run.status}, expected completed`],
+      [run.conclusion === "failure", `run conclusion is ${run.conclusion}, expected failure`],
+    ]);
   }
   // GitHub reads can take long enough for another session to change the selected repository.
   if (!isDeepStrictEqual(await localDeliveryTarget(cwd), target)) {

@@ -76,19 +76,25 @@ try {
     passed(runDelivery(["retry-ci", "73"]));
     assert.deepEqual(calls().at(-1).args, ["run", "rerun", "73", "--repo", "github.com/example/project", "--failed"]);
 
-    for (const patch of [
-      { headRefName: "another-branch" }, { headRefOid: latest }, { isCrossRepository: true },
-      { url: "https://github.com/other/project/pull/42" }, { state: "CLOSED" }, { baseRefName: "feature/check" },
+    for (const [patch, detail] of [
+      [{ headRefName: "another-branch" }, /head branch is another-branch/], [{ headRefOid: latest }, /head commit is/],
+      [{ isCrossRepository: true }, /another repository/], [{ url: "https://github.com/other/project/pull/42" }, /url is/],
+      [{ state: "CLOSED" }, /state is CLOSED/], [{ baseRefName: "feature/check" }, /base branch/],
     ]) {
-      refused(runDelivery(["pr-ready"], [{ ...pr, ...patch }]), /pull request/i);
+      const result = runDelivery(["pr-ready"], [{ ...pr, ...patch }]);
+      refused(result, /pull request/i);
+      assert.match(result.stderr, detail, "the refusal names the mismatched pull request field");
       assert.equal(calls().length, 2, "refusal stops before mutation");
     }
     refused(runDelivery(["pr-body", bodyFile], [pr, { ...pr, number: 43, url: "https://github.com/example/project/pull/43" }]), /pull request/i);
-    for (const patch of [
-      { headSha: latest }, { headBranch: "another-branch" }, { databaseId: 74 }, { conclusion: "success" },
-      { status: "in_progress" }, { url: "https://github.com/other/project/actions/runs/73" },
+    for (const [patch, detail] of [
+      [{ headSha: latest }, /run commit is/], [{ headBranch: "another-branch" }, /run branch is another-branch/],
+      [{ databaseId: 74 }, /run id is 74/], [{ conclusion: "success" }, /run conclusion is success/],
+      [{ status: "in_progress" }, /run status is in_progress/], [{ url: "https://github.com/other/project/actions/runs/73" }, /run url is/],
     ]) {
-      refused(runDelivery(["retry-ci", "73"], [pr], { ...run, ...patch }), /run/i);
+      const result = runDelivery(["retry-ci", "73"], [pr], { ...run, ...patch });
+      refused(result, /run/i);
+      assert.match(result.stderr, detail, "the refusal names the mismatched run field");
       assert.equal(calls().length, 3, "refusal stops before rerun");
     }
     for (const args of [["pr-ready", "42"], ["pr-body", bodyFile, "--title"], ["retry-ci", "--failed"], ["retry-ci", "73", "--debug"]]) {
