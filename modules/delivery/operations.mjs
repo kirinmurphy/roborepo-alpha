@@ -14,7 +14,7 @@ async function git(cwd, args) {
 
 async function requireConfiguredRemote(cwd, remote) {
   if (typeof remote !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(remote)) {
-    throw new Error(`Expected a configured remote name, got ${JSON.stringify(redactRemoteUrls(String(remote)))}`);
+    throw new Error(`Expected a configured remote name, got ${describeRemoteArgument(remote)}`);
   }
   await git(cwd, ["check-ref-format", `refs/remotes/${remote}/probe`]);
   const remotes = (await git(cwd, ["remote"])).split("\n");
@@ -44,9 +44,11 @@ async function gh(cwd, args, input = "") {
   return result.stdout;
 }
 
-// Remote URLs can carry tokens in their user-info, and refusals reach agent transcripts.
-function redactRemoteUrls(urls) {
-  return urls.split("\n").map((url) => url.replace(/^([A-Za-z][A-Za-z0-9+.-]*:\/\/)[^/@]*@/, "$1***@")).join(", ");
+// Remote URLs can carry tokens in forms no redaction pattern reliably catches, and refusals reach
+// agent transcripts, so refusals name the remote and which URL failed but never print a URL.
+function describeRemoteArgument(value) {
+  const text = String(value);
+  return /[@:]/.test(text) ? "a URL-like value (not printed)" : JSON.stringify(text);
 }
 
 // Names every failed condition so a refusal shows which target mismatched, not only that one did.
@@ -70,10 +72,10 @@ async function localDeliveryTarget(cwd) {
     && /^git:github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository || "");
   const pushValid = !pushUrls.includes("\n") && githubTransport.test(pushUrls);
   refuseMismatches(`Remote ${remote} must resolve to one matching GitHub fetch and push repository`, [
-    [fetchValid, `fetch URL ${redactRemoteUrls(fetchUrls)} is not one GitHub repository URL`],
-    [pushValid, `push URL ${redactRemoteUrls(pushUrls)} is not one GitHub repository URL`],
+    [fetchValid, "its fetch URL is not one GitHub repository URL"],
+    [pushValid, "its push URL is not one GitHub repository URL"],
     [!fetchValid || !pushValid || normalizeGitRemote(pushUrls)?.toLowerCase() === repository,
-      `push URL ${redactRemoteUrls(pushUrls)} names a different repository than fetch URL ${redactRemoteUrls(fetchUrls)}`],
+      "its push URL names a different repository than its fetch URL"],
   ]);
   const repo = repository.slice(4);
   return { branch, head, remote, upstream, fetchUrls, pushUrls, repo };
@@ -96,7 +98,9 @@ async function currentPullRequest(cwd) {
     "pr", "list", "--repo", repo, "--head", branch, "--state", "open",
     "--json", "number,headRefName,headRefOid,baseRefName,isCrossRepository,state,url",
   ]));
-  if (!Array.isArray(prs) || prs.length !== 1) throw new Error("Expected exactly one open pull request for the current branch");
+  if (!Array.isArray(prs) || prs.length !== 1) {
+    throw new Error(`Expected exactly one open pull request for ${branch}, found ${Array.isArray(prs) ? prs.length : "an unreadable list"}`);
+  }
   const pr = prs[0];
   refuseMismatches("Pull request does not match the current feature branch", [
     [Number.isSafeInteger(pr.number) && pr.number >= 1, `number ${pr.number} is not a valid pull request number`],
@@ -111,7 +115,7 @@ async function currentPullRequest(cwd) {
 }
 
 export async function updatePullRequest(cwd, operation, value) {
-  if (!["pr-body", "pr-ready", "retry-ci"].includes(operation)) throw new Error("Disallowed delivery operation");
+  if (!["pr-body", "pr-ready", "retry-ci"].includes(operation)) throw new Error(`Disallowed delivery operation: ${JSON.stringify(operation)}`);
   if (operation === "retry-ci" && (!/^[1-9][0-9]*$/.test(value || "") || !Number.isSafeInteger(Number(value)))) {
     throw new Error("Expected a numeric workflow run ID");
   }

@@ -35,6 +35,9 @@ try {
     refused(delivery(checkout, ["fetch", ...args]), /remote|usage/i);
   }
   assert.match(delivery(checkout, ["fetch", "-bad"]).stderr, /remote name, got "-bad"/, "an invalid remote name is quoted in the refusal");
+  const urlArgument = delivery(checkout, ["fetch", "https://u:ghp_argSecret@github.com/x/y"]);
+  assert.match(urlArgument.stderr, /URL-like value \(not printed\)/);
+  assert.ok(!urlArgument.stderr.includes("ghp_argSecret"), "a URL passed as the remote is never echoed");
   console.log("✓ Guarded fetch refreshed origin/main and preserved local branches and tags.");
 
   git(checkout, "switch", "-c", "feature/check");
@@ -87,7 +90,7 @@ try {
       assert.match(result.stderr, detail, "the refusal names the mismatched pull request field");
       assert.equal(calls().length, 2, "refusal stops before mutation");
     }
-    refused(runDelivery(["pr-body", bodyFile], [pr, { ...pr, number: 43, url: "https://github.com/example/project/pull/43" }]), /pull request/i);
+    refused(runDelivery(["pr-body", bodyFile], [pr, { ...pr, number: 43, url: "https://github.com/example/project/pull/43" }]), /one open pull request for feature\/check, found 2/);
     for (const [patch, detail] of [
       [{ headSha: latest }, /run commit is/], [{ headBranch: "another-branch" }, /run branch is another-branch/],
       [{ databaseId: 74 }, /run id is 74/], [{ conclusion: "success" }, /run conclusion is success/],
@@ -104,28 +107,33 @@ try {
     }
 
     git(checkout, "remote", "add", "replacement", "git@github.com:example/project.git");
-    for (const [key, changed, original] of [
-      ["remote.origin.url", "https://github.com/example/project.git", "git@github.com:example/project.git"],
-      ["remote.origin.pushurl", "https://github.com/example/project.git", null],
-      ["branch.feature/check.remote", "replacement", "origin"],
-      ["branch.feature/check.merge", "refs/heads/another-branch", "refs/heads/feature/check"],
+    for (const [key, changed, original, reported] of [
+      ["remote.origin.url", "https://github.com/example/project.git", "git@github.com:example/project.git", /validation: fetchUrls, pushUrls$/m],
+      ["remote.origin.pushurl", "https://github.com/example/project.git", null, /validation: pushUrls$/m],
+      ["branch.feature/check.remote", "replacement", "origin", /validation: remote$/m],
+      // A changed merge ref fails the re-read's own upstream check, which names it.
+      ["branch.feature/check.merge", "refs/heads/another-branch", "refs/heads/feature/check", /Upstream must name the current branch: refs\/heads\/another-branch/],
     ]) {
       const result = runDelivery(["pr-ready"], [pr], run, [key, changed]);
       assert.equal(result.status, 1, result.stderr || result.stdout);
-      // A change can also fail the re-read's own checks, which name the problem themselves.
-      assert.match(result.stderr, /changed during pull request validation: \w|Upstream must name|Unknown configured remote|URL/,
-        "the refusal names the changed configuration");
+      assert.match(result.stderr, reported, `the refusal names the changed ${key}`);
       assert.equal(calls().length, 2, "changed upstream configuration stops before mutation");
       if (original === null) git(checkout, "config", "--unset", key);
       else git(checkout, "config", key, original);
     }
 
     const secret = "ghp_deliveryCheckSecret";
-    git(checkout, "remote", "set-url", "origin", `https://x-access-token:${secret}@github.com/example/project.git`);
-    const credentialed = runDelivery(["pr-ready"]);
-    refused(credentialed, /fetch URL https:\/\/\*\*\*@github\.com/);
-    assert.ok(!credentialed.stderr.includes(secret), "a refusal never prints remote URL credentials");
-    assert.deepEqual(calls(), []);
+    for (const url of [
+      `https://x-access-token:${secret}@github.com/example/project.git`,
+      `https://me@example.com:${secret}@github.com/example/project.git`,
+      ` https://user:${secret}/x@github.com/example/project.git`,
+    ]) {
+      git(checkout, "remote", "set-url", "origin", url);
+      const credentialed = runDelivery(["pr-ready"]);
+      refused(credentialed, /Remote origin .*fetch URL is not one GitHub repository URL/);
+      assert.ok(!credentialed.stderr.includes(secret), "a refusal never prints remote URL credentials");
+      assert.deepEqual(calls(), []);
+    }
     git(checkout, "remote", "set-url", "origin", "file://github.com/example/project.git");
     refused(runDelivery(["pr-ready"]), /remote|repository/i);
     assert.deepEqual(calls(), []);
