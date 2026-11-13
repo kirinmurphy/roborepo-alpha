@@ -16,8 +16,8 @@ When a plan command finishes, it writes a report in the chat. The user often rea
 later, after working on something else, and cannot tell what the plan was for, what changed, or
 what they need to decide. This plan makes every plan-command report readable on its own: it says
 what the plan is for, describes changes as things a person would notice, explains every term it
-uses, and sets out each decision with its options and a recommendation. A second agent that sees
-only the report checks it before the user does, and visible changes come with a screenshot,
+uses, and sets out each decision with its options and a recommendation. For the commands that end
+a stage of work, a second agent that sees only the report checks it before the user does, and visible changes come with a screenshot,
 recording, or diagram.
 
 ## Context
@@ -83,7 +83,7 @@ make them understandable to someone who was not there.
   recommendation.
 - A visible change ships with a screenshot or recording, and a changed flow with a before/after
   diagram, or the report says why there is none.
-- Technical detail (commit ids, check names, file lists, validator passes) stays out of the first
+- Technical detail (commit ids, check names, file lists, Validator passes) stays out of the first
   layer and is available on request or in the plan document.
 
 ## Non-goals
@@ -166,7 +166,7 @@ Each command keeps only its own specifics, and points to the shared shape for ev
 | `/plan-write` | Plan title and id; open questions |
 | `/plan-promote` | Whether the plan moved to ready; the snippet the user pastes into a new chat to start the plan. Its ten-line counts block moves to Record or is dropped |
 | `/plan-execute` | Its current sections, now pointing at the shared reference |
-| `/plan-review` | The exact-commit approval question; findings that block approval. The nine-item packet becomes layer 2: criteria appear as a plain checklist of outcomes, and commits, validator passes, and evidence detail live in the plan's `## Review` record |
+| `/plan-review` | The exact-commit approval question; findings that block approval. The nine-item packet becomes layer 2: criteria appear as a plain checklist of outcomes, and commits, Validator passes, and evidence detail live in the plan's `## Review` record |
 | `/plan-close` | The reason for each refusal |
 | `/plan-archive` | The archive reason; any branch or worktree holding unmerged work |
 
@@ -250,7 +250,7 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 | Doc | Update |
 | --- | --- |
 | `docs/user/guides/plan/lifecycle/plan-suite.md` | Describe what a completion report contains. Update every description of the `/plan-review` packet: the commands table, the review steps, the answer table that "shows you the packet again", and check whether the merge-readiness paragraph on the committed review packet still holds |
-| `globals/packages/response-output/package.config.json` | Package description, if the new reader changes it; the control panel shows this text |
+| `globals/packages/response-output/package.config.json` | Package description, if the new reader changes it. The Config Control Panel, the portal page for turning packages on and off, shows this text |
 
 ## Related plans
 
@@ -277,7 +277,7 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 
 ## Open Questions
 
-- **Which commands get the fresh-agent check?** Recommended: `/plan-promote`, `/plan-execute`,
+- **Which commands get the cold-reader check from a separate agent?** Recommended: `/plan-promote`, `/plan-execute`,
   `/plan-review`, and `/plan-close`, which end a stage and write long reports; `/plan-write` and
   `/plan-archive` use the in-session self-check. Alternative: all six, which checks every report
   with a reader that never saw the session, at the cost of a short extra step on the two quick
