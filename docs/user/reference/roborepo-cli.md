@@ -279,12 +279,14 @@ permission entries for workflow skills that deliver an already-pushed feature br
 | Command | Operation |
 | --- | --- |
 | `roborepo delivery fetch <remote>` | Refresh heads under `refs/remotes/<remote>/` using a configured remote name |
-| `roborepo delivery pr-body <body-file>` | Replace the current branch's open PR body with the UTF-8 file |
+| `roborepo delivery pr-body <body-file>` | Replace the current branch's open PR body with a UTF-8 file in a temp directory |
 | `roborepo delivery pr-ready` | Mark that PR ready for review |
 | `roborepo delivery retry-ci <run-id>` | Rerun failed jobs in a completed, failed run at that PR head |
 
 A normal workflow refreshes the configured remote, pushes the feature branch with its upstream,
-writes the finished PR description to a file, and updates the existing PR.
+writes the finished PR description to a file, and updates the existing PR. The body file must
+resolve, after symlinks, to a regular file under the system temp directory or `/tmp`, so the
+allowed command cannot publish files from elsewhere on the machine.
 
 ```sh
 roborepo delivery fetch origin

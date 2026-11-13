@@ -100,6 +100,19 @@ try {
       assert.match(result.stderr, detail, "the refusal names the mismatched pull request field");
       assert.equal(calls().length, 2, "refusal stops before mutation");
     }
+    // The repository's own CLI file sits outside the temp directory, as a secret file would.
+    const linkedBody = path.join(root, "linked-body.md");
+    fs.symlinkSync(cli, linkedBody);
+    for (const outside of [cli, linkedBody]) {
+      const result = runDelivery(["pr-body", outside]);
+      refused(result, /PR body file must be inside a temp directory/);
+      assert.ok(!result.stderr.includes(cli), "a refused body file path is never printed");
+      assert.deepEqual(calls(), [], "a body file outside temp stops before any GitHub call");
+    }
+    const missingBody = runDelivery(["pr-body", path.join(root, "ghp_bodySecret.md")]);
+    refused(missingBody, /PR body file was not found \(path not printed\)/);
+    assert.ok(!missingBody.stderr.includes("ghp_bodySecret"));
+    refused(runDelivery(["pr-body", root]), /PR body file must be a regular file/);
     refused(runDelivery(["pr-body", bodyFile], [pr, { ...pr, number: 43, url: "https://github.com/example/project/pull/43" }]), /one open pull request for feature\/check, found 2/);
     for (const [patch, detail] of [
       [{ headSha: latest }, /run commit is/], [{ headBranch: "another-branch" }, /run branch is another-branch/],
