@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run validation pass 4 on the gh-reason fix; if clean, submit for review and push the branch.
+next_action: Run validation pass 5; if clean, submit for review and push the branch.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -394,6 +394,11 @@ Acceptance criteria:
       the Decision Log
 - [x] The excluded-commands comment and user doc gave SSH as the reason `gh` runs outside the
       sandbox; it is the unlisted `api.github.com` host — fixed (b3d45537)
+- [x] The testing doc claimed the runner verifies the whole projection; the `sandbox-shell` ask and
+      `reach-allowed-hosts` ask and deny buckets never ran against a real binary — fixed (e342835e),
+      added to the runner's unverified list
+- [x] Docs said `gh` "cannot work" in the sandbox when the reason given means it would prompt —
+      fixed (e342835e)
 
 ### Verification
 
@@ -402,6 +407,7 @@ Acceptance criteria:
   Decision Log
 - Full local gate (`npm run check`) passed at 75f212d3
 - Validation pass 3 at 0a1eca67 (fresh-context subagent): 1 `fix` finding, fixed in b3d45537
+- Validation pass 4 at 15136ae0 (fresh-context subagent): 2 `fix` findings, fixed in e342835e
 
 ## Open questions
 
