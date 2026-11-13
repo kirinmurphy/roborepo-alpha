@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run validation pass 7; if clean, submit for review and push the branch.
+next_action: Human review with /plan-review; after merge, run the Not tested steps on this machine.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -417,6 +417,8 @@ Acceptance criteria:
 - Validation pass 4 at 15136ae0 (fresh-context subagent): 2 `fix` findings, fixed in e342835e
 - Validation pass 5 at e342835e (fresh-context subagent): 1 `fix` finding, fixed in c81e4460; `bash scripts/doctor.sh --quiet` passed after it
 - Validation pass 6 at c81e4460 (fresh-context subagent): 2 `fix` findings (docs), fixed in 168a43a1; the subagent's own `bash scripts/doctor.sh --quiet` passed (98 checks)
+- Validation: clean on pass 7 at 168a43a1 (fresh-context subagent)
+- After the full gate at 75f212d3, only c81e4460 changed code (Codex approval policy); its scoped checks and `bash scripts/doctor.sh --quiet` passed, and CI runs the full gate on push
 
 ## Open questions
 
