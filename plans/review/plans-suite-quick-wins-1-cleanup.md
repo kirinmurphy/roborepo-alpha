@@ -496,6 +496,8 @@ describe the distinction between ordinary merges and owner access.
 - Status: complete
 - Reviewed implementation commit: be88642fae8a36fe6a9e986bbe79436ac93b6c98
 - Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
+- Approval evidence: on 2026-11-12, in the /plan-review session, the user answered
+  "Approve be88642f" to the question "Approve 'Clear agent friction' at commit be88642f?"
 
 ### Approval
 - Decision: approved
