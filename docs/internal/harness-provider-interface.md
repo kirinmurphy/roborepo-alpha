@@ -391,5 +391,5 @@ everything there holds for any checkout, because `~/.claude/settings.json` is us
 - Claude adds the session's directory and, in a linked worktree, the shared `.git` directory itself.
 - Claude merges `Edit` allow rules (`write-scope`) into writable paths and `Read`/`Edit` deny rules
   (`read-secrets`, `edit-plans-store`) into denied paths.
-- The plans store needs no grant: `edit-plans-store` denies its worktree and administrative
+- The plans store cannot be granted: `edit-plans-store` denies its worktree and administrative
   directory to sandboxed writes regardless, so `roborepo` is an excluded command instead.

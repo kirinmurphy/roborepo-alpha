@@ -8,9 +8,10 @@
 // them.
 
 // Commands that cannot work inside the sandbox. Claude matches this list against the text of the
-// whole call, and every command in the call must match, so `roborepo plans show x | grep y` stays
-// sandboxed. Each entry runs with full filesystem and network access, under the ordinary
-// allow/ask/deny rules — keep the list short.
+// whole call: `roborepo plans show x | grep y` stays sandboxed. Claude's documentation says every
+// command in the call must match, but on 2.1.309 a leading `cd` did not keep a call sandboxed.
+// Each entry runs with full filesystem and network access, under the ordinary allow/ask/deny
+// rules — keep the list short.
 //   - docker: talks to the daemon over a Unix socket the sandbox does not open.
 //   - gh, git push/pull/fetch: SSH and gh's own credential store cannot pass the sandbox proxy.
 //   - roborepo: plans commands lock and commit the plans store, which edit-plans-store denies to

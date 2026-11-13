@@ -255,10 +255,10 @@ It is separate from `go-online`, which stays Codex's on/off network switch.
 `roborepo`, and `./bin/roborepo` cannot work inside it: Docker needs its daemon socket, SSH cannot
 pass the sandbox proxy, and `roborepo plans` commands write the plans store, which `edit-plans-store`
 denies to every sandboxed write. A call made only of those commands runs unsandboxed, under the
-ordinary allow, ask, and deny rules. A call that adds any other command, a pipe included, stays
-sandboxed; do not rely on a leading `cd` either way. `roborepo plans show <id> --json | grep
-synchronized` cannot lock the plans store and reports `"synchronized": false`. Run plans commands
-on their own.
+ordinary allow, ask, and deny rules. A pipe, or most other commands added to the call, keeps it
+sandboxed; a leading `cd` was seen not to, so do not rely on it either way.
+`roborepo plans show <id> --json | grep synchronized` cannot lock the plans store and reports
+`"synchronized": false`. Run plans commands on their own.
 
 Codex always sandboxes its commands, so both behaviors are Claude-only. Enforcement was verified on
 macOS with Claude Code 2.1.309 through `claude -p`; Linux and Windows are unverified. A local
