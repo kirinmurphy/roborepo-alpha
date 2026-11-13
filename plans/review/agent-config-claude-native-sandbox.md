@@ -364,15 +364,25 @@ Acceptance criteria:
 
 ## Not tested
 
-- [ ] After merge, `roborepo update` on this machine writes the `sandbox` key into
+- [x] After merge, `roborepo update` on this machine writes the `sandbox` key into
       `~/.claude/settings.json`, `roborepo doctor` passes, and a new session's shell commands run
       without prompts. Needs the merged code applied to the live home, which this branch must not do
-      before review.
-- [ ] Then remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json`,
+      before review. — Confirmed during review at the user's request (2026-11-13), before merge:
+      `roborepo update` from the plan worktree refuses while the global `roborepo` command links to
+      the main checkout, so `roborepo config permissions` from the worktree applied the branch's
+      permission outputs instead. Only the `sandbox` key changed in the live Claude settings, the
+      Codex config was unchanged, and `bash scripts/doctor.sh --quiet` passed (97 checks). A headless
+      `claude -p` in the repo with the live settings and no pre-allowed tools ran a compound
+      temp-folder command and printed `ok`.
+- [x] Then remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json`,
       and confirm a new session still reports the sandbox (`claude sandbox status` shows
-      `"enabled": true`). Needs the step above first.
-- [ ] A desktop-app session started after the live update honors the generated key the way it
-      honored the trial block. The enforcement runner covers `claude -p` only.
+      `"enabled": true`). Needs the step above first. — Done 2026-11-13; `claude sandbox status`
+      reports `"enabled":true` with `enabledSource` `settings` and no local sandbox block.
+- [x] A desktop-app session started after the live update honors the generated key the way it
+      honored the trial block. The enforcement runner covers `claude -p` only. — 2026-11-13: a new
+      desktop-app session in default permission mode ran a compound temp-folder write (`ok`), was
+      refused a home-folder write ("Operation not permitted"), read the public CA bundle, and
+      reported the sandbox enabled; it finished without stopping at any permission prompt.
 
 ## Review
 
