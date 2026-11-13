@@ -33,6 +33,9 @@ recording, or diagram.
 | `response-output` | An optional rules package that tells agents how to word every chat reply. Users can turn it off |
 | Validator | A separate agent that `/plan-execute` starts with a fresh context, so it judges the code from the plan and the diff without the writer's blind spots. It reports problems and never edits |
 | `feature-verification` | The skill that captures evidence a change works: command output, screenshots, and recordings |
+| Plan suite skills | Live under `globals/packages/plan-suite/skills/<command>/`. Paths below that start with a command name, such as `plan-review/SKILL.md`, are relative to that folder |
+| `## Review` record | The section of a plan where `/plan-execute` and `/plan-review` record findings, checks run, and the approval |
+| Plans portal | The local web page that lists the repo's plans and their status |
 | Layer | A report has two: plain context a cold reader needs, shown always, and technical detail, shown on request (see change 1) |
 
 ### The problem, in one example
@@ -185,11 +188,11 @@ delivers it.
 
 ```mermaid
 flowchart LR
-  D[Agent drafts report] -->|report text only| C[Cold reader agent]
-  C -->|answers + unexplained terms| J{Answers right and no unexplained terms?}
-  J -->|yes| U[Deliver to user]
-  J -->|no| R[Rewrite report]
-  R -->|revised report| C
+  D[Agent drafts report] -->|sends only the report| C[Cold reader agent]
+  C -->|returns answers and unexplained terms| J{Answers right and no unexplained terms?}
+  J -->|yes: deliver| U[User reads report]
+  J -->|no: rewrite| R[Agent rewrites report]
+  R -->|sends revised report| C
 ```
 
 | Choice | Decision | Why |
