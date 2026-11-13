@@ -285,9 +285,11 @@ permission entries for workflow skills that deliver an already-pushed feature br
 
 A normal workflow refreshes the configured remote, pushes the feature branch with its upstream,
 writes the finished PR description to a file, and updates the existing PR. The body file must
-resolve, after symlinks, to a regular file under the system temp directory or `/tmp` that the
-`read-secrets` credential denylist does not name, so the allowed command cannot publish files the
-agent could not read itself.
+resolve, after symlinks, to a regular file under a fixed system temp location (`/tmp`,
+`/var/tmp`, macOS `/var/folders`, or a Windows per-user `AppData\Local\Temp`) that the
+`read-secrets` credential denylist does not name. `TMPDIR` and `TEMP` do not widen that set. The
+command opens the file and rechecks its identity before reading, so a path swapped mid-check is
+refused. The allowed command therefore cannot publish files the agent could not read itself.
 
 ```sh
 roborepo delivery fetch origin

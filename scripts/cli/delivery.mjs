@@ -23,38 +23,71 @@ function isDeniedSecret(resolved) {
   const manifest = JSON.parse(fs.readFileSync(permissionsManifest, "utf8"));
   const patterns = manifest.behaviors.find((behavior) => behavior.id === "read-secrets")?.paths ?? [];
   const slashed = (value) => value.split(path.sep).join("/");
-  const homes = [...new Set([os.homedir(), fs.realpathSync(os.homedir())].map(slashed))];
+  // `os.homedir()` follows $HOME; the account's own home is checked too, so an overridden $HOME
+  // cannot move `~/.ssh/**` away from the real one.
+  const accountHome = process.platform === "win32" ? os.homedir() : os.userInfo().homedir;
+  const homes = [...new Set([os.homedir(), accountHome].flatMap((home) => [home, realpathOrSelf(home)]).map(slashed))];
   return patterns.some((pattern) => homes.some((home) => secretPatternRegExp(pattern, home).test(slashed(resolved))));
 }
 
+function realpathOrSelf(value) {
+  try {
+    return fs.realpathSync(value);
+  } catch {
+    return value;
+  }
+}
+
+// Fixed system temp locations, never $TMPDIR or %TEMP%: an environment variable pointed at a
+// broad directory would otherwise widen what `pr-body` may read. macOS per-user temp folders live
+// under /var/folders. On Windows only a per-user AppData\Local\Temp counts; anything else fails
+// closed.
+function temporaryRoots() {
+  if (process.platform === "win32") {
+    const temp = realpathOrSelf(os.tmpdir());
+    return /\\AppData\\Local\\Temp$/i.test(temp) ? [temp] : [];
+  }
+  const candidates = ["/tmp", "/var/tmp", ...(process.platform === "darwin" ? ["/var/folders"] : [])];
+  return [...new Set(candidates.filter((root) => fs.existsSync(root)).map((root) => fs.realpathSync(root)))];
+}
+
+const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
+
 // Agent permissions allow `delivery pr-body` with any argument, and the command reads the file
 // outside the agent's Read tool, so it must enforce what Read would: the body must resolve, after
-// symlinks, to a regular file inside a temp directory that the `read-secrets` denylist does not
-// name. Refusals and read errors never print the path.
+// symlinks, to a regular file inside a system temp directory that the `read-secrets` denylist does
+// not name. The file is then opened and its identity rechecked against a fresh resolution, so a
+// path component swapped between the check and the open cannot redirect the read. Refusals and
+// read errors never print the path.
 function readBodyFile(file) {
-  const temporaryRoots = [os.tmpdir(), "/tmp"]
-    .filter((root) => fs.existsSync(root))
-    .map((root) => fs.realpathSync(root));
+  const roots = temporaryRoots();
   let resolved;
   try {
     resolved = fs.realpathSync(file);
   } catch {
     throw new Error("PR body file was not found (path not printed)");
   }
-  if (!temporaryRoots.some((root) => resolved.startsWith(root.endsWith(path.sep) ? root : root + path.sep))) {
-    throw new Error(`PR body file must be inside a temp directory (${temporaryRoots.join(" or ")})`);
+  if (!roots.some((root) => resolved.startsWith(root.endsWith(path.sep) ? root : root + path.sep))) {
+    throw new Error(`PR body file must be inside a system temp directory (${roots.join(" or ") || "none available"})`);
   }
   if (isDeniedSecret(resolved)) throw new Error("PR body file matches the read-secrets credential denylist (path not printed)");
-  let stat;
-  let body;
+  let fd;
   try {
-    stat = fs.statSync(resolved);
-    body = stat.isFile() ? fs.readFileSync(resolved, "utf8") : null;
+    fd = fs.openSync(resolved, OPEN_FLAGS);
+    const opened = fs.fstatSync(fd);
+    if (!opened.isFile()) throw new Error("PR body file must be a regular file");
+    const recheck = fs.realpathSync(resolved);
+    const current = fs.statSync(recheck);
+    if (recheck !== resolved || current.dev !== opened.dev || current.ino !== opened.ino) {
+      throw new Error("PR body file changed while it was being checked (path not printed)");
+    }
+    return fs.readFileSync(fd, "utf8");
   } catch (error) {
-    throw new Error(`PR body file could not be read (${error.code || "unknown error"}; path not printed)`);
+    if (!error.code) throw error;
+    throw new Error(`PR body file could not be read (${error.code}; path not printed)`);
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
   }
-  if (!stat.isFile()) throw new Error("PR body file must be a regular file");
-  return body;
 }
 
 export async function deliveryCommand(argv) {

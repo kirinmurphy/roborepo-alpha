@@ -105,14 +105,21 @@ try {
     fs.symlinkSync(cli, linkedBody);
     for (const outside of [cli, linkedBody]) {
       const result = runDelivery(["pr-body", outside]);
-      refused(result, /PR body file must be inside a temp directory/);
+      refused(result, /PR body file must be inside a system temp directory/);
       assert.ok(!result.stderr.includes(cli), "a refused body file path is never printed");
       assert.deepEqual(calls(), [], "a body file outside temp stops before any GitHub call");
     }
     const missingBody = runDelivery(["pr-body", path.join(root, "ghp_bodySecret.md")]);
     refused(missingBody, /PR body file was not found \(path not printed\)/);
     assert.ok(!missingBody.stderr.includes("ghp_bodySecret"));
+    // $TMPDIR is not a trusted temp root: pointing it at the CLI's own folder still refuses.
+    const widenedTemp = delivery(checkout, ["pr-body", cli], { TMPDIR: path.dirname(cli), TEMP: path.dirname(cli), TMP: path.dirname(cli) });
+    refused(widenedTemp, /PR body file must be inside a system temp directory/);
     refused(runDelivery(["pr-body", root]), /PR body file must be a regular file/);
+    // A FIFO is opened without blocking and refused as not a regular file.
+    const fifo = path.join(root, "body.fifo");
+    passed(spawnSync("mkfifo", [fifo], { encoding: "utf8" }));
+    refused(runDelivery(["pr-body", fifo]), /PR body file must be a regular file/);
     // Temp-directory credential files stay under the same denylist the Read tool enforces.
     const secretDir = path.join(root, "ghp_secretDir");
     fs.mkdirSync(path.join(secretDir, "keys"), { recursive: true });
