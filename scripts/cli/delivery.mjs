@@ -90,10 +90,9 @@ function readBodyFile(file) {
     if (!opened.isFile()) throw new Error("PR body file must be a regular file");
     const recheck = fs.realpathSync(resolved);
     const current = fs.statSync(recheck);
-    const descriptorPath = process.platform === "linux" ? fs.readlinkSync(`/proc/self/fd/${fd}`) : resolved;
-    if (descriptorPath !== resolved || recheck !== resolved || current.dev !== opened.dev || current.ino !== opened.ino) {
-      throw new Error("PR body file changed while it was being checked (path not printed)");
-    }
+    const changed = recheck !== resolved || current.dev !== opened.dev || current.ino !== opened.ino
+      || (process.platform === "linux" && fs.readlinkSync(`/proc/self/fd/${fd}`) !== resolved);
+    if (changed) throw new Error("PR body file changed while it was being checked (path not printed)");
     return fs.readFileSync(fd, "utf8");
   } catch (error) {
     if (!error.code) throw error;

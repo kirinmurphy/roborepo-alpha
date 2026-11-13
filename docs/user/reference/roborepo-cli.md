@@ -290,7 +290,8 @@ resolve, after symlinks, to a regular file under a fixed system temp location (`
 `read-secrets` credential denylist does not name. `TMPDIR` does not widen that set; on Windows,
 `TEMP` is accepted only when it names an `AppData\Local\Temp` folder. The command opens the file
 and rechecks its identity before reading. On Linux that check uses the kernel's path for the open
-file and refuses a path swapped mid-check; on macOS it narrows that window but cannot close it.
+file and refuses a path swapped mid-check; on macOS and Windows it narrows that window but cannot
+close it.
 
 ```sh
 roborepo delivery fetch origin
