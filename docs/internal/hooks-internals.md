@@ -278,7 +278,7 @@ the 5 named behaviors as a direct toggle, `roborepo config status` is read-only.
 
 The renderer writes the generated permission block in `generated/codex/config.toml`
 (`approval_policy`, `sandbox_mode`, `network_access` — derived from the `write-files`
-and `go-online` behaviors, and from whether anything is `ask`), the generated shell
+and `go-online` behaviors, and from whether any behavior Codex renders is `ask`), the generated shell
 prefix rules in `generated/codex/rules/default.rules`, and Claude
 `permissions.allow` / `permissions.deny` / `permissions.ask` plus the shell `sandbox` key in
 `generated/claude/settings.json`.
