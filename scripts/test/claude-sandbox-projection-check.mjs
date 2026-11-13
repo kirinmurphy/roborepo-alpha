@@ -100,6 +100,6 @@ for (const observation of coverage.observations) {
     assert.ok(observation.controls.includes(control), `coverage records ${control}`);
   }
 }
-assert.deepEqual(coverage.unverified, ["desktop app", "piped excluded commands", "unlisted hosts", "Linux", "Windows"]);
+assert.deepEqual(coverage.unverified, ["desktop app", "piped excluded commands", "unlisted hosts", "sandbox-shell ask", "reach-allowed-hosts ask and deny", "Linux", "Windows"]);
 
 console.log("claude-sandbox-projection: ok");

@@ -7,7 +7,7 @@
 // (read-secrets, edit-plans-store) into its denied paths, so the permissions key already carries
 // them.
 
-// Commands that cannot work inside the sandbox. Claude matches this list against the text of the
+// Commands that cannot work, or would prompt on every call, inside the sandbox. Claude matches this list against the text of the
 // whole call: `roborepo plans show x | grep y` stays sandboxed. Claude's documentation says every
 // command in the call must match, but on 2.1.309 a leading `cd` did not keep a call sandboxed.
 // Each entry runs with full filesystem and network access, under the ordinary allow/ask/deny

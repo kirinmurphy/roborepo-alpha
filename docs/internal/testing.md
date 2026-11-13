@@ -249,7 +249,7 @@ consult [official permission documentation](https://learn.chatgpt.com/docs/permi
 | Check | What it establishes | Availability |
 | --- | --- | --- |
 | `node scripts/test/claude-sandbox-projection-check.mjs` | The rendered `sandbox` key for every bucket of `sandbox-shell`, `reach-allowed-hosts`, and `read-secrets`; `go-online` has no effect; unrelated keys and hooks survive; reapply is stable; Codex and Gemini ignore the new kinds; the recorded coverage | Deterministic CI group |
-| `node scripts/test/claude-sandbox-enforcement-check.mjs` | A real Claude binary enforces the projection | Explicit macOS probe |
+| `node scripts/test/claude-sandbox-enforcement-check.mjs` | A real Claude binary enforces the default render and the sandbox-off render | Explicit macOS probe |
 
 The enforcement runner renders settings fresh, drops the hooks, and passes them with `--settings`
 and `--setting-sources ""`, so no settings file on the machine takes part. It runs three `claude -p`
@@ -267,6 +267,7 @@ It makes model calls and needs a signed-in Claude. Started from a sandboxed agen
 reports "Not logged in"; the runner exits `2` with `unavailable` for that, a missing binary, or a
 non-macOS platform. On November 13, 2026, Claude Code 2.1.309 passed all eight controls on macOS.
 `scripts/test/fixtures/claude-sandbox/coverage.json` records that run, and the projection check
-pins it. The desktop app, piped excluded commands, unlisted hosts, Linux, and Windows are unverified
-by the runner. Like the Codex runner, it stays out of CI groups so a skipped probe cannot imply
-certification.
+pins it. The desktop app, piped excluded commands, unlisted hosts, the `ask` bucket of
+`sandbox-shell`, the `ask` and `deny` buckets of `reach-allowed-hosts`, Linux, and Windows are
+unverified by the runner. Like the Codex runner, it stays out of CI groups so a skipped probe cannot
+imply certification.

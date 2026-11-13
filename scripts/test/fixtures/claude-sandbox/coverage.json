@@ -20,5 +20,5 @@
       ]
     }
   ],
-  "unverified": ["desktop app", "piped excluded commands", "unlisted hosts", "Linux", "Windows"]
+  "unverified": ["desktop app", "piped excluded commands", "unlisted hosts", "sandbox-shell ask", "reach-allowed-hosts ask and deny", "Linux", "Windows"]
 }

@@ -28,7 +28,7 @@ const coverage = {
   executable,
   policySource: "fresh render passed with --settings; settings files ignored",
   surface: "claude -p Bash tool commands and descendants",
-  unverified: ["desktop app", "piped excluded commands", "unlisted hosts", "Linux", "Windows"],
+  unverified: ["desktop app", "piped excluded commands", "unlisted hosts", "sandbox-shell ask", "reach-allowed-hosts ask and deny", "Linux", "Windows"],
 };
 
 function unavailable(reason) {
