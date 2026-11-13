@@ -253,8 +253,9 @@ It is separate from `go-online`, which stays Codex's on/off network switch.
 
 **What runs outside the sandbox.** `docker`, `gh`, `git push`, `git pull`, `git fetch`,
 `roborepo`, and `./bin/roborepo` cannot work inside it: Docker needs its daemon socket, `gh` calls
-`api.github.com`, which the host list leaves out, SSH cannot pass the sandbox proxy, and `roborepo plans` commands write the plans store, which `edit-plans-store`
-denies to every sandboxed write. A call made only of those commands runs unsandboxed, under the
+`api.github.com`, which the host list leaves out, SSH cannot pass the sandbox proxy, and
+`roborepo plans` commands write the plans store, which `edit-plans-store` denies to every sandboxed
+write. A call made only of those commands runs unsandboxed, under the
 ordinary allow, ask, and deny rules. A pipe, or most other commands added to the call, keeps it
 sandboxed; a leading `cd` was seen not to, so do not rely on it either way.
 `roborepo plans show <id> --json | grep synchronized` cannot lock the plans store and reports
