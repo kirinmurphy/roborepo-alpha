@@ -219,8 +219,49 @@ desktop session tools, structured file tools, browser, MCP, and escalated proces
 unverified. Linux and Windows enforcement is unverified. Gemini cannot enforce this path boundary;
 Claude retains its tool permission rules. A rendered profile alone does not certify protection.
 
+Three public certificate-authority bundles are exempt inside Claude's shell sandbox (see below):
+`/private/etc/ssl/cert.pem`, `/opt/homebrew/etc/ca-certificates/cert.pem`, and
+`/opt/homebrew/etc/openssl@4/cert.pem`. The `*.pem` pattern would otherwise hide them, and TLS
+clients such as `curl` and `npm` read them to verify servers. They hold no secrets. Claude's Read
+tool still cannot open them.
+
 A denylist only catches what it names. It cannot cover unknown-sensitive files — a tax PDF, a
 client repo under NDA — which is why it complements the scope perimeter instead of replacing it.
+
+### Shell sandbox (Claude)
+
+`sandbox-shell` runs each Claude shell command inside the operating system's sandbox (Seatbelt on
+macOS). Commands that stay inside the bounds below run without a permission prompt, whatever their
+shape: a leading `cd`, pipes, loops, and inline scripts all count.
+
+| Inside the sandbox | Bound |
+| --- | --- |
+| Writes | The session's checkout, the temp folders in `write-scope`, and the npm cache (`~/.npm`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
+| Reads | Everything except `read-secrets`, minus the certificate bundles above |
+| Network | Hosts in `reach-allowed-hosts` connect; any other host prompts |
+
+| `sandbox-shell` | Result |
+| --- | --- |
+| `allow` (default) | Sandboxed commands run without prompting |
+| `ask` | The sandbox stays on, and commands prompt by the command rules |
+| `deny` | The sandbox is off; commands follow the command rules alone |
+
+`reach-allowed-hosts` lists `registry.npmjs.org`, `github.com`, and `*.githubusercontent.com`.
+`allow` lets them through, `ask` makes them prompt like any other host, and `deny` refuses them.
+It is separate from `go-online`, which stays Codex's on/off network switch.
+
+**What runs outside the sandbox.** `docker`, `gh`, `git push`, `git pull`, `git fetch`,
+`roborepo`, and `./bin/roborepo` cannot work inside it: Docker needs its daemon socket, SSH cannot
+pass the sandbox proxy, and `roborepo plans` commands write the plans store, which `edit-plans-store`
+denies to every sandboxed write. A call made only of those commands runs unsandboxed, under the
+ordinary allow, ask, and deny rules. A call that adds anything else, a pipe included, stays
+sandboxed: `roborepo plans show <id> --json | grep synchronized` cannot lock the plans store and
+reports `"synchronized": false`. Run plans commands on their own.
+
+Codex always sandboxes its commands, so both behaviors are Claude-only. Enforcement was verified on
+macOS with Claude Code 2.1.309 through `claude -p`; Linux and Windows are unverified. A local
+`.claude/settings.local.json` can add entries, since Claude merges sandbox lists across settings
+files; RoboRepo replaces the `sandbox` key in `~/.claude/settings.json` on every render.
 
 ### Changing path scopes
 

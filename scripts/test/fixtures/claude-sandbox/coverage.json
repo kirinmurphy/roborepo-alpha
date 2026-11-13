@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "observations": [
+    {
+      "date": "2026-11-13",
+      "version": "2.1.309 (Claude Code)",
+      "platform": "darwin",
+      "policySource": "fresh render passed with --settings; settings files ignored",
+      "surface": "claude -p Bash tool commands and descendants",
+      "result": "passed",
+      "controls": [
+        "temp write",
+        "workspace write",
+        "home write refused",
+        "credential read refused",
+        "CA bundle read",
+        "allowed host connects",
+        "excluded command unsandboxed",
+        "missing-sandbox mutation"
+      ]
+    }
+  ],
+  "unverified": ["desktop app", "piped excluded commands", "unlisted hosts", "Linux", "Windows"]
+}

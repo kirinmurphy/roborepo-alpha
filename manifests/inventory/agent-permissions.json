@@ -61,7 +61,7 @@
     {
       "id": "read-secrets",
       "label": "Read credential files",
-      "description": "Credential material that is never correct for an agent to read, denied everywhere including inside the current repository. This is the one layer the repository boundary cannot provide: a .env inside your checkout is in-bounds for repo-write-boundary, so only a deny rule stops it. Claude ranks deny above every allow, so these out-rank both the scope allows and the boundary hook. Deny is not a prompt — there is no in-session override; carve out a path here rather than working around it. The .env variants are enumerated rather than globbed as .env.* so that .env.example and .env.sample stay readable: they are committed template files carrying placeholder values, and are often the fastest way to learn what a project expects. Claude permission rules have no negation, so a readable exception must be expressed as a narrower deny, not an allow that would be out-ranked. A new secret-bearing variant therefore needs adding here explicitly.",
+      "description": "Credential material that is never correct for an agent to read, denied everywhere including inside the current repository. This is the one layer the repository boundary cannot provide: a .env inside your checkout is in-bounds for repo-write-boundary, so only a deny rule stops it. Claude ranks deny above every allow, so these out-rank both the scope allows and the boundary hook. Deny is not a prompt — there is no in-session override; carve out a path here rather than working around it. The .env variants are enumerated rather than globbed as .env.* so that .env.example and .env.sample stay readable: they are committed template files carrying placeholder values, and are often the fastest way to learn what a project expects. Claude permission rules have no negation, so a readable exception must be expressed as a narrower deny, not an allow that would be out-ranked. A new secret-bearing variant therefore needs adding here explicitly. readableExceptions are public certificate-authority bundles the *.pem pattern would otherwise hide: TLS clients such as curl and npm read them to verify servers, so a sandboxed shell command could reach no host without them. They hold no secrets. They are re-allowed only where a shell sandbox can carve a path out of a denied pattern (Claude's); file-tool deny rules still cover them.",
       "kind": "tools-scoped",
       "tools": [
         "Read"
@@ -82,6 +82,11 @@
         "//**/*.pem",
         "//**/id_rsa",
         "//**/id_ed25519"
+      ],
+      "readableExceptions": [
+        "/private/etc/ssl/cert.pem",
+        "/opt/homebrew/etc/ca-certificates/cert.pem",
+        "/opt/homebrew/etc/openssl@4/cert.pem"
       ],
       "bucket": "deny",
       "category": "files"
@@ -115,6 +120,15 @@
       "bucket": "ask"
     },
     {
+      "id": "sandbox-shell",
+      "label": "Sandboxed shell commands",
+      "description": "Run each shell command inside the OS sandbox, which confines writes to the current repository, the temp folders in Write scope, and the npm cache, keeps Read credential files unreadable, and sends network traffic through Reach allowed hosts. Allow runs sandboxed commands without prompting, whatever their shape (a leading cd, pipes, inline scripts); ask keeps the sandbox but prompts by the command rules; deny turns the sandbox off. Docker, gh, the git network commands, and roborepo cannot work inside it, so a call made only of those runs outside it under the command rules. A call that mixes them with anything else, a pipe included, stays sandboxed. Codex always sandboxes its commands, so this applies to Claude only.",
+      "kind": "shell-sandbox",
+      "claudeOnly": true,
+      "bucket": "allow",
+      "category": "files"
+    },
+    {
       "id": "delete-files",
       "label": "Delete files",
       "description": "Remove files from disk (rm, git rm).",
@@ -134,10 +148,20 @@
     {
       "id": "go-online",
       "label": "Go online",
-      "description": "Sandbox network access. Codex-only — Claude does not sandbox network egress.",
+      "description": "Codex's sandbox network switch: on or off for every host. Claude's shell sandbox reads the separate allowed-host list instead, so this switch never makes Claude network commands prompt.",
       "kind": "network",
       "codexOnly": true,
       "bucket": "deny",
+      "category": "network"
+    },
+    {
+      "id": "reach-allowed-hosts",
+      "label": "Reach allowed hosts",
+      "description": "Hosts a sandboxed shell command may reach without prompting: the npm registry and GitHub over HTTPS. Allow lets them through; ask makes them prompt like any other host; deny refuses them. Hosts missing from the list prompt. Git over SSH cannot pass the sandbox proxy, so the git network commands run outside the sandbox (see Sandboxed shell commands).",
+      "kind": "network-hosts",
+      "claudeOnly": true,
+      "hosts": ["registry.npmjs.org", "github.com", "*.githubusercontent.com"],
+      "bucket": "allow",
       "category": "network"
     },
     {

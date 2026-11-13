@@ -191,10 +191,10 @@ export function buildOnboardSteps({ showWebNotice = false } = {}) {
       .map((it) => {
         // Harness-level caveats (e.g. a harness with no per-command ask tier) are surfaced once
         // as a section notice from the provider manifest, not repeated per item.
-        const codexNote = it.codexOnly ? " (Codex only)" : "";
+        const harnessNote = it.codexOnly ? " (Codex only)" : it.claudeOnly ? " (Claude only)" : "";
         return {
           label: it.label,
-          description: `${it.description || ""}${codexNote}`.trim(),
+          description: `${it.description || ""}${harnessNote}`.trim(),
           states: ["allow", "ask", "deny"],
           state: it.bucket,
           wasState: it.bucket, // original state; diffed against `state` on finish to batch the work

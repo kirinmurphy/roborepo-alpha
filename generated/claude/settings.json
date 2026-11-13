@@ -211,5 +211,36 @@
     "GIT_CONFIG_COUNT": "1",
     "GIT_CONFIG_KEY_0": "core.hooksPath",
     "GIT_CONFIG_VALUE_0": "~/.claude/git-hooks"
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "excludedCommands": [
+      "docker *",
+      "gh *",
+      "git push *",
+      "git pull *",
+      "git fetch *",
+      "roborepo *",
+      "./bin/roborepo *"
+    ],
+    "filesystem": {
+      "allowWrite": [
+        "~/.npm"
+      ],
+      "allowRead": [
+        "/private/etc/ssl/cert.pem",
+        "/opt/homebrew/etc/ca-certificates/cert.pem",
+        "/opt/homebrew/etc/openssl@4/cert.pem"
+      ]
+    },
+    "network": {
+      "allowLocalBinding": false,
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "github.com",
+        "*.githubusercontent.com"
+      ]
+    }
   }
 }

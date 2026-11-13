@@ -44,6 +44,7 @@ function makeHome() {
           && entry.hooks?.some((hook) => hook.command === 'node "$HOME/.claude/hooks/provider/repo-write-scope.mjs"')),
       "core Claude repo-scope hook is rendered from globals/harnesses/claude/hooks-claude.json",
     );
+    assert.equal(settings.sandbox?.enabled, true, "the live render carries the Claude shell sandbox");
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

@@ -434,9 +434,11 @@ function permissionItems(perms) {
       // A named behavior always has a manifest default to fall back to, so its delete is a revert.
       deletable: b.overridden ? "revert" : null,
       category: b.category ?? null,
-      // "go-online" has no Claude equivalent (Claude doesn't sandbox network); surfaced so the
-      // UI can note it rather than silently implying parity across harnesses.
+      // A behavior one harness alone renders (go-online for Codex; sandbox-shell and
+      // reach-allowed-hosts for Claude) is marked so the UI notes it rather than silently implying
+      // parity across harnesses.
       codexOnly: !!b.codexOnly,
+      claudeOnly: !!b.claudeOnly,
     })),
     ...(perms?.arbitrary || []).map((c) => ({
       id: c.id,

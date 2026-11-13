@@ -30,6 +30,7 @@
     "hook-review-launch-check.mjs",
     "hook-review-cli-check.mjs",
     "codex-credential-projection-check.mjs",
+    "claude-sandbox-projection-check.mjs",
     "permission-rule-home-path-check.mjs",
     "node-release-health-check.mjs",
     "telemetry-oracle-check.mjs",

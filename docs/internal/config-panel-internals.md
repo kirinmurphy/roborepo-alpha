@@ -192,6 +192,29 @@ tilde.
 - `globals/packages/*/package.config.json` — built-in package configs.
 - workspace `packages/*/package.config.json` — imported or locally authored package configs.
 
+## Claude shell sandbox
+
+Two behaviors carry sandbox intent in provider-neutral kinds that only the Claude provider renders:
+`sandbox-shell` (kind `shell-sandbox`) and `reach-allowed-hosts` (kind `network-hosts`, with a
+`hosts` list). `read-secrets` adds `readableExceptions`, the public CA bundles its `*.pem` pattern
+would hide. Both behaviors set `claudeOnly`, which the permission rows pass through like
+`codexOnly`; the portal, the terminal printout, and onboarding label those rows "Claude only".
+
+`claudeSandboxSettings` in `scripts/harnesses/claude/sandbox-settings.mjs` projects them into the
+`sandbox` key, which `renderClaudeRootConfig` replaces whole on every render:
+
+| Intent | `sandbox` key |
+| --- | --- |
+| `sandbox-shell` allow / ask / deny | `enabled: true` with `autoAllowBashIfSandboxed` true / false; `deny` renders `{ enabled: false }` only |
+| `read-secrets` deny | `filesystem.allowRead` = `readableExceptions` |
+| `reach-allowed-hosts` allow / ask / deny | `network.allowedDomains` / nothing / `network.deniedDomains` |
+| Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm"]`, `network.allowLocalBinding: false` |
+
+Writable temp folders and denied credentials are not repeated: Claude merges the `Edit` allow and
+`Read`/`Edit` deny rules from the `permissions` key into the sandbox. `go-online` never affects
+Claude. Codex and Gemini skip both kinds. See [testing](testing.md#claude-sandbox-verification) for
+the projection and enforcement checks.
+
 ## Codex credential profiles
 
 The resolved `read-secrets` behavior supplies the 15 native deny patterns. Codex preserves `~/`

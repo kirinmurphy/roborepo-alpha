@@ -34,6 +34,7 @@ const testDir = path.join(repoRoot, "scripts", "test");
 // reader can tell a deliberate non-test from a test that quietly fell out of the suite.
 const EXEMPT = new Map([
   ["codex-credential-enforcement-check.mjs", "explicit native runtime certification; unavailable sandboxes exit 2 and must not pass by skipping in CI"],
+  ["claude-sandbox-enforcement-check.mjs", "explicit native runtime certification through a signed-in `claude -p` (model calls); unavailable runtimes exit 2 and must not pass by skipping in CI"],
   ["naming-inventory.mjs", "naming-surface inventory utility (rename-prep); run by hand, not a check"],
   ["test-cli.sh", "the suite runner itself"],
   ["ci.sh", "the CI runner itself"],

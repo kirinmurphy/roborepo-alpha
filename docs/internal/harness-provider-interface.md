@@ -383,3 +383,13 @@ Codex is the only implementer. Its sandbox stops writes outside the workspace ro
 
 Both depend on the repository the render runs in, so they appear only after `roborepo update` runs
 inside a repository that has a plans store. The tracked `generated/codex/config.toml` has neither.
+
+Claude renders a sandbox too, but implements neither method. Its `permissions.render` sets the
+`sandbox` key of `settings.json` from `scripts/harnesses/claude/sandbox-settings.mjs`, and
+everything there holds for any checkout, because `~/.claude/settings.json` is user-level:
+
+- Claude adds the session's directory and, in a linked worktree, the shared `.git` directory itself.
+- Claude merges `Edit` allow rules (`write-scope`) into writable paths and `Read`/`Edit` deny rules
+  (`read-secrets`, `edit-plans-store`) into denied paths.
+- The plans store needs no grant: `edit-plans-store` denies its worktree and administrative
+  directory to sandboxed writes regardless, so `roborepo` is an excluded command instead.

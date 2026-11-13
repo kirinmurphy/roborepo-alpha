@@ -2,7 +2,7 @@
 // stubGroups below are placeholders that throw until their behavior moves here from scripts/cli/.
 //
 // Split by capability group across this directory: mcp.mjs (the 4 MCP methods), hooks-withdraw.mjs
-// (the withdraw-specific bulk strip).
+// (the withdraw-specific bulk strip), sandbox-settings.mjs (the `sandbox` key of permissions.render).
 // This file is the composition root: rootConfig/package-component merge, hooks merge/unmerge,
 // telemetry, transcripts, and the final defineHarnessProvider wiring.
 
@@ -16,7 +16,8 @@ import { hookRecordsFromFile, mergeRootConfigHooks, unmergeRootConfigHooks } fro
 import { resolveHarnessPath } from "../paths.mjs";
 import { mergeHooksMap } from "../hooks-merge.mjs";
 import { mergeClaudeSettings, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
-import { renderClaudeSettings } from "../permissions-render.mjs";
+import { renderClaudeSettings, resolveBehaviors } from "../permissions-render.mjs";
+import { claudeSandboxSettings } from "./sandbox-settings.mjs";
 import { mcpRemove, mcpAddServer, mcpRemoveServer, mcpList } from "./mcp.mjs";
 import { hooksWriteRemove } from "./hooks-withdraw.mjs";
 import { transcriptStats } from "../transcript-parse.mjs";
@@ -34,9 +35,14 @@ function readCoreHooksFragment() {
   return JSON.parse(fs.readFileSync(coreHooksPath, "utf8"));
 }
 
-function renderClaudeRootConfig(current, manifest, overrides, options = {}) {
+// RoboRepo owns `sandbox` the way it owns `permissions`: each render replaces it whole. A
+// repository's .claude/settings.local.json can still add entries, since Claude merges sandbox
+// arrays across settings scopes.
+function renderClaudeRootConfig(current, manifest, overrides = {}, options = {}) {
   const rendered = JSON.parse(renderClaudeSettings(current, manifest, overrides, options));
   rendered.hooks = mergeHooksMap(rendered.hooks || {}, readCoreHooksFragment()).hooks;
+  const sandbox = claudeSandboxSettings(resolveBehaviors(manifest, overrides.behaviors));
+  if (sandbox) rendered.sandbox = sandbox;
   return `${JSON.stringify(rendered, null, 2)}\n`;
 }
 

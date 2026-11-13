@@ -36,8 +36,8 @@ function printPermissionRow(item) {
   const override = item.overridden && item.defaultBucket
     ? `  (custom, default: ${item.defaultBucket})`
     : item.overridden ? "  (custom, added)" : "";
-  const codexNote = item.codexOnly ? "  [Codex only]" : "";
-  console.log(`  ${item.bucket.padEnd(6)} ${item.label}${override}${codexNote}`);
+  const harnessNote = item.codexOnly ? "  [Codex only]" : item.claudeOnly ? "  [Claude only]" : "";
+  console.log(`  ${item.bucket.padEnd(6)} ${item.label}${override}${harnessNote}`);
   if (item.description) console.log(`         ${item.description}`);
 }
 

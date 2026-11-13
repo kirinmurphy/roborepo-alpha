@@ -72,8 +72,8 @@ function codexSandboxMode(behaviors) {
   return writeFiles?.bucket === "allow" ? "workspace-write" : "read-only";
 }
 
-// Network access derives from the go-online behavior (Codex-only concept; Claude has no sandbox
-// network gate at all).
+// Network access derives from the go-online behavior, Codex's on/off switch. Claude's shell sandbox
+// reads the separate network-hosts list instead (scripts/harnesses/claude/sandbox-settings.mjs).
 function codexNetworkAccess(behaviors) {
   return findBehavior(behaviors, "go-online")?.bucket === "allow";
 }
@@ -293,7 +293,9 @@ export function claudePermissions(manifest, overrides = {}, { home: _home = os.h
     // mechanism it has (Claude: a PreToolUse hook; Codex: its workspace sandbox), so the platform
     // renders nothing here and the bucket travels to the provider instead.
     if (b.kind === "repo-scope") continue;
-    if (b.kind === "network") continue; // Codex-only concept; no Claude equivalent to render.
+    // Network intent is not a permission rule: go-online is Codex's sandbox switch, and the Claude
+    // provider renders its own sandbox key from network-hosts and shell-sandbox.
+    if (b.kind === "network" || b.kind === "network-hosts" || b.kind === "shell-sandbox") continue;
     if (b.kind !== "commands") continue;
     const bucket = b.bucket === "deny" ? deny : b.bucket === "ask" ? ask : allow;
     for (const pattern of b.commands ?? []) bucket.push(commandToClaude(pattern));
