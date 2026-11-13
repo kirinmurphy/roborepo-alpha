@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run the two sandbox checks (excluded commands honored in the desktop app and CLI; git commit from a linked worktree), record results in the Decision Log, then add the shared behaviors.
+next_action: Confirm npm run check, run the validation loop, then submit for review.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -212,27 +212,28 @@ so a repository's `.claude/settings.local.json` can still add entries.
 
 ## Implementation plan
 
-- [ ] With the trial block active, check whether `sandbox.excludedCommands` is honored, in a
+- [x] With the trial block active, check whether `sandbox.excludedCommands` is honored, in a
       desktop-app session and in a CLI session, using `roborepo plans show <id> --json` and its
       `synchronized` field. Record the result and the pattern that works in the Decision Log.
-- [ ] In a linked worktree with the trial block copied in, run `git commit` and record whether
+- [x] In a linked worktree with the trial block copied in, run `git commit` and record whether
       writes to the main checkout's `.git` succeed.
-- [ ] Add the confined-shell behavior, the readable CA exception list, and the allowed-host list to
+- [x] Add the confined-shell behavior, the readable CA exception list, and the allowed-host list to
       `manifests/inventory/agent-permissions.json`. Correct the `go-online` description.
-- [ ] Add the Claude sandbox projection module and its excluded command list under
+- [x] Add the Claude sandbox projection module and its excluded command list under
       `scripts/harnesses/claude/`.
-- [ ] Set `rendered.sandbox` in `renderClaudeRootConfig`, preserving unrelated keys.
-- [ ] Implement `permissions.writablePaths`, and `permissions.workspaceRoots` if needed, for Claude
+- [x] Set `rendered.sandbox` in `renderClaudeRootConfig`, preserving unrelated keys.
+- [x] Implement `permissions.writablePaths`, and `permissions.workspaceRoots` if needed, for Claude
       according to the two checks above. Move `plans-store-grants.mjs` to a shared location if
       Claude reuses it.
-- [ ] Correct the two "Codex-only" comments in `scripts/harnesses/permissions-render.mjs` and the
+- [x] Correct the two "Codex-only" comments in `scripts/harnesses/permissions-render.mjs` and the
       `go-online` comment in `scripts/cli/config.mjs`.
-- [ ] Show the new behaviors in the permission rows built by `scripts/cli/config.mjs`.
-- [ ] Add the projection check to `scripts/test/check-groups.json` and the enforcement runner to the
+- [x] Show the new behaviors in the permission rows built by `scripts/cli/config.mjs`.
+- [x] Add the projection check to `scripts/test/check-groups.json` and the enforcement runner to the
       explicit-runner list in `scripts/test/orphan-test-check.mjs`, as described under Validation.
-- [ ] Update the documents under Documentation impact.
-- [ ] Remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json` once
-      the generated settings carry it.
+- [x] Update the documents under Documentation impact.
+- [x] ~~Remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json` once
+      the generated settings carry it.~~ Moved to `## Not tested`: the block can go only after this
+      branch merges and `roborepo update` renders the generated key on this machine.
 
 ## Validation
 
@@ -247,12 +248,14 @@ Projection and enforcement need separate evidence, following "Codex credential v
 
 Acceptance criteria:
 
-- [ ] After `roborepo update`, the generated Claude settings contain the `sandbox` key and
-      `roborepo doctor` passes.
-- [ ] The enforcement runner passes and records the Claude version, platform, and each positive and
+- [x] After `roborepo update`, the generated Claude settings contain the `sandbox` key and
+      `roborepo doctor` passes. Verified for the tracked baseline (`generated/claude/settings.json`) and a
+      temporary-home live render; `bash scripts/doctor.sh --quiet` passed (98 checks). The live update on
+      this machine waits for merge (see `## Not tested`).
+- [x] The enforcement runner passes and records the Claude version, platform, and each positive and
       negative control.
-- [ ] `git commit` succeeds from a linked worktree session with the sandbox on.
-- [ ] `git push`, `gh pr view`, and `roborepo plans show <id> --json` behave as they do today;
+- [x] `git commit` succeeds from a linked worktree session with the sandbox on.
+- [x] `git push`, `gh pr view`, and `roborepo plans show <id> --json` behave as they do today;
       `roborepo plans show` reports `"synchronized": true`.
 - [ ] `npm run check` passes.
 
@@ -299,6 +302,71 @@ Acceptance criteria:
   revisit once the host list has proven complete.
 - **2026-11-12 — Codex parity for the CA exceptions and host list is a separate plan.** Codex's
   network is off by default, so the `*.pem` denial has no observed effect there yet.
+
+- **2026-11-12 — Check 1: excluded commands are honored when every command in the call matches.**
+  On Claude Code 2.1.309, in this desktop-app session and in a headless `claude -p` session, bare
+  `roborepo plans show 9njvfh5z --json` reported `"synchronized": true`, and so did
+  `cd <checkout> && roborepo plans show …`. The same command piped to `grep` or `head` ran sandboxed
+  and reported "The plans worktree could not be locked." The trial's failure was a piped call, not
+  an ignored setting. Claude's documentation says every command in a call must match, and that a
+  `cd` keeps a call sandboxed; the `cd` observation contradicts the second point and is not relied on.
+  The pattern `roborepo *` works as written; no different pattern is needed.
+- **2026-11-12 — Check 2: `git commit` from a linked worktree succeeds sandboxed.** A headless
+  session rooted in this plan's worktree committed (an empty probe commit, then dropped), while
+  writes to the main checkout's working tree and to the home folder were refused. Claude allows the
+  shared `.git` directory for a linked worktree, as its sandbox documentation states. Its settings
+  documentation also says a worktree session reads `.claude/settings.local.json` from the main
+  checkout's root, so the trial's "local settings do not reach worktrees" finding no longer holds; the
+  generated user-level key is still what reaches every checkout.
+- **2026-11-12 — No `permissions.writablePaths` or `workspaceRoots` for Claude; `plans-store-grants.mjs`
+  stays in the Codex folder.** Both methods derive paths from the current checkout, and
+  `~/.claude/settings.json` is user-level. Claude already covers the checkout and the worktree's
+  `.git`. The plans store cannot be granted anyway: a sandboxed write to its administrative directory
+  was refused with "Operation not permitted", because Claude merges the `edit-plans-store` deny
+  (`Edit(//**/repo_plans/**)`) into the sandbox, and that glob also matches
+  `.git/worktrees/repo_plans`. Granting it would also undo that guard for every shell command. So
+  `roborepo` stays excluded, and `~/.npm` is a provider constant in
+  `scripts/harnesses/claude/sandbox-settings.mjs`. Alternative: a `writablePaths` method returning
+  `~/.npm` (rejected: the build-time render passes no adapter options, so the tracked baseline would
+  lack it).
+- **2026-11-12 — New behaviors use provider-neutral kinds with a `claudeOnly` flag.** `sandbox-shell`
+  (kind `shell-sandbox`; allow = sandboxed and prompt-free, ask = sandboxed and prompting, deny = off)
+  and `reach-allowed-hosts` (kind `network-hosts`; allow = `allowedDomains`, ask = prompt, deny =
+  `deniedDomains`). Every existing renderer skips unknown kinds, so Codex and Gemini output is
+  unchanged; the projection check asserts it. `claudeOnly` mirrors `codexOnly` in the rows, the
+  terminal printout, onboarding, and the portal ("Claude only"). Alternative: a general
+  `harnesses: [...]` field (rejected: it redesigns rows that `permissions-ui-revamp` owns).
+- **2026-11-12 — CA exceptions are a `readableExceptions` field on `read-secrets`.** They only mean
+  something while that behavior denies `*.pem`, so the projection emits `allowRead` only then.
+  Alternative: a separate `tools-scoped` Read-allow behavior (rejected: Claude's file tools rank deny
+  above allow, so it would render dead rules).
+- **2026-11-12 — `./bin/roborepo *` is excluded alongside `roborepo *`.** It is the same CLI run from
+  a development checkout, where plans commands need the same unsandboxed store access. It matches
+  only that literal text.
+- **2026-11-12 — The enforcement runner drives `claude -p`.** Claude has no model-free command
+  runner (`claude sandbox` installs the Windows sandbox and reports status only). The runner passes
+  the fresh render with `--settings` and `--setting-sources ""`, drops hooks, uses Haiku, and reads
+  results the probe writes to a file, so model wording cannot affect the verdict. A global
+  protected-branch pre-push guard refused a push to an anonymous path remote, so the runner gives its
+  throwaway remote a recorded default branch.
+- **2026-11-12 — Scope correction: removing the trial block moves to `## Not tested`.** It may happen
+  only once the generated key is live, which needs this branch merged and `roborepo update` run on
+  this machine. Removing it earlier would leave the main checkout unsandboxed until then.
+
+## Not tested
+
+- [ ] After merge, `roborepo update` on this machine writes the `sandbox` key into
+      `~/.claude/settings.json`, `roborepo doctor` passes, and a new session's shell commands run
+      without prompts. Needs the merged code applied to the live home, which this branch must not do
+      before review.
+- [ ] Then remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json`,
+      and confirm a new session still reports the sandbox (`claude sandbox status` shows
+      `"enabled": true`). Needs the step above first.
+- [ ] The portal's permission rows show "Claude only" on Sandboxed shell commands and Reach allowed
+      hosts. The row data carries `claudeOnly` (checked through `readConfigSnapshot`), but no browser
+      check ran: starting a portal from this worktree risks replacing the running one.
+- [ ] A desktop-app session started after the live update honors the generated key the way it
+      honored the trial block. The enforcement runner covers `claude -p` only.
 
 ## Open questions
 
