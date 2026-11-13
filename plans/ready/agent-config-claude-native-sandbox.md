@@ -3,7 +3,7 @@ id: 9njvfh5z
 next_action: Run the two sandbox checks (excluded commands honored in the desktop app and CLI; git commit from a linked worktree), record results in the Decision Log, then add the shared behaviors.
 blocked_by: []
 depends_on: []
-related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting"]
+related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
 reviewed_commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
 worktree:
 ---
@@ -135,6 +135,8 @@ Four findings shape the design:
 | Audit Global Agent Permissions Management (`permva27`) | Backlog | Related, not a prerequisite. This plan renders a native control, which fits either audit outcome |
 | Permissions UI Revamp (`permissions-ui-revamp`) | Backlog, depends on `permva27` | Neighbor. Will redesign the rows this plan adds to `scripts/cli/config.mjs`; this plan adds rows in the current shape only |
 | Capability-Derived Resource Targeting (`harness-capability-derived-resource-targeting`) | Backlog | No overlap found |
+| Agent behavior evals (`0jped168`) | Backlog | Affected. Its runner starts headless `claude -p`, which the trial saw fail with "Not logged in" when started from a sandboxed command |
+| Session launching, Milestone 1 (`plan-session-launching-milestone-1`) | Backlog | Affected. Its background start runs one headless Claude turn, the same path as the evals runner |
 
 ## Goals
 
@@ -263,6 +265,11 @@ Acceptance criteria:
 - **Writable paths are rendered per checkout.** `~/.claude/settings.json` is user-level, so paths
   derived from the current directory at `roborepo update` apply to every session. Prefer paths that
   hold for any checkout.
+- **Headless Claude may not start from a sandboxed command.** The trial's `claude -p` reported "Not
+  logged in", cause unconfirmed. With the sandbox on by default, an agent that runs the evals runner
+  (`0jped168`) or the session launcher's background start from its shell would hit the same failure.
+  Those plans need the cause confirmed, or their commands run outside the sandbox, before they rely
+  on that path.
 - **Claude version drift.** Sandbox keys and merge rules may change between releases. The
   enforcement runner names the version it verified.
 - **macOS-only evidence.** Linux uses a different mechanism and needs extra packages; Windows runs
