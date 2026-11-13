@@ -127,6 +127,13 @@ try {
       assert.ok(!result.stderr.includes("ghp_secretDir"), "a denied body file path is never printed");
       assert.deepEqual(calls(), [], "a denied body file stops before any GitHub call");
     }
+    // Home-anchored patterns (`~/.ssh/**`) resolve against the runtime home, here inside temp.
+    const home = path.join(root, "home");
+    fs.mkdirSync(path.join(home, ".ssh"), { recursive: true });
+    const homeKey = path.join(home, ".ssh", "deploy-key.md");
+    fs.writeFileSync(homeKey, "ghp_secretValue");
+    const homeSecret = delivery(checkout, ["pr-body", homeKey], { HOME: home, USERPROFILE: home });
+    refused(homeSecret, /matches the read-secrets credential denylist \(path not printed\)/);
     const template = path.join(secretDir, ".env.example");
     fs.writeFileSync(template, "PLACEHOLDER=1");
     passed(runDelivery(["pr-body", template]));
