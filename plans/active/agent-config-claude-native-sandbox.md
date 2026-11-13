@@ -334,7 +334,8 @@ Acceptance criteria:
   (kind `shell-sandbox`; allow = sandboxed and prompt-free, ask = sandboxed and prompting, deny = off)
   and `reach-allowed-hosts` (kind `network-hosts`; allow = `allowedDomains`, ask = prompt, deny =
   `deniedDomains`). Every existing renderer skips unknown kinds, so Codex and Gemini output is
-  unchanged; the projection check asserts it. `claudeOnly` mirrors `codexOnly` in the rows, the
+  unchanged, and Codex's approval policy ignores `claudeOnly` behaviors; the projection check asserts
+  both. `claudeOnly` mirrors `codexOnly` in the rows, the
   terminal printout, onboarding, and the portal ("Claude only"). Alternative: a general
   `harnesses: [...]` field (rejected: it redesigns rows that `permissions-ui-revamp` owns).
 - **2026-11-12 — CA exceptions are a `readableExceptions` field on `read-secrets`.** They only mean
@@ -399,6 +400,10 @@ Acceptance criteria:
       added to the runner's unverified list
 - [x] Docs said `gh` "cannot work" in the sandbox when the reason given means it would prompt —
       fixed (e342835e)
+- [x] Setting a Claude-only behavior to `ask` turned Codex's `approval_policy` to `on-request`,
+      against the non-goal of leaving the Codex profile unchanged — fixed (c81e4460); the projection check
+      now asserts every bucket of every Claude-only behavior leaves Codex and Gemini output unchanged,
+      and fails without the fix
 
 ### Verification
 
@@ -408,6 +413,7 @@ Acceptance criteria:
 - Full local gate (`npm run check`) passed at 75f212d3
 - Validation pass 3 at 0a1eca67 (fresh-context subagent): 1 `fix` finding, fixed in b3d45537
 - Validation pass 4 at 15136ae0 (fresh-context subagent): 2 `fix` findings, fixed in e342835e
+- Validation pass 5 at e342835e (fresh-context subagent): 1 `fix` finding, fixed in c81e4460; `bash scripts/doctor.sh --quiet` passed after it
 
 ## Open questions
 
