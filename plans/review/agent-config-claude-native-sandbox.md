@@ -419,6 +419,25 @@ Acceptance criteria:
 - Validation pass 6 at c81e4460 (fresh-context subagent): 2 `fix` findings (docs), fixed in 168a43a1; the subagent's own `bash scripts/doctor.sh --quiet` passed (98 checks)
 - Validation: clean on pass 7 at 168a43a1 (fresh-context subagent)
 - After the full gate at 75f212d3, only c81e4460 changed code (Codex approval policy); its scoped checks and `bash scripts/doctor.sh --quiet` passed, and CI runs the full gate on push
+- Human review, 2026-11-13: `roborepo plans sync-base` reported up-to-date at 168a43a1 on base cedc1ebe;
+  the branch is not pushed, so no CI result exists for it
+- Full local gate (`npm run check`) passed at 168a43a1 ("CI checks passed"). A first run from inside
+  the reviewing agent's own shell sandbox failed 15 checks on EPERM writes, port binding, and
+  `.git/worktrees` creation outside that sandbox's writable root; it was the environment, not the
+  branch, and the unsandboxed rerun passed
+- `node scripts/test/claude-sandbox-projection-check.mjs`,
+  `permissions-render-live-characterization-check.mjs`, and `permission-harness-notes-check.mjs`
+  passed at 168a43a1
+- `node scripts/test/claude-sandbox-enforcement-check.mjs` passed at 168a43a1 on Claude Code 2.1.309,
+  darwin: temp and workspace writes ok; home write, `*.pem` and `.env` reads refused; CA bundle read
+  and allowed host ok; excluded command unsandboxed; missing-sandbox mutation detected
+- Validation pass 8 at 168a43a1 (fresh-context subagent, review): clean
+
+### Result
+
+- Status: complete
+- Reviewed implementation commit: 168a43a1a493f4f486c80794624aea4e630077c3
+- Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
 
 ## Open questions
 
