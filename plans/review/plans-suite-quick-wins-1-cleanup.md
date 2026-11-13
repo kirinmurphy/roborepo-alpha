@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Human approval of the reviewed commit; confirm or defer the two Not tested entries.
+next_action: Human approval of reviewed commit be88642f.
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7", "3xh2sq32"]
@@ -252,16 +252,8 @@ describe the distinction between ordinary merges and owner access.
 
 ## Not tested
 
-- [ ] Mark a draft PR ready with `roborepo delivery pr-ready`, and rerun a real failed CI run
-      with `roborepo delivery retry-ci <run-id>`. Live `fetch`, `pr-body`, and the `retry-ci`
-      refusal for an in-progress run passed against PR 63 (see Verification). The session's
-      permission check refused a live `pr-ready` call, and PR 63 is not a draft and has no
-      failed run. Live command-prompt suppression in Claude and Gemini is also still unverified.
-- [ ] In a Claude desktop session in the default permission mode, enter an existing linked
-      worktree with `EnterWorktree({ path })` and confirm edits there proceed without per-file
-      folder prompts. On 2026-11-11 a session in auto mode entered this plan's worktree that way.
-      The app still filed it under the primary checkout (`cwd` unchanged in session metadata),
-      and its edits ran without prompts. Auto mode alone may explain the missing prompts, though.
+- None. The live draft PR / failed-run check and the default-mode `EnterWorktree` check were
+  deferred to follow-up plans; see Decision Log.
 
 ## Documentation impact
 
@@ -332,6 +324,16 @@ describe the distinction between ordinary merges and owner access.
   manual checks cover merge blocking and the bypass. The manual procedure in
   `docs/internal/testing.md` stays until that command replaces it. The owner ruleset entry is
   therefore no longer a Not tested entry or Open Question here.
+
+- User decision (2026-11-12, plan review): the live `roborepo delivery pr-ready` check on a real
+  draft PR and `retry-ci` on a real failed run are deferred to Deliver finished plans as a
+  watched pull request (`i5mnkm7z`), which exercises both commands. Live command-prompt
+  suppression in Claude and Gemini goes with it. Fake GitHub CLI tests assert their arguments
+  and refusals here.
+- User decision (2026-11-12, plan review): the default-permission-mode `EnterWorktree({ path })`
+  check is deferred to Keep local agent work within useful boundaries for Claude (`46qth5z8`),
+  which owns the fallback hook if prompts persist. This review's auto-mode session saw per-file
+  prompts stop after entering the worktree.
 
 ## Open Questions
 
@@ -491,6 +493,6 @@ describe the distinction between ordinary merges and owner access.
 
 ### Result
 
-- Status: pending
+- Status: complete
 - Reviewed implementation commit: be88642fae8a36fe6a9e986bbe79436ac93b6c98
 - Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
