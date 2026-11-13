@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Push 0ae6c9c5 for PR CI, then human approval of that commit.
+next_action: Human approval of reviewed commit 0ae6c9c5.
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7", "3xh2sq32"]
@@ -428,7 +428,7 @@ describe the distinction between ordinary merges and owner access.
   passed; portal UI 246/255, with 9 timeouts and aborted page loads. A rerun of those four spec
   files failed 7 different tests on timeouts, taking 3.2 hours on a heavily loaded machine. The
   changes since CI-green 4df5a89e touch only the delivery CLI, its check, and
-  `roborepo-cli.md`, none of which the portal loads. The full gate for 0ae6c9c5 is left to PR CI.
+  `roborepo-cli.md`, none of which the portal loads. PR 63 CI then passed at 0ae6c9c5 (`check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer`), covering the full gate and the Linux `/proc` branch.
 - Plan review (2026-11-12): base synchronized three times — `c3c54c00` (main 37af5648),
   `e64a5e27` (main c77b4649, merged by another session during review), and `be88642f`
   (main cedc1ebe). All merges were clean; main's changes touch regions separate from this plan.
@@ -531,7 +531,7 @@ describe the distinction between ordinary merges and owner access.
 
 ### Result
 
-- Status: pending (full gate for 0ae6c9c5 awaits PR CI)
+- Status: complete
 - Reviewed implementation commit: 0ae6c9c5ecd957dc85395a56eb180451a4f03378
 - Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
 - Earlier result: complete at be88642f. Approval evidence: on 2026-11-12, in the /plan-review session, the user answered
