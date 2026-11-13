@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run validation pass 5; if clean, submit for review and push the branch.
+next_action: Run validation pass 7; if clean, submit for review and push the branch.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -404,6 +404,8 @@ Acceptance criteria:
       against the non-goal of leaving the Codex profile unchanged — fixed (c81e4460); the projection check
       now asserts every bucket of every Claude-only behavior leaves Codex and Gemini output unchanged,
       and fails without the fix
+- [x] `hooks-internals.md` still said any `ask` selects Codex's `on-request` — fixed (168a43a1)
+- [x] `harnesses-explained.md` described Claude permissions without the `sandbox` key — fixed (168a43a1)
 
 ### Verification
 
@@ -414,6 +416,7 @@ Acceptance criteria:
 - Validation pass 3 at 0a1eca67 (fresh-context subagent): 1 `fix` finding, fixed in b3d45537
 - Validation pass 4 at 15136ae0 (fresh-context subagent): 2 `fix` findings, fixed in e342835e
 - Validation pass 5 at e342835e (fresh-context subagent): 1 `fix` finding, fixed in c81e4460; `bash scripts/doctor.sh --quiet` passed after it
+- Validation pass 6 at c81e4460 (fresh-context subagent): 2 `fix` findings (docs), fixed in 168a43a1; the subagent's own `bash scripts/doctor.sh --quiet` passed (98 checks)
 
 ## Open questions
 
