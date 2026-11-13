@@ -62,8 +62,8 @@ function renderShellCommandRule(pattern, bucket) {
 
 // Flat model shared with Claude/Codex: behaviorManifest.behaviors resolves via overrides, then each
 // behavior/arbitrary command maps to one rule. "network" kind (go-online) is Codex-only — Gemini
-// has no sandbox network gate. Kinds other than the ones handled below (shell-sandbox,
-// network-hosts) are other providers' sandbox intent and render nothing here. providerManifest is
+// has no sandbox network gate. shell-sandbox and network-hosts are Claude's sandbox intent; the
+// commands-only filter below skips them. providerManifest is
 // only consulted for the tools-kind tool-name mapping (see geminiToolNames above).
 export function renderGeminiPolicyRules(providerManifest, behaviorManifest, overrides = {}) {
   const behaviors = (behaviorManifest.behaviors ?? []).map((b) => ({

@@ -73,6 +73,21 @@ test.describe("Agents page", () => {
     await modal.locator("#modal-close").click();
   });
 
+  test("permission rows that one harness alone renders name that harness", async ({ page }) => {
+    await page.goto("/agents");
+    await page.locator('[data-slot="defaults-toggle"]').click();
+    const row = (label) => page.locator(".behavior-row").filter({ has: page.locator(".behavior-label", { hasText: new RegExp(`^${label}$`) }) });
+    for (const label of ["Sandboxed shell commands", "Reach allowed hosts"]) {
+      await expect(row(label).getByText("Claude only", { exact: true })).toBeVisible();
+      await expect(row(label).getByText("Codex only", { exact: true })).toBeHidden();
+    }
+    await expect(row("Go online").getByText("Codex only", { exact: true })).toBeVisible();
+    await expect(row("Go online").getByText("Claude only", { exact: true })).toBeHidden();
+    for (const note of ["Claude only", "Codex only"]) {
+      await expect(row("Delete files").getByText(note, { exact: true })).toBeHidden();
+    }
+  });
+
   test("keeps the high token-use banner hidden", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);

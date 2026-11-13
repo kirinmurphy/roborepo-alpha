@@ -232,7 +232,8 @@ client repo under NDA — which is why it complements the scope perimeter instea
 
 `sandbox-shell` runs each Claude shell command inside the operating system's sandbox (Seatbelt on
 macOS). Commands that stay inside the bounds below run without a permission prompt, whatever their
-shape: a leading `cd`, pipes, loops, and inline scripts all count.
+shape: pipes, loops, and inline scripts all count. A command an `ask` or `deny` rule names still
+prompts or is refused; `rm` (`delete-files`) still asks.
 
 | Inside the sandbox | Bound |
 | --- | --- |
@@ -254,9 +255,10 @@ It is separate from `go-online`, which stays Codex's on/off network switch.
 `roborepo`, and `./bin/roborepo` cannot work inside it: Docker needs its daemon socket, SSH cannot
 pass the sandbox proxy, and `roborepo plans` commands write the plans store, which `edit-plans-store`
 denies to every sandboxed write. A call made only of those commands runs unsandboxed, under the
-ordinary allow, ask, and deny rules. A call that adds anything else, a pipe included, stays
-sandboxed: `roborepo plans show <id> --json | grep synchronized` cannot lock the plans store and
-reports `"synchronized": false`. Run plans commands on their own.
+ordinary allow, ask, and deny rules. A call that adds any other command, a pipe included, stays
+sandboxed; do not rely on a leading `cd` either way. `roborepo plans show <id> --json | grep
+synchronized` cannot lock the plans store and reports `"synchronized": false`. Run plans commands
+on their own.
 
 Codex always sandboxes its commands, so both behaviors are Claude-only. Enforcement was verified on
 macOS with Claude Code 2.1.309 through `claude -p`; Linux and Windows are unverified. A local

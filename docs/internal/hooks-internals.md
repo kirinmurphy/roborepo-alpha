@@ -280,7 +280,8 @@ The renderer writes the generated permission block in `generated/codex/config.to
 (`approval_policy`, `sandbox_mode`, `network_access` — derived from the `write-files`
 and `go-online` behaviors, and from whether anything is `ask`), the generated shell
 prefix rules in `generated/codex/rules/default.rules`, and Claude
-`permissions.allow` / `permissions.deny` / `permissions.ask` in `generated/claude/settings.json`.
+`permissions.allow` / `permissions.deny` / `permissions.ask` plus the shell `sandbox` key in
+`generated/claude/settings.json`.
 
 Command behaviors and arbitrary entries map to Codex `forbidden`, `allow`, and `prompt` rules,
 and Claude's `deny`, `allow`, and `ask` arrays. An ask entry also selects Codex's `on-request`
