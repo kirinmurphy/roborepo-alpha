@@ -268,7 +268,7 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 | --- | --- |
 | Reports grow longer | Layering keeps technical detail out of the first layer; `vzgsx5vz`'s leave-out rules still apply |
 | The check adds time and tokens to every plan command | One short report, a cheaper model, at most three reads |
-| The cold reader passes a report the user still finds unclear | The Not tested entry; the user's feedback tunes the questions |
+| The checker agent passes a report the user still finds unclear | The Not tested entry; the user's feedback tunes the questions |
 | The `/plan-review` approver loses evidence they relied on | All of it stays in the plan's `## Review` record and is one request away |
 
 ## Decisions
