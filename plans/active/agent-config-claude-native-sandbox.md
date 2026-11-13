@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Confirm npm run check, run the validation loop, then submit for review.
+next_action: Run validation pass 3 on 0a1eca67; if clean, submit for review and push the branch.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -257,7 +257,8 @@ Acceptance criteria:
 - [x] `git commit` succeeds from a linked worktree session with the sandbox on.
 - [x] `git push`, `gh pr view`, and `roborepo plans show <id> --json` behave as they do today;
       `roborepo plans show` reports `"synchronized": true`.
-- [ ] `npm run check` passes.
+- [x] `npm run check` passes. Passed at 75f212d3 ("CI checks passed"). An earlier run failed only
+      because a commit landed mid-run and changed the `generated/` status the suite's guard compares.
 
 ## Risks
 
@@ -353,6 +354,9 @@ Acceptance criteria:
   generated settings was told to run `rm victim.txt` (the `delete-files` ask rule) in its workspace:
   Claude requested permission instead of auto-allowing it, and the file survived. The docs say
   prompt-free "unless an ask or deny rule names them".
+- **2026-11-13 — `gh pr view` works under the generated settings.** A headless session with the
+  fresh render ran `gh pr view 64 --json number,state` as an excluded command and printed
+  `{"number":64,"state":"MERGED"}`.
 - **2026-11-12 — Scope correction: removing the trial block moves to `## Not tested`.** It may happen
   only once the generated key is live, which needs this branch merged and `roborepo update` run on
   this machine. Removing it earlier would leave the main checkout unsandboxed until then.
@@ -381,10 +385,20 @@ Acceptance criteria:
       sandboxed, which the leading-`cd` observation contradicts — fixed (75f212d3)
 - [x] The Gemini comment implied the new kinds are handled by name — fixed (75f212d3)
 - [x] `docs/internal/hooks-internals.md` omitted the generated `sandbox` key — fixed (75f212d3)
+- [x] The `sandbox-shell` description and user doc still claimed added commands keep a call
+      sandboxed, against the leading-`cd` observation — fixed (0a1eca67)
+- [x] The excluded-commands comment in `sandbox-settings.mjs` repeated the same claim — fixed (0a1eca67)
+- [x] `harness-provider-interface.md` said the plans store "needs no grant" instead of "cannot be
+      granted" — fixed (0a1eca67)
+- [x] No evidence that `gh pr view` works under the generated settings — fixed: run and recorded in
+      the Decision Log
 
 ### Verification
 
 - Validation pass 1 at bfab9cc6 (fresh-context subagent): 5 `fix` findings, all fixed in 75f212d3
+- Validation pass 2 at 75f212d3 (fresh-context subagent): 4 `fix` findings, fixed in 0a1eca67 and the
+  Decision Log
+- Full local gate (`npm run check`) passed at 75f212d3
 
 ## Open questions
 
