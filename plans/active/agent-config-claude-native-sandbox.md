@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run validation pass 3 on 0a1eca67; if clean, submit for review and push the branch.
+next_action: Run validation pass 4 on the gh-reason fix; if clean, submit for review and push the branch.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -392,6 +392,8 @@ Acceptance criteria:
       granted" — fixed (0a1eca67)
 - [x] No evidence that `gh pr view` works under the generated settings — fixed: run and recorded in
       the Decision Log
+- [x] The excluded-commands comment and user doc gave SSH as the reason `gh` runs outside the
+      sandbox; it is the unlisted `api.github.com` host — fixed (b3d45537)
 
 ### Verification
 
@@ -399,6 +401,7 @@ Acceptance criteria:
 - Validation pass 2 at 75f212d3 (fresh-context subagent): 4 `fix` findings, fixed in 0a1eca67 and the
   Decision Log
 - Full local gate (`npm run check`) passed at 75f212d3
+- Validation pass 3 at 0a1eca67 (fresh-context subagent): 1 `fix` finding, fixed in b3d45537
 
 ## Open questions
 
