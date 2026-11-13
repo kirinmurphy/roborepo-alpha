@@ -88,6 +88,18 @@ for (const [name, output] of [["codex", codex], ["gemini", gemini]]) {
 }
 assert.ok(!permissions.allow.some((rule) => hosts.hosts.some((host) => rule.includes(host))), "hosts are not permission rules");
 
+// No bucket of a Claude-only behavior changes Codex or Gemini output, starting from a baseline
+// with no ask anywhere (Codex's approval policy turns on any ask).
+const noAsk = Object.fromEntries(manifest.behaviors.filter((b) => b.bucket === "ask").map((b) => [b.id, "allow"]));
+const otherOutputs = (behaviors) => ["codex", "gemini"].map((id) => getHarnessProvider(id).adapters.permissions.render("", manifest, { behaviors }, "out", {}));
+const baseline = otherOutputs(noAsk);
+assert.match(baseline[0], /approval_policy = "never"/, "the baseline has no ask");
+for (const b of manifest.behaviors.filter((behavior) => behavior.claudeOnly)) {
+  for (const bucket of ["allow", "ask", "deny"]) {
+    assert.deepEqual(otherOutputs({ ...noAsk, [b.id]: bucket }), baseline, `${b.id} ${bucket} leaves Codex and Gemini unchanged`);
+  }
+}
+
 // The enforcement runner's last recorded observation.
 const coverage = JSON.parse(fs.readFileSync(new URL("./fixtures/claude-sandbox/coverage.json", import.meta.url)));
 assert.equal(coverage.schemaVersion, 1);

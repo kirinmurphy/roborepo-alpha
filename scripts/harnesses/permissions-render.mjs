@@ -46,8 +46,9 @@ function quoteToml(value) {
 
 // Native prompt rules require an approval-capable session policy. The reviewer remains a
 // user-owned setting; this renderer must not select human or automatic review.
+// Claude-only behaviors render nothing for Codex, so their bucket must not change its policy.
 function codexApprovalPolicy(behaviors, arbitraryCommands) {
-  return behaviors.some((b) => b.bucket === "ask") || arbitraryCommands.some((c) => c.bucket === "ask")
+  return behaviors.some((b) => b.bucket === "ask" && !b.claudeOnly) || arbitraryCommands.some((c) => c.bucket === "ask")
     ? "on-request"
     : "never";
 }
