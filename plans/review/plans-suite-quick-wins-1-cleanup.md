@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Human approval of reviewed commit 0ae6c9c5.
+next_action: Merge PR 63, then run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7", "3xh2sq32"]
@@ -534,6 +534,7 @@ describe the distinction between ordinary merges and owner access.
 - Status: complete
 - Reviewed implementation commit: 0ae6c9c5ecd957dc85395a56eb180451a4f03378
 - Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
+- Approval evidence: on 2026-11-13, in the /plan-review session, the user answered "Approve 0ae6c9c5" to the question "Approve the plan 'Clear agent friction: permissions, rule conflicts, and stale docs' at commit 0ae6c9c5?"
 - Earlier result: complete at be88642f. Approval evidence: on 2026-11-12, in the /plan-review session, the user answered
   "Approve be88642f" to the question "Approve 'Clear agent friction' at commit be88642f?"
 
