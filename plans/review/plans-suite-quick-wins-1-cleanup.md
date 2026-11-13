@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Human approval of reviewed commit be88642f.
+next_action: Push 0ae6c9c5 for PR CI, then human approval of that commit.
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7", "3xh2sq32"]
@@ -293,6 +293,16 @@ describe the distinction between ordinary merges and owner access.
   and tags even when configured fetch mappings target local branches.
 - PR body input is a UTF-8 file. Its content is passed to GitHub CLI through standard input.
   This preserves multiline text and keeps it out of shell interpretation and option parsing.
+- 2026-11-13: the allowed `pr-body` reads its file outside the agent's Read tool, so it now
+  enforces what Read would: the file must resolve, after symlinks, to a regular file under the
+  temp directory or `/tmp` that the `read-secrets` denylist does not name (f5d78948, 4df5a89e).
+  Alternative: move `pr-body` to the ask bucket. Rejected because it restores the prompt this
+  plan removes.
+- User decision (2026-11-13, plan review): tighten the `pr-body` guard rather than accept two
+  low-severity gaps. Temp roots are fixed system locations (`/tmp`, `/var/tmp`, macOS
+  `/var/folders`, Windows per-user `AppData\Local\Temp`), not `TMPDIR`; the file is opened and its
+  identity rechecked before reading (22b08820). Alternative: accept both as matching the Read
+  hook's own trust of `os.tmpdir()`.
 - GitHub delivery resolves the configured upstream, verifies matching fetch and push repository
   identities over HTTPS or SSH, excludes the default branch, and validates the published PR
   head. It refuses fork PRs and ambiguous PR matches. Retry is limited to completed failed runs
@@ -383,14 +393,42 @@ describe the distinction between ordinary merges and owner access.
       refusal details were unasserted — fixed in review (468674fe)
 - [x] The invalid pull request number refusal had no test — fixed in review (502eacb1)
 - [x] A failed `git fetch` passes git's own stderr through, which can include a URL path or
-      query — not changed: it matches raw `git fetch` output and is a git failure, not a guard
-      refusal; hiding it would drop git's diagnostics
+      query — first kept as raw git output; later changed after review (6aff151b): a failed
+      fetch now names only the remote and exit code
+- [x] No test exercised the `~/` `read-secrets` patterns in the `pr-body` guard — fixed in
+      review (0496d957)
+- [x] `pr-body` checked the resolved path, then read by path again, so a racing process could swap
+      a temp parent for a symlink in between — escalated; user chose to tighten; fixed in review
+      (22b08820) by opening first and comparing device and inode with a fresh resolution
+- [x] `pr-body` temp roots came from `os.tmpdir()`, so a broad `TMPDIR` widened what it may read
+      — escalated; user chose to tighten; fixed in review (22b08820) with fixed system temp roots
+- [x] The path-based identity recheck could still be beaten by repeated timed swaps — fixed in
+      review (03644a90): Linux also compares the open descriptor's `/proc` path; docs and comment
+      state that macOS and Windows only narrow the window (0ae6c9c5)
+- [x] `os.userInfo()` threw without a user-database entry, failing `pr-body` in such containers;
+      Windows `%TEMP%` wording overclaimed; the test fixture followed `$TMPDIR` — fixed in review
+      (03644a90)
 - [x] Repository, changed-configuration, invalid-remote, PR-count, and disallowed-operation
       refusals stayed generic — fixed in review (ec7034b0, 6ed1005b); the changed-configuration
       refusal names keys only, and the test asserts the key for each case
 
 ### Verification
 
+- Plan review (2026-11-13), changes since be88642f: base already up to date (main cedc1ebe).
+  PR 63 CI passed at 4df5a89e (`check (ubuntu-latest)`, `check (macos-latest)`,
+  `windows-installer`). Validator pass 14 (fresh-context subagent) over be88642f..4df5a89e found
+  one fix, a missing test for the `~/` denylist patterns (0496d957), and two low-severity
+  escalations the user decided to tighten (22b08820; see Decision Log). Pass 15 at 22b08820 found
+  a remaining two-walk race plus three accuracy fixes (03644a90); pass 16 at 03644a90 found a doc
+  nit and a readability fix (0ae6c9c5); pass 17 at 0ae6c9c5 was clean. The Linux `/proc` branch has not run on Linux locally; PR
+  CI on `ubuntu-latest` exercises it once the branch is pushed. Identity-recheck refusal and the
+  `os.userInfo()` fallback have no deterministic test: both need a timed swap or a container
+  without a user-database entry.
+- `npm run check` at 0ae6c9c5 (local, 2026-11-13): doctor 98 checks and 80/80 check suites
+  passed; portal UI 246/255, with 9 timeouts and aborted page loads. A rerun of those four spec
+  files failed 7 different tests on timeouts, taking 3.2 hours on a heavily loaded machine. The
+  changes since CI-green 4df5a89e touch only the delivery CLI, its check, and
+  `roborepo-cli.md`, none of which the portal loads. The full gate for 0ae6c9c5 is left to PR CI.
 - Plan review (2026-11-12): base synchronized three times — `c3c54c00` (main 37af5648),
   `e64a5e27` (main c77b4649, merged by another session during review), and `be88642f`
   (main cedc1ebe). All merges were clean; main's changes touch regions separate from this plan.
@@ -493,10 +531,10 @@ describe the distinction between ordinary merges and owner access.
 
 ### Result
 
-- Status: complete
-- Reviewed implementation commit: be88642fae8a36fe6a9e986bbe79436ac93b6c98
+- Status: pending (full gate for 0ae6c9c5 awaits PR CI)
+- Reviewed implementation commit: 0ae6c9c5ecd957dc85395a56eb180451a4f03378
 - Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
-- Approval evidence: on 2026-11-12, in the /plan-review session, the user answered
+- Earlier result: complete at be88642f. Approval evidence: on 2026-11-12, in the /plan-review session, the user answered
   "Approve be88642f" to the question "Approve 'Clear agent friction' at commit be88642f?"
 
 ### Approval
