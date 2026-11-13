@@ -142,7 +142,8 @@ check in change 3.
 reference that every plan command reads before it writes its completion report. Recommended home:
 generalize `plan-execute/references/final-report.md` into a shared reference, read by the other
 commands through a relative path (as `plan-write` already reads `../plan-suite-init/SKILL.md`).
-`/plan-promote` may choose a different home if the installer cannot ship a file outside a skill.
+`/plan-promote` confirms that a file one skill reads from another skill's folder still resolves
+after install, and chooses another home if it does not.
 
 The shape, in order, skipping empty sections:
 
@@ -200,7 +201,7 @@ flowchart LR
 | Which reports | Completion reports of `/plan-promote`, `/plan-execute`, `/plan-review`, and `/plan-close`. `/plan-write` and `/plan-archive` use the in-session self-check below | The four end a stage of work and carry the long reports a user returns to. The other two reports are short. Ordinary chat replies would pay the cost on every turn. Open question: run it on all six |
 | Model | A cheaper model is allowed | The task is reading comprehension of a short text, not judging code |
 | Passes | At most two rewrites, then deliver and say which terms the check still flagged | A report must not stall delivery |
-| No subagent available | Run the check in-session as a separate step: reread the report as if new, answer the three questions, and list each term with where it was introduced | Same fallback `/plan-execute` uses for its Validator |
+| No subagent available | Use the in-session self-check: a separate step that rereads the report as if new, answers the three questions, and lists each term with where it was introduced | Same fallback `/plan-execute` uses for its Validator |
 | Shown to the user | No, unless the cap was reached | The user wants the report, not its review |
 
 ### 4. Visual evidence required for visible changes
@@ -232,7 +233,7 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 
 - `node scripts/test/plan-suite-skills-check.mjs` asserts that every plan command reads the shared
   reference before reporting, that the reference names the five sections, the three cold-reader
-  questions, the two-rewrite cap, and the in-session fallback, and that `/plan-review` still asks
+  questions, the two-rewrite cap, and the in-session self-check, and that `/plan-review` still asks
   for approval of an exact commit.
 - `bash scripts/build/render-rules.sh --check` and `bash scripts/doctor.sh --quiet` pass.
 - Dry run of the check: give the cold-reader check the original "delivery refusals" bullet. It
