@@ -35,11 +35,16 @@ export async function fetchTrackingRefs(cwd, remote) {
   await requireConfiguredRemote(cwd, remote);
   // A remote's configured refspecs may write local branches. An empty refmap suppresses
   // those mappings, while the sole explicit destination stays inside its tracking namespace.
-  await git(cwd, [
+  const result = await runGitProcess(cwd, [
     "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "protocol.ext.allow=never",
     "fetch", "--no-tags", "--no-prune", "--no-prune-tags", "--no-recurse-submodules",
     "--refmap=", "--", remote, `+refs/heads/*:refs/remotes/${remote}/*`,
-  ]);
+  ], { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
+  // Git's fetch diagnostics quote the remote URL, and a URL path can carry a token that Git's
+  // own credential stripping misses, so the refusal names the remote but not Git's output.
+  if (!result.ok) {
+    throw new Error(`Fetch from remote ${remote} failed (exit ${result.code ?? "unknown"}); Git's output is not printed because it can include the remote URL`);
+  }
   return `Refreshed refs/remotes/${remote}/*`;
 }
 

@@ -40,6 +40,11 @@ try {
   const urlArgument = delivery(checkout, ["fetch", "https://u:ghp_argSecret@github.com/x/y"]);
   assert.match(urlArgument.stderr, /non-name value \(not printed\)/);
   assert.ok(!urlArgument.stderr.includes("ghp_argSecret"), "a URL passed as the remote is never echoed");
+  git(checkout, "remote", "add", "unreachable", path.join(root, "ghp_fetchPathSecret", "missing.git"));
+  const failedFetch = delivery(checkout, ["fetch", "unreachable"]);
+  refused(failedFetch, /Fetch from remote unreachable failed/);
+  assert.ok(!failedFetch.stderr.includes("ghp_fetchPathSecret"), "a failed fetch never prints the remote URL");
+  git(checkout, "remote", "remove", "unreachable");
   console.log("✓ Guarded fetch refreshed origin/main and preserved local branches and tags.");
 
   git(checkout, "switch", "-c", "feature/check");
