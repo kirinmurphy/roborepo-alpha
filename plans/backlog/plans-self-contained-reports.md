@@ -17,7 +17,7 @@ later, after working on something else, and cannot tell what the plan was for, w
 what they need to decide. This plan makes every plan-command report readable on its own: it says
 what the plan is for, describes changes as things a person would notice, explains every term it
 uses, and sets out each decision with its options and a recommendation. For the commands that end
-a stage of work, a second agent that sees only the report checks it before the user does, and visible changes come with a screenshot,
+a stage of work, a checker agent that sees only the report checks it before the user does, and visible changes come with a screenshot,
 recording, or diagram.
 
 ## Context
@@ -31,6 +31,7 @@ recording, or diagram.
 | Cold reader | Someone reading a report with no memory of the session: the user coming back hours later, or a person who never saw the work |
 | Report template | The section of each command's instructions that tells the agent what to put in its completion report |
 | `response-output` | An optional rules package that tells agents how to word every chat reply. Users can turn it off |
+| Checker agent | A separate agent, started with a fresh context, that reads only a completion report and tests whether a cold reader could follow it (change 3) |
 | Validator | A separate agent that `/plan-execute` starts with a fresh context, so it judges the code from the plan and the diff without the writer's blind spots. It reports problems and never edits |
 | `feature-verification` | The skill that captures evidence a change works: command output, screenshots, and recordings |
 | Plan suite skills | Live under `globals/packages/plan-suite/skills/<command>/`. Paths below that start with a command name, such as `plan-review/SKILL.md`, are relative to that folder |
@@ -176,7 +177,7 @@ reader can act on, not as shorthand from the session.
 
 ### 3. Cold-reader check before delivery
 
-Before a plan command delivers its completion report, a fresh agent reads **only the report** and
+Before a plan command delivers its completion report, a checker agent reads **only the report** and
 answers three questions:
 
 1. What is this plan for?
@@ -189,7 +190,7 @@ delivers it.
 
 ```mermaid
 flowchart LR
-  D[Agent drafts report] -->|sends only the report| C[Cold reader agent]
+  D[Agent drafts report] -->|sends only the report| C[Checker agent]
   C -->|returns answers and unexplained terms| J{Answers right and no unexplained terms?}
   J -->|yes: deliver| U[User reads report]
   J -->|no: rewrite| R[Agent rewrites report]
@@ -278,7 +279,7 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 
 ## Open Questions
 
-- **Which commands get the cold-reader check from a separate agent?** Recommended: `/plan-promote`, `/plan-execute`,
+- **Which commands get the cold-reader check from a checker agent?** Recommended: `/plan-promote`, `/plan-execute`,
   `/plan-review`, and `/plan-close`, which end a stage and write long reports; `/plan-write` and
   `/plan-archive` use the in-session self-check. Alternative: all six, which checks every report
   with a reader that never saw the session, at the cost of a short extra step on the two quick
