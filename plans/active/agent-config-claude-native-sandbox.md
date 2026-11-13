@@ -349,6 +349,10 @@ Acceptance criteria:
   results the probe writes to a file, so model wording cannot affect the verdict. A global
   protected-branch pre-push guard refused a push to an anonymous path remote, so the runner gives its
   throwaway remote a recorded default branch.
+- **2026-11-13 — Ask and deny rules still apply to sandboxed commands.** A headless session with the
+  generated settings was told to run `rm victim.txt` (the `delete-files` ask rule) in its workspace:
+  Claude requested permission instead of auto-allowing it, and the file survived. The docs say
+  prompt-free "unless an ask or deny rule names them".
 - **2026-11-12 — Scope correction: removing the trial block moves to `## Not tested`.** It may happen
   only once the generated key is live, which needs this branch merged and `roborepo update` run on
   this machine. Removing it earlier would leave the main checkout unsandboxed until then.
@@ -362,11 +366,25 @@ Acceptance criteria:
 - [ ] Then remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json`,
       and confirm a new session still reports the sandbox (`claude sandbox status` shows
       `"enabled": true`). Needs the step above first.
-- [ ] The portal's permission rows show "Claude only" on Sandboxed shell commands and Reach allowed
-      hosts. The row data carries `claudeOnly` (checked through `readConfigSnapshot`), but no browser
-      check ran: starting a portal from this worktree risks replacing the running one.
 - [ ] A desktop-app session started after the live update honors the generated key the way it
       honored the trial block. The enforcement runner covers `claude -p` only.
+
+## Review
+
+### Findings
+
+- [x] The portal "Claude only" Not tested entry was checkable: the portal UI suite runs a hermetic
+      server — fixed (75f212d3), assertion added to `portal-ui.spec.mjs`, entry removed
+- [x] `claudeOnly` in rows, the config status printout, and onboarding had no deterministic check —
+      fixed (75f212d3), `permission-harness-notes-check.mjs`
+- [x] The `sandbox-shell` description and user doc claimed any added command keeps a call
+      sandboxed, which the leading-`cd` observation contradicts — fixed (75f212d3)
+- [x] The Gemini comment implied the new kinds are handled by name — fixed (75f212d3)
+- [x] `docs/internal/hooks-internals.md` omitted the generated `sandbox` key — fixed (75f212d3)
+
+### Verification
+
+- Validation pass 1 at bfab9cc6 (fresh-context subagent): 5 `fix` findings, all fixed in 75f212d3
 
 ## Open questions
 
