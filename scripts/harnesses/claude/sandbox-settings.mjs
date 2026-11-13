@@ -13,7 +13,8 @@
 // Each entry runs with full filesystem and network access, under the ordinary allow/ask/deny
 // rules — keep the list short.
 //   - docker: talks to the daemon over a Unix socket the sandbox does not open.
-//   - gh, git push/pull/fetch: SSH and gh's own credential store cannot pass the sandbox proxy.
+//   - gh: calls api.github.com, which reach-allowed-hosts does not list, so every call would prompt.
+//   - git push/pull/fetch: SSH cannot pass the sandbox proxy.
 //   - roborepo: plans commands lock and commit the plans store, which edit-plans-store denies to
 //     every sandboxed write; `./bin/roborepo` is the same CLI run from a development checkout.
 export const CLAUDE_SANDBOX_EXCLUDED_COMMANDS = Object.freeze([
