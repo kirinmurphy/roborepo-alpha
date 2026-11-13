@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
 reviewed_commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
-worktree:
+worktree: agent-config-claude-native-sandbox
 ---
 
 # Cut Claude permission prompts by running shell commands in the native sandbox
