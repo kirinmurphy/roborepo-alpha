@@ -31,6 +31,9 @@ recording, or diagram.
 | Cold reader | Someone reading a report with no memory of the session: the user coming back hours later, or a person who never saw the work |
 | Report template | The section of each command's instructions that tells the agent what to put in its completion report |
 | `response-output` | An optional rules package that tells agents how to word every chat reply. Users can turn it off |
+| Validator | A separate agent that `/plan-execute` starts with a fresh context, so it judges the code from the plan and the diff without the writer's blind spots. It reports problems and never edits |
+| `feature-verification` | The skill that captures evidence a change works: command output, screenshots, and recordings |
+| Layer | A report has two: plain context a cold reader needs, shown always, and technical detail, shown on request (see change 1) |
 
 ### The problem, in one example
 
@@ -56,7 +59,7 @@ These facts were checked against `main` and against the branch of "Clear agent f
 | --- | --- |
 | `globals/packages/response-output/rules.md` | Already says "Introduce before you name". The example above broke it anyway, so more rule text alone does not fix this. Its opening aims at the wrong reader: "someone who knows the project but not what you just read" |
 | `plan-execute/references/final-report.md` | Outcome first: a headline, a "What changed" table phrased as what you'll notice, and a "Needs you" table. The closest of the templates to what this plan wants |
-| `plan-review/SKILL.md`, step 6 | Shows a nine-item review packet before asking for approval: commit and base, each criterion with code and test evidence, changes by area, each Validator pass, every commit, base failures, outside issues, manual checks, and escalated findings |
+| `plan-review/SKILL.md`, step 6 | Shows a nine-item review packet before asking for approval: commit and base, each criterion with code and test evidence, changes by area, each Validator pass and what it found, every commit, base failures, outside issues, manual checks, and escalated findings |
 | `plan-promote/SKILL.md`, Completion Result | A block of ten status lines and counts, then an eight-item "also report" list |
 | `plan-review`, `plan-close`, `plan-archive`, Final Report (on the `vzgsx5vz` branch) | Rewritten to be shorter: one outcome line, status only when unusual, evidence through `feature-verification` "where it applies", no passing gates or commit ids. Each skill repeats the same paragraph |
 | `plan-write/SKILL.md` | Asks only to "report changed files, verification run, and paired skills" |
@@ -120,12 +123,15 @@ self-containment wins when they conflict. The answer is layering, not cutting:
 | Layer | Contains | Shown |
 | --- | --- | --- |
 | 1. Plain context | What the plan is for, what changed for a person, what the reader must do | Always |
-| 2. Technical detail | Commit ids, check names, files, validator passes, Decision Log | On request, or in the plan document |
+| 2. Technical detail | Commit ids, check names, files, Validator passes, the plan's log of decisions made during the work | On request, or in the plan document |
 
 A report that drops the one sentence a cold reader needs has not saved space; the reader has to
-ask anyway. Inside an ongoing conversation, a reply may still refer to things already explained
-in that conversation. The cold-reader standard applies to completion reports, which are what
-the user returns to.
+ask anyway.
+
+The new reader applies to every reply, as the user asked for chat output in general. Inside an
+ongoing conversation, a reply may still refer to things already explained earlier in it; a
+completion report may not, because the user returns to it cold. Only completion reports get the
+check in change 3.
 
 ### 2. One shared report shape
 
@@ -155,7 +161,7 @@ Each command keeps only its own specifics, and points to the shared shape for ev
 | Command | Keeps |
 | --- | --- |
 | `/plan-write` | Plan title and id; open questions |
-| `/plan-promote` | Whether the plan moved to ready; the paste-to-start snippet. Its ten-line counts block moves to Record or is dropped |
+| `/plan-promote` | Whether the plan moved to ready; the snippet the user pastes into a new chat to start the plan. Its ten-line counts block moves to Record or is dropped |
 | `/plan-execute` | Its current sections, now pointing at the shared reference |
 | `/plan-review` | The exact-commit approval question; findings that block approval. The nine-item packet becomes layer 2: criteria appear as a plain checklist of outcomes, and commits, validator passes, and evidence detail live in the plan's `## Review` record |
 | `/plan-close` | The reason for each refusal |
@@ -174,7 +180,8 @@ answers three questions:
 3. What must the reader do or decide?
 
 It also lists every term it could not explain from the report. The writing agent rewrites the
-report until all three answers match its intent and the list is empty, then delivers it.
+report until all three answers match its intent and the list is empty, at most twice, then
+delivers it.
 
 ```mermaid
 flowchart LR
@@ -187,7 +194,7 @@ flowchart LR
 
 | Choice | Decision | Why |
 | --- | --- | --- |
-| Which reports | Completion reports of plan commands only | They are what the user returns to cold. Ordinary chat replies would pay the cost on every turn |
+| Which reports | Completion reports of `/plan-promote`, `/plan-execute`, `/plan-review`, and `/plan-close`. `/plan-write` and `/plan-archive` use the in-session self-check below | The four end a stage of work and carry the long reports a user returns to. The other two reports are short. Ordinary chat replies would pay the cost on every turn. Open question: run it on all six |
 | Model | A cheaper model is allowed | The task is reading comprehension of a short text, not judging code |
 | Passes | At most two rewrites, then deliver and say which terms the check still flagged | A report must not stall delivery |
 | No subagent available | Run the check in-session as a separate step: reread the report as if new, answer the three questions, and list each term with where it was introduced | Same fallback `/plan-execute` uses for its Validator |
@@ -239,7 +246,7 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 
 | Doc | Update |
 | --- | --- |
-| `docs/user/guides/plan/lifecycle/plan-suite.md` | Describe what a completion report contains, and update the two descriptions of the `/plan-review` packet (the commands table and the review steps) |
+| `docs/user/guides/plan/lifecycle/plan-suite.md` | Describe what a completion report contains. Update every description of the `/plan-review` packet: the commands table, the review steps, the answer table that "shows you the packet again", and check whether the merge-readiness paragraph on the committed review packet still holds |
 | `globals/packages/response-output/package.config.json` | Package description, if the new reader changes it; the control panel shows this text |
 
 ## Related plans
@@ -259,6 +266,18 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 | The cold reader passes a report the user still finds unclear | The Not tested entry; the user's feedback tunes the questions |
 | The `/plan-review` approver loses evidence they relied on | All of it stays in the plan's `## Review` record and is one request away |
 
+## Decisions
+
+- **Change 1 stays, though change 2 carries the fix for plan reports.** The user asked for chat
+  output in general to serve a cold reader, not only plan reports. Dropping change 1 would leave
+  ordinary replies aimed at the old reader.
+
 ## Open Questions
 
-- None blocking. `/plan-promote` should confirm where the shared reference lives (see change 2).
+- **Which commands get the fresh-agent check?** Recommended: `/plan-promote`, `/plan-execute`,
+  `/plan-review`, and `/plan-close`, which end a stage and write long reports; `/plan-write` and
+  `/plan-archive` use the in-session self-check. Alternative: all six, which checks every report
+  with a reader that never saw the session, at the cost of a short extra step on the two quick
+  commands.
+- **Where the shared reference lives.** `/plan-promote` confirms whether the installer ships a
+  file read across skills (see change 2).
