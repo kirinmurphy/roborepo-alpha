@@ -199,7 +199,7 @@ flowchart LR
 
 | Choice | Decision | Why |
 | --- | --- | --- |
-| Which reports | Completion reports of `/plan-promote`, `/plan-execute`, `/plan-review`, and `/plan-close`. `/plan-write` and `/plan-archive` use the in-session self-check below | The four end a stage of work and carry the long reports a user returns to. The other two reports are short. Ordinary chat replies would pay the cost on every turn. Open question: run it on all six |
+| Which reports | Completion reports of `/plan-promote`, `/plan-execute`, `/plan-review`, and `/plan-close`. `/plan-write` and `/plan-archive` use the in-session self-check below | The four end a stage of work and carry the long reports a user returns to. The other two reports are short. Ordinary chat replies would pay the cost on every turn. Decided by the user; see Decisions |
 | Model | A cheaper model is allowed | The task is reading comprehension of a short text, not judging code |
 | Passes | At most two rewrites, then deliver and say which terms the check still flagged | A report must not stall delivery |
 | No subagent available | Use the in-session self-check: a separate step that rereads the report as if new, answers the three questions, and lists each term with where it was introduced | Same fallback `/plan-execute` uses for its Validator |
@@ -276,13 +276,12 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 - **Change 1 stays, though change 2 carries the fix for plan reports.** The user asked for chat
   output in general to serve a cold reader, not only plan reports. Dropping change 1 would leave
   ordinary replies aimed at the old reader.
+- **The checker agent runs for four commands.** User decision (2026-11-12): `/plan-promote`,
+  `/plan-execute`, `/plan-review`, and `/plan-close` use the checker agent, because they end a
+  stage of work and write the long reports a user returns to. `/plan-write` and `/plan-archive`
+  write short reports and use the in-session self-check.
 
 ## Open Questions
 
-- **Which commands get the cold-reader check from a checker agent?** Recommended: `/plan-promote`, `/plan-execute`,
-  `/plan-review`, and `/plan-close`, which end a stage and write long reports; `/plan-write` and
-  `/plan-archive` use the in-session self-check. Alternative: all six, which checks every report
-  with a reader that never saw the session, at the cost of a short extra step on the two quick
-  commands.
 - **Where the shared reference lives.** `/plan-promote` confirms whether the installer ships a
   file read across skills (see change 2).
