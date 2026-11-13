@@ -287,9 +287,10 @@ A normal workflow refreshes the configured remote, pushes the feature branch wit
 writes the finished PR description to a file, and updates the existing PR. The body file must
 resolve, after symlinks, to a regular file under a fixed system temp location (`/tmp`,
 `/var/tmp`, macOS `/var/folders`, or a Windows per-user `AppData\Local\Temp`) that the
-`read-secrets` credential denylist does not name. `TMPDIR` and `TEMP` do not widen that set. The
-command opens the file and rechecks its identity before reading, so a path swapped mid-check is
-refused. The allowed command therefore cannot publish files the agent could not read itself.
+`read-secrets` credential denylist does not name. `TMPDIR` does not widen that set; on Windows,
+`TEMP` is accepted only when it names an `AppData\Local\Temp` folder. The command opens the file
+and rechecks its identity before reading. On Linux that check uses the kernel's path for the open
+file and refuses a path swapped mid-check; on macOS it narrows that window but cannot close it.
 
 ```sh
 roborepo delivery fetch origin

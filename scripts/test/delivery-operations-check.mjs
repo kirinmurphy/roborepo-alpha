@@ -6,7 +6,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
 
-const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-delivery-"));
+// pr-body accepts only fixed system temp roots, so on POSIX the fixture uses /tmp rather than a
+// $TMPDIR that may point elsewhere.
+const root = fs.mkdtempSync(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "roborepo-delivery-"));
 const cli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
 isolateGitConfig(root);
 

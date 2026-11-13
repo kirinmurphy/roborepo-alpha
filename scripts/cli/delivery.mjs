@@ -25,9 +25,19 @@ function isDeniedSecret(resolved) {
   const slashed = (value) => value.split(path.sep).join("/");
   // `os.homedir()` follows $HOME; the account's own home is checked too, so an overridden $HOME
   // cannot move `~/.ssh/**` away from the real one.
-  const accountHome = process.platform === "win32" ? os.homedir() : os.userInfo().homedir;
-  const homes = [...new Set([os.homedir(), accountHome].flatMap((home) => [home, realpathOrSelf(home)]).map(slashed))];
+  const homes = [...new Set([os.homedir(), accountHome()].flatMap((home) => [home, realpathOrSelf(home)]).map(slashed))];
   return patterns.some((pattern) => homes.some((home) => secretPatternRegExp(pattern, home).test(slashed(resolved))));
+}
+
+// An account with no user-database entry (a container run with an arbitrary UID) makes
+// `os.userInfo()` throw; $HOME is then the only home available.
+function accountHome() {
+  if (process.platform === "win32") return os.homedir();
+  try {
+    return os.userInfo().homedir;
+  } catch {
+    return os.homedir();
+  }
 }
 
 function realpathOrSelf(value) {
@@ -38,10 +48,10 @@ function realpathOrSelf(value) {
   }
 }
 
-// Fixed system temp locations, never $TMPDIR or %TEMP%: an environment variable pointed at a
-// broad directory would otherwise widen what `pr-body` may read. macOS per-user temp folders live
-// under /var/folders. On Windows only a per-user AppData\Local\Temp counts; anything else fails
-// closed.
+// Fixed system temp locations, never $TMPDIR: an environment variable pointed at a broad
+// directory would otherwise widen what `pr-body` may read. macOS per-user temp folders live under
+// /var/folders. Windows has no fixed per-user location, so %TEMP% is accepted only when it names an
+// AppData\Local\Temp folder; anything else fails closed.
 function temporaryRoots() {
   if (process.platform === "win32") {
     const temp = realpathOrSelf(os.tmpdir());
@@ -56,9 +66,11 @@ const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.
 // Agent permissions allow `delivery pr-body` with any argument, and the command reads the file
 // outside the agent's Read tool, so it must enforce what Read would: the body must resolve, after
 // symlinks, to a regular file inside a system temp directory that the `read-secrets` denylist does
-// not name. The file is then opened and its identity rechecked against a fresh resolution, so a
-// path component swapped between the check and the open cannot redirect the read. Refusals and
-// read errors never print the path.
+// not name. The file is then opened and its identity rechecked. On Linux the kernel's own path
+// for the open descriptor is compared, which closes a path component swapped mid-check. Elsewhere
+// Node has no descriptor-path lookup, so a fresh resolution's device and inode are compared, which
+// narrows that window but cannot close it against repeated timed swaps. Refusals and read errors
+// never print the path.
 function readBodyFile(file) {
   const roots = temporaryRoots();
   let resolved;
@@ -78,7 +90,8 @@ function readBodyFile(file) {
     if (!opened.isFile()) throw new Error("PR body file must be a regular file");
     const recheck = fs.realpathSync(resolved);
     const current = fs.statSync(recheck);
-    if (recheck !== resolved || current.dev !== opened.dev || current.ino !== opened.ino) {
+    const descriptorPath = process.platform === "linux" ? fs.readlinkSync(`/proc/self/fd/${fd}`) : resolved;
+    if (descriptorPath !== resolved || recheck !== resolved || current.dev !== opened.dev || current.ino !== opened.ino) {
       throw new Error("PR body file changed while it was being checked (path not printed)");
     }
     return fs.readFileSync(fd, "utf8");
