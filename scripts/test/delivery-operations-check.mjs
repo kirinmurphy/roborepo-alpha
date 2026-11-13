@@ -113,6 +113,30 @@ try {
     refused(missingBody, /PR body file was not found \(path not printed\)/);
     assert.ok(!missingBody.stderr.includes("ghp_bodySecret"));
     refused(runDelivery(["pr-body", root]), /PR body file must be a regular file/);
+    // Temp-directory credential files stay under the same denylist the Read tool enforces.
+    const secretDir = path.join(root, "ghp_secretDir");
+    fs.mkdirSync(path.join(secretDir, "keys"), { recursive: true });
+    const secretFiles = [".env", ".env.production", ".env.preview.local", "deploy.pem", "keys/id_ed25519"]
+      .map((name) => path.join(secretDir, name));
+    for (const file of secretFiles) fs.writeFileSync(file, "ghp_secretValue");
+    const linkedSecret = path.join(root, "linked-secret.md");
+    fs.symlinkSync(secretFiles[0], linkedSecret);
+    for (const file of [...secretFiles, linkedSecret]) {
+      const result = runDelivery(["pr-body", file]);
+      refused(result, /matches the read-secrets credential denylist \(path not printed\)/);
+      assert.ok(!result.stderr.includes("ghp_secretDir"), "a denied body file path is never printed");
+      assert.deepEqual(calls(), [], "a denied body file stops before any GitHub call");
+    }
+    const template = path.join(secretDir, ".env.example");
+    fs.writeFileSync(template, "PLACEHOLDER=1");
+    passed(runDelivery(["pr-body", template]));
+    if (process.getuid?.() !== 0) {
+      const unreadable = path.join(secretDir, "unreadable.md");
+      fs.writeFileSync(unreadable, "body", { mode: 0o000 });
+      const result = runDelivery(["pr-body", unreadable]);
+      refused(result, /PR body file could not be read \(EACCES; path not printed\)/);
+      assert.ok(!result.stderr.includes("ghp_secretDir"), "a read error never prints the path");
+    }
     refused(runDelivery(["pr-body", bodyFile], [pr, { ...pr, number: 43, url: "https://github.com/example/project/pull/43" }]), /one open pull request for feature\/check, found 2/);
     for (const [patch, detail] of [
       [{ headSha: latest }, /run commit is/], [{ headBranch: "another-branch" }, /run branch is another-branch/],
