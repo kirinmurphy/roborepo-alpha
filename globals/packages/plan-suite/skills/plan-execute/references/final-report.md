@@ -13,6 +13,7 @@ The plan document already holds the Decision Log, every Validation Loop finding,
 
 - Shape
 - Headline
+- What changed
 - Decisions worth knowing
 - Exceptions
 - Needs you
@@ -42,7 +43,9 @@ Name the plan's lifecycle outcome:
 **Review findings fixed: "<title>" (<id>), ready for /plan-review again**
 ```
 
-What changed uses the shared table form, one row per change a person would notice:
+## What changed
+
+The shared What changed section, as a table with one row per change a person would notice:
 
 | Change | What you'll notice |
 | --- | --- |

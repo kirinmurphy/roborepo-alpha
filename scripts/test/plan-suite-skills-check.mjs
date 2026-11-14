@@ -369,7 +369,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   // commands that end a stage of work run the checker agent; the short reports self-check.
   const SHARED_REPORT = "`/plan-write`'s `references/completion-report.md`";
   const reportSections = {
-    "plan-write": ["## Completion Report", "## Common Rules"],
+    // plan-write ends with its Completion Report, so its section runs to the end of the file.
+    "plan-write": ["## Completion Report", null],
     "plan-promote": ["## Completion Result", "## Boundaries"],
     "plan-review": ["## Final Report", "## Boundaries"],
     "plan-close": ["## Final Report", "## Boundaries"],
@@ -378,7 +379,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   for (const [id, [startHeading, endHeading]] of Object.entries(reportSections)) {
     const skill = readSkill(id);
     const reportStart = skill.indexOf(startHeading);
-    const end = skill.indexOf(endHeading, reportStart);
+    const end = endHeading ? skill.indexOf(endHeading, reportStart) : -1;
     assert.ok(reportStart >= 0, `${id}: has a ${startHeading} section`);
     const report = end > reportStart ? skill.slice(reportStart, end) : skill.slice(reportStart);
     const pointer = id === "plan-write" ? "`references/completion-report.md`" : SHARED_REPORT;
