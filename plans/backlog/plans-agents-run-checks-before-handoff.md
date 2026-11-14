@@ -106,7 +106,7 @@ Some handoffs come from tools, not instructions. Findings, each with its source:
 
 | Limit | Evidence | Status |
 | --- | --- | --- |
-| The shell sandbox refuses local port binding and writes outside the checkout | `9njvfh5z` review: 15 gate checks failed inside the reviewing agent's sandbox on write errors, port binding, and `.git/worktrees`; the unsandboxed rerun passed | `9njvfh5z` keeps `allowLocalBinding: false`. Its decision log notes the app's preview tools run outside the shell sandbox. Whether `roborepo browser run --serve` can start a dev server inside the sandbox is not verified; see Open Questions |
+| The shell sandbox refuses local port binding and writes outside the checkout | `9njvfh5z` review: 15 gate checks failed inside the reviewing agent's sandbox on write errors, port binding, and `.git/worktrees`; the unsandboxed rerun passed | `9njvfh5z` keeps `allowLocalBinding: false`. Its decision log notes the app's preview tools run outside the shell sandbox. Checked 2026-11-14 from a desktop-app session: a Node server listening on `127.0.0.1` inside the shell sandbox failed with `EPERM`, so `roborepo browser run --serve` cannot start a dev server there. `roborepo browser` itself was not run |
 | Plan-store commands cannot lock the store inside the sandbox | `9njvfh5z` current state: `roborepo plans show` reports "The plans worktree could not be locked" | Workaround is a sandbox-bypass rerun, which needs a permission prompt or auto-mode approval |
 | The browser suites failed in a fresh worktree with no installed dependencies | `vzgsx5vz` verification: four suites failed with `ERR_MODULE_NOT_FOUND` until `npm ci` | Fixed on `main` by `c77b4649`, which installs dev dependencies on demand |
 | Playwright may be missing | `feature-verification/SKILL.md`: a missing browser makes the run `blocked`, and installing it goes through a permission prompt | Unchanged; a declined prompt leaves the check blocked |
@@ -372,10 +372,12 @@ Behavior that must not change, each case passing before and after:
 
 ## Open Questions
 
-- **Can `roborepo browser run --serve` start a dev server inside the shell sandbox?** Unverified.
-  If not, every UI check an agent runs from the shell becomes a `Blocked:` entry unless it uses the
-  app's preview tools. `/plan-promote` should try it once and, if it fails, name the preview-tool
-  route in the `/plan-execute` text.
+- **How agents outside the desktop app run UI checks.** The shell sandbox refuses local ports, so
+  `roborepo browser run --serve` cannot start a dev server there. In the Claude desktop app, the
+  preview tools run outside the sandbox and this plan's text already points agents to them. In the
+  Claude CLI and Codex, each UI check becomes a `Blocked:` entry, and the user is asked to allow it.
+  Recommendation: accept that here, and propose localhost-only port binding as a follow-up to the
+  sandbox plan (`9njvfh5z`), which turned binding off over wildcard listeners.
 
 - **Order against `9671042v`.** Both are ready to promote and edit the same review packet.
   Recommendation: this plan first, because it decides what the packet contains. The other order
