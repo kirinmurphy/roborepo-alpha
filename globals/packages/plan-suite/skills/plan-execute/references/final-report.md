@@ -108,7 +108,7 @@ Implementation result
 - Lifecycle: stays active | moved to review | stays review
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)
-- Details: Decision Log, findings, and Not tested entries are in the plan document
+- Details: Decision Log, findings, and Not tested entries are in the plan document; ask here for any detail
 ```
 
 Add a line only for a non-default fact: a shareable link, a server left running, docs that needed
