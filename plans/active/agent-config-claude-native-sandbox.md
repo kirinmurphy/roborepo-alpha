@@ -577,6 +577,10 @@ Acceptance criteria:
   record), fixed in fb76b09a and the plan record
 - Validation: clean on pass 13 at fb76b09a (fresh-context subagent); the `delete-files` Open
   Question and its two escalated findings remain open for the user
+- Full local gate (`npm run check`, run unsandboxed) at 4f4a15b4: 78 of 79 suites passed.
+  `codex-command-permission-check.mjs` failed because it used `rm` as its ask-bucket example and
+  `delete-files` now allows it; fixed in afd22abd (uses `git pull`) and the suite passes there. The
+  final-commit gate waits for the `delete-files` answer
 
 ### Result
 
@@ -606,6 +610,8 @@ Acceptance criteria:
     outside the sandbox runs under the plain allow (unverified). Codex may let a command its rules
     allow skip its sandbox (unverified). A further option is to render
     `allowUnsandboxedCommands: false`.
+  - The full gate showed one more effect: Codex's PreToolUse permission hook now approves `rm`
+    outright, where it used to defer to Codex's native approval.
   - The shipped rule in `globals/packages/tool-call-optimization/rules.md` tells agents never to
     rely on a blanket `rm` allow, which the default now is. Its rewrite follows this answer.
   - Blocked rather than decided: it relaxes a permission on harnesses the plan's non-goals keep
