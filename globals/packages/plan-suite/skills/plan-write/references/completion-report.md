@@ -107,8 +107,10 @@ You are reading a report with no other context. Using only the report, answer:
 1. What is this plan for?
 2. What changed, for a person using it?
 3. What must the reader do or decide?
-Then list every term, command, flag, id, or name the report uses without explaining it in plain
-words, other than common developer knowledge. Do not guess from outside knowledge.
+Then list every term, command, flag, id, or name you would have to ask about before you could act
+on the report: one it uses without saying in plain words what it is or does. Do not list common
+developer knowledge, the plan's own title and id, or a term the report describes, even briefly.
+Do not guess from outside knowledge.
 ```
 
 Compare its three answers with what the report was meant to say. If any answer is wrong or missing,
