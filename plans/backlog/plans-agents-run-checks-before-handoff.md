@@ -106,7 +106,7 @@ Some handoffs come from tools, not instructions. Findings, each with its source:
 
 | Limit | Evidence | Status |
 | --- | --- | --- |
-| The shell sandbox refuses local port binding and writes outside the checkout | `9njvfh5z` review: 15 gate checks failed inside the reviewing agent's sandbox on write errors, port binding, and `.git/worktrees`; the unsandboxed rerun passed | `9njvfh5z` keeps `allowLocalBinding: false`. Its decision log notes the app's preview tools run outside the shell sandbox. Checked 2026-11-14 from a desktop-app session: a Node server listening on `127.0.0.1` inside the shell sandbox failed with `EPERM`, so `roborepo browser run --serve` cannot start a dev server there. `roborepo browser` itself was not run |
+| The shell sandbox refuses local port binding and writes outside the checkout | `9njvfh5z` review: 15 gate checks failed inside the reviewing agent's sandbox on write errors, port binding, and `.git/worktrees`; the unsandboxed rerun passed | `9njvfh5z` keeps `allowLocalBinding: false`. Its decision log notes the app's preview tools run outside the shell sandbox. Checked 2026-11-14 on Claude Code 2.1.309, desktop app: a Node server on `127.0.0.1` failed with `EPERM` inside the sandbox. The live settings exclude `roborepo *` from the sandbox, so a bare `roborepo browser run --serve "python3 -m http.server …"` started the server and its check passed; the same command piped to `cat` stayed sandboxed and was `blocked` ("--serve command exited (1)") |
 | Plan-store commands cannot lock the store inside the sandbox | `9njvfh5z` current state: `roborepo plans show` reports "The plans worktree could not be locked" | Workaround is a sandbox-bypass rerun, which needs a permission prompt or auto-mode approval |
 | The browser suites failed in a fresh worktree with no installed dependencies | `vzgsx5vz` verification: four suites failed with `ERR_MODULE_NOT_FOUND` until `npm ci` | Fixed on `main` by `c77b4649`, which installs dev dependencies on demand |
 | Playwright may be missing | `feature-verification/SKILL.md`: a missing browser makes the run `blocked`, and installing it goes through a permission prompt | Unchanged; a declined prompt leaves the check blocked |
@@ -207,7 +207,7 @@ Changes to `plan-execute/SKILL.md` and its references:
 | --- | --- |
 | "Not Tested" section | Replace "Never check an entry off yourself" with the table above: attempt each entry, using `feature-verification` for UI, server, API, CLI, or performance behavior; clear it with evidence when it passes; leave it open only with a reason |
 | A failing check | A check that runs and fails is a defect: fix it, as with any failing test. It never becomes a Not tested entry |
-| A blocked check | Retry through the harness's normal route first (a sandbox-bypass rerun goes through the permission prompt; the app's preview tools for a dev server). Only then write the `Blocked:` reason, and add the command to the questions `/plan-execute` already saves for the end of its run, so its final report asks the user to allow it |
+| A blocked check | Retry through the harness's normal route first: run `roborepo browser run --serve` as a bare call, with no pipe, `cd`, or chained command, so the `roborepo *` sandbox exclusion applies; use the app's preview tools where they exist; otherwise a sandbox-bypass rerun, which goes through the permission prompt. Only then write the `Blocked:` reason, and add the command to the questions `/plan-execute` already saves for the end of its run, so its final report asks the user to allow it |
 | `references/validation-loop.md`, rubric item 4 | Keep "a check an agent can run is run, not listed". Add: each open entry's reason holds, and each cleared entry's evidence names a real command or method. A reason that does not hold is a `fix` finding |
 | `references/final-report.md` | The manual-checks part lists only open entries, grouped as person-only and blocked, with the reason |
 
@@ -295,6 +295,9 @@ The plan-document check cannot tell whether a reason is true. Judging that stays
       `/plan-review`, and only person-only entries need the user.
 - [ ] Add `NOT_TESTED_UNEXPLAINED`, and that submit refuses it, to the finding list in
       `plan-write/references/workflow-validate.md`.
+- [ ] In `globals/packages/feature-verification/skills/feature-verification/SKILL.md`, say that
+      `roborepo browser run --serve` must be a bare call: a pipe or chained command keeps it in the
+      Claude sandbox, where the dev server cannot open its port.
 - [ ] Update the "Sync" row in `plan-write/SKILL.md` and the Not tested line in `session-close`.
 - [ ] Parse wrapped entry lines in `modules/plan-suite/index.mjs`; add `NOT_TESTED_UNEXPLAINED` to
       `findings.mjs` and `lifecycle-policy.mjs`; tolerate it for the `active` destination in
@@ -372,12 +375,10 @@ Behavior that must not change, each case passing before and after:
 
 ## Open Questions
 
-- **How agents outside the desktop app run UI checks.** The shell sandbox refuses local ports, so
-  `roborepo browser run --serve` cannot start a dev server there. In the Claude desktop app, the
-  preview tools run outside the sandbox and this plan's text already points agents to them. In the
-  Claude CLI and Codex, each UI check becomes a `Blocked:` entry, and the user is asked to allow it.
-  Recommendation: accept that here, and propose localhost-only port binding as a follow-up to the
-  sandbox plan (`9njvfh5z`), which turned binding off over wildcard listeners.
+- **Codex UI checks.** On Claude, a bare `roborepo browser run --serve` call runs outside the
+  sandbox and works (see the tooling table). Codex was not tested. Its binary has a
+  `network.allow_local_binding` setting whose scope was not checked. Until someone checks it, a
+  Codex agent may still write `Blocked:` entries for UI checks.
 
 - **Order against `9671042v`.** Both are ready to promote and edit the same review packet.
   Recommendation: this plan first, because it decides what the packet contains. The other order
