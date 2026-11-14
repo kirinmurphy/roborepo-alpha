@@ -440,8 +440,10 @@ Acceptance criteria:
       without a prompt. Needs a person watching for prompts after the merged settings are applied.
       The other half, a home-folder delete refused by the sandbox, is the enforcement runner's
       home-write control and the 2026-11-13 desktop-app check.
-- [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks, and
-      `git switch main` stays denied (`occupy-main`). Same reason.
+- [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks. Same reason. That
+      `git switch main` stays denied is the rendered `occupy-main` deny rule, which
+      `claude-sandbox-projection-check.mjs` asserts, applied to a command that now runs outside the
+      sandbox under the ordinary rules.
 - [ ] In a manual-mode desktop-app session, `roborepo plans show`, `roborepo plans save` of an
       edited copy in a temp folder, and `roborepo plans sync-base` run without a prompt and report
       `"synchronized": true` where they print it. Same reason; a bare `roborepo plans show 9njvfh5z
@@ -523,6 +525,13 @@ Acceptance criteria:
       questions (`delete-files`)
 - [ ] `delete-files` allow is unconfined where `rm` runs unsandboxed (Windows, Linux without
       packages, `allowUnsandboxedCommands` retries, possibly Codex) — escalated, see Open questions
+- [x] The excluded-commands comment stated that a chained switch skips the prompt, without the
+      desktop-app qualifier, and two lines passed 100 columns — fixed (fb76b09a)
+- [x] "all three behaviors are Claude-only" followed the new table of shared behaviors — fixed
+      (fb76b09a)
+- [x] The defaults tables implied `switch-branches` changed its default — fixed (fb76b09a)
+- [x] The `git switch main` half of a Not tested entry was not a prompt check — fixed in the plan
+      record
 
 ### Verification
 
@@ -564,6 +573,8 @@ Acceptance criteria:
 - Validation pass 11 at 4f4a15b4 (fresh-context subagent): 6 `fix` findings, fixed in d18adcd8 and
   the plan record; 2 `escalate` findings folded into the `delete-files` Open Question
 - Scoped checks passed at d18adcd8: projection, protected-branch push, harness notes, docs references
+- Validation pass 12 at d18adcd8 (fresh-context subagent): 5 `fix` findings (comments, docs, plan
+  record), fixed in fb76b09a and the plan record
 
 ### Result
 
