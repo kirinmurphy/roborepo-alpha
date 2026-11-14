@@ -1,6 +1,6 @@
 ---
 id: vzgsx5vz
-next_action: Merge PR 63, then run /plan-close.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["i5mnkm7z", "46qth5z8", "w7vls1yk", "permva27", "pvgx8oh7", "3xh2sq32"]
