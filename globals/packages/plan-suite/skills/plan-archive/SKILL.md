@@ -76,13 +76,9 @@ cleanup command so its guards still apply. Never remove one by hand.
 
 ## Final Report
 
-Name the plan by its H1 title, with its id in parentheses on first mention only. Lead with one
-line naming the plan and the outcome, then give the next step and its command when there is one.
-
-Include a status detail only when it departs from the expected result or requires action. Show
-behavioral evidence through `feature-verification` where it applies and let the evidence speak
-for itself. Omit passing gates, commit ids, and Git status unless they explain an exception or
-enable the next step. Link to the plan document for the full record.
+Name the plan by its H1 title, with its id in parentheses on first mention only. Before writing the
+report, read `/plan-write`'s `references/completion-report.md`, follow its shape, and run its
+in-session self-check before delivering. What is specific to this command:
 
 Give the archive reason and identify any worktree or branch holding unmerged work. Name affected
 dependencies when the reader needs to act. For a refusal, give every reason and the action that

@@ -45,6 +45,8 @@ Rules:
 - `id`: a short opaque base36 string, 6-8 lowercase alphanumerics, unique within the repository and
   never changed once written. See "Plan ids" below.
 - `next_action`: required in backlog, ready, active, and review; empty for completed and archived plans.
+  One sentence a cold reader can act on, since the Plans portal shows it alone; see
+  `references/completion-report.md`.
 - `blocked_by`, `depends_on`, and `related`: arrays.
 - `reviewed_commit`: commit intentionally reviewed against repository state; empty means never reviewed.
 - `worktree`: optional. Git's administrative name for the one linked worktree implementing this plan

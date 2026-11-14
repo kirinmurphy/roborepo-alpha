@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "response-output",
   "label": "Response output optimization",
-  "description": "How the agent words every response: a one-line result first, short and scannable by default, visuals over prose, no unexplained internal names, and plain evidence lines. Detail comes when you ask.",
+  "description": "How the agent words every response, written for a reader returning cold: a one-line result first, what changed for you before how it works, short and scannable by default, visuals over prose, no unexplained internal names, and plain evidence lines. Detail comes when you ask.",
   "lifecycle": "optional",
   "presentation": {
     "category": "chat-time-output",

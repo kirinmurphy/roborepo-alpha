@@ -178,7 +178,8 @@ then the run proceeds without questions.
    - blockers;
    - completed work;
    - verification results;
-   - a `next_action` that names the next concrete step.
+   - a `next_action` that names the next concrete step, written for a cold reader as
+     `/plan-write`'s `references/completion-report.md` describes.
 8. Do not silently omit objectives.
 9. Do not expand into unrelated cleanup.
 10. Perform a final comparison between:
@@ -440,8 +441,10 @@ questions, review packets, and other prose in this run.
 
 Before the final report in every execution mode (start, resume, and review findings), read
 [references/final-report.md](references/final-report.md) and follow its required template and
-reporting checklist. Include all applicable reporting obligations, behavioral evidence or its
-stated limitation, verification results, blockers, and the next user command.
+reporting checklist. It builds on `/plan-write`'s `references/completion-report.md`, the shape
+every plan command shares, including the checker agent that reads the report before the user does.
+Include all applicable reporting obligations, behavioral evidence or its stated limitation,
+verification results, blockers, and the next user command.
 
 ## Boundaries
 

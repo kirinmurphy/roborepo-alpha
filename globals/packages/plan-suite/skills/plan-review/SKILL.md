@@ -248,17 +248,24 @@ unconfirmed manual check that blocks it. Then ask the concrete question that unb
 step, following **Continue until a human decision**. Continue agent-resolvable work instead of
 presenting it as a decision for the human.
 
-Present a review packet:
+Present a review packet in two layers, following `/plan-write`'s `references/completion-report.md`
+for shape, wording, and visual evidence. The human approving may come to it cold.
 
-- the plan, the commit, and the base it was synchronized with;
-- each acceptance criterion with the code and test evidence that meets it;
-- what changed, grouped by area, with the docs updated;
-- each Validator pass and what it found;
-- every commit this review made in step 5;
-- base failures, named as such;
-- issues outside this plan, each proposed as separate work when it is worth doing;
+The first layer, always shown:
+
+- what the plan is for, in one sentence;
+- what changed for a person using the work, with visual evidence for visible changes;
+- the acceptance criteria as a plain checklist of outcomes, each marked met or not;
+- base failures, named as such, and issues outside this plan, each proposed as separate work when it
+  is worth doing;
+- when the Validator reached its cap, the last pass's fixes, which were not revalidated;
 - the manual checks that need the human, from `## Not tested`;
 - each escalated finding as a decision: the options, their consequences, and a recommendation.
+
+The second layer stays in the plan's `## Review` record and is offered in one line: the commit and
+the base it was synchronized with, the code and test evidence behind each criterion, changes grouped
+by area with the docs updated, each Validator pass and what it found, and every commit this review
+made in step 5.
 
 Then ask the human directly for approval, naming the plan by its title and the exact commit. Ask
 through the harness's structured question tool where one exists (in Claude Code, `AskUserQuestion`
@@ -310,20 +317,18 @@ the proposed change and its consequences, and wait for an explicit answer.
 On agreement:
 
 1. Revise the requirements, acceptance criteria, and tasks, record the user decision in the Decision
-   Log, set `next_action`, and save the plan.
+   Log, set `next_action` for a cold reader (see `/plan-write`'s `references/completion-report.md`),
+   and save the plan.
 2. Run `roborepo plans reopen <plan> --json`. It marks any approval `invalidated` and commits and
    pushes the move back to `active/`. The plan keeps its worktree and branch, and never returns to
    `ready/`.
 
 ## Final Report
 
-Name the plan by its H1 title, with its id in parentheses on first mention only. Lead with one
-line naming the plan and the outcome, then give the next step and its command when there is one.
-
-Include a status detail only when it departs from the expected result or requires action. Show
-behavioral evidence through `feature-verification` where it applies and let the evidence speak
-for itself. Omit passing gates, commit ids, and Git status unless they explain an exception or
-enable the next step. Link to the plan document for the full record.
+Name the plan by its H1 title, with its id in parentheses on first mention only. Before writing the
+report, read `/plan-write`'s `references/completion-report.md` and follow its shape, its visual
+evidence rule, and its checker agent, which reads the report before the human does. The review
+packet from step 6 is this report's What changed and Needs you. What is specific to this command:
 
 Say which findings or manual checks prevent approval and what decision or action moves the plan
 forward. A pending, stale, or missing review ends with the next actionable question under
