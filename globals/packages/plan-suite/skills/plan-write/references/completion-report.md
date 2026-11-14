@@ -27,7 +27,8 @@ and may not know the domain. From the report alone they must be able to answer t
 
 A report has two layers. The first is plain context the cold reader needs, and it is always shown.
 The second is technical detail (commit ids, check names, files, Validator passes, the Decision Log),
-which stays in the plan document and is offered in one line. When short and self-contained
+offered in one line and given when asked. Part of it is already in the plan document, such as the
+Decision Log and a `## Review` record; the rest the session gives in the chat. When short and self-contained
 conflict, self-contained wins: a report that drops the one sentence a cold reader needs has saved
 nothing, because the reader has to ask anyway.
 
@@ -56,7 +57,7 @@ Record
 - Plan: "<title>" (<id>), <store-relative path>
 - Lifecycle: <where the plan is now>
 - Branch: <branch> | none
-- Details: decisions, findings, and checks are in the plan document; ask for any of them here
+- Details: decisions and findings the plan records are in the plan document; ask here for any detail
 ```
 
 Add a Record line only for a non-default fact the prose did not state, such as a shareable link or

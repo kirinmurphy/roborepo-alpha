@@ -77,7 +77,8 @@ chat. It reads the same way for every command:
 5. a short record: where the plan is, its branch, and a link to the plan document.
 
 Any command, flag, or name in the report is explained beside it. Commit ids, check names, file
-lists, and validator passes stay in the plan document; ask in the chat when you want them.
+lists, and validator passes are left out; ask in the chat when you want them. Decisions and review
+findings are also kept in the plan document.
 
 Before you see the report of `/plan-promote`, `/plan-execute`, `/plan-review`, or `/plan-close`, a
 separate agent that sees only the report checks that it answers what the plan is for, what changed,
@@ -299,7 +300,7 @@ This recovery also works after landing while the plan remains in review, because
 touches nothing on a code branch. Your answer and a complete review remain required, and closure
 still runs its own test gate.
 
-Before merging, `roborepo plans merge-readiness <plan> --json` checks the committed review record,
+Before merging, `roborepo plans merge-readiness <plan> --json` checks that the plan's review result and approval are committed (its output calls this the review packet),
 clean worktree, exact implementation, and reviewed base. A failure names the repair; a pass names
 the assessed tips and grants no merge permission.
 
