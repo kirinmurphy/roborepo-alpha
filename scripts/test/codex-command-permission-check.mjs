@@ -17,8 +17,9 @@ for (const [toolName, key] of [["Bash", "command"], ["exec_command", "cmd"]]) {
   for (const [command, expected] of [
     ["git status", "allow"],
     ["git push --force origin feature/demo", "deny"],
-    ["rm scratch.txt", undefined],
-    ["rm scratch.txt && git status", undefined],
+    // An ask-bucket command (pull-code) defers to Codex's native approval, alone or chained.
+    ["git pull origin main", undefined],
+    ["git pull origin main && git status", undefined],
     ["git push origin feature/demo && touch chained.txt", "deny"],
     ["git status && touch chained.txt", undefined],
     ["git status; touch chained.txt", undefined],
