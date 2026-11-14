@@ -131,7 +131,7 @@
     {
       "id": "delete-files",
       "label": "Delete files",
-      "description": "Remove files from disk (rm, git rm). Allowed because Claude's shell sandbox limits deletes to the session's checkout and the temp folders in Write scope. The allow applies to every harness: Gemini has no sandbox, and whether Codex's sandbox confines an allowed command is unverified. With Sandboxed shell commands set to deny, or where the sandbox is unavailable, an allowed rm can delete anywhere, so set this to ask there.",
+      "description": "Remove files from disk (rm, git rm). Allowed because Claude's shell sandbox limits deletes to the session's checkout and the temp folders in Write scope, and the protected-branch hook asks before a delete in a checkout that has main or another protected branch checked out (Codex: denies). Temp folders and feature-branch checkouts never prompt. Gemini runs neither the sandbox nor the hook, and with Sandboxed shell commands set to deny an allowed rm can delete anywhere outside a protected checkout, so set this to ask there.",
       "kind": "commands",
       "commands": [
         [

@@ -349,5 +349,71 @@ fs.writeFileSync(log, "");
 assert.equal(git(work, ["commit", "-q", "--allow-empty", "-m", "cdpath"], { ...agentEnv, CDPATH: path.join(tmp, "decoy") }).status, 0);
 assert.equal(fs.readFileSync(log, "utf8").trim(), "pre-commit 0", "CDPATH does not redirect the repo's hooks");
 
+// Deletes ask only in a checkout that has a protected branch checked out. The fixtures live under the
+// system temp folder, which the hook treats as temp, so ROBOREPO_TEMP_ROOTS narrows the temp list
+// to one scratch folder for these cases.
+const scratch = path.join(tmp, "scratch");
+const onMain = path.join(tmp, "on-main");
+const onFeature = path.join(tmp, "on-feature");
+fs.mkdirSync(scratch);
+for (const [dir, branch] of [[onMain, "main"], [onFeature, "feature"]]) {
+  gitOk(tmp, "init", "-q", "-b", branch, dir);
+  fs.writeFileSync(path.join(dir, "a.txt"), "a");
+  gitOk(dir, "add", "a.txt");
+  gitOk(dir, "commit", "-q", "-m", "init");
+}
+const temps = { ROBOREPO_TEMP_ROOTS: scratch };
+const deleteCases = [
+  [onMain, "rm a.txt", "ask"],
+  [onMain, "rm -rf build", "ask"],
+  [onMain, `rm ${path.join(scratch, "x")}`, "defer"],
+  [onMain, 'rm "$TARGET"', "ask"],
+  [onMain, "rm *.log", "ask"],
+  [onMain, "rmdir empty", "ask"],
+  [onMain, "unlink a.txt", "ask"],
+  [onMain, "git rm a.txt", "ask"],
+  [onMain, "git clean -fdx", "ask"],
+  [onMain, "git clean -n", "defer"],
+  [onMain, "git reset --hard", "ask"],
+  [onMain, "git reset --soft HEAD~1", "defer"],
+  [onMain, "git restore a.txt", "ask"],
+  [onMain, "git restore --staged a.txt", "defer"],
+  [onMain, "git restore --staged --worktree a.txt", "ask"],
+  [onMain, "git stash drop", "ask"],
+  [onMain, "git stash", "defer"],
+  [onMain, "find . -name '*.tmp' -delete", "ask"],
+  [onMain, "find . -name x -exec rm {} ;", "ask"],
+  [onMain, `find ${scratch} -delete`, "defer"],
+  [onMain, "find . -name x", "defer"],
+  [onMain, "ls | xargs rm", "ask"],
+  [onMain, "sh -c 'rm a.txt'", "ask"],
+  [onMain, `cd ${onFeature} && rm a.txt`, "defer"],
+  [onMain, `rm ${path.join(onFeature, "a.txt")}`, "defer"],
+  [onMain, `git -C ${onFeature} rm a.txt`, "defer"],
+  [onMain, "grep rm notes.txt", "defer"],
+  [onFeature, "rm a.txt", "defer"],
+  [onFeature, "git reset --hard", "defer"],
+  [onFeature, `rm ${path.join(onMain, "a.txt")}`, "ask"],
+  [onFeature, `git -C ${onMain} clean -f`, "ask"],
+];
+for (const [cwd, command, expected] of deleteCases) {
+  assert.equal(decide(command, { cwd, env: temps }), expected, `${path.basename(cwd)}: ${command}`);
+}
+// Temp folders win: with the default temp roots, the system temp folder holding these fixtures is
+// temp, so even the checkout on main deletes freely there.
+assert.equal(decide("rm a.txt", { cwd: onMain }), "defer", "a checkout under a temp folder is temp");
+// Extra protected names count, and Codex, which cannot ask, denies.
+gitOk(onFeature, "switch", "-q", "-c", "release");
+assert.equal(decide("rm a.txt", { cwd: onFeature, env: { ...temps, ROBOREPO_PROTECTED_BRANCHES: "release" } }), "ask", "extra protected names guard deletes");
+gitOk(onFeature, "switch", "-q", "feature");
+for (const command of ["rm a.txt", "git reset --hard"]) {
+  assert.equal(decide(command, { cwd: onMain, env: temps, toolName: "exec_command", hookPath: codexHook, key: "cmd" }), "deny", `Codex denies: ${command}`);
+}
+const reason = spawnSync(process.execPath, [hook], {
+  input: JSON.stringify({ cwd: onMain, tool_name: "Bash", tool_input: { command: "rm a.txt" } }),
+  encoding: "utf8", env: { ...gitEnv, ...temps },
+}).stdout;
+assert.match(JSON.parse(reason).hookSpecificOutput.permissionDecisionReason, /protected branch "main"/, "the ask names the branch");
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("protected-branch-push-check passed");

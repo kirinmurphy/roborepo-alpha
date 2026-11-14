@@ -10,7 +10,7 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 | Event | Hook | What it does | Installed by |
 | --- | --- | --- | --- |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | always |
-| PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes (see below) | always |
+| PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes; asks before a delete in a checkout on a protected branch (see below) | always |
 | PreToolUse `Bash` | Output minimizer | Trims noisy build, lint, and typecheck output; denies `--watch`, `--verbose`, and `--debug`; auto-allows a short list of safe read-only commands, alone or piped into read-only filters such as `head` or `wc`, never with anything chained or redirected | always |
 | PreToolUse `Bash` | Dense command log | Records commands of three or more lines to `<stateRoot>/capture/claude/dense-bash.jsonl` so you can find ones worth scripting. Never blocks | `capture-dense-bash` |
 | PreToolUse `Read`, `Write`, `Edit` | Repository scope | Reads across the repository and its worktrees are quiet; writes outside the checkout in use prompt. See [Config Control Panel](config-control-panel.md#changing-path-scopes) | always |
@@ -60,6 +60,31 @@ do not run in agent shells.
 
 A push from your own terminal is never blocked. Pair this with branch protection on the remote for
 a guard that does not depend on the local machine.
+
+### Deletes on a protected branch
+
+Deleting files is allowed by default (`delete-files`), because Claude's shell sandbox keeps shell
+commands inside the session's checkout and the temp folders. That still leaves the checkout itself,
+which on `main` is the one you most want intact. The same hook adds that check:
+
+| Delete target | Result |
+| --- | --- |
+| A temp folder (`/tmp`, `/private/tmp`, `/var/folders`, `$TMPDIR`) | Runs, no prompt |
+| A checkout or worktree on a feature branch | Runs, no prompt |
+| A checkout with a protected branch checked out | Asks (Codex: denied) |
+| A path the shell expands (`$VAR`, `*.log`, `~`) | Judged by the folder the command runs in |
+
+It recognizes `rm`, `rmdir`, `unlink`, `find … -delete` or `-exec rm`, `xargs rm`, `git rm`,
+`git clean -f`, `git reset --hard`, `git restore` of the working tree, and `git stash drop` or
+`clear`, alone, chained, or inside `sh -c`. It follows a leading `cd` and `git -C`. It cannot see a
+delete hidden in a script, `mv` over a file, or a redirect that truncates one. Protected branches
+are the same list as for pushes. `ROBOREPO_TEMP_ROOTS` (comma-separated) replaces the temp folder
+list.
+
+The hook runs on every shell call, sandboxed or not. That matters because the desktop app was seen
+running a sandboxed `rm` without the prompt its ask rule called for, while a hook's ask on a
+sandboxed command did prompt. Gemini runs neither the sandbox nor this hook, so set `delete-files`
+to `ask` if you run agents there.
 
 ## Opening Pull Requests With gh
 

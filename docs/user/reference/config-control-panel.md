@@ -241,7 +241,7 @@ on it; `merge-pull-requests` does not, since `gh` runs outside it either way:
 
 | Behavior | Change | Why |
 | --- | --- | --- |
-| `delete-files` (`rm`, `git rm`) | Default `ask` → `allow` | The sandbox limits deletes to the checkout and temp folders. The allow applies to every harness, so set it to `ask` if you turn `sandbox-shell` off or run agents in Gemini, which has no sandbox |
+| `delete-files` (`rm`, `git rm`) | Default `ask` → `allow` | The sandbox limits deletes to the checkout and temp folders, and the protected-branch hook asks before any delete in a checkout on `main` ([Deletes on a protected branch](claude-hooks.md#deletes-on-a-protected-branch)). Set it to `ask` if you run agents in Gemini, which has neither |
 | `merge-pull-requests` (`gh pr merge`) | New, default `ask` (was denied) | You approve each merge; other `gh` commands that skip git stay denied (`change-github-directly`) |
 | `switch-branches` (`git checkout`, `git switch`) | Default stays `ask`; the commands now run outside the sandbox | So the prompt also appears in the desktop app. `git switch main` stays denied (`occupy-main`) |
 

@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -24,6 +25,14 @@ import { fileURLToPath } from 'node:url'
 // It also denies the gh commands that act on GitHub without git (API calls, the token, settings) in
 // the forms the permission prefix rules miss: global flags before the subcommand, as in
 // `gh -R owner/repo api …`. Those never reach either protected-branch guard.
+//
+// It also guards a checkout that has a protected branch checked out against deletes. Claude's shell
+// sandbox runs commands that stay inside the checkout and temp folders without a prompt, and the
+// delete-files rule allows rm, so nothing else stops an agent working on main from deleting files
+// or discarding work there. A delete (rm, rmdir, unlink, find -delete, xargs rm, git rm, git clean
+// -f, git reset --hard, git restore of the working tree, git stash drop/clear) asks when its target
+// is in such a checkout. Temp-folder targets and checkouts on any other branch are left alone, and
+// so is anything this parser cannot see (a script, mv over a file, a redirect).
 //
 // The same file is installed for Claude and Codex; both send PreToolUse input on stdin and accept
 // hookSpecificOutput.permissionDecision. Keep the two copies identical.
@@ -257,6 +266,90 @@ function classifyGh(args) {
   }
 }
 
+const DELETE_PROGRAMS = new Set(['rm', 'rmdir', 'unlink'])
+// Temp folders, where deletes never ask. TMPDIR covers a sandbox's per-session temp folder.
+// ROBOREPO_TEMP_ROOTS (comma-separated) replaces the list.
+const TEMP_ROOTS = [...new Set((process.env.ROBOREPO_TEMP_ROOTS
+  ? process.env.ROBOREPO_TEMP_ROOTS.split(',')
+  : ['/tmp', '/private/tmp', '/var/folders', '/private/var/folders', os.tmpdir(), process.env.TMPDIR])
+  .map((root) => (root ?? '').trim().replace(/\/+$/, ''))
+  .filter(Boolean))]
+// A word the shell rewrites before the command sees it, so its path is unknown here.
+const EXPANDED = /[$`*?[\]{}~]/
+const checkoutCache = new Map()
+
+function inTemp(target) {
+  return TEMP_ROOTS.some((root) => target === root || target.startsWith(`${root}/`))
+}
+
+// The checkout holding `target` when it has a protected branch checked out, else null. A target
+// that does not exist yet is judged by its nearest existing parent.
+function protectedCheckout(target) {
+  let dir = target
+  while (!fs.existsSync(dir) && path.dirname(dir) !== dir) dir = path.dirname(dir)
+  if (fs.existsSync(dir) && !fs.statSync(dir).isDirectory()) dir = path.dirname(dir)
+  if (checkoutCache.has(dir)) return checkoutCache.get(dir)
+  let found = null
+  const top = git(dir, ['rev-parse', '--show-toplevel'])
+  const branch = top && currentBranch(dir)
+  if (branch && protectedBranches(dir, defaultRemote(dir, branch)).names.has(branch)) found = { top, branch }
+  checkoutCache.set(dir, found)
+  return found
+}
+
+// Asks when any target lies in a checkout on a protected branch. A target the shell expands is
+// judged by the directory the command runs in.
+function classifyDelete(cwd, command, targets) {
+  for (const word of targets.length ? targets : ['.']) {
+    const target = EXPANDED.test(word) ? cwd : path.resolve(cwd, word)
+    if (inTemp(target)) continue
+    const checkout = protectedCheckout(target)
+    if (checkout) return askDelete(command, checkout)
+  }
+  return null
+}
+
+// The path operands of rm, rmdir, or unlink: every word after the options, or after `--`.
+function deleteTargets(args) {
+  const end = args.indexOf('--')
+  const before = end === -1 ? args : args.slice(0, end)
+  const after = end === -1 ? [] : args.slice(end + 1)
+  return [...before.filter((arg) => !arg.startsWith('-') && !/^[0-9]?[<>]/.test(arg)), ...after]
+}
+
+// `find <paths> ... -delete` (or `-exec rm`): the starting paths, which precede the first expression.
+function findDeleteTargets(args) {
+  const deletes = args.includes('-delete') || args.some((arg, k) => ['-exec', '-execdir'].includes(arg) && DELETE_PROGRAMS.has(path.basename(args[k + 1] ?? '')))
+  if (!deletes) return null
+  const first = args.findIndex((arg) => arg.startsWith('-') || arg === '(' || arg === '!')
+  return first === -1 ? args : args.slice(0, first)
+}
+
+// The git subcommands that delete files or throw away uncommitted work in the checkout.
+function gitDeletes(subcommand, args) {
+  if (subcommand === 'rm') return 'git rm'
+  if (subcommand === 'clean' && args.some((arg) => arg === '--force' || /^-[a-z]*f/i.test(arg))) return 'git clean'
+  if (subcommand === 'reset' && args.includes('--hard')) return 'git reset --hard'
+  if (subcommand === 'stash' && ['drop', 'clear'].includes(args[0])) return `git stash ${args[0]}`
+  if (subcommand === 'restore') {
+    const staged = args.some((arg) => arg === '--staged' || arg === '-S')
+    const worktree = args.some((arg) => arg === '--worktree' || arg === '-W')
+    if (!staged || worktree) return 'git restore'
+  }
+  return null
+}
+
+function askDelete(command, { top, branch }) {
+  const where = `${top}, which has protected branch "${branch}" checked out`
+  if (forCodex) {
+    return {
+      decision: 'deny',
+      reason: `roborepo: \`${command}\` deletes in ${where}. Codex cannot ask you to confirm it, so agents may not run it there. Work in a feature-branch worktree, or run it yourself.`,
+    }
+  }
+  return { decision: 'ask', reason: `roborepo: \`${command}\` deletes in ${where}. Confirm this delete.` }
+}
+
 function unknownDefault(remote) {
   return ask(`the default branch of \`${remote}\` is not recorded here, so this push may land on it. \`git remote set-head ${remote} --auto\` records it`)
 }
@@ -288,8 +381,8 @@ function ask(detail) {
   return { decision: 'ask', reason: `roborepo: ${detail}. Confirm this push does not reach main.` }
 }
 
-// Walks every simple command, following `cd` so a later `git push` is resolved in the right
-// directory, and descending into `sh -c '...'` strings. A deny or ask from any push wins. The result
+// Walks every simple command, following `cd` so a later `git push` or delete is resolved in the
+// right directory, and descending into `sh -c '...'` strings. A deny or ask from any command wins. The result
 // is VERIFIED only when every simple command is a `cd` or a verified push run plainly: no leading
 // environment assignment and no `git -c` (either could point git away from the backstop), and not
 // inside a shell wrapper.
@@ -316,6 +409,21 @@ function classifyCommand(text, startCwd) {
       if (flag !== -1 && words[flag + 1]) result = stricter(result, withoutAllow(classifyCommand(words[flag + 1], cwd)))
       continue
     }
+    if (DELETE_PROGRAMS.has(program)) {
+      result = stricter(result, classifyDelete(cwd, program, deleteTargets(words.slice(i + 1))))
+      continue
+    }
+    if (program === 'find') {
+      const targets = findDeleteTargets(words.slice(i + 1))
+      if (targets) result = stricter(result, classifyDelete(cwd, 'find -delete', targets))
+      continue
+    }
+    if (program === 'xargs') {
+      // The paths arrive on stdin, so the directory xargs runs in stands in for them.
+      const deleter = words.slice(i + 1).find((w) => !w.startsWith('-'))
+      if (deleter && DELETE_PROGRAMS.has(path.basename(deleter))) result = stricter(result, classifyDelete(cwd, `xargs ${deleter}`, []))
+      continue
+    }
     if (program !== 'git') continue
 
     let gitCwd = cwd
@@ -332,6 +440,8 @@ function classifyCommand(text, startCwd) {
     }
     if (words[j] !== 'push') {
       onlyVerifiedPushes = false
+      const deletes = gitDeletes(words[j], words.slice(j + 1))
+      if (deletes) result = stricter(result, classifyDelete(gitCwd, deletes, []))
       continue
     }
     const pushResult = classifyPush(gitCwd, words.slice(j + 1))
@@ -358,7 +468,7 @@ const toolName = input.tool_name || input.toolName || ''
 const toolInput = input.tool_input || input.toolInput || {}
 const rawCommand = toolInput.command ?? toolInput.cmd
 const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).replaceAll("'", "'\\''")}'`).join(' ') : rawCommand
-if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh)\b/.test(command)) process.exit(0)
+if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash)\b/.test(command)) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 const result = classifyCommand(command, cwd)

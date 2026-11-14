@@ -223,7 +223,7 @@ every provider renders them; `delete-files` and `switch-branches` depend on the 
 
 | Behavior | Change | Reason |
 | --- | --- | --- |
-| `delete-files` | Default `ask` → `allow` | Claude's shell sandbox confines deletes. Gemini has no sandbox, and whether Codex's confines an allowed command is unverified |
+| `delete-files` | Default `ask` → `allow` | Claude's shell sandbox confines deletes; `protected-branch-push.mjs` asks (Codex: denies) before deletes and discarded work in a checkout on a protected branch. Gemini has neither |
 | `merge-pull-requests` | New, default `ask` | Split from `change-github-directly`, which stays `deny`; the protected-branch hook's `GH_DENIED` list no longer names `pr merge` |
 | `switch-branches` | Default stays `ask` | `git checkout *` and `git switch *` are now in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
 
