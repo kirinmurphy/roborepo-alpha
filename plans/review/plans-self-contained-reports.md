@@ -257,7 +257,7 @@ archive skills.
 
 ## Not tested
 
-- [ ] Reports from real runs read well to the user after time away. Only the user can judge this;
+- [x] Reports from real runs read well to the user after time away. Only the user can judge this;
       deterministic tests can only check that the instructions exist.
 
 ## Documentation impact
@@ -353,8 +353,9 @@ archive skills.
 - Review: `npm run check` stages all passed at a70fb022 except one CLI test, "CLI surface help and menu routes" (the unpushed-commits menu), which failed once in the full run and passed 2/2 alone on both this branch and main; this branch does not touch that code
 - Review: the unit stage first failed for want of `@playwright/test`, which the later portal UI stage installs; rerun after install, 80/80 passed
 - Review: Validator pass 7 (fresh-context subagent) found no fix or escalate findings
+- Manual: the review packet, a real report in the new shape, read well after time away (confirmed by the user, 2026-11-14, by approving it in the /plan-review chat)
 
 ### Result
-- Status: pending
+- Status: complete
 - Reviewed implementation commit: a70fb0224a20d82fda1e98d1d0ea1dea0b8d4feb
 - Base commit: 62e86111d947f66b6ce61f991cf152d90c13b8a1
