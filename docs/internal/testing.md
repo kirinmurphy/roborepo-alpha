@@ -248,7 +248,7 @@ consult [official permission documentation](https://learn.chatgpt.com/docs/permi
 
 | Check | What it establishes | Availability |
 | --- | --- | --- |
-| `node scripts/test/claude-sandbox-projection-check.mjs` | The rendered `sandbox` key for every bucket of `sandbox-shell`, `reach-allowed-hosts`, `reach-claude-log-upload`, and `read-secrets`; `go-online` has no effect; the defaults that lean on the sandbox (`delete-files` allow, `merge-pull-requests` ask, `git checkout` and `git switch` excluded with their ask rule kept, `plans sync-base` allowed); unrelated keys and hooks survive; reapply is stable; Codex and Gemini ignore the new kinds; the recorded coverage | Deterministic CI group |
+| `node scripts/test/claude-sandbox-projection-check.mjs` | The rendered `sandbox` key for every bucket of `sandbox-shell`, `reach-allowed-hosts`, `reach-claude-log-upload`, and `read-secrets`; `go-online` has no effect; the defaults changed with the sandbox (`delete-files` allow, `merge-pull-requests` ask, `git checkout` and `git switch` excluded with their ask rule kept, `plans sync-base` allowed); unrelated keys and hooks survive; reapply is stable; Codex and Gemini ignore the new kinds; the recorded coverage | Deterministic CI group |
 | `node scripts/test/claude-sandbox-enforcement-check.mjs` | A real Claude binary enforces the default render and the sandbox-off render | Explicit macOS probe |
 
 The enforcement runner renders settings fresh, drops the hooks, and passes them with `--settings`

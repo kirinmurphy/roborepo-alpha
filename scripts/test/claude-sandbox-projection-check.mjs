@@ -38,9 +38,9 @@ const permissions = JSON.parse(render("{}")).permissions;
 assert.ok(permissions.allow.includes("Edit(//tmp/**)"), "write-scope Edit allows feed the sandbox's writable paths");
 assert.ok(permissions.deny.includes("Read(//**/*.pem)"), "read-secrets Read denies feed the sandbox's denied paths");
 
-// Defaults that lean on the sandbox. Deletes run prompt-free because the sandbox confines them;
-// merging a pull request prompts rather than being refused; and branch switches run outside the
-// sandbox, because the desktop app skips ask rules for sandboxed commands.
+// Defaults changed with the sandbox. Deletes run prompt-free because the sandbox confines them, and
+// branch switches run outside it because the desktop app skips ask rules for sandboxed commands.
+// Merging a pull request prompts rather than being refused; gh runs outside the sandbox anyway.
 const bucketOf = (rule) => ["allow", "ask", "deny"].filter((key) => permissions[key].includes(rule));
 assert.deepEqual(bucketOf("Bash(rm:*)"), ["allow"], "delete-files allows rm");
 assert.deepEqual(bucketOf("Bash(git rm:*)"), ["allow"], "delete-files allows git rm");

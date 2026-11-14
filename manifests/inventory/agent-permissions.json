@@ -131,7 +131,7 @@
     {
       "id": "delete-files",
       "label": "Delete files",
-      "description": "Remove files from disk (rm, git rm). Allowed because the harness sandbox limits deletes: Claude's shell sandbox to the session's checkout and the temp folders in Write scope, Codex's to its workspace. With Sandboxed shell commands set to deny, an allowed rm can delete anywhere under Claude, so set this to ask too.",
+      "description": "Remove files from disk (rm, git rm). Allowed because Claude's shell sandbox limits deletes to the session's checkout and the temp folders in Write scope. The allow applies to every harness: Gemini has no sandbox, and whether Codex's sandbox confines an allowed command is unverified. With Sandboxed shell commands set to deny, or where the sandbox is unavailable, an allowed rm can delete anywhere, so set this to ask there.",
       "kind": "commands",
       "commands": [
         [
@@ -223,7 +223,7 @@
     {
       "id": "switch-branches",
       "label": "Switch branches",
-      "description": "Change the checked-out branch (git checkout, git switch). Prompts because it moves the working tree out from under in-flight work. Under Claude these commands run outside the shell sandbox so the prompt also appears in the desktop app; chained after another command (cd x && git switch y) they stay sandboxed and may skip it.",
+      "description": "Change the checked-out branch (git checkout, git switch). Prompts because it moves the working tree out from under in-flight work. Under Claude these commands run outside the shell sandbox so the prompt also appears in the desktop app; chained after another command (make x && git switch y) they stay sandboxed and may skip it.",
       "kind": "commands",
       "commands": [
         [

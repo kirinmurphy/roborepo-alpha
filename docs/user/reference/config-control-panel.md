@@ -236,11 +236,12 @@ shape: pipes, loops, and inline scripts all count. A command an `ask` or `deny` 
 prompts or is refused when run through `claude -p`; the desktop app was seen to run sandboxed
 commands without consulting ask rules, which is why branch switches run outside the sandbox (below).
 
-Three defaults lean on the sandbox:
+Three defaults changed with the sandbox. `delete-files` and `switch-branches` depend on it;
+`merge-pull-requests` does not, since `gh` runs outside it either way:
 
 | Behavior | Default | Why |
 | --- | --- | --- |
-| `delete-files` (`rm`, `git rm`) | `allow` | The sandbox limits deletes to the checkout and temp folders. Set it to `ask` if you turn `sandbox-shell` off |
+| `delete-files` (`rm`, `git rm`) | `allow` | The sandbox limits deletes to the checkout and temp folders. The allow applies to every harness, so set it to `ask` if you turn `sandbox-shell` off or run agents in Gemini, which has no sandbox |
 | `merge-pull-requests` (`gh pr merge`) | `ask` | You approve each merge; other `gh` commands that skip git stay denied (`change-github-directly`) |
 | `switch-branches` (`git checkout`, `git switch`) | `ask` | Runs outside the sandbox so it prompts in the desktop app too. `git switch main` stays denied (`occupy-main`) |
 

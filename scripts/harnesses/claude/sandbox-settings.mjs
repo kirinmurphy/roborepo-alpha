@@ -18,7 +18,7 @@
 //   - git push/pull/fetch: SSH cannot pass the sandbox proxy.
 //   - git checkout/switch: the desktop app runs sandboxed commands without consulting ask rules,
 //     so switch-branches would never prompt there. Run outside, they prompt. A chained call
-//     (`cd x && git switch y`) does not match, stays sandboxed, and still skips the prompt.
+//     (`make x && git switch y`) does not match, stays sandboxed, and still skips the prompt.
 //   - roborepo: plans commands lock and commit the plans store, which edit-plans-store denies to
 //     every sandboxed write; `./bin/roborepo` is the same CLI run from a development checkout.
 export const CLAUDE_SANDBOX_EXCLUDED_COMMANDS = Object.freeze([

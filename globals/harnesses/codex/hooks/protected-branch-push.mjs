@@ -21,9 +21,9 @@ import { fileURLToPath } from 'node:url'
 // This reads the command text, so it can be fooled by indirection it cannot see (an alias, a
 // script). The pre-push hook in ../git-hooks/ is the backstop: git hands it the exact refs.
 //
-// It also denies the gh commands that act on GitHub without git (merge, API calls, settings) in the
-// forms the permission prefix rules miss: global flags before the subcommand, as in
-// `gh -R owner/repo pr merge 12`. Those never reach either protected-branch guard.
+// It also denies the gh commands that act on GitHub without git (API calls, the token, settings) in
+// the forms the permission prefix rules miss: global flags before the subcommand, as in
+// `gh -R owner/repo api …`. Those never reach either protected-branch guard.
 //
 // The same file is installed for Claude and Codex; both send PreToolUse input on stdin and accept
 // hookSpecificOutput.permissionDecision. Keep the two copies identical.

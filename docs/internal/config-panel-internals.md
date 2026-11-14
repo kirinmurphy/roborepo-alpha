@@ -217,12 +217,13 @@ Writable temp folders and denied credentials are not repeated: Claude merges the
 Claude. Codex and Gemini skip both kinds. See [testing](testing.md#claude-sandbox-verification) for
 the projection and enforcement checks.
 
-Three command defaults assume the sandbox is on. They are ordinary `commands` behaviors, so every
-provider renders them:
+Three command defaults changed with the sandbox. They are ordinary `commands` behaviors, so every
+provider renders them; `delete-files` and `switch-branches` depend on the Claude sandbox, while
+`merge-pull-requests` does not, since `gh` runs outside it either way:
 
 | Behavior | Default | Reason |
 | --- | --- | --- |
-| `delete-files` | `allow` | The sandbox (Claude's shell sandbox, Codex's workspace) confines deletes |
+| `delete-files` | `allow` | Claude's shell sandbox confines deletes. Gemini has no sandbox, and whether Codex's confines an allowed command is unverified |
 | `merge-pull-requests` | `ask` | Split from `change-github-directly`, which stays `deny`; the protected-branch hook's `GH_DENIED` list no longer names `pr merge` |
 | `switch-branches` | `ask` | `git checkout *` and `git switch *` are in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
 
