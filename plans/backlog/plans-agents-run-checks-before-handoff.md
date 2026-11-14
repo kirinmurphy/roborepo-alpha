@@ -15,15 +15,17 @@ worktree:
 When a finished plan reaches the user for review, the agent often asks the user to run checks the
 agent could have run itself. The user wants to be asked only for what an agent cannot do. The
 cause is in the plan suite's own instructions: they tell the implementing agent to list every
-unverified check for the user and never to clear one itself, and the only instruction to try the
-checks first runs after the user has already approved and merged.
+unverified check for the user and never to clear one itself. The one rule that says to run them
+first sits in the Validator's checklist and loses to that explicit instruction, and the only step
+that tries the checks is in `/plan-close`, after the user has already approved and merged.
 
 This plan changes three things the user will notice:
 
 1. By the time a plan reaches review, every check an agent can run has been run, with the result
    written into the plan.
 2. The review asks the user only for checks a person must make, each with steps, the expected
-   result, and the reason an agent could not do it.
+   result, and the reason an agent could not do it, plus any command a tool blocked, for the user
+   to allow.
 3. A plan cannot be submitted for review while any open check lacks that reason.
 
 Human approval of the reviewed commit is unchanged.
@@ -172,7 +174,7 @@ findings already use.
 - [ ] The portal starts and lists plans in a browser. Blocked: `roborepo browser run --serve "npm run
       portal"` failed with "listen EPERM 127.0.0.1:4310"; allow it to run outside the sandbox.
 - [x] `roborepo plans submit` refuses an entry with no reason. — Verified by agent 2026-11-20 at
-      a1b2c3d: `node scripts/test/plan-lifecycle-transitions-check.mjs` passed.
+      a1b2c3d: `node scripts/test/plan-lifecycle-transitions-check.mjs` → passed.
 - [x] The approval question names the commit. — Confirmed by the user 2026-11-21: "saw the full
       commit id in the question".
 ```
@@ -280,16 +282,30 @@ The plan-document check cannot tell whether a reason is true. Judging that stays
 ## Implementation plan
 
 - [ ] Rewrite `plan-write/references/plan-schema.md` "Not tested" with the entry format, the
-      accepted reasons, and the safety rules.
-- [ ] Update `plan-execute/SKILL.md` "Not Tested", `references/validation-loop.md` item 4, and
-      `references/final-report.md`.
+      accepted reasons, and the safety rules, and correct its lifecycle paragraph: moves into
+      `review/` tolerate open entries only when each carries a reason.
+- [ ] Update `plan-execute/SKILL.md` "Not Tested" and its Implementation Completion lines on
+      "unconfirmed Not tested entries" and "Genuinely unverified manual checks … resolved before
+      `/plan-close`", so they say open entries must carry a reason and are settled in review;
+      update `references/validation-loop.md` item 4 and `references/final-report.md`.
 - [ ] Update `plan-review/SKILL.md` steps 3, 5, 6, and 6a.
-- [ ] Reduce `plan-close/SKILL.md` step 5 and `references/verdict.md` to a confirmation.
+- [ ] Reduce `plan-close/SKILL.md` step 5 and `references/verdict.md` to a confirmation. Align
+      its refusal report (which quotes each open entry "so the user can confirm") and its
+      Boundaries line on manual-only entries with the entry format: the refusal sends the user to
+      `/plan-review`, and only person-only entries need the user.
+- [ ] Add `NOT_TESTED_UNEXPLAINED`, and that submit refuses it, to the finding list in
+      `plan-write/references/workflow-validate.md`.
 - [ ] Update the "Sync" row in `plan-write/SKILL.md` and the Not tested line in `session-close`.
 - [ ] Parse wrapped entry lines in `modules/plan-suite/index.mjs`; add `NOT_TESTED_UNEXPLAINED` to
       `findings.mjs` and `lifecycle-policy.mjs`; tolerate it for the `active` destination in
       `transition.mjs`; leave it out of the tolerated sets for preflight in `review-gates.mjs` and
       the `review` destination; mark freshness incomplete in `review-freshness.mjs`.
+- [ ] Rewrite the resolution text of `UNCONFIRMED_NOT_TESTED` in `findings.mjs` ("Confirm each
+      entry by hand and check it off") and the comment above `notTestedFindings` in
+      `lifecycle-policy.mjs` ("until someone confirms it by hand") to match: run the check and
+      record its evidence, or give the reason an agent cannot. In `review-gates.mjs`, rewrite the
+      comment above the tolerated set ("/plan-close resolves it") and the preflight message "no
+      findings apart from Not tested entries" to name the new rule.
 - [ ] Update the pinned phrases in `scripts/test/plan-suite-skills-check.mjs` ("Never check an
       entry off yourself", "manual-only `## Not tested` entries") and pin the new ones.
 - [ ] Update the docs under Documentation impact.
@@ -305,17 +321,18 @@ New behavior, each case failing before the change:
   unexplained entry and accepts it once a reason is added; `plans preflight` fails on the entry
   and names it; a complete review Result whose only problem is a checked entry with no evidence
   reads `incomplete`.
-- `node scripts/test/plan-suite-skills-check.mjs`: the new pins (the entry format, the two reason
-  markers, review asking only for person-only checks) pass, and the removed phrases are no longer
-  pinned.
+- `plan-suite-findings-check.mjs`: the `UNCONFIRMED_NOT_TESTED` resolution no longer tells the
+  reader to confirm every entry by hand.
+- `node scripts/test/plan-suite-skills-check.mjs`: new pins for the entry format, the two reason
+  markers, and review asking only for person-only checks and blocked commands.
 
 Behavior that must not change, each case passing before and after:
 
 - `plan-suite-findings-check.mjs`: entries with `Needs a person:` or `Blocked:`, and checked
   entries written like those in `9njvfh5z` (a resolution such as "— Done 2026-11-13; …"), yield
-  nothing; a completed plan with a checked entry and no dash yields nothing.
-- `plan-lifecycle-transitions-check.mjs`: start and reopen tolerate the finding, and `plans save`
-  accepts a plan with it.
+  no `NOT_TESTED_UNEXPLAINED`; a completed plan with a checked entry and no dash yields none.
+- `plan-lifecycle-transitions-check.mjs`: start and reopen still succeed for a plan whose open
+  entry has no reason, and `plans save` still accepts that plan.
 - `bash scripts/doctor.sh --quiet` passes. CI runs the full gate, because skills are package
   outputs.
 
