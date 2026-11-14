@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Human review with /plan-review; after merge, run the Not tested steps on this machine.
+next_action: Implement the 2026-11-14 permission defaults (delete-files allow, merge-pull-requests ask, git checkout/switch excluded from the sandbox) with /plan-execute, then /plan-review.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -148,14 +148,22 @@ Four findings shape the design:
 - Commands that cannot work in the sandbox, including `roborepo plans` writes to the plans store,
   keep working.
 - The shared permission source states the intent; the Claude provider owns every Claude-native key.
+- Deleting files runs without a prompt: the sandbox already limits shell writes to the session's
+  checkout and temp folders.
+- Merging a pull request asks instead of being denied.
+- Switching branches asks in desktop-app sessions as it does in headless ones.
+- Creating, reading, and editing plans in the plans store through `roborepo plans` never needs
+  approval.
 
 ## Non-goals
 
 - Changing Claude's default permission mode, including auto mode.
 - Changing the Codex profile, including what `go-online` does for Codex.
 - Isolating app and browser test runs (`8bjltk2n`).
-- Relaxing ask rules such as `push-code`, or redesigning the permissions editor
-  (`permissions-ui-revamp`).
+- Changing ask or deny defaults beyond the three named in Goals, such as `push-code`, or
+  redesigning the permissions editor (`permissions-ui-revamp`).
+- Making agents enter their worktree before editing. That is agent behavior the global rules
+  already state, not a permission rule.
 
 ## Proposed design
 
@@ -234,6 +242,21 @@ so a repository's `.claude/settings.local.json` can still add entries.
 - [x] ~~Remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json` once
       the generated settings carry it.~~ Moved to `## Not tested`: the block can go only after this
       branch merges and `roborepo update` renders the generated key on this machine.
+- [ ] Change the `delete-files` default from `ask` to `allow`, and say in its description that the
+      sandbox limits deletes to the session's checkout and temp folders.
+- [ ] Move `gh pr merge` out of `change-github-directly` into a new `merge-pull-requests` behavior,
+      default `ask`. The other `change-github-directly` commands stay denied.
+- [ ] Add `git checkout *` and `git switch *` to the Claude sandbox's excluded commands, so the
+      `switch-branches` ask rule applies in desktop-app sessions. Record that a chained call (for
+      example `cd x && git switch y`) stays sandboxed and still skips the prompt.
+- [ ] Add `roborepo plans sync-base` to `plan-store-commands`, the one plans subcommand a plan
+      workflow runs that no allow rule covers. Check the plan skills for any instruction that pipes
+      or redirects a `roborepo plans` command: such a call stays sandboxed, cannot lock the plans
+      store, and, when the agent retries it outside the sandbox, asks for approval. Replace those
+      with the bare command.
+- [ ] Extend the projection, harness-notes, and live characterization checks for the three changes.
+- [ ] Update `docs/user/reference/config-control-panel.md` and
+      `docs/internal/config-panel-internals.md` for the three defaults.
 
 ## Validation
 
@@ -259,6 +282,15 @@ Acceptance criteria:
       `roborepo plans show` reports `"synchronized": true`.
 - [x] `npm run check` passes. Passed at 75f212d3 ("CI checks passed"). An earlier run failed only
       because a commit landed mid-run and changed the `generated/` status the suite's guard compares.
+- [ ] In a manual-mode desktop-app session, `rm` on a file in the checkout or a temp folder runs
+      without a prompt, and `rm` on a file in the home folder is refused by the sandbox.
+- [ ] `gh pr merge` asks; `gh api` and the other `change-github-directly` commands stay denied.
+- [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks, and
+      `git switch main` stays denied (`occupy-main`).
+- [ ] In a manual-mode desktop-app session, `roborepo plans show`, `roborepo plans save` of an
+      edited copy in a temp folder, and `roborepo plans sync-base` run without a prompt and report
+      `"synchronized": true` where they print it.
+- [ ] `npm run check` passes on the final commit.
 
 ## Risks
 
@@ -290,6 +322,8 @@ Acceptance criteria:
 - `docs/internal/testing.md`: add the Claude projection and enforcement checks beside "Codex
   credential verification".
 - `docs/internal/config-panel-internals.md`: record the new behaviors and their Claude projection.
+- Both docs above: the `delete-files` and `merge-pull-requests` defaults, and why `git checkout` and
+  `git switch` run outside the sandbox.
 
 ## Decision Log
 
@@ -370,6 +404,23 @@ Acceptance criteria:
   and excluded commands still prompt without an allow rule. The same nested run also prompted for
   `api.anthropic.com`; the user chose to leave that prompt as is rather than block hosts one at a
   time, since only a `claude` command run from an agent's shell reaches it.
+- **2026-11-14 — Scope change: three permission defaults move to match the user's intent.** Review
+  found that in the desktop app, sandboxed commands skip ask rules: a manual-mode session ran `rm`
+  with no prompt, while `claude -p` with the same settings refused it. The user then stated the
+  policy they want: deny pushes to main and protected files; ask for PR merges, branch switches, and
+  unlisted hosts; allow anything in the assigned worktree and in temp folders, and listed hosts.
+  Pushes to main, protected files, temp folders, and hosts already matched. The user chose to change
+  three defaults in this plan: `delete-files` ask → allow (the sandbox confines deletes to the
+  checkout and temp folders, which also turns the desktop gap for `rm` into intended behavior);
+  `gh pr merge` deny → ask, as a new `merge-pull-requests` behavior; and `git checkout` / `git switch`
+  excluded from the sandbox so `switch-branches` asks in the desktop app. Alternatives considered: a
+  PreToolUse hook that forces the ask for these commands however they are chained (deferred: more
+  code for a narrow case), and keeping the original non-goal of not changing ask rules (rejected by
+  the user). "Enter the worktree before editing" is agent behavior, not a permission, and stays out.
+  The user also asked that creating, reading, and editing plans never need approval. The
+  `plan-store-commands` allow rules already cover every plans subcommand except `sync-base`; the
+  approvals seen in this review came from piped or redirected plans commands, which stay
+  sandboxed, and from the reviewing agent's retries outside the sandbox.
 
 ## Not tested
 
@@ -431,10 +482,11 @@ Acceptance criteria:
       spec did not cover the new row's "Claude only" note — fixed (a9c5db66)
 - [x] The user reference said "both behaviors" after a third Claude-only row was added — fixed
       (d50687c9)
-- [ ] In the desktop app, sandboxed commands skip ask rules: a manual-mode session ran
+- [x] In the desktop app, sandboxed commands skip ask rules: a manual-mode session ran
       `rm /private/tmp/rm-ask-probe/victim.txt` with no prompt (2026-11-14), while `claude -p` with
       the same live settings refused `rm` three ways. Affects `delete-files` and `git checkout` /
-      `git switch`, against the non-goal of not relaxing ask rules — escalated to the user
+      `git switch`, against the non-goal of not relaxing ask rules — escalated; the user chose a
+      scope change (Decision Log, 2026-11-14), and the plan returns to active for it
 
 ### Verification
 
@@ -476,7 +528,7 @@ Acceptance criteria:
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: d50687c9 (blocked by the open ask-rule finding)
+- Reviewed implementation commit: d50687c9 (superseded: reopened for the 2026-11-14 scope change)
 - Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
 
 ## Open questions
