@@ -1,10 +1,10 @@
 ---
 id: 9671042v
-next_action: Wait for "Clear agent friction" (vzgsx5vz) to merge, then run /plan-promote on this plan.
+next_action: Ready to build. Start with /plan-execute; the first step rewrites the reader description at the top of the response-output rules.
 blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["i5mnkm7z", "0jped168"]
-reviewed_commit:
+reviewed_commit: 62e86111d947f66b6ce61f991cf152d90c13b8a1
 worktree:
 ---
 
@@ -56,8 +56,8 @@ reader, the same point reads:
 
 ### Current state
 
-These facts were checked against `main` and against the branch of "Clear agent friction"
-(`vzgsx5vz`, branch `codex/plans-suite-quick-wins-1-cleanup`), which is in review and not yet merged.
+These facts were checked against `main` at `62e86111`, the merge of "Clear agent friction"
+(`vzgsx5vz`), which rewrote the review, close, and archive report sections.
 
 | Where | What it does today |
 | --- | --- |
@@ -65,9 +65,10 @@ These facts were checked against `main` and against the branch of "Clear agent f
 | `plan-execute/references/final-report.md` | Outcome first: a headline, a "What changed" table phrased as what you'll notice, and a "Needs you" table. The closest of the templates to what this plan wants |
 | `plan-review/SKILL.md`, step 6 | Shows a nine-item review packet before asking for approval: commit and base, each criterion with code and test evidence, changes by area, each Validator pass and what it found, every commit, base failures, outside issues, manual checks, and escalated findings |
 | `plan-promote/SKILL.md`, Completion Result | A block of ten status lines and counts, then an eight-item "also report" list |
-| `plan-review`, `plan-close`, `plan-archive`, Final Report (on the `vzgsx5vz` branch) | Rewritten to be shorter: one outcome line, status only when unusual, evidence through `feature-verification` "where it applies", no passing gates or commit ids. Each skill repeats the same paragraph |
+| `plan-review`, `plan-close`, `plan-archive`, Final Report | Rewritten to be shorter: one outcome line, status only when unusual, evidence through `feature-verification` "where it applies", no passing gates or commit ids. Each skill repeats the same paragraph |
 | `plan-write/SKILL.md` | Asks only to "report changed files, verification run, and paired skills" |
 | Any plan command | Nothing reads a report before the user does. Code, by contrast, gets a fresh-context Validator in `/plan-execute` |
+| `plan-write/references/plan-schema.md` | Already read by `/plan-execute`, `/plan-promote`, and `/plan-archive`, which name it as "`/plan-write`'s `references/plan-schema.md`". The installer places every plan suite skill as a sibling folder for both Claude and Codex, so a reference in one skill's folder resolves from the others |
 | Plan frontmatter `next_action` | One line per plan, shown by the Plans portal as "next action" (`portal/plans/templates.js`) |
 
 Agents follow a command's own report template more closely than the general output rules, so the
@@ -140,11 +141,14 @@ check in change 3.
 ### 2. One shared report shape
 
 `response-output` is optional, so the plan suite cannot rely on it. Move the report rules into one
-reference that every plan command reads before it writes its completion report. Recommended home:
-generalize `plan-execute/references/final-report.md` into a shared reference, read by the other
-commands through a relative path (as `plan-write` already reads `../plan-suite-init/SKILL.md`).
-`/plan-promote` confirms that a file one skill reads from another skill's folder still resolves
-after install, and chooses another home if it does not.
+reference that every plan command reads before it writes its completion report:
+`plan-write/references/completion-report.md`. Every command names it the way they already name the
+shared plan schema: "`/plan-write`'s `references/completion-report.md`". It takes the general parts
+of `plan-execute/references/final-report.md` (headline, "What changed", "Needs you", Record, what to
+leave out). `final-report.md` stays as `/plan-execute`'s own reference, keeps only what is specific
+to that command (its headline variants, "Decisions worth knowing", Exceptions), and points to the
+shared reference for the rest. The paragraph that the review, close, and archive skills each repeat
+in their Final Report is replaced by that pointer.
 
 The shape, in order, skipping empty sections:
 
@@ -211,31 +215,40 @@ When a change is visible in an interface, the report includes a screenshot or re
 change alters a flow or sequence, the report includes a before/after diagram. When neither is
 included for such a change, the report says why in one line. The plan commands reuse evidence
 `/plan-execute` or `feature-verification` already captured rather than capturing it again.
-This replaces the "where it applies" wording on the `vzgsx5vz` branch.
+This replaces the "where it applies" wording that `vzgsx5vz` added to the review, close, and
+archive skills.
 
 ## Implementation plan
 
-- [ ] Confirm `vzgsx5vz` has merged, and start from its Final Report wording in the review, close,
-      and archive skills.
 - [ ] Rewrite the opening of `globals/packages/response-output/rules.md` for a cold reader, add
       the outcome-before-mechanism rule and the layering rule, and update the package description
-      in `package.config.json` if it no longer matches.
-- [ ] Create the shared report reference with the shape, the "no unintroduced term" rule, the
-      visual-evidence rule, and the cold-reader check.
-- [ ] Point the report sections of all six plan commands at the shared reference, keeping each
-      command's specifics from the table above. Restructure the `/plan-review` packet and the
-      `/plan-promote` counts block into the two layers.
+      in `package.config.json` if it no longer matches. Regenerate rule outputs with
+      `bash scripts/build/render-rules.sh`.
+- [ ] Create `plan-write/references/completion-report.md` with the five-section shape, the "no
+      unintroduced term" rule, the visual-evidence rule, and the cold-reader check with its
+      in-session fallback. Add it to the reference list in `plan-write/SKILL.md`.
+- [ ] Trim `plan-execute/references/final-report.md` to `/plan-execute`'s specifics and point it
+      at the shared reference.
+- [ ] Replace the repeated Final Report paragraph in `plan-review`, `plan-close`, and
+      `plan-archive` with a pointer to the shared reference, keeping each command's specifics from
+      the table in change 2.
+- [ ] Restructure the `/plan-review` step 6 packet into the two layers, keeping the exact-commit
+      approval question unchanged.
+- [ ] Replace `/plan-promote`'s Completion Result block and "also report" list, and
+      `/plan-write`'s one-line report instruction, with the shared shape plus their specifics.
 - [ ] Apply the cold-reader standard to `next_action` wherever a command writes it.
-- [ ] Update `scripts/test/plan-suite-skills-check.mjs` for the new report wording.
-- [ ] Regenerate rule outputs with `bash scripts/build/render-rules.sh`.
-- [ ] Run the dry runs under Validation and record the results.
+- [ ] Update `docs/user/guides/plan/lifecycle/plan-suite.md` per Documentation impact.
+- [ ] Update `scripts/test/plan-suite-skills-check.mjs` for the new report wording, then run
+      Validation and the two dry runs, and record the results.
 
 ## Validation
 
 - `node scripts/test/plan-suite-skills-check.mjs` asserts that every plan command reads the shared
   reference before reporting, that the reference names the five sections, the three cold-reader
   questions, the two-rewrite cap, and the in-session self-check, and that `/plan-review` still asks
-  for approval of an exact commit.
+  for approval of an exact commit. Its existing assertions on `final-report.md` (the link from
+  `plan-execute/SKILL.md` and the file's contents) are updated to match the trimmed file, not
+  deleted.
 - `bash scripts/build/render-rules.sh --check` and `bash scripts/doctor.sh --quiet` pass.
 - Dry run of the check: give the cold-reader check the original "delivery refusals" bullet. It
   must flag "delivery refusals" as unexplained. The rewritten version above must pass.
@@ -258,8 +271,8 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
 
 | Plan | Relationship |
 | --- | --- |
-| Clear agent friction (`vzgsx5vz`) | Prerequisite. In review, unmerged. It rewrites the same report sections, so this plan starts after it merges and builds on its wording |
-| Deliver finished plans as a watched pull request (`i5mnkm7z`) | Also edits `final-report.md`: its Record gains the pull request link. Whichever lands second keeps the other's change |
+| Clear agent friction (`vzgsx5vz`) | Landed prerequisite. Merged to `main` in `62e86111` and closed. This plan builds on the Final Report wording it added |
+| Deliver finished plans as a watched pull request (`i5mnkm7z`) | In backlog, unlanded. Also edits the report Record: it adds the pull request link. If it lands second, it adds the link to the shared reference's Record instead of `final-report.md`. Whichever lands second keeps the other's change |
 | Live Evals for Skill Routing and Plan Closing (`0jped168`) | Could later measure report quality. The three cold-reader questions are a ready rubric for the report judge it leaves to a later plan |
 
 ## Risks
@@ -280,8 +293,7 @@ This replaces the "where it applies" wording on the `vzgsx5vz` branch.
   `/plan-execute`, `/plan-review`, and `/plan-close` use the checker agent, because they end a
   stage of work and write the long reports a user returns to. `/plan-write` and `/plan-archive`
   write short reports and use the in-session self-check.
-
-## Open Questions
-
-- **Where the shared reference lives.** `/plan-promote` confirms whether the installer ships a
-  file read across skills (see change 2).
+- **The shared reference lives in `/plan-write`'s references folder.** Settled at promotion
+  (2026-11-14). That folder already holds the plan schema every command reads, and the installer
+  places all plan suite skills side by side for Claude and Codex, so the path resolves after
+  install. Keeping it beside the schema avoids a second convention for shared files.
