@@ -182,7 +182,7 @@ command:
 Promotion result
 - Plan: "<title>" (<id>), <store-relative path>
 - Lifecycle: backlog -> ready | refined in ready | stays in backlog
-- Details: related-plan classifications, checks run, and changes are in the plan document
+- Details: related-plan classifications, checks run, and files changed; ask for any of them here
 ```
 
 Files changed, areas reviewed, the validator's output, related plans that need nothing from the

@@ -31,7 +31,7 @@ Recommended frontmatter:
 ```yaml
 ---
 id: a3f9c2k1
-next_action: Implement the next concrete task
+next_action: Add the retry test for the timeout path, then run /plan-execute to finish the plan
 blocked_by: []
 depends_on: []
 related: []

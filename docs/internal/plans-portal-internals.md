@@ -238,5 +238,5 @@ npm test
 
 ## Merge Readiness
 
-`mergeReadiness` requires a committed review packet, a clean index and filesystem, and a current
+`mergeReadiness` requires a committed review record, a clean index and filesystem, and a current
 reviewed base implementation before merging.

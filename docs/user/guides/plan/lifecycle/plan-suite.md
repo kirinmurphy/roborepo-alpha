@@ -241,8 +241,9 @@ A new review runs these steps:
    while they remain open, then shows you the review in plain language: what the plan is for, what
    changed for a person using it, each acceptance criterion as met or not, base failures, the manual
    checks waiting on you, and each escalated finding as a decision with options and a
-   recommendation. The technical detail (commits, validator passes, and the evidence behind each
-   criterion) stays in the plan's `## Review` record; ask for it in the chat when you want it.
+   recommendation. The technical detail (commits, validator findings, and the evidence behind each
+   criterion) is one request away in the chat; commits, findings, and checks run are also kept in
+   the plan's `## Review` record.
 
 Then it asks for your approval of the exact commit, and acts on your answer:
 

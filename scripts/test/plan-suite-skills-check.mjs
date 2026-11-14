@@ -280,10 +280,10 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "without asking the human",
     "the eighth pass's findings are fixed like any other pass's",
   ]);
-  // The packet shows plain outcomes first; commits and evidence detail stay in the ## Review record.
+  // The packet shows plain outcomes first; commits and evidence detail are offered on request.
   const packet = review.slice(order[5], order[6]);
-  const secondLayer = packet.indexOf("The second layer stays in the plan's `## Review` record");
-  assert.ok(secondLayer > 0, "plan-review: packet names a second layer kept in the ## Review record");
+  const secondLayer = packet.indexOf("The second layer is offered in one line and given when the human asks");
+  assert.ok(secondLayer > 0, "plan-review: packet offers a second layer on request");
   includesAll("plan-review packet first layer", packet.slice(0, secondLayer), [
     "`/plan-write`'s `references/completion-report.md`",
     "what the plan is for, in one sentence",
@@ -292,7 +292,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   ]);
   includesAll("plan-review packet second layer", packet.slice(secondLayer), [
     "the code and test evidence behind each criterion",
-    "each Validator pass and what it found",
+    "each Validator pass's findings",
     "every commit this review made in step 5",
   ]);
   includesAll("plan-review exact-commit approval", packet, ["Then ask the human directly for approval, naming the plan by its title and the exact commit"]);

@@ -262,13 +262,15 @@ The first layer, always shown:
 - the manual checks that need the human, from `## Not tested`;
 - each escalated finding as a decision: the options, their consequences, and a recommendation.
 
-The second layer stays in the plan's `## Review` record and is offered in one line: the commit and
-the base it was synchronized with, the code and test evidence behind each criterion, changes grouped
-by area with the docs updated, each Validator pass and what it found, and every commit this review
-made in step 5.
+The second layer is offered in one line and given when the human asks. The plan's `## Review`
+record already holds part of it: the commit and the base it was synchronized with (`### Result`),
+each Validator pass's findings and every commit this review made in step 5 (`### Findings`), and the
+checks run (`### Verification`). The rest comes from this session's step 3 work: the code and test
+evidence behind each criterion, and changes grouped by area with the docs updated.
 
 Before showing the first layer, run the checker agent from `/plan-write`'s
-`references/completion-report.md` on it, and rewrite until it passes or the cap is reached, as that reference describes.
+`references/completion-report.md` on it, and rewrite until it passes or the cap is reached, as that
+reference describes.
 
 Then ask the human directly for approval, naming the plan by its title and the exact commit. Ask
 through the harness's structured question tool where one exists (in Claude Code, `AskUserQuestion`
