@@ -38,6 +38,21 @@ const permissions = JSON.parse(render("{}")).permissions;
 assert.ok(permissions.allow.includes("Edit(//tmp/**)"), "write-scope Edit allows feed the sandbox's writable paths");
 assert.ok(permissions.deny.includes("Read(//**/*.pem)"), "read-secrets Read denies feed the sandbox's denied paths");
 
+// Defaults that lean on the sandbox. Deletes run prompt-free because the sandbox confines them;
+// merging a pull request prompts rather than being refused; and branch switches run outside the
+// sandbox, because the desktop app skips ask rules for sandboxed commands.
+const bucketOf = (rule) => ["allow", "ask", "deny"].filter((key) => permissions[key].includes(rule));
+assert.deepEqual(bucketOf("Bash(rm:*)"), ["allow"], "delete-files allows rm");
+assert.deepEqual(bucketOf("Bash(git rm:*)"), ["allow"], "delete-files allows git rm");
+assert.deepEqual(bucketOf("Bash(gh pr merge:*)"), ["ask"], "merge-pull-requests asks");
+assert.deepEqual(bucketOf("Bash(gh api:*)"), ["deny"], "the rest of change-github-directly stays denied");
+assert.deepEqual(bucketOf("Bash(roborepo plans sync-base:*)"), ["allow"], "plans sync-base runs without approval");
+for (const verb of ["checkout", "switch"]) {
+  assert.ok(defaults.excludedCommands.includes(`git ${verb} *`), `git ${verb} runs outside the sandbox`);
+  assert.deepEqual(bucketOf(`Bash(git ${verb}:*)`), ["ask"], `git ${verb} keeps its ask rule`);
+  assert.deepEqual(bucketOf(`Bash(git ${verb} main:*)`), ["deny"], `git ${verb} main stays denied`);
+}
+
 // Shell sandbox buckets.
 assert.equal(sandboxOf({ behaviors: { "sandbox-shell": "ask" } }).autoAllowBashIfSandboxed, false, "ask keeps the sandbox but prompts");
 assert.equal(sandboxOf({ behaviors: { "sandbox-shell": "ask" } }).enabled, true);

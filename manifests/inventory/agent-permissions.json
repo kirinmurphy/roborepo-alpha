@@ -122,7 +122,7 @@
     {
       "id": "sandbox-shell",
       "label": "Sandboxed shell commands",
-      "description": "Run each shell command inside the OS sandbox, which confines writes to the current repository, the temp folders in Write scope, and the npm cache, keeps Read credential files unreadable, and sends network traffic through Reach allowed hosts. Allow runs sandboxed commands without prompting, whatever their shape (pipes, loops, inline scripts), unless an ask or deny rule names them; ask keeps the sandbox but prompts by the command rules; deny turns the sandbox off. Docker, the git network commands, and roborepo cannot work inside it, and gh would prompt on every call, so a call made only of those runs outside it under the command rules. A pipe, or most other commands added to the call, keeps it sandboxed; a leading cd was seen not to, so do not rely on either. Codex always sandboxes its commands, so this applies to Claude only.",
+      "description": "Run each shell command inside the OS sandbox, which confines writes to the current repository, the temp folders in Write scope, and the npm cache, keeps Read credential files unreadable, and sends network traffic through Reach allowed hosts. Allow runs sandboxed commands without prompting, whatever their shape (pipes, loops, inline scripts), unless an ask or deny rule names them; ask keeps the sandbox but prompts by the command rules; deny turns the sandbox off. Docker, the git network commands, and roborepo cannot work inside it, gh would prompt on every call, and git checkout and git switch run outside it so Switch branches prompts in the desktop app, which skips ask rules for sandboxed commands; a call made only of those runs outside it under the command rules. A pipe, or most other commands added to the call, keeps it sandboxed; a leading cd was seen not to, so do not rely on either. Codex always sandboxes its commands, so this applies to Claude only.",
       "kind": "shell-sandbox",
       "claudeOnly": true,
       "bucket": "allow",
@@ -131,7 +131,7 @@
     {
       "id": "delete-files",
       "label": "Delete files",
-      "description": "Remove files from disk (rm, git rm).",
+      "description": "Remove files from disk (rm, git rm). Allowed because the harness sandbox limits deletes: Claude's shell sandbox to the session's checkout and the temp folders in Write scope, Codex's to its workspace. With Sandboxed shell commands set to deny, an allowed rm can delete anywhere under Claude, so set this to ask too.",
       "kind": "commands",
       "commands": [
         [
@@ -142,7 +142,7 @@
           "rm"
         ]
       ],
-      "bucket": "ask",
+      "bucket": "allow",
       "category": "destructive"
     },
     {
@@ -223,7 +223,7 @@
     {
       "id": "switch-branches",
       "label": "Switch branches",
-      "description": "Change the checked-out branch (git checkout, git switch). Prompts because it moves the working tree out from under in-flight work.",
+      "description": "Change the checked-out branch (git checkout, git switch). Prompts because it moves the working tree out from under in-flight work. Under Claude these commands run outside the shell sandbox so the prompt also appears in the desktop app; chained after another command (cd x && git switch y) they stay sandboxed and may skip it.",
       "kind": "commands",
       "commands": [
         [
@@ -342,7 +342,7 @@
     {
       "id": "open-prs",
       "label": "Open pull requests",
-      "description": "Open a pull request (gh pr create). Allowed because opening a PR changes no branch: merging is denied by change-github-directly. Push the branch first with git push and pass --head, so gh neither pushes nor forks on its own.",
+      "description": "Open a pull request (gh pr create). Allowed because opening a PR changes no branch: merging prompts under merge-pull-requests. Push the branch first with git push and pass --head, so gh neither pushes nor forks on its own.",
       "kind": "commands",
       "commands": [
         [
@@ -405,16 +405,26 @@
       "category": "git"
     },
     {
-      "id": "change-github-directly",
-      "label": "Change GitHub directly",
-      "description": "Act on GitHub without git: merge a pull request, call the API (which can rewrite main), print the auth token, or change repository settings, secrets, variables, releases, or workflows. Denied, because none of it passes through the protected-branch hooks; only GitHub branch protection covers it.",
+      "id": "merge-pull-requests",
+      "label": "Merge pull requests",
+      "description": "Merge a pull request (gh pr merge). Prompts, so you approve each merge into the base branch. The merge does not pass through the protected-branch hooks; GitHub branch protection still applies.",
       "kind": "commands",
       "commands": [
         [
           "gh",
           "pr",
           "merge"
-        ],
+        ]
+      ],
+      "bucket": "ask",
+      "category": "git"
+    },
+    {
+      "id": "change-github-directly",
+      "label": "Change GitHub directly",
+      "description": "Act on GitHub without git: call the API (which can rewrite main), print the auth token, or change repository settings, secrets, variables, releases, or workflows. Denied, because none of it passes through the protected-branch hooks; only GitHub branch protection covers it. Merging a pull request prompts instead (merge-pull-requests).",
+      "kind": "commands",
+      "commands": [
         [
           "gh",
           "api"
@@ -541,7 +551,7 @@
     {
       "id": "plan-store-commands",
       "label": "Read and change plans",
-      "description": "The named roborepo plans commands: read, save, order, approve, lifecycle moves, and their gates. These are the only way plan files change: each one validates the change and commits it to the plans branch, so an agent needs neither direct writes to the plans worktree nor arbitrary Git commands there.",
+      "description": "The named roborepo plans commands: read, save, order, approve, lifecycle moves, their gates, and syncing a plan branch with its base. These are the only way plan files change: each one validates the change and commits it to the plans branch, so an agent needs neither direct writes to the plans worktree nor arbitrary Git commands there.",
       "kind": "commands",
       "commands": [
         [
@@ -623,6 +633,11 @@
           "roborepo",
           "plans",
           "landed"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "sync-base"
         ]
       ],
       "bucket": "allow",

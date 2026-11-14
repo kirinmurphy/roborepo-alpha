@@ -70,11 +70,12 @@ they can reach:
 | Bucket | Commands |
 | --- | --- |
 | allow | `gh pr create`; read-only `gh pr view`, `pr list`, `pr status`, `pr checks`, `pr diff`, `gh run list`, `run view`, `gh repo view` |
-| ask | `gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`, `gh issue create`, `issue comment` |
-| deny | `gh pr merge`, `gh api`, `gh auth token`, `gh repo edit`, `repo delete`, `repo rename`, `gh secret`, `gh variable`, `gh release`, `gh workflow run` |
+| ask | `gh pr merge`; `gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`, `gh issue create`, `issue comment` |
+| deny | `gh api`, `gh auth token`, `gh repo edit`, `repo delete`, `repo rename`, `gh secret`, `gh variable`, `gh release`, `gh workflow run` |
 
 The protected-branch hook also denies the deny-bucket commands when global flags come first
-(`gh -R owner/repo pr merge 12`), a form the prefix rules miss.
+(`gh -R owner/repo api …`), a form the prefix rules miss. Merging asks (`merge-pull-requests`), so
+you approve each merge; GitHub branch protection is the only guard the merge itself passes through.
 
 The workflow an agent should follow:
 

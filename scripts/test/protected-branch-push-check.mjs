@@ -133,10 +133,11 @@ const cases = [
 // gh commands that skip git: denied in any flag position, since the prefix rules only see the
 // leading words. Other gh commands are left to the permission rules.
 cases.push(
-  ["gh -R owner/repo pr merge 12 --admin", "deny"],
   ["gh --repo=owner/repo api -X PATCH repos/o/r/git/refs/heads/main", "deny"],
-  ["gh pr merge 12", "deny"],
-  ["git push origin feat && gh -R o/r pr merge 12", "deny"],
+  ["git push origin feat && gh -R o/r api repos/o/r", "deny"],
+  // Merging asks through the merge-pull-requests rule, so the hook leaves it to the rules.
+  ["gh -R owner/repo pr merge 12 --admin", "defer"],
+  ["gh pr merge 12", "defer"],
   ["gh -R owner/repo pr create --head feat", "defer"],
   ["gh pr view 12", "defer"],
 );

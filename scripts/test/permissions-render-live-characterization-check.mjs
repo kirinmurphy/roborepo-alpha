@@ -50,6 +50,23 @@ function makeHome() {
   }
 }
 
+// --- A live home rendered under older defaults takes the new ones: the render replaces
+// `permissions` whole, so a rule that moved bucket does not linger in its old one ---
+{
+  const home = makeHome();
+  try {
+    fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
+    const old = { permissions: { allow: [], ask: ["Bash(rm:*)"], deny: ["Bash(gh pr merge:*)"] } };
+    fs.writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify(old));
+    renderPermissionsTo(home, { manifest });
+    const { permissions } = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
+    assert.ok(permissions.allow.includes("Bash(rm:*)") && !permissions.ask.includes("Bash(rm:*)"), "rm moves from ask to allow");
+    assert.ok(permissions.ask.includes("Bash(gh pr merge:*)") && !permissions.deny.includes("Bash(gh pr merge:*)"), "gh pr merge moves from deny to ask");
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
 // --- All three present, both existing rootConfigs: all three get touched, model key stripped
 // from Claude ---
 {

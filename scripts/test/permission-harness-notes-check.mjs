@@ -21,6 +21,7 @@ const NOTES = {
   "reach-claude-log-upload": "Claude",
   "go-online": "Codex",
   "delete-files": null,
+  "merge-pull-requests": null,
 };
 
 try {

@@ -217,6 +217,19 @@ Writable temp folders and denied credentials are not repeated: Claude merges the
 Claude. Codex and Gemini skip both kinds. See [testing](testing.md#claude-sandbox-verification) for
 the projection and enforcement checks.
 
+Three command defaults assume the sandbox is on. They are ordinary `commands` behaviors, so every
+provider renders them:
+
+| Behavior | Default | Reason |
+| --- | --- | --- |
+| `delete-files` | `allow` | The sandbox (Claude's shell sandbox, Codex's workspace) confines deletes |
+| `merge-pull-requests` | `ask` | Split from `change-github-directly`, which stays `deny`; the protected-branch hook's `GH_DENIED` list no longer names `pr merge` |
+| `switch-branches` | `ask` | `git checkout *` and `git switch *` are in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
+
+`plan-store-commands` also allows `roborepo plans sync-base`, so every plans subcommand a plan
+workflow runs is pre-approved. A plans command that is piped or redirected stays sandboxed, cannot
+lock the plans store, and prompts when retried outside the sandbox.
+
 ## Codex credential profiles
 
 The resolved `read-secrets` behavior supplies the 15 native deny patterns. Codex preserves `~/`

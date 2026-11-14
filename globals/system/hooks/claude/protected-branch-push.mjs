@@ -47,8 +47,9 @@ const PLANS_STORE_BRANCH = 'repo-plans'
 
 const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
 // Mirrors the change-github-directly behavior in agent-permissions.json; a test keeps them equal.
+// `gh pr merge` is absent: merge-pull-requests asks, so the permission rules decide it.
 const GH_DENIED = [
-  ['pr', 'merge'], ['api'], ['auth', 'token'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
+  ['api'], ['auth', 'token'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
   ['secret'], ['variable'], ['release'], ['workflow', 'run'],
 ]
 // gh options that take their value as the next word, before or between subcommands.

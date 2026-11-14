@@ -233,7 +233,16 @@ client repo under NDA — which is why it complements the scope perimeter instea
 `sandbox-shell` runs each Claude shell command inside the operating system's sandbox (Seatbelt on
 macOS). Commands that stay inside the bounds below run without a permission prompt, whatever their
 shape: pipes, loops, and inline scripts all count. A command an `ask` or `deny` rule names still
-prompts or is refused; `rm` (`delete-files`) still asks.
+prompts or is refused when run through `claude -p`; the desktop app was seen to run sandboxed
+commands without consulting ask rules, which is why branch switches run outside the sandbox (below).
+
+Three defaults lean on the sandbox:
+
+| Behavior | Default | Why |
+| --- | --- | --- |
+| `delete-files` (`rm`, `git rm`) | `allow` | The sandbox limits deletes to the checkout and temp folders. Set it to `ask` if you turn `sandbox-shell` off |
+| `merge-pull-requests` (`gh pr merge`) | `ask` | You approve each merge; other `gh` commands that skip git stay denied (`change-github-directly`) |
+| `switch-branches` (`git checkout`, `git switch`) | `ask` | Runs outside the sandbox so it prompts in the desktop app too. `git switch main` stays denied (`occupy-main`) |
 
 | Inside the sandbox | Bound |
 | --- | --- |
@@ -263,9 +272,11 @@ sandboxed command a way to send files out.
 `roborepo`, and `./bin/roborepo` cannot work inside it, or would prompt on every call: Docker needs
 its daemon socket, `gh` calls `api.github.com`, which the host list leaves out, SSH cannot pass the
 sandbox proxy, and `roborepo plans` commands write the plans store, which `edit-plans-store` denies
-to every sandboxed write. A call made only of those commands runs unsandboxed, under the ordinary
+to every sandboxed write. `git checkout` and `git switch` run outside it so their `ask` rule
+applies in the desktop app. A call made only of those commands runs unsandboxed, under the ordinary
 allow, ask, and deny rules. A pipe, or most other commands added to the call, keeps it sandboxed; a
-leading `cd` was seen not to, so do not rely on it either way.
+leading `cd` was seen not to, so do not rely on it either way. A chained branch switch
+(`make x && git switch y`) therefore stays sandboxed and may run without its prompt in the desktop app.
 `roborepo plans show <id> --json | grep synchronized` cannot lock the plans store and reports
 `"synchronized": false`. Run plans commands on their own.
 

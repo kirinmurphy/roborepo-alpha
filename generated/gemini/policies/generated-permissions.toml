@@ -13,13 +13,13 @@ priority = 500
 [[rule]]
 toolName = "run_shell_command"
 commandPrefix = "rm"
-decision = "ask_user"
+decision = "allow"
 priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
 commandPrefix = "git rm"
-decision = "ask_user"
+decision = "allow"
 priority = 500
 
 [[rule]]
@@ -199,7 +199,7 @@ priority = 500
 [[rule]]
 toolName = "run_shell_command"
 commandPrefix = "gh pr merge"
-decision = "deny"
+decision = "ask_user"
 priority = 500
 
 [[rule]]
@@ -427,6 +427,12 @@ priority = 500
 [[rule]]
 toolName = "run_shell_command"
 commandPrefix = "roborepo plans landed"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo plans sync-base"
 decision = "allow"
 priority = 500
 

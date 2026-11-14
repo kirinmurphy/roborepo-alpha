@@ -7,7 +7,8 @@
 // (read-secrets, edit-plans-store) into its denied paths, so the permissions key already carries
 // them.
 
-// Commands that cannot work, or would prompt on every call, inside the sandbox. Claude matches this list against the text of the
+// Commands that run outside the sandbox: they cannot work inside it, would prompt on every call
+// there, or must keep their ask rule in the desktop app. Claude matches this list against the text of the
 // whole call: `roborepo plans show x | grep y` stays sandboxed. Claude's documentation says every
 // command in the call must match, but on 2.1.309 a leading `cd` did not keep a call sandboxed.
 // Each entry runs with full filesystem and network access, under the ordinary allow/ask/deny
@@ -15,6 +16,9 @@
 //   - docker: talks to the daemon over a Unix socket the sandbox does not open.
 //   - gh: calls api.github.com, which reach-allowed-hosts does not list, so every call would prompt.
 //   - git push/pull/fetch: SSH cannot pass the sandbox proxy.
+//   - git checkout/switch: the desktop app runs sandboxed commands without consulting ask rules,
+//     so switch-branches would never prompt there. Run outside, they prompt. A chained call
+//     (`cd x && git switch y`) does not match, stays sandboxed, and still skips the prompt.
 //   - roborepo: plans commands lock and commit the plans store, which edit-plans-store denies to
 //     every sandboxed write; `./bin/roborepo` is the same CLI run from a development checkout.
 export const CLAUDE_SANDBOX_EXCLUDED_COMMANDS = Object.freeze([
@@ -23,6 +27,8 @@ export const CLAUDE_SANDBOX_EXCLUDED_COMMANDS = Object.freeze([
   "git push *",
   "git pull *",
   "git fetch *",
+  "git checkout *",
+  "git switch *",
   "roborepo *",
   "./bin/roborepo *",
 ]);

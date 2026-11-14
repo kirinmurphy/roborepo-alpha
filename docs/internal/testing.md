@@ -248,7 +248,7 @@ consult [official permission documentation](https://learn.chatgpt.com/docs/permi
 
 | Check | What it establishes | Availability |
 | --- | --- | --- |
-| `node scripts/test/claude-sandbox-projection-check.mjs` | The rendered `sandbox` key for every bucket of `sandbox-shell`, `reach-allowed-hosts`, `reach-claude-log-upload`, and `read-secrets`; `go-online` has no effect; unrelated keys and hooks survive; reapply is stable; Codex and Gemini ignore the new kinds; the recorded coverage | Deterministic CI group |
+| `node scripts/test/claude-sandbox-projection-check.mjs` | The rendered `sandbox` key for every bucket of `sandbox-shell`, `reach-allowed-hosts`, `reach-claude-log-upload`, and `read-secrets`; `go-online` has no effect; the defaults that lean on the sandbox (`delete-files` allow, `merge-pull-requests` ask, `git checkout` and `git switch` excluded with their ask rule kept, `plans sync-base` allowed); unrelated keys and hooks survive; reapply is stable; Codex and Gemini ignore the new kinds; the recorded coverage | Deterministic CI group |
 | `node scripts/test/claude-sandbox-enforcement-check.mjs` | A real Claude binary enforces the default render and the sandbox-off render | Explicit macOS probe |
 
 The enforcement runner renders settings fresh, drops the hooks, and passes them with `--settings`
@@ -269,6 +269,8 @@ non-macOS platform. On November 13, 2026, Claude Code 2.1.309 passed all eight c
 `scripts/test/fixtures/claude-sandbox/coverage.json` records that run, and the projection check
 pins it. The desktop app, piped excluded commands, unlisted hosts, the `ask` bucket of
 `sandbox-shell`, the `ask` and `deny` buckets of `reach-allowed-hosts`, `reach-claude-log-upload`,
-Linux, and Windows are unverified by the runner. A headless run cannot tell a denied host from one
+Linux, and Windows are unverified by the runner. The desktop app was seen to skip ask rules for
+sandboxed commands (`rm` ran without a prompt) while `claude -p` honored them, so a headless pass
+says nothing about desktop prompts. A headless run cannot tell a denied host from one
 that would prompt, since both come back refused. Like the Codex runner, it stays out of CI groups
 so a skipped probe cannot imply certification.
