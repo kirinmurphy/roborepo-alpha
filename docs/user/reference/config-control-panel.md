@@ -269,7 +269,7 @@ leading `cd` was seen not to, so do not rely on it either way.
 `roborepo plans show <id> --json | grep synchronized` cannot lock the plans store and reports
 `"synchronized": false`. Run plans commands on their own.
 
-Codex always sandboxes its commands, so both behaviors are Claude-only. Enforcement was verified on
+Codex always sandboxes its commands, so all three behaviors are Claude-only. Enforcement was verified on
 macOS with Claude Code 2.1.309 through `claude -p`; Linux and Windows are unverified. A local
 `.claude/settings.local.json` can add entries, since Claude merges sandbox lists across settings
 files; RoboRepo replaces the `sandbox` key in `~/.claude/settings.json` on every render.
