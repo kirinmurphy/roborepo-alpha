@@ -1,0 +1,19 @@
+{
+  "path": [
+    "delivery",
+    "pr-ready"
+  ],
+  "kind": "command",
+  "title": "pr-ready",
+  "description": "Mark the current feature pull request ready",
+  "order": 20,
+  "usage": "roborepo delivery pr-ready",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/delivery.mjs",
+    "export": "deliveryCommand",
+    "prependArgs": [
+      "pr-ready"
+    ]
+  }
+}

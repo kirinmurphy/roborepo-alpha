@@ -26,6 +26,7 @@
     "pre-push-gate-check.mjs",
     "minimize-bash-output-check.mjs",
     "codex-command-permission-check.mjs",
+    "agent-permission-defaults-check.mjs",
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",
     "hook-review-cli-check.mjs",
@@ -74,8 +75,10 @@
     "browser-cli-check.mjs",
     "browser-playwright-check.mjs",
     "response-output-rules-check.mjs",
+    "agent-workflow-rules-check.mjs",
     "browser-lifecycle-check.mjs",
     "browser-playwright-cache-check.mjs",
-    "browser-playwright-cli-check.mjs"
+    "browser-playwright-cli-check.mjs",
+    "delivery-operations-check.mjs"
   ]
 }

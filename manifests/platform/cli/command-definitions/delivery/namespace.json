@@ -1,0 +1,9 @@
+{
+  "path": [
+    "delivery"
+  ],
+  "kind": "namespace",
+  "title": "Guarded delivery",
+  "description": "Deliver the current feature branch with validated targets",
+  "order": 455
+}

@@ -1,0 +1,19 @@
+{
+  "path": [
+    "delivery",
+    "retry-ci"
+  ],
+  "kind": "command",
+  "title": "retry-ci",
+  "description": "Rerun failed jobs at the current pull request head",
+  "order": 30,
+  "usage": "roborepo delivery retry-ci <run-id>",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/delivery.mjs",
+    "export": "deliveryCommand",
+    "prependArgs": [
+      "retry-ci"
+    ]
+  }
+}

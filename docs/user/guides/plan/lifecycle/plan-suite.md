@@ -19,7 +19,7 @@ Use it when you want to:
 | Piece | Always available? | What it does |
 | --- | --- | --- |
 | Plans page | Yes | Local `/plans` portal view for discovering, filtering, rendering, and copying plan context |
-| Plan suite | Optional packages: `plan-suite` and `session-close` | Eight slash commands: one-time setup, six for the lifecycle steps, plus `/session-close` |
+| Plan suite | Optional packages: `plan-suite` and `session-close` | Seven plan commands, including one-time setup, plus `/session-close` |
 
 | Command | What you get |
 | --- | --- |
@@ -65,15 +65,15 @@ flowchart LR
 
 ## Enable The Plan Suite
 
-The six plan commands hand off to one another, so they ship as one package, `plan-suite`, that
-turns on and off as a unit. `/session-close` is a separate package, because it is useful in any
-chat.
+The seven plan commands ship as one package, `plan-suite`, and turn on and off together.
+They include `/plan-suite-init` for one-time repository setup. `/session-close` is a separate
+package because it is useful in any chat.
 
 The Plans page shows an onboarding banner until the suite is enabled. Its button enables both
 packages at once, and each command in the list has a **Details** button that shows that command's
 skill. The Agents page shows them under **Development Workflows**: a **Development Planning
-Lifecycle** card with a `6 skills` badge, and a **/session-close** card, each with its own toggle.
-Click the Development Planning Lifecycle card's name to list its six skills and its rules
+Lifecycle** card with a `7 skills` badge, and a **/session-close** card, each with its own toggle.
+Click the Development Planning Lifecycle card's name to list its seven skills and its rules
 fragment, each of which opens its source.
 
 From the CLI:
@@ -86,7 +86,7 @@ roborepo package enable session-close
 The six commands were once six packages (`plan-write`, `plan-promote`, and so on), and
 `/plan-start` was replaced by `/plan-execute`. Updating RoboRepo removes the old package IDs. If
 any of the six plan skills were installed, the update keeps them and turns on `plan-suite`, which
-installs all six.
+installs all seven.
 
 ## Where Plans Live
 
@@ -467,30 +467,32 @@ The Plans page copies prompts; it never runs a suite command for you. Paste the
 prompt into Claude or Codex in that repository, and the command does the work, including any move
 between lifecycle folders and the commit that records it.
 
-Each card leads with one command button:
+The card and detail drawer show a lead button when the plan has a recommended next command.
 
-| Plan | Button | Copies |
+| Plan | Lead button | Copies |
 | --- | --- | --- |
-| Backlog | **Promote** | `/plan-promote` |
+| Backlog, all prerequisites complete | **Promote** | `/plan-promote` |
+| Backlog, unfinished prerequisites | — | The card shows **Waiting on** and the prerequisites |
 | Ready | **Start** | `/plan-execute` |
-| Active, every task outside Not tested checked | **Review** | `/plan-review` |
-| Active, never checked or possibly stale | **Update** | `/plan-write` |
-| Any other active plan | **Continue** | `/plan-execute`, which resumes in the plan's worktree |
-| Review, approval recorded | **Close after merge** | `/plan-close` |
-| Any other review plan, open findings included | **Review** | `/plan-review`, which fixes open findings in its own chat |
+| Active | — | **Continue** and **Review** are in the Copy menu |
+| Review, unblocked and approved | **Close** | `/plan-close` |
+| Review, unblocked and awaiting approval | **Review** | `/plan-review`, which fixes open findings in its own chat |
+| Review, blocked | — | Review actions are in the Copy menu |
+| Completed, Archived, or Unclassified | — | — |
 
-Each plan's menu lists every command that fits its lifecycle:
+With the suite enabled, the Copy menu offers these commands.
 
 | Lifecycle | Actions |
 | --- | --- |
-| Backlog | **Promote** (`/plan-promote`), **Update** (`/plan-write`), **Archive** (`/plan-archive`) |
-| Ready | **Start** (`/plan-execute`), **Refine** (`/plan-promote`), **Archive** |
-| Active | **Continue** (`/plan-execute`), **Review** (`/plan-review`), **Update** (`/plan-write`), **Archive** |
-| Review | **Review** (`/plan-review`), **Fix findings** (`/plan-execute`), **Close after merge** (`/plan-close`), **Archive** |
+| Backlog | **Promote** (`/plan-promote`) when prerequisites are complete, **Archive** (`/plan-archive`) |
+| Ready | **Start** (`/plan-execute`), **Refine** (`/plan-promote`), **Archive** (`/plan-archive`) |
+| Active | **Continue** (`/plan-execute`), **Review** (`/plan-review`), **Archive** (`/plan-archive`) |
+| Review | **Review** (`/plan-review`), **Fix findings** (`/plan-execute`), **Close** (`/plan-close`), **Archive** (`/plan-archive`) |
+| Completed, Archived, or Unclassified | — |
 
-Every menu also copies the plan's path and a portable prompt: a self-contained summary for a chat
-without repository access. Without the suite enabled, the menu offers repository-aware and portable
-prompts with no command.
+Use `/plan-write` in an agent chat to update an existing plan. **Copy file path** is
+available in every Copy menu. With the suite disabled, the menu offers a **Repo-aware prompt**
+in place of the workflow actions.
 
 Lifecycle tabs switch the list you are browsing. Moving a plan through the suite changes its folder.
 

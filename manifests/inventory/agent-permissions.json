@@ -709,6 +709,56 @@
       ],
       "bucket": "ask",
       "category": "configuration"
+    },
+    {
+      "id": "guarded-delivery",
+      "label": "Guarded feature delivery",
+      "description": "Refresh a configured remote tracking namespace, update the current feature PR body, mark it ready, or rerun failed jobs for its pushed head. Each command validates its target.",
+      "kind": "commands",
+      "commands": [
+        [
+          "roborepo",
+          "delivery",
+          "fetch"
+        ],
+        [
+          "roborepo",
+          "delivery",
+          "pr-body"
+        ],
+        [
+          "roborepo",
+          "delivery",
+          "pr-ready"
+        ],
+        [
+          "roborepo",
+          "delivery",
+          "retry-ci"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "git"
+    },
+    {
+      "id": "plan-lifecycle",
+      "label": "Run guarded plan worktree steps",
+      "description": "Synchronize a plan worktree with its base or stop its matching servers. Both commands retain their existing guards.",
+      "kind": "commands",
+      "commands": [
+        [
+          "roborepo",
+          "plans",
+          "sync-base"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "stop-servers"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "git"
     }
   ],
   "tools": {},
