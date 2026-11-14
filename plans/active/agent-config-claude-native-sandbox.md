@@ -250,7 +250,7 @@ so a repository's `.claude/settings.local.json` can still add entries.
 - [x] Add `git checkout *` and `git switch *` to the Claude sandbox's excluded commands, so the
       `switch-branches` ask rule applies in desktop-app sessions. Record that a chained call (for
       example `make x && git switch y`) stays sandboxed and still skips the prompt.
-- [x] Add `roborepo plans sync-base` to `plan-store-commands`, the one plans subcommand a plan
+- [x] Add `roborepo plans sync-base` (and `stop-servers`, which plan-close runs) to `plan-store-commands`, the one plans subcommand a plan
       workflow runs that no allow rule covers. Check the plan skills for any instruction that pipes
       or redirects a `roborepo plans` command: such a call stays sandboxed, cannot lock the plans
       store, and, when the agent retries it outside the sandbox, asks for approval. Replace those
@@ -430,9 +430,11 @@ Acceptance criteria:
 - **2026-11-14 — No plan skill pipes or redirects a `roborepo plans` command.** Searched
   `globals/` for plans commands followed by `|`, `>`, or `2>`; the only hit is the user reference's
   deliberate example of the pitfall. No skill text changed.
-- **2026-11-14 — `stop-servers` stays unlisted in `plan-store-commands`.** It is the other plans
-  subcommand no allow rule covers, but no plan skill runs it and it stops processes, so it keeps
-  prompting.
+- **2026-11-14 — `stop-servers` joins `plan-store-commands` (user correction).** An earlier entry
+  kept it unlisted on the grounds that no plan skill runs it. The user pointed out that plan-close
+  does: its step 9 runs "the repository's canonical linked-worktree server cleanup command" without
+  asking, which is `roborepo plans stop-servers`, so a search for the literal command missed it. It
+  sends SIGTERM only to servers listening from the plan's own worktree. Allowed in 4019fd05.
 
 ## Not tested
 
