@@ -575,6 +575,8 @@ Acceptance criteria:
 - Scoped checks passed at d18adcd8: projection, protected-branch push, harness notes, docs references
 - Validation pass 12 at d18adcd8 (fresh-context subagent): 5 `fix` findings (comments, docs, plan
   record), fixed in fb76b09a and the plan record
+- Validation: clean on pass 13 at fb76b09a (fresh-context subagent); the `delete-files` Open
+  Question and its two escalated findings remain open for the user
 
 ### Result
 
