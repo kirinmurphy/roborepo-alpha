@@ -70,7 +70,8 @@ temp root at boot on this machine. Folders 11 days old survive there, so it is n
 
 ### What the instructions tell agents
 
-Every source below names a different place, and none names the same place for the same purpose:
+The sources below send the same kinds of file to different places, and none says which place fits
+which purpose:
 
 | Source | Says |
 | --- | --- |
@@ -98,9 +99,9 @@ Every source below names a different place, and none names the same place for th
 
 Cut Claude permission prompts by running shell commands in the native sandbox (9njvfh5z, in review)
 lets sandboxed shell commands write only to temp roots and the checkout. A sandboxed shell cannot
-write to `~/.roborepo/`; `roborepo` commands run outside the sandbox and can. Codex's sandbox
-likewise allows temp roots and the workspace. Any location this plan gives agents must be writable
-under both.
+write to `~/.roborepo/`; `roborepo` commands run outside the sandbox and can. Codex's sandbox is
+expected to allow temp roots and the workspace in the same way; that was not checked for this plan.
+Any location this plan gives agents must be writable under both.
 
 ## Proposed design
 
@@ -149,8 +150,8 @@ by age and by plan lifecycle.
   link, and refuses any entry whose resolved path leaves its root. It removes links as links and
   never follows them, as `withTemporaryStorage` already does.
 - **Age.** An entry is removed when nothing inside it changed for its purpose's age limit.
-- **Lifecycle.** `plan-close` and `plan-archive` remove `~/.roborepo/work/<plan id>/` after the
-  plan's move is committed.
+- **Lifecycle.** `roborepo temp clean --plan <plan id>` removes `~/.roborepo/work/<plan id>/`.
+  `plan-close` and `plan-archive` run it after the plan's move is committed.
 - **Dry run.** `roborepo temp clean --dry-run` lists every entry it would remove with its size and
   age. `--apply` removes them. Doctor reports the dry-run total and the size of harness-owned
   scratch folders it does not touch.
@@ -167,8 +168,9 @@ by age and by plan lifecycle.
 
 ## Implementation plan
 
-- [ ] Add `roborepo temp path <purpose> [<key>]` and `roborepo temp clean --dry-run | --apply`,
-      backed by `modules/temp-cleanup/` with the owned-roots safety rules.
+- [ ] Confirm which paths Codex's sandbox lets a shell command write, and record the result here.
+- [ ] Add `roborepo temp path <purpose> [<key>]` and `roborepo temp clean --dry-run | --apply |
+      --plan <plan id>`, backed by `modules/temp-cleanup/` with the owned-roots safety rules.
 - [ ] Add the shared rule fragment and render it for Claude and Codex.
 - [ ] Update the instruction sources listed under "What the instructions tell agents" to name the
       purpose instead of an ad hoc location.
