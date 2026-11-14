@@ -267,6 +267,9 @@ the base it was synchronized with, the code and test evidence behind each criter
 by area with the docs updated, each Validator pass and what it found, and every commit this review
 made in step 5.
 
+Before showing the first layer, run the checker agent from `/plan-write`'s
+`references/completion-report.md` on it, and rewrite until it passes or the cap is reached, as that reference describes.
+
 Then ask the human directly for approval, naming the plan by its title and the exact commit. Ask
 through the harness's structured question tool where one exists (in Claude Code, `AskUserQuestion`
 or the app's next-step box; in Codex, its user-input request), so the request reads as a decision

@@ -252,7 +252,8 @@ human accepted it.
    validator apart from unconfirmed Not tested entries.
 3. **Incomplete, blocked, or not yet validated:** the plan stays in `active/`. This includes a
    Validation Loop that left `escalate` findings open; their unchecked findings fail the preflight.
-   Record the remaining tasks, findings, or blockers, set an actionable `next_action`, and save the plan. A later `/plan-execute` resumes from there.
+   Record the remaining tasks, findings, or blockers, set an actionable `next_action` written for a
+   cold reader, and save the plan. A later `/plan-execute` resumes from there.
 4. **Complete:** run `roborepo plans submit <plan> --json`. It reruns the preflight, then commits and
    pushes the move from `active/` to `review/` on the plans branch. Then push the feature branch (below)
    and report that the plan awaits `/plan-review`.

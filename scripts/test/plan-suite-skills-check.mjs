@@ -296,6 +296,9 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "every commit this review made in step 5",
   ]);
   includesAll("plan-review exact-commit approval", packet, ["Then ask the human directly for approval, naming the plan by its title and the exact commit"]);
+  const checkerAt = packet.indexOf("Before showing the first layer, run the checker agent");
+  assert.ok(checkerAt > secondLayer && checkerAt < packet.indexOf("Then ask the human directly for approval"),
+    "plan-review: the checker agent reads the packet before approval is asked");
   includesAll("plan-review", review, [
     "references/resume-review.md",
     "### Result",
