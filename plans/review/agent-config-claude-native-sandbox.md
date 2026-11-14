@@ -361,6 +361,15 @@ Acceptance criteria:
 - **2026-11-12 — Scope correction: removing the trial block moves to `## Not tested`.** It may happen
   only once the generated key is live, which needs this branch merged and `roborepo update` run on
   this machine. Removing it earlier would leave the main checkout unsandboxed until then.
+- **2026-11-13 — The `claude` program's Datadog log address is refused, not prompted.** A `claude`
+  command run from a sandboxed shell sends its own error logs to
+  `http-intake.logs.us5.datadoghq.com`, which is on no list, so every such run prompted. The user
+  chose a new Claude-only `reach-claude-log-upload` behavior, default `deny`, rendered into
+  `network.deniedDomains`. Allowing the address was rejected: anyone with a Datadog account can
+  receive data posted there. Excluding `claude *` was rejected: the nested agent would run unfenced,
+  and excluded commands still prompt without an allow rule. The same nested run also prompted for
+  `api.anthropic.com`; the user chose to leave that prompt as is rather than block hosts one at a
+  time, since only a `claude` command run from an agent's shell reaches it.
 
 ## Not tested
 
@@ -416,6 +425,12 @@ Acceptance criteria:
       and fails without the fix
 - [x] `hooks-internals.md` still said any `ask` selects Codex's `on-request` — fixed (168a43a1)
 - [x] `harnesses-explained.md` described Claude permissions without the `sandbox` key — fixed (168a43a1)
+- [x] A `claude` command run from a sandboxed shell prompted for the program's Datadog log address
+      — escalated, the user chose to refuse it; fixed (d0474b1a)
+- [x] The projection check did not assert Codex and Gemini omit the log address, and the portal
+      spec did not cover the new row's "Claude only" note — fixed (a9c5db66)
+- [x] The user reference said "both behaviors" after a third Claude-only row was added — fixed
+      (d50687c9)
 
 ### Verification
 
@@ -442,11 +457,22 @@ Acceptance criteria:
   darwin: temp and workspace writes ok; home write, `*.pem` and `.env` reads refused; CA bundle read
   and allowed host ok; excluded command unsandboxed; missing-sandbox mutation detected
 - Validation pass 8 at 168a43a1 (fresh-context subagent, review): clean
+- Validation pass 9 at d0474b1a (fresh-context subagent, review): 3 `fix` findings (test coverage,
+  line wrapping), fixed in a9c5db66
+- Validation pass 10 at a9c5db66 (fresh-context subagent, review): 1 `fix` finding (doc wording),
+  fixed in d50687c9; that prose-only commit was not revalidated
+- Full local gate (`npm run check`) at a9c5db66: 425 passed, 1 failed. The failure,
+  `cli-surface-integration-check.mjs` (an interactive remote-sync menu test this branch does not
+  touch), passed at 168a43a1 and passed 3 of 3 reruns at a9c5db66, so it is recorded as flaky
+- Scoped checks passed at a9c5db66: projection, live characterization, harness notes, orphan test,
+  and `render-agent-permissions.mjs --check`
+- The live `~/.claude/settings.json` was re-rendered from d0474b1a; a desktop-app session's sandbox
+  then listed `http-intake.logs.us5.datadoghq.com` among its denied hosts
 
 ### Result
 
-- Status: complete
-- Reviewed implementation commit: 168a43a1a493f4f486c80794624aea4e630077c3
+- Status: pending
+- Reviewed implementation commit: d50687c9 (awaiting the user's account of the manual run)
 - Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
 
 ## Open questions
