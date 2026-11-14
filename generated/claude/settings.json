@@ -53,6 +53,7 @@
       "Bash(roborepo plans approval:*)",
       "Bash(roborepo plans landed:*)",
       "Bash(roborepo plans sync-base:*)",
+      "Bash(roborepo plans stop-servers:*)",
       "Bash(npm test:*)",
       "Bash(npm run test:*)",
       "Bash(pnpm test:*)",

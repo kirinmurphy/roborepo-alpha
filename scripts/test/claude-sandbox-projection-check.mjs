@@ -47,6 +47,7 @@ assert.deepEqual(bucketOf("Bash(git rm:*)"), ["allow"], "delete-files allows git
 assert.deepEqual(bucketOf("Bash(gh pr merge:*)"), ["ask"], "merge-pull-requests asks");
 assert.deepEqual(bucketOf("Bash(gh api:*)"), ["deny"], "the rest of change-github-directly stays denied");
 assert.deepEqual(bucketOf("Bash(roborepo plans sync-base:*)"), ["allow"], "plans sync-base runs without approval");
+assert.deepEqual(bucketOf("Bash(roborepo plans stop-servers:*)"), ["allow"], "plan-close stops worktree servers without approval");
 for (const verb of ["checkout", "switch"]) {
   assert.ok(defaults.excludedCommands.includes(`git ${verb} *`), `git ${verb} runs outside the sandbox`);
   assert.deepEqual(bucketOf(`Bash(git ${verb}:*)`), ["ask"], `git ${verb} keeps its ask rule`);

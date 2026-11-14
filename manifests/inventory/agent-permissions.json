@@ -551,7 +551,7 @@
     {
       "id": "plan-store-commands",
       "label": "Read and change plans",
-      "description": "The named roborepo plans commands: read, save, order, approve, lifecycle moves, their gates, and syncing a plan branch with its base. These are the only way plan files change: each one validates the change and commits it to the plans branch, so an agent needs neither direct writes to the plans worktree nor arbitrary Git commands there.",
+      "description": "The named roborepo plans commands: read, save, order, approve, lifecycle moves, their gates, syncing a plan branch with its base, and stopping the servers a closed plan's worktree left running. These are the only way plan files change: each one validates the change and commits it to the plans branch, so an agent needs neither direct writes to the plans worktree nor arbitrary Git commands there.",
       "kind": "commands",
       "commands": [
         [
@@ -638,6 +638,11 @@
           "roborepo",
           "plans",
           "sync-base"
+        ],
+        [
+          "roborepo",
+          "plans",
+          "stop-servers"
         ]
       ],
       "bucket": "allow",

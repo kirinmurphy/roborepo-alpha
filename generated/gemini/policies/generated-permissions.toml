@@ -438,6 +438,12 @@ priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
+commandPrefix = "roborepo plans stop-servers"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
 commandPrefix = "roborepo update"
 decision = "ask_user"
 priority = 500
