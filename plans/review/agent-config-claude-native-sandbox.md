@@ -431,6 +431,10 @@ Acceptance criteria:
       spec did not cover the new row's "Claude only" note — fixed (a9c5db66)
 - [x] The user reference said "both behaviors" after a third Claude-only row was added — fixed
       (d50687c9)
+- [ ] In the desktop app, sandboxed commands skip ask rules: a manual-mode session ran
+      `rm /private/tmp/rm-ask-probe/victim.txt` with no prompt (2026-11-14), while `claude -p` with
+      the same live settings refused `rm` three ways. Affects `delete-files` and `git checkout` /
+      `git switch`, against the non-goal of not relaxing ask rules — escalated to the user
 
 ### Verification
 
@@ -472,7 +476,7 @@ Acceptance criteria:
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: d50687c9 (awaiting the user's account of the manual run)
+- Reviewed implementation commit: d50687c9 (blocked by the open ask-rule finding)
 - Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
 
 ## Open questions
