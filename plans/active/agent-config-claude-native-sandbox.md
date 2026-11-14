@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Implement the 2026-11-14 permission defaults (delete-files allow, merge-pull-requests ask, git checkout/switch excluded from the sandbox) with /plan-execute, then /plan-review.
+next_action: Answer the delete-files Open Question (allow for every harness, or keep ask where no sandbox confines rm), then rerun /plan-execute to finish and submit.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -240,22 +240,35 @@ so a repository's `.claude/settings.local.json` can still add entries.
       explicit-runner list in `scripts/test/orphan-test-check.mjs`, as described under Validation.
 - [x] Update the documents under Documentation impact.
 - [x] ~~Remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json` once
-      the generated settings carry it.~~ Moved to `## Not tested`: the block can go only after this
+      the generated settings carry it.~~ Moved to `- **2026-11-14 — The protected-branch hook stops denying `gh pr merge` and defers to the rules.**
+  Its `GH_DENIED` list mirrored `change-github-directly` and would have kept merges denied. A
+  flag-first merge (`gh -R o/r pr merge 12`) then matches no allow rule, so Claude prompts for it.
+  Alternative: have the hook return `ask` for merges in any flag position (rejected: the Codex copy
+  turns every hook `ask` into a deny, which would undo the `prompt` rule Codex now renders).
+- **2026-11-14 — No plan skill pipes or redirects a `roborepo plans` command.** Searched
+  `globals/` for plans commands followed by `|`, `>`, or `2>`; the only hit is the user reference's
+  deliberate example of the pitfall. No skill text changed.
+- **2026-11-14 — `stop-servers` stays unlisted in `plan-store-commands`.** It is the other plans
+  subcommand no allow rule covers, but no plan skill runs it and it stops processes, so it keeps
+  prompting.
+
+## Not tested`: the block can go only after this
       branch merges and `roborepo update` renders the generated key on this machine.
 - [ ] Change the `delete-files` default from `ask` to `allow`, and say in its description that the
-      sandbox limits deletes to the session's checkout and temp folders.
-- [ ] Move `gh pr merge` out of `change-github-directly` into a new `merge-pull-requests` behavior,
+      sandbox limits deletes to the session's checkout and temp folders. Implemented in 4f4a15b4;
+      blocked on the Open Question about harnesses with no sandbox.
+- [x] Move `gh pr merge` out of `change-github-directly` into a new `merge-pull-requests` behavior,
       default `ask`. The other `change-github-directly` commands stay denied.
-- [ ] Add `git checkout *` and `git switch *` to the Claude sandbox's excluded commands, so the
+- [x] Add `git checkout *` and `git switch *` to the Claude sandbox's excluded commands, so the
       `switch-branches` ask rule applies in desktop-app sessions. Record that a chained call (for
       example `cd x && git switch y`) stays sandboxed and still skips the prompt.
-- [ ] Add `roborepo plans sync-base` to `plan-store-commands`, the one plans subcommand a plan
+- [x] Add `roborepo plans sync-base` to `plan-store-commands`, the one plans subcommand a plan
       workflow runs that no allow rule covers. Check the plan skills for any instruction that pipes
       or redirects a `roborepo plans` command: such a call stays sandboxed, cannot lock the plans
       store, and, when the agent retries it outside the sandbox, asks for approval. Replace those
       with the bare command.
-- [ ] Extend the projection, harness-notes, and live characterization checks for the three changes.
-- [ ] Update `docs/user/reference/config-control-panel.md` and
+- [x] Extend the projection, harness-notes, and live characterization checks for the three changes.
+- [x] Update `docs/user/reference/config-control-panel.md` and
       `docs/internal/config-panel-internals.md` for the three defaults.
 
 ## Validation
@@ -282,14 +295,13 @@ Acceptance criteria:
       `roborepo plans show` reports `"synchronized": true`.
 - [x] `npm run check` passes. Passed at 75f212d3 ("CI checks passed"). An earlier run failed only
       because a commit landed mid-run and changed the `generated/` status the suite's guard compares.
-- [ ] In a manual-mode desktop-app session, `rm` on a file in the checkout or a temp folder runs
-      without a prompt, and `rm` on a file in the home folder is refused by the sandbox.
-- [ ] `gh pr merge` asks; `gh api` and the other `change-github-directly` commands stay denied.
-- [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks, and
-      `git switch main` stays denied (`occupy-main`).
-- [ ] In a manual-mode desktop-app session, `roborepo plans show`, `roborepo plans save` of an
-      edited copy in a temp folder, and `roborepo plans sync-base` run without a prompt and report
-      `"synchronized": true` where they print it.
+- [x] ~~In a manual-mode desktop-app session, `rm` …, `git switch` asks …, and the plans commands
+      run without a prompt.~~ Moved to `## Not tested`: an agent cannot observe its own permission
+      prompts. The rendered rules behind each are asserted by `claude-sandbox-projection-check.mjs`.
+- [x] `gh pr merge` asks; `gh api` and the other `change-github-directly` commands stay denied.
+      Rendered rules asserted for Claude, and the Codex and Gemini outputs changed to `prompt` /
+      `ask_user`; `agent-run-coverage-check.mjs` asserts the ask, and `protected-branch-push-check.mjs`
+      asserts the hook defers on `gh pr merge` (bare and flag-first) and still denies `gh -R … api`.
 - [ ] `npm run check` passes on the final commit.
 
 ## Risks
@@ -424,6 +436,15 @@ Acceptance criteria:
 
 ## Not tested
 
+- [ ] In a manual-mode desktop-app session, `rm` on a file in the checkout or a temp folder runs
+      without a prompt, and `rm` on a file in the home folder is refused by the sandbox. Needs a
+      person watching for prompts after the merged settings are applied.
+- [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks, and
+      `git switch main` stays denied (`occupy-main`). Same reason.
+- [ ] In a manual-mode desktop-app session, `roborepo plans show`, `roborepo plans save` of an
+      edited copy in a temp folder, and `roborepo plans sync-base` run without a prompt and report
+      `"synchronized": true` where they print it. Same reason; a bare `roborepo plans show 9njvfh5z
+      --json` from this plan's worktree reported `"synchronized": true` on 2026-11-14.
 - [x] After merge, `roborepo update` on this machine writes the `sandbox` key into
       `~/.claude/settings.json`, `roborepo doctor` passes, and a new session's shell commands run
       without prompts. Needs the merged code applied to the live home, which this branch must not do
@@ -533,4 +554,19 @@ Acceptance criteria:
 
 ## Open questions
 
-None. The two checks at the top of the implementation plan decide provider details, not scope.
+- **`delete-files` allow reaches harnesses with no shell sandbox.** `delete-files` is a shared
+  `commands` behavior, so `allow` renders for every provider: Claude (`Bash(rm:*)` allow), Codex
+  (`prefix_rule(["rm"], "allow")`), and Gemini (`decision = "allow"`). The reason given for it, that
+  the sandbox confines deletes, holds for Claude. Gemini renders no sandbox, so an agent there could
+  `rm` anything without a prompt. Codex sandboxes its commands, but whether a command its rules
+  allow still runs inside that sandbox was not verified.
+  - A — keep `allow` for every harness (as committed in 4f4a15b4). Simple and matches the stated
+    choice; Gemini, and possibly Codex, lose the prompt with nothing confining the delete.
+  - B — keep `delete-files` at `ask` in the shared source and add a Claude-only allow. Keeps the
+    other harnesses as they are; needs a per-harness bucket the rows do not support today, which
+    `permissions-ui-revamp` owns, so it means more code or waiting.
+  - C — revert to `ask` for now and leave the `rm` desktop gap (it already ran without a prompt in
+    the desktop app because of the sandbox), revisiting with B later.
+  - Recommendation: A if Gemini is not a harness you run agents in, otherwise C.
+  - Blocked rather than decided: it relaxes a permission on harnesses the plan's non-goals keep
+    unchanged. Blocks the `delete-files` task and the submit to review.
