@@ -240,19 +240,7 @@ so a repository's `.claude/settings.local.json` can still add entries.
       explicit-runner list in `scripts/test/orphan-test-check.mjs`, as described under Validation.
 - [x] Update the documents under Documentation impact.
 - [x] ~~Remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json` once
-      the generated settings carry it.~~ Moved to `- **2026-11-14 — The protected-branch hook stops denying `gh pr merge` and defers to the rules.**
-  Its `GH_DENIED` list mirrored `change-github-directly` and would have kept merges denied. A
-  flag-first merge (`gh -R o/r pr merge 12`) then matches no allow rule, so Claude prompts for it.
-  Alternative: have the hook return `ask` for merges in any flag position (rejected: the Codex copy
-  turns every hook `ask` into a deny, which would undo the `prompt` rule Codex now renders).
-- **2026-11-14 — No plan skill pipes or redirects a `roborepo plans` command.** Searched
-  `globals/` for plans commands followed by `|`, `>`, or `2>`; the only hit is the user reference's
-  deliberate example of the pitfall. No skill text changed.
-- **2026-11-14 — `stop-servers` stays unlisted in `plan-store-commands`.** It is the other plans
-  subcommand no allow rule covers, but no plan skill runs it and it stops processes, so it keeps
-  prompting.
-
-## Not tested`: the block can go only after this
+      the generated settings carry it.~~ Moved to `## Not tested`: the block can go only after this
       branch merges and `roborepo update` renders the generated key on this machine.
 - [ ] Change the `delete-files` default from `ask` to `allow`, and say in its description that the
       sandbox limits deletes to the session's checkout and temp folders. Implemented in 4f4a15b4;
@@ -261,7 +249,7 @@ so a repository's `.claude/settings.local.json` can still add entries.
       default `ask`. The other `change-github-directly` commands stay denied.
 - [x] Add `git checkout *` and `git switch *` to the Claude sandbox's excluded commands, so the
       `switch-branches` ask rule applies in desktop-app sessions. Record that a chained call (for
-      example `cd x && git switch y`) stays sandboxed and still skips the prompt.
+      example `make x && git switch y`) stays sandboxed and still skips the prompt.
 - [x] Add `roborepo plans sync-base` to `plan-store-commands`, the one plans subcommand a plan
       workflow runs that no allow rule covers. Check the plan skills for any instruction that pipes
       or redirects a `roborepo plans` command: such a call stays sandboxed, cannot lock the plans
@@ -434,11 +422,24 @@ Acceptance criteria:
   approvals seen in this review came from piped or redirected plans commands, which stay
   sandboxed, and from the reviewing agent's retries outside the sandbox.
 
+- **2026-11-14 — The protected-branch hook stops denying `gh pr merge` and defers to the rules.**
+  Its `GH_DENIED` list mirrored `change-github-directly` and would have kept merges denied. A
+  flag-first merge (`gh -R o/r pr merge 12`) then matches no allow rule, so Claude prompts for it.
+  Alternative: have the hook return `ask` for merges in any flag position (rejected: the Codex copy
+  turns every hook `ask` into a deny, which would undo the `prompt` rule Codex now renders).
+- **2026-11-14 — No plan skill pipes or redirects a `roborepo plans` command.** Searched
+  `globals/` for plans commands followed by `|`, `>`, or `2>`; the only hit is the user reference's
+  deliberate example of the pitfall. No skill text changed.
+- **2026-11-14 — `stop-servers` stays unlisted in `plan-store-commands`.** It is the other plans
+  subcommand no allow rule covers, but no plan skill runs it and it stops processes, so it keeps
+  prompting.
+
 ## Not tested
 
 - [ ] In a manual-mode desktop-app session, `rm` on a file in the checkout or a temp folder runs
-      without a prompt, and `rm` on a file in the home folder is refused by the sandbox. Needs a
-      person watching for prompts after the merged settings are applied.
+      without a prompt. Needs a person watching for prompts after the merged settings are applied.
+      The other half, a home-folder delete refused by the sandbox, is the enforcement runner's
+      home-write control and the 2026-11-13 desktop-app check.
 - [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks, and
       `git switch main` stays denied (`occupy-main`). Same reason.
 - [ ] In a manual-mode desktop-app session, `roborepo plans show`, `roborepo plans save` of an
@@ -508,6 +509,20 @@ Acceptance criteria:
       the same live settings refused `rm` three ways. Affects `delete-files` and `git checkout` /
       `git switch`, against the non-goal of not relaxing ask rules — escalated; the user chose a
       scope change (Decision Log, 2026-11-14), and the plan returns to active for it
+- [x] Three 2026-11-14 Decision Log entries were spliced into the trial-block task — fixed in the
+      plan record
+- [x] `make x && git switch y` replaces the `cd` chained example the 2026-11-12 Check 1 contradicts
+      — fixed (d18adcd8)
+- [x] The protected-branch hook header still named `pr merge` as denied — fixed (d18adcd8)
+- [x] The `delete-files` description and internals doc claimed Codex's sandbox confines allowed
+      deletes — fixed (d18adcd8)
+- [x] Docs and the projection check grouped `merge-pull-requests` with the sandbox-dependent
+      defaults — fixed (d18adcd8)
+- [x] The `rm` Not tested entry listed a runner-covered home-folder refusal — fixed in the plan record
+- [ ] `tool-call-optimization` rules forbid relying on a blanket `rm` allow — escalated, see Open
+      questions (`delete-files`)
+- [ ] `delete-files` allow is unconfined where `rm` runs unsandboxed (Windows, Linux without
+      packages, `allowUnsandboxedCommands` retries, possibly Codex) — escalated, see Open questions
 
 ### Verification
 
@@ -546,6 +561,10 @@ Acceptance criteria:
 - The live `~/.claude/settings.json` was re-rendered from d0474b1a; a desktop-app session's sandbox
   then listed `http-intake.logs.us5.datadoghq.com` among its denied hosts
 
+- Validation pass 11 at 4f4a15b4 (fresh-context subagent): 6 `fix` findings, fixed in d18adcd8 and
+  the plan record; 2 `escalate` findings folded into the `delete-files` Open Question
+- Scoped checks passed at d18adcd8: projection, protected-branch push, harness notes, docs references
+
 ### Result
 
 - Status: pending
@@ -568,5 +587,13 @@ Acceptance criteria:
   - C — revert to `ask` for now and leave the `rm` desktop gap (it already ran without a prompt in
     the desktop app because of the sandbox), revisiting with B later.
   - Recommendation: A if Gemini is not a harness you run agents in, otherwise C.
+  - Also found in validation pass 11: even under Claude the allow is confined only while `rm`
+    runs sandboxed. Windows runs unsandboxed and Linux needs extra packages; the render leaves
+    `allowUnsandboxedCommands` unset, which Claude's documentation gives as `true`, so a retry
+    outside the sandbox runs under the plain allow (unverified). Codex may let a command its rules
+    allow skip its sandbox (unverified). A further option is to render
+    `allowUnsandboxedCommands: false`.
+  - The shipped rule in `globals/packages/tool-call-optimization/rules.md` tells agents never to
+    rely on a blanket `rm` allow, which the default now is. Its rewrite follows this answer.
   - Blocked rather than decided: it relaxes a permission on harnesses the plan's non-goals keep
     unchanged. Blocks the `delete-files` task and the submit to review.
