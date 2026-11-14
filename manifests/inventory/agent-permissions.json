@@ -165,6 +165,16 @@
       "category": "network"
     },
     {
+      "id": "reach-claude-log-upload",
+      "label": "Reach Claude's log upload",
+      "description": "The Datadog address the claude program sends its own error logs to. It matters only when an agent runs claude from its shell: that copy is sandboxed and would prompt for the address on every run. The Claude Code app's own uploads run outside the sandbox and are unaffected. Deny blocks it without a prompt; ask prompts; allow lets it through, which also opens the address to any sandboxed command, and anyone with a Datadog account can receive data posted there.",
+      "kind": "network-hosts",
+      "claudeOnly": true,
+      "hosts": ["http-intake.logs.us5.datadoghq.com"],
+      "bucket": "deny",
+      "category": "network"
+    },
+    {
       "id": "commit-code",
       "label": "Commit code",
       "description": "Stage and commit changes locally (git add, git commit).",

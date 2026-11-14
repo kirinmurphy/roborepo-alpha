@@ -18,6 +18,7 @@ process.env.SKIP_MCP = "1";
 const NOTES = {
   "sandbox-shell": "Claude",
   "reach-allowed-hosts": "Claude",
+  "reach-claude-log-upload": "Claude",
   "go-online": "Codex",
   "delete-files": null,
 };

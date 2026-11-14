@@ -194,10 +194,10 @@ tilde.
 
 ## Claude shell sandbox
 
-Two behaviors carry sandbox intent in provider-neutral kinds that only the Claude provider renders:
-`sandbox-shell` (kind `shell-sandbox`) and `reach-allowed-hosts` (kind `network-hosts`, with a
-`hosts` list). `read-secrets` adds `readableExceptions`, the public CA bundles its `*.pem` pattern
-would hide. Both behaviors set `claudeOnly`, which the permission rows pass through like
+Three behaviors carry sandbox intent in provider-neutral kinds that only the Claude provider
+renders: `sandbox-shell` (kind `shell-sandbox`), and `reach-allowed-hosts` and
+`reach-claude-log-upload` (kind `network-hosts`, each with a `hosts` list). `read-secrets` adds
+`readableExceptions`, the public CA bundles its `*.pem` pattern would hide. All three set `claudeOnly`, which the permission rows pass through like
 `codexOnly`; the portal, the terminal printout, and onboarding label those rows "Claude only".
 
 `claudeSandboxSettings` in `scripts/harnesses/claude/sandbox-settings.mjs` projects them into the
@@ -207,7 +207,8 @@ would hide. Both behaviors set `claudeOnly`, which the permission rows pass thro
 | --- | --- |
 | `sandbox-shell` allow / ask / deny | `enabled: true` with `autoAllowBashIfSandboxed` true / false; `deny` renders `{ enabled: false }` only |
 | `read-secrets` deny | `filesystem.allowRead` = `readableExceptions` |
-| `reach-allowed-hosts` allow / ask / deny | `network.allowedDomains` / nothing / `network.deniedDomains` |
+| Each `network-hosts` behavior, allow / ask / deny | its `hosts` joined to `network.allowedDomains` / nothing / `network.deniedDomains` |
+| Defaults | `reach-allowed-hosts` allow; `reach-claude-log-upload` deny, so a `claude` command run from a sandboxed shell does not prompt for the program's Datadog log address |
 | Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm"]`, `network.allowLocalBinding: false` |
 
 Writable temp folders and denied credentials are not repeated: Claude merges the `Edit` allow and

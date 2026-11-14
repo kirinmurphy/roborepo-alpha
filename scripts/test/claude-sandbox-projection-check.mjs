@@ -14,16 +14,19 @@ const sandboxOf = (overrides) => JSON.parse(render("{}", overrides)).sandbox;
 
 const secrets = manifest.behaviors.find((b) => b.id === "read-secrets");
 const hosts = manifest.behaviors.find((b) => b.id === "reach-allowed-hosts");
+const logUpload = manifest.behaviors.find((b) => b.id === "reach-claude-log-upload");
 
-// Default: confined, prompt-free, CA bundles re-allowed, listed hosts reachable.
+// Default: confined, prompt-free, CA bundles re-allowed, listed hosts reachable, and the claude
+// program's own log upload refused so a `claude` command run from the shell does not prompt.
 const defaults = sandboxOf();
 assert.deepEqual(defaults, {
   enabled: true,
   autoAllowBashIfSandboxed: true,
   excludedCommands: [...CLAUDE_SANDBOX_EXCLUDED_COMMANDS],
   filesystem: { allowWrite: ["~/.npm"], allowRead: secrets.readableExceptions },
-  network: { allowLocalBinding: false, allowedDomains: hosts.hosts },
+  network: { allowLocalBinding: false, allowedDomains: hosts.hosts, deniedDomains: logUpload.hosts },
 });
+assert.deepEqual(logUpload.hosts, ["http-intake.logs.us5.datadoghq.com"]);
 assert.ok(secrets.paths.includes("//**/*.pem"), "the exceptions exist because *.pem is denied");
 assert.ok(secrets.readableExceptions.every((p) => p.endsWith(".pem") && p.startsWith("/")), "exceptions are absolute CA bundle paths");
 assert.ok(!("strictAllowlist" in defaults.network), "unlisted hosts prompt rather than fail");
@@ -41,11 +44,18 @@ assert.equal(sandboxOf({ behaviors: { "sandbox-shell": "ask" } }).enabled, true)
 assert.deepEqual(sandboxOf({ behaviors: { "sandbox-shell": "deny" } }), { enabled: false }, "deny turns the sandbox off");
 
 // Host list buckets.
-assert.ok(!("allowedDomains" in sandboxOf({ behaviors: { "reach-allowed-hosts": "ask" } }).network), "ask leaves listed hosts to prompt");
-assert.ok(!("deniedDomains" in sandboxOf({ behaviors: { "reach-allowed-hosts": "ask" } }).network));
+const askHosts = sandboxOf({ behaviors: { "reach-allowed-hosts": "ask" } }).network;
+assert.ok(!("allowedDomains" in askHosts), "ask leaves listed hosts to prompt");
+assert.deepEqual(askHosts.deniedDomains, logUpload.hosts, "ask adds nothing to the denied hosts");
 const deniedHosts = sandboxOf({ behaviors: { "reach-allowed-hosts": "deny" } }).network;
-assert.deepEqual(deniedHosts.deniedDomains, hosts.hosts, "deny refuses listed hosts");
+assert.deepEqual(deniedHosts.deniedDomains, [...hosts.hosts, ...logUpload.hosts], "deny refuses listed hosts");
 assert.ok(!("allowedDomains" in deniedHosts));
+assert.ok(!("deniedDomains" in sandboxOf({ behaviors: { "reach-claude-log-upload": "ask" } }).network), "ask lets the log upload prompt");
+assert.deepEqual(
+  sandboxOf({ behaviors: { "reach-claude-log-upload": "allow" } }).network.allowedDomains,
+  [...hosts.hosts, ...logUpload.hosts],
+  "allow joins the log upload to the allowed hosts",
+);
 
 // Without denied credentials there is nothing to carve the CA bundles out of.
 for (const bucket of ["allow", "ask"]) {
@@ -112,6 +122,6 @@ for (const observation of coverage.observations) {
     assert.ok(observation.controls.includes(control), `coverage records ${control}`);
   }
 }
-assert.deepEqual(coverage.unverified, ["desktop app", "piped excluded commands", "unlisted hosts", "sandbox-shell ask", "reach-allowed-hosts ask and deny", "Linux", "Windows"]);
+assert.deepEqual(coverage.unverified, ["desktop app", "piped excluded commands", "unlisted hosts", "sandbox-shell ask", "reach-allowed-hosts ask and deny", "reach-claude-log-upload", "Linux", "Windows"]);
 
 console.log("claude-sandbox-projection: ok");

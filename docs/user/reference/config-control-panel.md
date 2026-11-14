@@ -239,7 +239,7 @@ prompts or is refused; `rm` (`delete-files`) still asks.
 | --- | --- |
 | Writes | The session's checkout, the temp folders in `write-scope`, and the npm cache (`~/.npm`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
 | Reads | Everything except `read-secrets`, minus the certificate bundles above |
-| Network | Hosts in `reach-allowed-hosts` connect; any other host prompts |
+| Network | Hosts in `reach-allowed-hosts` connect; the address in `reach-claude-log-upload` is refused; any other host prompts |
 
 | `sandbox-shell` | Result |
 | --- | --- |
@@ -250,6 +250,14 @@ prompts or is refused; `rm` (`delete-files`) still asks.
 `reach-allowed-hosts` lists `registry.npmjs.org`, `github.com`, and `*.githubusercontent.com`.
 `allow` lets them through, `ask` makes them prompt like any other host, and `deny` refuses them.
 It is separate from `go-online`, which stays Codex's on/off network switch.
+
+`reach-claude-log-upload` names `http-intake.logs.us5.datadoghq.com`, the Datadog address the
+`claude` program sends its own error logs to. It matters only when an agent runs `claude` from its
+shell: that copy is sandboxed, and without this row it would prompt for the address on every run.
+The Claude Code app's own uploads run outside the sandbox and are unaffected. `deny` (default)
+refuses the address without a prompt, `ask` prompts, and `allow` lets it through. Avoid `allow`:
+anyone with a Datadog account can receive data posted to that address, so allowing it gives every
+sandboxed command a way to send files out.
 
 **What runs outside the sandbox.** `docker`, `gh`, `git push`, `git pull`, `git fetch`,
 `roborepo`, and `./bin/roborepo` cannot work inside it, or would prompt on every call: Docker needs

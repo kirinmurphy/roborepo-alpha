@@ -240,6 +240,9 @@
         "registry.npmjs.org",
         "github.com",
         "*.githubusercontent.com"
+      ],
+      "deniedDomains": [
+        "http-intake.logs.us5.datadoghq.com"
       ]
     }
   }
