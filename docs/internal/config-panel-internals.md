@@ -217,15 +217,15 @@ Writable temp folders and denied credentials are not repeated: Claude merges the
 Claude. Codex and Gemini skip both kinds. See [testing](testing.md#claude-sandbox-verification) for
 the projection and enforcement checks.
 
-Three command defaults changed with the sandbox. They are ordinary `commands` behaviors, so every
-provider renders them; `delete-files` and `switch-branches` depend on the Claude sandbox, while
+Three command behaviors changed alongside the sandbox. They are ordinary `commands` behaviors, so
+every provider renders them; `delete-files` and `switch-branches` depend on the Claude sandbox, while
 `merge-pull-requests` does not, since `gh` runs outside it either way:
 
-| Behavior | Default | Reason |
+| Behavior | Change | Reason |
 | --- | --- | --- |
-| `delete-files` | `allow` | Claude's shell sandbox confines deletes. Gemini has no sandbox, and whether Codex's confines an allowed command is unverified |
-| `merge-pull-requests` | `ask` | Split from `change-github-directly`, which stays `deny`; the protected-branch hook's `GH_DENIED` list no longer names `pr merge` |
-| `switch-branches` | `ask` | `git checkout *` and `git switch *` are in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
+| `delete-files` | Default `ask` → `allow` | Claude's shell sandbox confines deletes. Gemini has no sandbox, and whether Codex's confines an allowed command is unverified |
+| `merge-pull-requests` | New, default `ask` | Split from `change-github-directly`, which stays `deny`; the protected-branch hook's `GH_DENIED` list no longer names `pr merge` |
+| `switch-branches` | Default stays `ask` | `git checkout *` and `git switch *` are now in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
 
 `plan-store-commands` also allows `roborepo plans sync-base`, so every plans subcommand a plan
 workflow runs is pre-approved. A plans command that is piped or redirected stays sandboxed, cannot

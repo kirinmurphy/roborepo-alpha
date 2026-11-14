@@ -236,14 +236,14 @@ shape: pipes, loops, and inline scripts all count. A command an `ask` or `deny` 
 prompts or is refused when run through `claude -p`; the desktop app was seen to run sandboxed
 commands without consulting ask rules, which is why branch switches run outside the sandbox (below).
 
-Three defaults changed with the sandbox. `delete-files` and `switch-branches` depend on it;
-`merge-pull-requests` does not, since `gh` runs outside it either way:
+Three command behaviors changed alongside the sandbox. `delete-files` and `switch-branches` depend
+on it; `merge-pull-requests` does not, since `gh` runs outside it either way:
 
-| Behavior | Default | Why |
+| Behavior | Change | Why |
 | --- | --- | --- |
-| `delete-files` (`rm`, `git rm`) | `allow` | The sandbox limits deletes to the checkout and temp folders. The allow applies to every harness, so set it to `ask` if you turn `sandbox-shell` off or run agents in Gemini, which has no sandbox |
-| `merge-pull-requests` (`gh pr merge`) | `ask` | You approve each merge; other `gh` commands that skip git stay denied (`change-github-directly`) |
-| `switch-branches` (`git checkout`, `git switch`) | `ask` | Runs outside the sandbox so it prompts in the desktop app too. `git switch main` stays denied (`occupy-main`) |
+| `delete-files` (`rm`, `git rm`) | Default `ask` → `allow` | The sandbox limits deletes to the checkout and temp folders. The allow applies to every harness, so set it to `ask` if you turn `sandbox-shell` off or run agents in Gemini, which has no sandbox |
+| `merge-pull-requests` (`gh pr merge`) | New, default `ask` (was denied) | You approve each merge; other `gh` commands that skip git stay denied (`change-github-directly`) |
+| `switch-branches` (`git checkout`, `git switch`) | Default stays `ask`; the commands now run outside the sandbox | So the prompt also appears in the desktop app. `git switch main` stays denied (`occupy-main`) |
 
 | Inside the sandbox | Bound |
 | --- | --- |
@@ -281,7 +281,8 @@ leading `cd` was seen not to, so do not rely on it either way. A chained branch 
 `roborepo plans show <id> --json | grep synchronized` cannot lock the plans store and reports
 `"synchronized": false`. Run plans commands on their own.
 
-Codex always sandboxes its commands, so all three behaviors are Claude-only. Enforcement was verified on
+Codex always sandboxes its commands, so `sandbox-shell`, `reach-allowed-hosts`, and
+`reach-claude-log-upload` are Claude-only. Enforcement was verified on
 macOS with Claude Code 2.1.309 through `claude -p`; Linux and Windows are unverified. A local
 `.claude/settings.local.json` can add entries, since Claude merges sandbox lists across settings
 files; RoboRepo replaces the `sandbox` key in `~/.claude/settings.json` on every render.
