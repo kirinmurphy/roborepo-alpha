@@ -1,6 +1,6 @@
 ---
 id: 9671042v
-next_action: Ready to build. Start with /plan-execute; the first step rewrites the reader description at the top of the response-output rules.
+next_action: The work is built and checked; a person now reviews and approves it by running /plan-review on this plan.
 blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["i5mnkm7z", "0jped168"]
@@ -220,25 +220,25 @@ archive skills.
 
 ## Implementation plan
 
-- [ ] Rewrite the opening of `globals/packages/response-output/rules.md` for a cold reader, add
+- [x] Rewrite the opening of `globals/packages/response-output/rules.md` for a cold reader, add
       the outcome-before-mechanism rule and the layering rule, and update the package description
       in `package.config.json` if it no longer matches. Regenerate rule outputs with
       `bash scripts/build/render-rules.sh`.
-- [ ] Create `plan-write/references/completion-report.md` with the five-section shape, the "no
+- [x] Create `plan-write/references/completion-report.md` with the five-section shape, the "no
       unintroduced term" rule, the visual-evidence rule, and the cold-reader check with its
       in-session fallback. Add it to the reference list in `plan-write/SKILL.md`.
-- [ ] Trim `plan-execute/references/final-report.md` to `/plan-execute`'s specifics and point it
+- [x] Trim `plan-execute/references/final-report.md` to `/plan-execute`'s specifics and point it
       at the shared reference.
-- [ ] Replace the repeated Final Report paragraph in `plan-review`, `plan-close`, and
+- [x] Replace the repeated Final Report paragraph in `plan-review`, `plan-close`, and
       `plan-archive` with a pointer to the shared reference, keeping each command's specifics from
       the table in change 2.
-- [ ] Restructure the `/plan-review` step 6 packet into the two layers, keeping the exact-commit
+- [x] Restructure the `/plan-review` step 6 packet into the two layers, keeping the exact-commit
       approval question unchanged.
-- [ ] Replace `/plan-promote`'s Completion Result block and "also report" list, and
+- [x] Replace `/plan-promote`'s Completion Result block and "also report" list, and
       `/plan-write`'s one-line report instruction, with the shared shape plus their specifics.
-- [ ] Apply the cold-reader standard to `next_action` wherever a command writes it.
-- [ ] Update `docs/user/guides/plan/lifecycle/plan-suite.md` per Documentation impact.
-- [ ] Update `scripts/test/plan-suite-skills-check.mjs` for the new report wording, then run
+- [x] Apply the cold-reader standard to `next_action` wherever a command writes it.
+- [x] Update `docs/user/guides/plan/lifecycle/plan-suite.md` per Documentation impact.
+- [x] Update `scripts/test/plan-suite-skills-check.mjs` for the new report wording, then run
       Validation and the two dry runs, and record the results.
 
 ## Validation
@@ -282,7 +282,7 @@ archive skills.
 | Reports grow longer | Layering keeps technical detail out of the first layer; `vzgsx5vz`'s leave-out rules still apply |
 | The check adds time and tokens to every plan command | One short report, a cheaper model, at most three reads |
 | The checker agent passes a report the user still finds unclear | The Not tested entry; the user's feedback tunes the questions |
-| The `/plan-review` approver loses evidence they relied on | All of it stays in the plan's `## Review` record and is one request away |
+| The `/plan-review` approver loses evidence they relied on | Commits, findings, and checks run stay in the plan's `## Review` record; per-criterion evidence and changes by area are one request away in the review chat |
 
 ## Decisions
 
@@ -297,3 +297,56 @@ archive skills.
   (2026-11-14). That folder already holds the plan schema every command reads, and the installer
   places all plan suite skills side by side for Claude and Codex, so the path resolves after
   install. Keeping it beside the schema avoids a second convention for shared files.
+
+## Decision Log
+
+- **Rules stayed within their 78-line budget.** The response-output rules load on every turn, and
+  the new opening, outcome-before-mechanism rule, and layering rule first came to 80 lines. Tightened
+  the wording instead of raising the budget, which the rules check guards on purpose.
+- **The checker's instruction excludes the plan's own name and briefly described terms.** The first
+  dry run of the rewritten bullet listed the plan's title and id and terms the report did describe,
+  which would force a rewrite of a clear report every time. Alternatives: keep the strict wording
+  (every report hits the cap) or drop the term list (loses the main signal). Narrowing what counts
+  as unexplained kept the signal; the original bullet is still flagged.
+- **The real-report dry run used this run's `/plan-execute` report.** The plan named `/plan-review`
+  or `/plan-promote`, but running either here would move another plan's lifecycle as a side effect.
+  `/plan-execute`'s report follows the same shared shape and runs the same checker agent.
+- **`/plan-review` runs the checker on the step 6 packet, before the approval question.** The packet
+  is the report the human approves from, so checking only the later Final Report would come too
+  late.
+- **The review packet's detail layer is offered on request, not newly stored.** The Validator noted
+  that per-criterion evidence and changes by area were never written to the `## Review` record,
+  though the packet text said they stayed there. Storing them would change what `/plan-review`
+  records, which the Non-goals rule out; rewording to name what the record already holds (commit,
+  base, findings, commits, checks run) and offering the rest in the chat keeps the plan's scope.
+  The Risks row now says the same.
+- **Merge-readiness keeps its "review packet" label; the docs explain it.** The Validator flagged
+  the docs' new wording against the command's output. Renaming the output would change CLI behavior
+  outside this plan's scope; the docs now say the command checks that the review result and approval
+  are committed, and that its output calls this the review packet.
+
+## Review
+
+### Findings
+- [x] Plan record not updated with tasks, decisions, and dry-run results — recorded in this save
+- [x] Real plan-command report dry run not run — run on this run's /plan-execute report
+- [x] /plan-review showed the packet and asked for approval before the cold-reader check — checker now runs in step 6 before approval (eab9b2ca)
+- [x] Two next_action writers lacked the cold-reader pointer (plan-execute completion, plan-close verdict) — added (eab9b2ca)
+- [x] Review packet said its detail layer stayed in the `## Review` record, which does not store per-criterion evidence — reworded to what is stored, rest on request (5b754646); see Decision Log
+- [x] /plan-promote Record claimed the plan document holds classifications and checks — now offers them on request (5b754646)
+- [x] Internal portal doc still called the merge-readiness input a review packet — now review record (5b754646)
+- [x] Shared reference and user guide said all technical detail stays in the plan document, which /plan-write and /plan-promote do not record — now offered on request, with only recorded items named as kept (49b0703d)
+- [x] Docs called the merge-readiness input a review record while its output says review packet — docs now name what it checks and the label its output uses (49b0703d); see Decision Log
+- [x] plan-execute's What changed guidance sat under its Headline section and named a shared table form that does not exist — own section and Contents entry (59f0f358)
+- [x] plan-suite check named a plan-write end heading that comes earlier in the file — end-of-file case made explicit (59f0f358)
+- [x] plan-execute's Record dropped the one-line offer of technical detail — restored (a70fb022)
+
+### Verification
+- Validation: clean on pass 6 at a70fb022 (fresh-context subagent); passes 1–5 found the fixes listed above
+- No dev server or link: the change is skill and rule prose, which no running app renders
+- `plan-suite-skills-check.mjs`, `response-output-rules-check.mjs`, `package-catalog-check.mjs`, `skill-structure-check.mjs`, and `docs-reference-check.mjs` passed
+- `bash scripts/build/render-rules.sh --check` and `bash scripts/doctor.sh --quiet` passed (98 checks)
+- Dry run, original "delivery refusals" bullet: the checker said the plan's purpose was not stated and flagged "delivery refusal" as unexplained
+- Dry run, rewritten bullet: all three answers matched intent and "delivery refusals" was no longer flagged; the checker still asked how to approve, which a full report's Needs you covers with its command
+- Dry run, this run's `/plan-execute` report given alone to a fresh checker: all three answers matched intent; it flagged that the four commands with the checker and the two that self-check were not named, which the delivered report fixes
+
