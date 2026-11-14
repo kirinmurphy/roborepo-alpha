@@ -38,11 +38,14 @@ Human approval of the reviewed commit is unchanged.
 | `/plan-execute` | Implements a plan in its own worktree, runs a fresh-context Validator over the work, then submits the plan for review |
 | `/plan-review` | Rechecks the finished work, fixes what it can, and asks the user to approve the exact commit |
 | `/plan-close` | Runs after the user merges: confirms the work landed and the approval is still valid, then marks the plan completed |
-| Validator | A separate agent with a fresh context that checks the work against the plan and reports problems. It never edits |
+| Validator | A separate agent with a fresh context that checks the work against the plan and reports problems. It never edits. It classes each problem as `fix` (the right fix is clear and within the plan, so the agent fixes it without asking) or `escalate` (a real choice, which goes to the user) |
 | `## Not tested` | A section of a plan: one checkbox per piece of built work that no automated test covers. An unchecked entry is a check nobody has made yet |
 | Agent-runnable check | A check an agent can make with the tools it has: running a command or test, driving the app in a browser, reading output. It may still need the user to allow a command |
 | Person-only check | A check only a person can make: judging look and feel, using an account or credential an agent must not use, a physical device, or a third-party system the agent cannot reach |
-| Plan validator | `roborepo plans validate`, code in `modules/plan-suite/`. It reports each problem with a plan as a finding with a stable code |
+| Plan-document check | `roborepo plans validate`, code in `modules/plan-suite/`. It checks the plan file itself, not the code, and reports each problem as a finding with a stable code. Its findings are either blocking or advisory (reported only) |
+| Review packet | The summary `/plan-review` shows the user before asking for approval (step 6 of its skill): evidence for each criterion, fixes made, and the manual checks the user must make |
+| Needs you | The part of a completion report that lists what the user must do or decide |
+| Review Result | The `### Result` record `/plan-review` writes before asking for approval. It may be marked complete only when every finding and manual check is settled |
 | Submit | `roborepo plans submit`: the command `/plan-execute` runs to move a finished plan from `active/` to `review/`. It reruns `roborepo plans preflight`, which refuses while required work is open |
 | `feature-verification` | The skill that captures evidence a change works: command output, screenshots, and browser recordings through `roborepo browser` |
 
@@ -54,13 +57,15 @@ sequenceDiagram
   participant R as /plan-review
   participant U as User
   participant C as /plan-close
-  E->>E: lists every unverified check under Not tested, clears none
-  E->>R: submits with open entries
+  E->>E: lists every unverified check under Not tested
+  E->>E: submits: plan moves to review/ with open entries
   R->>R: Validator flags entries an agent could run, as a finding
   R->>U: lists every Not tested entry as a manual check
-  U->>R: runs the checks by hand, approves
-  U->>C: merges
-  C->>C: "Attempt each check the agent can perform"
+  U->>R: reports the checks run by hand
+  U->>R: approves the reviewed commit
+  U->>U: merges the pull request
+  U->>C: runs /plan-close
+  C->>C: attempts each agent-runnable check
 ```
 
 The skill text, checked against `main` at `62e86111`:
@@ -75,10 +80,11 @@ The skill text, checked against `main` at `62e86111`:
 | `plan-close/SKILL.md`, step 5 | "Attempt each check the agent can perform", check off with recorded evidence | The only place that tries the checks, after approval and merge. It also contradicts "only the user clears" |
 | `modules/plan-suite/review-freshness.mjs` | A review Result is incomplete while any entry is unchecked | Every entry must already be settled before approval, so close's attempt step can only run on an empty list |
 
-The plan validator reports open entries as `UNCONFIRMED_NOT_TESTED`, an advisory finding that the
+The plan-document check reports open entries as `UNCONFIRMED_NOT_TESTED`, an advisory finding that the
 submit transition, preflight, and `plans save` all tolerate. It does not look at what an entry
-says. `docs/internal/plan-suite-deferred-topics.md` already recommends this direction under
-"Making execute prove the work" and "Gates and lifecycle rules"; no plan owns it yet.
+says. `docs/internal/plan-suite-deferred-topics.md` lists the gap under "Making execute prove
+the work" and "Gates and lifecycle rules" (rows "Behavior checks", "QA script", and "Not tested
+timing"); no plan owns it yet.
 
 ### Evidence from recent plans
 
@@ -98,14 +104,13 @@ Some handoffs come from tools, not instructions. Findings, each with its source:
 
 | Limit | Evidence | Status |
 | --- | --- | --- |
-| The shell sandbox refuses local port binding and writes outside the checkout | `9njvfh5z` review: 15 gate checks failed inside the reviewing agent's sandbox on write errors, port binding, and `.git/worktrees`; the unsandboxed rerun passed | `9njvfh5z` keeps `allowLocalBinding: false`. Its decision log notes the app's preview tools run outside the shell sandbox. Whether `roborepo browser run --serve` can start a dev server inside the sandbox is **not verified** |
+| The shell sandbox refuses local port binding and writes outside the checkout | `9njvfh5z` review: 15 gate checks failed inside the reviewing agent's sandbox on write errors, port binding, and `.git/worktrees`; the unsandboxed rerun passed | `9njvfh5z` keeps `allowLocalBinding: false`. Its decision log notes the app's preview tools run outside the shell sandbox. Whether `roborepo browser run --serve` can start a dev server inside the sandbox is not verified; see Open Questions |
 | Plan-store commands cannot lock the store inside the sandbox | `9njvfh5z` current state: `roborepo plans show` reports "The plans worktree could not be locked" | Workaround is a sandbox-bypass rerun, which needs a permission prompt or auto-mode approval |
 | The browser suites failed in a fresh worktree with no installed dependencies | `vzgsx5vz` verification: four suites failed with `ERR_MODULE_NOT_FOUND` until `npm ci` | Fixed on `main` by `c77b4649`, which installs dev dependencies on demand |
 | Playwright may be missing | `feature-verification/SKILL.md`: a missing browser makes the run `blocked`, and installing it goes through a permission prompt | Unchanged; a declined prompt leaves the check blocked |
 
-Fixing these tools belongs to other plans (`9njvfh5z` for sandbox scope). This plan makes the
-difference visible: a check blocked by a tool is reported as blocked with the exact command, so
-the user is asked to allow it, not to run it.
+Today nothing distinguishes a check blocked by a tool from one only a person can make; both reach the user as
+a manual check.
 
 ## Goals
 
@@ -125,7 +130,8 @@ the user is asked to allow it, not to run it.
 - Fixing the tooling limits above. They are recorded so the right plan can pick them up.
 - Changing human approval, `roborepo plans approve`, or the `### Approval` record.
 - Renaming `## Not tested` or splitting it into two sections.
-- Measuring how often agents hand over runnable checks. Behavior evals (`0jped168`) can do that
+- Measuring how often agents hand over runnable checks. "Live Evals for Skill Routing and Plan Closing" (`0jped168`), which runs real
+  agents against fixtures, can do that
   later.
 
 ## Proposed design
@@ -138,20 +144,25 @@ sequenceDiagram
   participant R as /plan-review
   participant U as User
   participant C as /plan-close
-  E->>E: runs every agent-runnable check, clears each with evidence
+  E->>E: runs every agent-runnable check
+  E->>E: records the evidence for each passing check
+  E->>E: checks off each entry it recorded evidence for
   E->>E: leaves open only person-only or blocked entries, each with its reason
-  E->>R: submit refuses any open entry without a reason
+  E->>E: submits: refused while any open entry lacks a reason
   R->>R: runs any open entry whose reason does not hold
   R->>U: asks for person-only checks (steps, expected result, why) and blocked commands
-  U->>R: reports each result, approves
-  U->>C: merges
+  U->>R: reports each person-only result
+  U->>R: approves the reviewed commit
+  U->>U: merges the pull request
+  U->>C: runs /plan-close
   C->>C: confirms no entry is open
 ```
 
 ### 1. One entry format
 
-An open entry ends with one of two reasons. A cleared entry ends with its evidence after a dash,
-the same convention the `## Review` findings already use.
+An open entry ends with one of two reasons. A cleared entry ends with its evidence after a ` — `
+dash; this plan calls that text the entry's resolution, the same convention the `## Review`
+findings already use.
 
 ```markdown
 ## Not tested
@@ -171,8 +182,15 @@ the same convention the `## Review` findings already use.
 | Open, person-only | `Needs a person: <why an agent cannot>` | Any agent |
 | Open, blocked by a tool | `Blocked: <exact command> failed with <error>` and what would unblock it | Any agent |
 | Cleared by an agent | `— Verified by agent <date> at <commit>: <command or method> → <result>` | An agent, only after the check passed |
-| Cleared by the user | `— Confirmed by the user <date>: <what they reported>` | An agent, only after the user's explicit answer in chat |
+| Cleared by the user | `— Confirmed by the user <date>: <what they reported>` | The user confirms; an agent only records it, quoting the user's explicit answer in chat |
 | Removed | Deleted, with the reason in `## Decision Log` | Only on the user's decision, as today |
+
+**Safety rules.** These hold for every agent and every plan command:
+
+- An agent never checks off a person-only entry on its own judgment.
+- An agent never clears an entry without a resolution that names the passing evidence.
+- An agent records a user's confirmation only from the user's explicit answer, and never records
+  human approval.
 
 Accepted reasons for `Needs a person:` are: human judgment of look, feel, or wording; an account,
 credential, or payment an agent must not use; a physical device; a third-party system the agent
@@ -187,7 +205,7 @@ Changes to `plan-execute/SKILL.md` and its references:
 | --- | --- |
 | "Not Tested" section | Replace "Never check an entry off yourself" with the table above: attempt each entry, using `feature-verification` for UI, server, API, CLI, or performance behavior; clear it with evidence when it passes; leave it open only with a reason |
 | A failing check | A check that runs and fails is a defect: fix it, as with any failing test. It never becomes a Not tested entry |
-| A blocked check | Retry through the harness's normal route first (a sandbox-bypass rerun goes through the permission prompt; the app's preview tools for a dev server). Only then write the `Blocked:` reason, and queue the command in the end-of-run questions so the user can allow it |
+| A blocked check | Retry through the harness's normal route first (a sandbox-bypass rerun goes through the permission prompt; the app's preview tools for a dev server). Only then write the `Blocked:` reason, and add the command to the questions `/plan-execute` already saves for the end of its run, so its final report asks the user to allow it |
 | `references/validation-loop.md`, rubric item 4 | Keep "a check an agent can run is run, not listed". Add: each open entry's reason holds, and each cleared entry's evidence names a real command or method. A reason that does not hold is a `fix` finding |
 | `references/final-report.md` | The manual-checks part lists only open entries, grouped as person-only and blocked, with the reason |
 
@@ -200,7 +218,7 @@ Changes to `plan-review/SKILL.md`:
 | Step 3, Validator rubric | "Entries an agent could run instead" becomes: entries whose reason does not hold, and cleared entries without evidence |
 | Step 5, fixes | Run each such entry here, as a `fix`, and clear it with evidence. Retry each `Blocked:` entry once, since review may run with different permissions |
 | Step 6, review packet | "The manual checks that need the human" lists only person-only entries and blocked commands. Each person-only check gives the steps, the expected result, and the reason. Each blocked command gives the exact command to allow |
-| Step 6a | Unchanged: approval still needs every entry settled. The agent writes `— Confirmed by the user` only from the user's explicit answer, quoting it |
+| Step 6a | Approval still needs every entry settled, as today. Add: the agent writes `— Confirmed by the user` only from the user's explicit answer, quoting it |
 
 ### 4. `/plan-close` stops discovering checks
 
@@ -215,13 +233,13 @@ finds open means approval was recorded outside the normal path; review is where 
 | File | Change |
 | --- | --- |
 | `plan-write/references/plan-schema.md`, "Not tested" | Replace "Only the user clears an entry" with the entry-format table and the safety rules |
-| `plan-write/SKILL.md`, sync row | A sync adds entries with a reason |
+| `plan-write/SKILL.md`, the "Sync" row of its Create, Revise, or Sync table (syncing brings a plan up to date after work and adds `## Not tested` entries for gaps) | A sync adds entries with a reason |
 | `globals/packages/session-close/skills/session-close/SKILL.md` | Entries it adds carry a reason |
 
-### 6. The plan validator checks the format
+### 6. The plan-document check enforces the format
 
 One new finding in `modules/plan-suite/`, `NOT_TESTED_UNEXPLAINED`, computed for active and
-review plans next to `UNCONFIRMED_NOT_TESTED` in `lifecycle-policy.mjs`:
+review plans only, in `validateActive` in `lifecycle-policy.mjs` (which review reuses):
 
 - an unchecked entry that contains neither `Needs a person:` nor `Blocked:`;
 - a checked entry with no text after a ` — ` dash.
@@ -231,21 +249,22 @@ keeps only an entry's first line as its text, so it must join the indented lines
 
 The cleared-entry check accepts any resolution after the dash rather than the exact wording, so
 entries written before this plan, such as those in `9njvfh5z`, stay valid. The skills prescribe
-the wording; the validator only confirms evidence exists.
+the wording; the check only confirms evidence exists.
 
 | Where | Treatment | Why |
 | --- | --- | --- |
-| `roborepo plans validate` | Advisory | A plan mid-work may hold an entry not yet explained |
-| `roborepo plans save`, move into `active/` (start, reopen) | Tolerated | Saving and resuming work must not stall on it |
-| `roborepo plans preflight` and the move into `review/` (submit) | Refused | Submitting is the point where every entry must be run or explained |
-| Review Result freshness (`review-freshness.mjs`) | Incomplete while present | No approval over an entry cleared without evidence |
+| `roborepo plans validate`, `roborepo plans save` | Advisory, so neither refuses it | A plan mid-work may hold an entry not yet explained. `plans save` stops only on blocking findings, so it needs no change |
+| Move into `active/` (start, reopen) | Tolerated, added beside `UNCONFIRMED_NOT_TESTED` in `transition.mjs` | Resuming work must not stall on it. Lifecycle moves check advisory findings too, so this entry is needed |
+| `roborepo plans preflight` and the move into `review/` (submit) | Refused: not added to the tolerated sets in `review-gates.mjs` and `transition.mjs` | Submitting is the point where every entry must be run or explained |
+| Review Result freshness (`review-freshness.mjs`) | Incomplete while present | Open entries already make the Result incomplete. The new case is a checked entry with no evidence: no approval over it |
+| Completed plans and the move into `completed/` | Not computed | Close already refuses any open entry. Skipping the cleared-entry check keeps older completed plans valid, and freshness has already caught a cleared entry with no evidence before approval |
 
-The validator cannot tell whether a reason is true. Judging that stays with the Validator in
+The plan-document check cannot tell whether a reason is true. Judging that stays with the Validator in
 `/plan-execute` and `/plan-review`.
 
 ## Decisions
 
-- **The validator check is in scope.** The right instruction already exists in the execute
+- **The plan-document check is in scope.** The right instruction already exists in the execute
   Validator's rubric ("run, not listed") and is ignored because other text contradicts it. A
   deterministic refusal at submit is what makes the agent stop and either run the check or write
   down why it cannot.
@@ -264,33 +283,39 @@ The validator cannot tell whether a reason is true. Judging that stays with the 
       accepted reasons, and the safety rules.
 - [ ] Update `plan-execute/SKILL.md` "Not Tested", `references/validation-loop.md` item 4, and
       `references/final-report.md`.
-- [ ] Update `plan-review/SKILL.md` steps 3, 5, and 6.
+- [ ] Update `plan-review/SKILL.md` steps 3, 5, 6, and 6a.
 - [ ] Reduce `plan-close/SKILL.md` step 5 and `references/verdict.md` to a confirmation.
-- [ ] Update the sync row in `plan-write/SKILL.md` and the Not tested line in `session-close`.
+- [ ] Update the "Sync" row in `plan-write/SKILL.md` and the Not tested line in `session-close`.
 - [ ] Parse wrapped entry lines in `modules/plan-suite/index.mjs`; add `NOT_TESTED_UNEXPLAINED` to
-      `findings.mjs` and `lifecycle-policy.mjs`; tolerate it in `plan-writes.mjs` and for the
-      `active` destination in `transition.mjs`; refuse it in `review-gates.mjs` preflight and the
-      `review` destination; mark freshness incomplete in `review-freshness.mjs`.
+      `findings.mjs` and `lifecycle-policy.mjs`; tolerate it for the `active` destination in
+      `transition.mjs`; leave it out of the tolerated sets for preflight in `review-gates.mjs` and
+      the `review` destination; mark freshness incomplete in `review-freshness.mjs`.
 - [ ] Update the pinned phrases in `scripts/test/plan-suite-skills-check.mjs` ("Never check an
       entry off yourself", "manual-only `## Not tested` entries") and pin the new ones.
-- [ ] Remove the topics this plan settles from `docs/internal/plan-suite-deferred-topics.md`
-      ("Behavior checks", "QA script", "Not tested timing").
 - [ ] Update the docs under Documentation impact.
 
 ## Validation
 
-Each case is written to fail before the change:
+New behavior, each case failing before the change:
 
 - `node scripts/test/plan-suite-findings-check.mjs`: an unchecked entry with no reason yields
-  `NOT_TESTED_UNEXPLAINED`; one with `Needs a person:` or `Blocked:` on a wrapped line does not;
-  a checked entry with no dash resolution yields it; the `9njvfh5z` entry formats do not.
+  `NOT_TESTED_UNEXPLAINED`; a checked entry with no resolution yields it; the parsed text of an
+  entry includes its wrapped second line.
 - `node scripts/test/plan-lifecycle-transitions-check.mjs`: submit refuses an active plan with an
-  unexplained entry and accepts it once a reason is added; start and reopen tolerate it.
-- `node scripts/test/plan-lifecycle-transitions-check.mjs` also covers the rest: `plans preflight`
-  fails on an unexplained entry and names it, and a complete review Result with an unexplained
-  entry reads `incomplete`.
-- `node scripts/test/plan-suite-skills-check.mjs` passes with the new pins and without the removed
-  phrases.
+  unexplained entry and accepts it once a reason is added; `plans preflight` fails on the entry
+  and names it; a complete review Result whose only problem is a checked entry with no evidence
+  reads `incomplete`.
+- `node scripts/test/plan-suite-skills-check.mjs`: the new pins (the entry format, the two reason
+  markers, review asking only for person-only checks) pass, and the removed phrases are no longer
+  pinned.
+
+Behavior that must not change, each case passing before and after:
+
+- `plan-suite-findings-check.mjs`: entries with `Needs a person:` or `Blocked:`, and checked
+  entries written like those in `9njvfh5z` (a resolution such as "— Done 2026-11-13; …"), yield
+  nothing; a completed plan with a checked entry and no dash yields nothing.
+- `plan-lifecycle-transitions-check.mjs`: start and reopen tolerate the finding, and `plans save`
+  accepts a plan with it.
 - `bash scripts/doctor.sh --quiet` passes. CI runs the full gate, because skills are package
   outputs.
 
@@ -305,9 +330,9 @@ Each case is written to fail before the change:
 
 | Doc | Update |
 | --- | --- |
-| `docs/user/guides/plan/lifecycle/plan-suite.md` | The "Not Tested" section (entry format, who clears what), the preflight list, and close step 4 |
+| `docs/user/guides/plan/lifecycle/plan-suite.md` | The "Not Tested" section (entry format, who clears what), the preflight list, the `/plan-review` packet's "manual checks waiting on you", and close step 4 |
 | `docs/user/reference/plans-portal.md` | "Not Tested Entries" and the `plans preflight` row: the new finding and where it blocks |
-| `docs/internal/plan-suite-deferred-topics.md` | Remove the settled topics |
+| `docs/internal/plan-suite-deferred-topics.md` | Remove the rows this plan settles: "Behavior checks" and "QA script" under "Making execute prove the work", and "Not tested timing" under "Gates and lifecycle rules" |
 
 ## Related plans
 
@@ -326,9 +351,14 @@ Each case is written to fail before the change:
 | Agents write a plausible `Needs a person:` reason to pass the gate | The Validator in execute and review checks each reason holds; a false one is a `fix` finding and the entry is run |
 | `/plan-execute` takes longer and spends more tokens running checks | The deferred-topics doc accepted this trade; the checks were going to run anyway, by the user or at close |
 | An agent clears an entry on weak evidence | Evidence must name the command or method and its result, at a commit; review's Validator checks it |
-| Plans already in active or review gain the finding | At the time of writing, only `9njvfh5z` is in review, and its entries are all cleared with a dash resolution |
+| Plans already in active or review gain the finding | At the time of writing, only `9njvfh5z` is in review, and its entries are all cleared with a resolution |
 
 ## Open Questions
+
+- **Can `roborepo browser run --serve` start a dev server inside the shell sandbox?** Unverified.
+  If not, every UI check an agent runs from the shell becomes a `Blocked:` entry unless it uses the
+  app's preview tools. `/plan-promote` should try it once and, if it fails, name the preview-tool
+  route in the `/plan-execute` text.
 
 - **Order against `9671042v`.** Both are ready to promote and edit the same review packet.
   Recommendation: this plan first, because it decides what the packet contains. The other order
