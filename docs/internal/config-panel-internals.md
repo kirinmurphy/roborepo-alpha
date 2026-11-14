@@ -197,8 +197,9 @@ tilde.
 Three behaviors carry sandbox intent in provider-neutral kinds that only the Claude provider
 renders: `sandbox-shell` (kind `shell-sandbox`), and `reach-allowed-hosts` and
 `reach-claude-log-upload` (kind `network-hosts`, each with a `hosts` list). `read-secrets` adds
-`readableExceptions`, the public CA bundles its `*.pem` pattern would hide. All three set `claudeOnly`, which the permission rows pass through like
-`codexOnly`; the portal, the terminal printout, and onboarding label those rows "Claude only".
+`readableExceptions`, the public CA bundles its `*.pem` pattern would hide. All three set
+`claudeOnly`, which the permission rows pass through like `codexOnly`; the portal, the terminal
+printout, and onboarding label those rows "Claude only".
 
 `claudeSandboxSettings` in `scripts/harnesses/claude/sandbox-settings.mjs` projects them into the
 `sandbox` key, which `renderClaudeRootConfig` replaces whole on every render:

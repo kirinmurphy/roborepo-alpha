@@ -77,7 +77,7 @@ test.describe("Agents page", () => {
     await page.goto("/agents");
     await page.locator('[data-slot="defaults-toggle"]').click();
     const row = (label) => page.locator(".behavior-row").filter({ has: page.locator(".behavior-label", { hasText: new RegExp(`^${label}$`) }) });
-    for (const label of ["Sandboxed shell commands", "Reach allowed hosts"]) {
+    for (const label of ["Sandboxed shell commands", "Reach allowed hosts", "Reach Claude's log upload"]) {
       await expect(row(label).getByText("Claude only", { exact: true })).toBeVisible();
       await expect(row(label).getByText("Codex only", { exact: true })).toBeHidden();
     }

@@ -94,6 +94,7 @@ const codex = getHarnessProvider("codex").adapters.permissions.render("", manife
 const gemini = getHarnessProvider("gemini").adapters.permissions.render("", manifest, {}, "policy.toml", {});
 for (const [name, output] of [["codex", codex], ["gemini", gemini]]) {
   for (const host of hosts.hosts) assert.ok(!output.includes(host), `${name} ignores the allowed-host list`);
+  for (const host of logUpload.hosts) assert.ok(!output.includes(host), `${name} ignores the log upload address`);
   for (const bundle of secrets.readableExceptions) assert.ok(!output.includes(bundle), `${name} ignores the CA exceptions`);
 }
 assert.ok(!permissions.allow.some((rule) => hosts.hosts.some((host) => rule.includes(host))), "hosts are not permission rules");

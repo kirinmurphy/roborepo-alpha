@@ -270,5 +270,5 @@ non-macOS platform. On November 13, 2026, Claude Code 2.1.309 passed all eight c
 pins it. The desktop app, piped excluded commands, unlisted hosts, the `ask` bucket of
 `sandbox-shell`, the `ask` and `deny` buckets of `reach-allowed-hosts`, `reach-claude-log-upload`,
 Linux, and Windows are unverified by the runner. A headless run cannot tell a denied host from one
-that would prompt, since both come back refused. Like the Codex runner, it stays out of CI groups so a skipped probe cannot
-imply certification.
+that would prompt, since both come back refused. Like the Codex runner, it stays out of CI groups
+so a skipped probe cannot imply certification.
