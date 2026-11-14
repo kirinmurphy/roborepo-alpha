@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["i5mnkm7z", "0jped168"]
 reviewed_commit: 62e86111d947f66b6ce61f991cf152d90c13b8a1
-worktree:
+worktree: plans-self-contained-reports
 ---
 
 # Plan reports a reader can understand after time away
