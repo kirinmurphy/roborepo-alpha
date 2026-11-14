@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Answer the delete-files Open Question (allow for every harness, or keep ask where no sandbox confines rm), then rerun /plan-execute to finish and submit.
+next_action: Run /plan-review; then, after merge, confirm the Not tested desktop prompt checks.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -242,9 +242,11 @@ so a repository's `.claude/settings.local.json` can still add entries.
 - [x] ~~Remove the trial `sandbox` block from the main checkout's `.claude/settings.local.json` once
       the generated settings carry it.~~ Moved to `## Not tested`: the block can go only after this
       branch merges and `roborepo update` renders the generated key on this machine.
-- [ ] Change the `delete-files` default from `ask` to `allow`, and say in its description that the
-      sandbox limits deletes to the session's checkout and temp folders. Implemented in 4f4a15b4;
-      blocked on the Open Question about harnesses with no sandbox.
+- [x] Change the `delete-files` default from `ask` to `allow`, and say in its description that the
+      sandbox limits deletes to the session's checkout and temp folders.
+- [x] Make the protected-branch hook ask (Codex: deny) before a delete or discarded work in a
+      checkout that has a protected branch checked out; temp folders and feature-branch checkouts
+      never prompt. Rewrite the `tool-call-optimization` rule that forbade relying on an `rm` allow.
 - [x] Move `gh pr merge` out of `change-github-directly` into a new `merge-pull-requests` behavior,
       default `ask`. The other `change-github-directly` commands stay denied.
 - [x] Add `git checkout *` and `git switch *` to the Claude sandbox's excluded commands, so the
@@ -436,8 +438,34 @@ Acceptance criteria:
   asking, which is `roborepo plans stop-servers`, so a search for the literal command missed it. It
   sends SIGTERM only to servers listening from the plan's own worktree. Allowed in 4019fd05.
 
+- **2026-11-14 — User decision: `rm` stays allowed, and only a `main` checkout is guarded.** The
+  user wants no prompt for temp folders and protection for `main` above all. Chosen design: keep
+  `delete-files` at `allow` and have `protected-branch-push.mjs` ask (Codex: deny, since its hooks
+  cannot ask) before a delete whose target is in a checkout with a protected branch checked out.
+  Covered: `rm`, `rmdir`, `unlink`, `find -delete`/`-exec rm`, `xargs rm`, `git rm`, `git clean -f`,
+  `git reset --hard`, `git restore` of the working tree, `git stash drop`/`clear`, following `cd`,
+  `git -C`, and `sh -c`. Temp folders win over a checkout found inside one; `ROBOREPO_TEMP_ROOTS`
+  replaces the temp list, which the hook test uses. Alternatives: default `ask` with the hook
+  approving safe deletes (rejected: Claude's hook docs say ask and deny rules are evaluated whatever
+  the hook returns, so a hook cannot approve past an ask rule); rm-only coverage (rejected: the
+  sandbox already auto-approves `git clean`, `git reset --hard`, and `git restore` in a `main`
+  checkout, so an rm-only guard would not protect main); a Claude-only allow (rejected: needs
+  per-harness buckets). Gemini runs neither sandbox nor hook; its docs say to set `ask` there.
+- **2026-11-14 — Desktop hook evidence.** Headless runs on 2.1.309 and on the desktop's bundled
+  2.1.325 refused a sandboxed `rm` for a `Bash(rm:*)` ask rule, a `Bash(rm *)` ask rule, a hook ask,
+  and a hook deny, so the version gap does not explain the desktop's skipped ask rule. In this
+  desktop-app session switched to manual mode, a sandboxed `true && git -C <tmp repo> push origin
+  feature`, which no ask rule matches and the hook answered `ask`, raised a prompt (the user
+  cancelled it), and `true && git -C <tmp repo> push origin main` was refused with the hook's deny
+  reason. The desktop app therefore honors hook decisions on sandboxed commands, though it skipped
+  the rule-based ask for `rm`.
+
 ## Not tested
 
+- [ ] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
+      checkout file asks, and `rm` of a temp-folder file runs without a prompt. The hook decisions
+      are asserted by `protected-branch-push-check.mjs`, and the desktop prompt path was observed
+      with the push guard; this combination needs the installed hook and a person watching.
 - [ ] In a manual-mode desktop-app session, `rm` on a file in the checkout or a temp folder runs
       without a prompt. Needs a person watching for prompts after the merged settings are applied.
       The other half, a home-folder delete refused by the sandbox, is the enforcement runner's
@@ -523,10 +551,12 @@ Acceptance criteria:
 - [x] Docs and the projection check grouped `merge-pull-requests` with the sandbox-dependent
       defaults — fixed (d18adcd8)
 - [x] The `rm` Not tested entry listed a runner-covered home-folder refusal — fixed in the plan record
-- [ ] `tool-call-optimization` rules forbid relying on a blanket `rm` allow — escalated, see Open
-      questions (`delete-files`)
-- [ ] `delete-files` allow is unconfined where `rm` runs unsandboxed (Windows, Linux without
-      packages, `allowUnsandboxedCommands` retries, possibly Codex) — escalated, see Open questions
+- [x] `tool-call-optimization` rules forbid relying on a blanket `rm` allow — escalated; the user
+      chose the guarded allow, and the rule was rewritten (171ba56f)
+- [x] `delete-files` allow is unconfined where `rm` runs unsandboxed (Windows, Linux without
+      packages, `allowUnsandboxedCommands` retries, possibly Codex) — escalated; resolved by the
+      branch-aware guard, which runs on every shell call, sandboxed or not (171ba56f). Gemini keeps
+      the gap and is documented
 - [x] The excluded-commands comment stated that a chained switch skips the prompt, without the
       desktop-app qualifier, and two lines passed 100 columns — fixed (fb76b09a)
 - [x] "all three behaviors are Claude-only" followed the new table of shared behaviors — fixed
@@ -579,6 +609,8 @@ Acceptance criteria:
   record), fixed in fb76b09a and the plan record
 - Validation: clean on pass 13 at fb76b09a (fresh-context subagent); the `delete-files` Open
   Question and its two escalated findings remain open for the user
+- Desktop and headless hook probes, 2026-11-14: see the Decision Log entry "Desktop hook
+  evidence"
 - Full local gate (`npm run check`, run unsandboxed) at 4f4a15b4: 78 of 79 suites passed.
   `codex-command-permission-check.mjs` failed because it used `rm` as its ask-bucket example and
   `delete-files` now allows it; fixed in afd22abd (uses `git pull`) and the suite passes there. The
@@ -592,29 +624,4 @@ Acceptance criteria:
 
 ## Open questions
 
-- **`delete-files` allow reaches harnesses with no shell sandbox.** `delete-files` is a shared
-  `commands` behavior, so `allow` renders for every provider: Claude (`Bash(rm:*)` allow), Codex
-  (`prefix_rule(["rm"], "allow")`), and Gemini (`decision = "allow"`). The reason given for it, that
-  the sandbox confines deletes, holds for Claude. Gemini renders no sandbox, so an agent there could
-  `rm` anything without a prompt. Codex sandboxes its commands, but whether a command its rules
-  allow still runs inside that sandbox was not verified.
-  - A — keep `allow` for every harness (as committed in 4f4a15b4). Simple and matches the stated
-    choice; Gemini, and possibly Codex, lose the prompt with nothing confining the delete.
-  - B — keep `delete-files` at `ask` in the shared source and add a Claude-only allow. Keeps the
-    other harnesses as they are; needs a per-harness bucket the rows do not support today, which
-    `permissions-ui-revamp` owns, so it means more code or waiting.
-  - C — revert to `ask` for now and leave the `rm` desktop gap (it already ran without a prompt in
-    the desktop app because of the sandbox), revisiting with B later.
-  - Recommendation: A if Gemini is not a harness you run agents in, otherwise C.
-  - Also found in validation pass 11: even under Claude the allow is confined only while `rm`
-    runs sandboxed. Windows runs unsandboxed and Linux needs extra packages; the render leaves
-    `allowUnsandboxedCommands` unset, which Claude's documentation gives as `true`, so a retry
-    outside the sandbox runs under the plain allow (unverified). Codex may let a command its rules
-    allow skip its sandbox (unverified). A further option is to render
-    `allowUnsandboxedCommands: false`.
-  - The full gate showed one more effect: Codex's PreToolUse permission hook now approves `rm`
-    outright, where it used to defer to Codex's native approval.
-  - The shipped rule in `globals/packages/tool-call-optimization/rules.md` tells agents never to
-    rely on a blanket `rm` allow, which the default now is. Its rewrite follows this answer.
-  - Blocked rather than decided: it relaxes a permission on harnesses the plan's non-goals keep
-    unchanged. Blocks the `delete-files` task and the submit to review.
+None. The `delete-files` question was answered by the user on 2026-11-14 (Decision Log).
