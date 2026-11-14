@@ -349,6 +349,44 @@ describe the distinction between ordinary merges and owner access.
 
 - None. The owner ruleset question moved to `3xh2sq32`; see Decision Log.
 
+## Verification
+
+Closure check on 2026-11-13 against `main` at `62e86111d947f66b6ce61f991cf152d90c13b8a1`, the
+squash merge of PR 63. The guarded `roborepo delivery` commands, the new lifecycle allows, the
+branch-safety exception, the `EnterWorktree` rule, the shared delivery rule, the portable
+validator wording, the rewritten closing reports, and the corrected docs are all on `main`. Every
+task and review finding is resolved, and `## Not tested` and `## Open Questions` hold no entries:
+their former items moved to `i5mnkm7z`, `46qth5z8`, `l1mz96d9`, and `3xh2sq32` by user decision
+(see Decision Log).
+
+- Approved implementation commit: `0ae6c9c5ecd957dc85395a56eb180451a4f03378`.
+  `roborepo plans approval vzgsx5vz --json` returned `fresh`.
+- Absorbing commit: 62e86111d947f66b6ce61f991cf152d90c13b8a1
+- `roborepo plans landed vzgsx5vz --json` confirmed landing with a new scan (`ownWork: true`,
+  fork `cedc1ebe`).
+- Completion gate: CI run 43549193077 on the push of `62e86111` passed all three jobs,
+  `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`. The gate was not
+  rerun locally.
+- Focused checks passed on `main`: `plan-suite-skills-check`, `delivery-operations-check`,
+  `agent-workflow-rules-check`, `agent-permission-defaults-check`,
+  `codex-command-permission-check`, `docs-reference-check`,
+  `node scripts/build/render-agent-permissions.mjs --check`, and
+  `bash scripts/build/render-rules.sh --check`. `delivery-operations-check` passes only outside
+  the Claude sandbox, which blocks removal of its `/tmp` fixture directories.
+- Code claims rechecked on `main`: `09-deliver-finished-work.md` exists and is listed in
+  `manifests/platform/source-files.tsv`; both branch-safety copies carry the worktree exception;
+  the Claude rule names `EnterWorktree({ path })`; `plan-execute` says "a cheaper model" and no
+  longer names `sonnet`; the permissions manifest holds the `delivery`, `sync-base`, and
+  `stop-servers` entries.
+- Docs of record checked against `main`: `plan-suite.md`, `plans-portal.md`,
+  `config-control-panel.md`, `setup-and-daily-use.md`, and `plans-portal-internals.md` say seven
+  plan skills and keep the historical six-package account; the `plan-suite.md` action table shows
+  **Continue** and **Review** for active plans as menu items only; `roborepo-cli.md` documents the
+  guarded delivery commands; `rules-parity-and-layering.md` covers the delivery fragment;
+  `testing.md` lists the three required checks and the owner procedure.
+- Not verified here: the deferred live checks named in the Decision Log, and owner configuration
+  of the required checks on GitHub.
+
 ## Review
 
 ### Findings
