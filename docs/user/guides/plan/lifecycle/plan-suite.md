@@ -27,7 +27,7 @@ Use it when you want to:
 | `/plan-write` | Create a plan with its initial checklist, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development, then move it to `ready/` |
 | `/plan-execute` | Start or resume implementation in an isolated worktree, check it with a validator and fix what it finds, then move the plan to `review/`; or fix findings a review sent back |
-| `/plan-review` | Recheck the finished work against the current base, fix what has a clear fix, show you a review packet, and record your approval |
+| `/plan-review` | Recheck the finished work against the current base, fix what has a clear fix, show you a plain-language review, and record your approval |
 | `/plan-close` | After you merge the reviewed work, verify it and move the plan to `completed/` |
 | `/plan-archive` | Retire a plan that will not be completed, with the reason |
 | `/session-close` | End a chat: review and commit the session's work, write the handoff note |
@@ -58,10 +58,33 @@ flowchart LR
    validator checks it and the same run fixes what it finds; once a check comes back clean, the
    plan moves to `review/`.
 6. Run `/plan-review`. It rechecks the work against the current base, fixes anything with a clear
-   fix in the same chat, and shows you a review packet. You approve, ask for changes it makes on the
-   spot, or decide the questions it could not.
+   fix in the same chat, and shows you what the plan is for, what changed, and what needs you. You
+   approve, ask for changes it makes on the spot, or decide the questions it could not.
 7. Merge the reviewed branch yourself through a pull request.
 8. Run `/plan-close`.
+
+## What Each Command Reports
+
+Every plan command ends with a report written for you coming back later, without memory of the
+chat. It reads the same way for every command:
+
+1. a headline: the plan's title and what happened to it;
+2. one sentence on what the plan is for;
+3. what changed, described as things you would notice, with a screenshot or recording for a visible
+   change and a before/after diagram for a changed flow;
+4. what needs you: each decision with its options, where each leads, and a recommendation, and each
+   action with its exact command;
+5. a short record: where the plan is, its branch, and a link to the plan document.
+
+Any command, flag, or name in the report is explained beside it. Commit ids, check names, file
+lists, and validator passes are left out; ask in the chat when you want them. Decisions and review
+findings are also kept in the plan document.
+
+Before you see the report of `/plan-promote`, `/plan-execute`, `/plan-review`, or `/plan-close`, a
+separate agent that sees only the report checks that it answers what the plan is for, what changed,
+and what you must do, and flags any term it leaves unexplained. `/plan-write` and `/plan-archive`
+write shorter reports and run the same check themselves. A plan's next action, shown on the Plans
+page, follows the same standard: one sentence you can act on without the chat.
 
 ## Enable The Plan Suite
 
@@ -216,16 +239,21 @@ A new review runs these steps:
    again until a pass finds nothing to fix, for at most eight passes. A fixed finding reads
    `- [x] … — fixed in review (<short commit>)`;
 6. records the Result as complete once findings and required manual checks are resolved, or pending
-   while they remain open, then shows you a review packet: each acceptance criterion with its evidence, what changed, the
-   validator passes, the commits it made, base failures, the manual checks waiting on you, and each
-   escalated finding as a decision with options and a recommendation.
+   while they remain open, then shows you the review in plain language: what the plan is for, what
+   changed for a person using it, each acceptance criterion as met or not, base failures, the manual
+   checks waiting on you, and each escalated finding as a decision with options and a
+   recommendation. The technical detail (commits, validator findings, and the evidence behind each
+   criterion) is one request away in the chat; commits, findings, and checks run are also kept in
+   the plan's `## Review` record.
 
-Then it asks for your approval of the exact commit, and acts on your answer:
+While a finding or manual check is still open, it asks you for what settles it (a decision, or the
+result of a check only you can run) instead of asking for approval. Once nothing is open, it asks
+for your approval of the exact commit, and acts on your answer:
 
 | Your answer | What follows |
 | --- | --- |
 | Approve | It immediately records the approval for the reviewed implementation with `roborepo plans approve` and checks that it is fresh |
-| Ask for a change, or decide an escalated question, within the requirements | It makes the change in the same chat and shows you the packet again |
+| Ask for a change, or decide an escalated question, within the requirements | It makes the change in the same chat and shows you the review again |
 | Want the change done in a separate chat | The plan stays in `review/`. Run `/plan-execute`, then `/plan-review` again |
 | The requirements themselves must change | With your agreement, it revises the plan, invalidates any approval, and moves the plan back to `active/` with `roborepo plans reopen`. The worktree and branch stay |
 
@@ -274,7 +302,7 @@ This recovery also works after landing while the plan remains in review, because
 touches nothing on a code branch. Your answer and a complete review remain required, and closure
 still runs its own test gate.
 
-Before merging, `roborepo plans merge-readiness <plan> --json` checks the committed review packet,
+Before merging, `roborepo plans merge-readiness <plan> --json` checks that the plan's review result and approval are committed (its output calls this the review packet),
 clean worktree, exact implementation, and reviewed base. A failure names the repair; a pass names
 the assessed tips and grants no merge permission.
 

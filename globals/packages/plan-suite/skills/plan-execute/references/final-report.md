@@ -1,7 +1,11 @@
 # Final Report
 
-The reader is reviewing outcomes, not auditing the run. Lead with where the plan stands, show what
-changed for the person using the work, and spend detail only on what is wrong or what they must do.
+Before writing the report, read `/plan-write`'s `references/completion-report.md`. It owns the shape
+every plan command shares (headline, what the plan is for, what changed, needs you, record), the
+rule against unintroduced terms, the visual-evidence rule, the cold-reader check, and what to leave
+out. This command runs the checker agent before delivering. This file adds only what is specific
+to `/plan-execute`.
+
 The plan document already holds the Decision Log, every Validation Loop finding, and the
 `## Not tested` entries; the report points there instead of repeating them.
 
@@ -9,27 +13,29 @@ The plan document already holds the Decision Log, every Validation Loop finding,
 
 - Shape
 - Headline
-- Tables
+- What changed
+- Decisions worth knowing
 - Exceptions
+- Needs you
 - Record
-- What to leave out
 
 ## Shape
 
-In this order, skipping any section that would be empty:
+The shared shape, with two sections of this command's own after What changed:
 
 1. Headline
-2. What changed (table)
-3. Decisions worth knowing (table)
-4. Exceptions (only when something did not pass)
-5. Needs you (table)
-6. Record
+2. What this plan is for
+3. What changed
+4. Decisions worth knowing
+5. Exceptions (only when something did not pass)
+6. Needs you
+7. Record
 
-Separate sections with a `━` rule. Each table cell stays a few words to one short sentence.
+Each table cell stays a few words to one short sentence.
 
 ## Headline
 
-One bold line on its own, before anything else, naming the plan and its lifecycle outcome:
+Name the plan's lifecycle outcome:
 
 ```text
 **Submitted for review: "<title>" (<id>)**
@@ -37,44 +43,23 @@ One bold line on its own, before anything else, naming the plan and its lifecycl
 **Review findings fixed: "<title>" (<id>), ready for /plan-review again**
 ```
 
-Follow it with at most one plain sentence when the reader needs context the tables cannot give,
-such as "Main is red until this merges." No commit ids, pass counts, or check names here.
+## What changed
 
-## Tables
-
-### What changed
-
-What the user, a developer, or an agent will notice, not how it was built. One row per
-user-visible change; fold related internals into the row they serve.
+The shared What changed section, as a table with one row per change a person would notice:
 
 | Change | What you'll notice |
 | --- | --- |
 | Pre-push check | `git push` refuses broken doc links and whitespace errors in about 4 s |
 
-### Decisions worth knowing
+## Decisions worth knowing
 
 Only decisions that changed scope, departed from the plan's wording, traded one behavior for
-another, or that the reviewer might reverse. Routine choices stay in the Decision Log.
+another, or that the reviewer might reverse. Routine choices stay in the Decision Log. Describe each
+in plain words; the reader has not seen the plan's wording.
 
 | Decision | Why | Instead of |
 | --- | --- | --- |
 | plan-review never pushes | Keeps the skill's no-push rule | Pushing after each fix, as the plan said |
-
-### Needs you
-
-Everything the reader must do or decide, in the order they should do it, each row complete enough
-to act on without scrolling back: what to do, why it matters, and the exact command when there is
-one. Unconfirmed `## Not tested` entries appear here as manual checks. Open Questions appear here
-too, each with its options and recommendation; this is the run's only question batch. The last row
-is the next command: `/plan-execute` again to resume, or `/plan-review`.
-
-| Do | Why | How |
-| --- | --- | --- |
-| Push the branch | The automatic push was refused; CI has not run | `git push -u origin <branch>` |
-| Run `/plan-review` | Next lifecycle step | `/plan-review` |
-
-Include the push row only when the feature-branch push failed or was skipped; say whether the
-session's permissions, a hook, or the remote refused it.
 
 ## Exceptions
 
@@ -94,15 +79,28 @@ Include, when they apply:
   is worth doing;
 - blocked objectives and what blocks them;
 - paired skills skipped or unavailable, with the reason;
-- a missing feature-verification pairing for UI, server, API, CLI, or performance work, and why;
-- behavioral evidence the user should see (a screenshot, output, a recording), inline.
+- a missing feature-verification pairing for UI, server, API, CLI, or performance work, and why.
 
 A ✓ belongs here only when it settles a doubt the reader would otherwise have, such as a fixed
 flake that now passes repeatedly.
 
+## Needs you
+
+Unconfirmed `## Not tested` entries appear here as manual checks. Open Questions appear here too,
+each with its options, what each leads to, and a recommendation; this is the run's only question
+batch. The last row is the next command: `/plan-execute` again to resume, or `/plan-review`.
+
+| Do | Why | How |
+| --- | --- | --- |
+| Push the branch | The automatic push was refused; CI has not run | `git push -u origin <branch>` |
+| Run `/plan-review` | A person reviews and approves the work | `/plan-review` |
+
+Include the push row only when the feature-branch push failed or was skipped; say whether the
+session's permissions, a hook, or the remote refused it.
+
 ## Record
 
-A short closing block for lookup, with only facts the prose did not already state:
+The shared Record block, with this command's lines:
 
 ```text
 Implementation result
@@ -110,20 +108,8 @@ Implementation result
 - Lifecycle: stays active | moved to review | stays review
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)
-- Details: Decision Log, findings, and Not tested entries are in the plan document
+- Details: Decision Log, findings, and Not tested entries are in the plan document; ask here for any detail
 ```
 
 Add a line only for a non-default fact: a shareable link, a server left running, docs that needed
 no update and why, or uncommitted work left in the worktree.
-
-## What to leave out
-
-Unless it is the point of an exception:
-
-- commit ids, including start, implementation, fix, and submit commits;
-- counts of objectives, decisions, validation passes, or findings fixed;
-- a passing gate, a clean validation pass, or a passing preflight;
-- the Decision Log, validation pass reports, files changed, Git status, and validator output;
-- anything already said earlier in the report.
-
-The reader asks for any of these when they want depth; offer it in one line at the end.

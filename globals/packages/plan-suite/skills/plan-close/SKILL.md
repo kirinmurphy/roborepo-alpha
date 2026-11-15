@@ -143,7 +143,8 @@ dependency, or work outside this plan.
 Follow `references/verdict.md`:
 
 - **Incomplete or blocked after agent-resolvable repairs:** refuse. Name the remaining work, update
-  the plan's tasks and `next_action`, and leave it in `review/`.
+  the plan's tasks and `next_action` (written for a cold reader, as `/plan-write`'s
+  `references/completion-report.md` describes), and leave it in `review/`.
 - **Superseded or abandoned:** stop and direct the user to `/plan-archive`, naming the reason you
   found. `/plan-close` never archives.
 - **Complete:** continue to step 5.
@@ -330,13 +331,10 @@ approval, or merge decisions.
 
 ## Final Report
 
-Name the plan by its H1 title, with its id in parentheses on first mention only. Lead with one
-line naming the plan and the outcome, then give the next step and its command when there is one.
-
-Include a status detail only when it departs from the expected result or requires action. Show
-behavioral evidence through `feature-verification` where it applies and let the evidence speak
-for itself. Omit passing gates, commit ids, and Git status unless they explain an exception or
-enable the next step. Link to the plan document for the full record.
+Name the plan by its H1 title, with its id in parentheses on first mention only. Before writing the
+report, read `/plan-write`'s `references/completion-report.md` and follow its shape, its visual
+evidence rule, and its checker agent, which reads the report before the user does. What is specific
+to this command:
 
 For a refusal, follow **Refusal and blocker reporting**. Give every reason with the evidence and
 the action that resolves it. For a closure that was already committed, say so and report any
