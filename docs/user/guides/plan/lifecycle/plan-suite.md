@@ -246,7 +246,9 @@ A new review runs these steps:
    criterion) is one request away in the chat; commits, findings, and checks run are also kept in
    the plan's `## Review` record.
 
-Then it asks for your approval of the exact commit, and acts on your answer:
+While a finding or manual check is still open, it asks you for what settles it (a decision, or the
+result of a check only you can run) instead of asking for approval. Once nothing is open, it asks
+for your approval of the exact commit, and acts on your answer:
 
 | Your answer | What follows |
 | --- | --- |
