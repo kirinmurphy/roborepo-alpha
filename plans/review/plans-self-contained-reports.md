@@ -366,3 +366,23 @@ archive skills.
 - Decision: approved
 - Reviewed implementation commit: 8ff9ea2691ea2ed905c1adad752bd840bb8c71c3
 - Confirmed by: human
+
+## Completion
+
+Closed 2026-11-15. Every plan command now ends with a report a reader returning cold can follow:
+it says what the plan is for, what changed for a person, and what they must do, from one shared
+reference (`plan-write/references/completion-report.md`) that all six commands read. The four
+commands that end a stage of work have that report checked by a fresh-context agent before the user
+sees it, and the general output rules now aim at the same reader. Merged to `main` through
+kirinmurphy/roborepo-alpha#65.
+
+## Verification
+
+- Completion gate: CI run 43690460123 on `main` at 26dad21f passed (check on ubuntu-latest and macos-latest, windows-installer)
+- Focused checks rerun on `main` at 26dad21f: `plan-suite-skills-check.mjs`, `response-output-rules-check.mjs`, `package-catalog-check.mjs`, `skill-structure-check.mjs`, `docs-reference-check.mjs`, and `bash scripts/build/render-rules.sh --check` passed
+- Plan claims checked against `main`: all six plan commands' SKILL.md files point to the shared completion report; `response-output/rules.md` opens with the cold reader and stays at its 78-line budget; the shared reference names the five sections, the three questions, the two-rewrite cap, and the in-session self-check
+- Docs of record checked against the landed code: `docs/user/guides/plan/lifecycle/plan-suite.md` ("What Each Command Reports" section and the merge-readiness paragraph) and the `response-output` package description in `package.config.json` both match
+- Approval: fresh; approved commit 8ff9ea2691ea2ed905c1adad752bd840bb8c71c3, confirmed by a human
+- Landing: newly scanned; branch `plan/plans-self-contained-reports` absorbed into `main`
+- Absorbing commit: 26dad21f5948daee39c16d66299941b57d36d411
+- Not verified: report quality across many real runs; that measurement is left to Live Evals for Skill Routing and Plan Closing (`0jped168`), per Non-goals
