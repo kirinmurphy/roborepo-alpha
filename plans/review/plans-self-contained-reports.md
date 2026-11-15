@@ -354,10 +354,12 @@ archive skills.
 - Review: the unit stage first failed for want of `@playwright/test`, which the later portal UI stage installs; rerun after install, 80/80 passed
 - Review: Validator pass 7 (fresh-context subagent) found no fix or escalate findings
 - Manual: the review packet, a real report in the new shape, read well after time away (confirmed by the user, 2026-11-14, by approving it in the /plan-review chat)
+- Pull request CI passed at a70fb022, so the CLI test failure in the local run was flaky
+- Re-review (2026-11-15) of 8ff9ea26, a one-paragraph user-guide fix made after pull request feedback, base main 62e86111 unchanged: the docs reference and plan-suite skills checks passed; Validator pass 8 (fresh-context subagent) found no fix findings; pull request CI was still running
 
 ### Result
-- Status: complete
-- Reviewed implementation commit: a70fb0224a20d82fda1e98d1d0ea1dea0b8d4feb
+- Status: pending
+- Reviewed implementation commit: 8ff9ea2691ea2ed905c1adad752bd840bb8c71c3
 - Base commit: 62e86111d947f66b6ce61f991cf152d90c13b8a1
 
 ### Approval
