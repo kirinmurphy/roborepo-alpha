@@ -1,6 +1,6 @@
 ---
 id: 9671042v
-next_action: The work is built and checked; a person now reviews and approves it by running /plan-review on this plan.
+next_action:
 blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["i5mnkm7z", "0jped168"]
