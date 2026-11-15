@@ -364,5 +364,5 @@ archive skills.
 
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: a70fb0224a20d82fda1e98d1d0ea1dea0b8d4feb
+- Reviewed implementation commit: 8ff9ea2691ea2ed905c1adad752bd840bb8c71c3
 - Confirmed by: human
