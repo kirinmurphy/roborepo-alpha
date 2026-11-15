@@ -71,15 +71,17 @@ which on `main` is the one you most want intact. The same hook adds that check:
 | --- | --- |
 | A temp folder (`/tmp`, `/private/tmp`, `/var/folders`, `$TMPDIR`) | Runs, no prompt |
 | A checkout or worktree on a feature branch | Runs, no prompt |
-| A checkout with a protected branch checked out | Asks (Codex: denied) |
-| A path the shell expands (`$VAR`, `*.log`, `~`) | Judged by the folder the command runs in |
+| A checkout with a protected branch checked out, including its `.git` folder | Asks (Codex: denied) |
+| A folder holding such a checkout up to two levels down | Asks (Codex: denied) |
+| A path the shell expands | Judged by its literal part: `$TMPDIR/x` is temp, `/repo/src/*` is `/repo/src`; a word that starts with an expansion (`"$f"`, `*.log`) is judged by the folder the command runs in |
 
 It recognizes `rm`, `rmdir`, `unlink`, `find … -delete` or `-exec rm`, `xargs rm`, `git rm`,
 `git clean -f`, `git reset --hard`, `git restore` of the working tree, and `git stash drop` or
-`clear`, alone, chained, or inside `sh -c`. It follows a leading `cd` and `git -C`. It cannot see a
-delete hidden in a script, `mv` over a file, or a redirect that truncates one. Protected branches
-are the same list as for pushes. `ROBOREPO_TEMP_ROOTS` (comma-separated) replaces the temp folder
-list.
+`clear`. It finds them chained, in loops and `if` blocks, in subshells and `$(…)`, behind wrappers
+such as `env`, `command`, `nohup`, `time`, and `sudo`, and inside `sh -c`. It follows `cd`, `pushd`,
+`~`, and `git -C`. It cannot see a delete hidden in a script, `mv` over a file, or a redirect that
+truncates one. Protected branches are the same list as for pushes. `ROBOREPO_TEMP_ROOTS`
+(comma-separated) replaces the temp folder list.
 
 The hook runs on every shell call, sandboxed or not. That matters because the desktop app was seen
 running a sandboxed `rm` without the prompt its ask rule called for, while a hook's ask on a

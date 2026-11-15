@@ -362,7 +362,7 @@ for (const [dir, branch] of [[onMain, "main"], [onFeature, "feature"]]) {
   gitOk(dir, "add", "a.txt");
   gitOk(dir, "commit", "-q", "-m", "init");
 }
-const temps = { ROBOREPO_TEMP_ROOTS: scratch };
+const temps = { ROBOREPO_TEMP_ROOTS: scratch, TMPDIR: scratch };
 const deleteCases = [
   [onMain, "rm a.txt", "ask"],
   [onMain, "rm -rf build", "ask"],
@@ -395,6 +395,44 @@ const deleteCases = [
   [onFeature, "git reset --hard", "defer"],
   [onFeature, `rm ${path.join(onMain, "a.txt")}`, "ask"],
   [onFeature, `git -C ${onMain} clean -f`, "ask"],
+  // .git belongs to the checkout around it.
+  [onMain, "rm -rf .git", "ask"],
+  [onMain, "rm .git/index", "ask"],
+  // Shell keywords, grouping, subshells, and command substitution do not hide the program.
+  [onMain, 'for f in *.log; do rm "$f"; done', "ask"],
+  [onMain, "if true; then rm a.txt; fi", "ask"],
+  [onMain, "(rm a.txt)", "ask"],
+  [onMain, "{ rm a.txt; }", "ask"],
+  [onMain, "echo $(rm a.txt)", "ask"],
+  [onMain, 'echo "$(rm a.txt)"', "ask"],
+  [onMain, "echo `rm a.txt`", "ask"],
+  [onMain, "echo 'rm a.txt'", "defer"],
+  // Nor do wrappers.
+  [onMain, "command rm a.txt", "ask"],
+  [onMain, "env -i rm a.txt", "ask"],
+  [onMain, "nohup rm a.txt", "ask"],
+  [onMain, "time rm a.txt", "ask"],
+  [onMain, "sudo -u someone rm a.txt", "ask"],
+  [onMain, "FOO=1 rm a.txt", "ask"],
+  // xargs options that take a value, and git stash options before the subcommand.
+  [onMain, "ls | xargs -n 1 rm", "ask"],
+  [onMain, "ls | xargs -I {} rm {}", "ask"],
+  [onMain, "ls | xargs -P 4 rm -f", "ask"],
+  [onMain, "ls | xargs -n 1 echo", "defer"],
+  [onMain, "git stash -q drop", "ask"],
+  // An expanded word is judged by its literal part: a $TMPDIR path is temp, a glob under a main
+  // checkout is that checkout.
+  [onMain, 'rm -rf "$TMPDIR/foo"', "defer"],
+  [onMain, "rm -rf ${TMPDIR}/foo", "defer"],
+  [scratch, `rm -rf ${onMain}/*.txt`, "ask"],
+  [onFeature, `rm -rf ${onMain}/src/*`, "ask"],
+  [onFeature, `rm -rf ${onFeature}/src/*`, "defer"],
+  // cd -- and pushd are followed.
+  [scratch, `cd -- ${onMain} && rm a.txt`, "ask"],
+  [scratch, `pushd ${onMain} && rm a.txt`, "ask"],
+  // Deleting a folder that holds a main checkout takes the checkout with it.
+  [scratch, `rm -rf ${tmp}`, "ask"],
+  [scratch, `rm -rf ${onFeature}`, "defer"],
 ];
 for (const [cwd, command, expected] of deleteCases) {
   assert.equal(decide(command, { cwd, env: temps }), expected, `${path.basename(cwd)}: ${command}`);
