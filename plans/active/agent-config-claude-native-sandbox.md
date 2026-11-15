@@ -582,6 +582,12 @@ Acceptance criteria:
 - [x] A Not tested entry promised a prompt-free `rm` in any checkout — fixed in the plan record
 - [x] Deleting a folder holding a main checkout deferred — escalated by the Validator, decided in
       the Decision Log (2026-11-15) and fixed (e085f4ed)
+- [x] A `cd` inside a subshell leaked out, and `popd` and `cd -` were not followed, so a later main
+      delete deferred — fixed (73e9683e)
+- [x] `cd "$TMPDIR" && rm x` from a main checkout asked — fixed (73e9683e)
+- [x] No test chained a verified push with a main delete — fixed (73e9683e)
+- [x] A verification line still said the final gate waited on the `delete-files` answer — fixed in
+      the plan record
 
 ### Verification
 
@@ -632,10 +638,11 @@ Acceptance criteria:
 - Full local gate (`npm run check`, run unsandboxed) passed at 171ba56f ("CI checks passed")
 - Validation pass 14 at 171ba56f (fresh-context subagent): 7 `fix` and 1 `escalate` findings,
   fixed in e085f4ed and the plan record; `bash scripts/doctor.sh --quiet` passed (97 checks) after it
+- Validation pass 15 at e085f4ed (fresh-context subagent, about 110 probe commands): 4 `fix`
+  findings, fixed in 73e9683e and the plan record
 - Full local gate (`npm run check`, run unsandboxed) at 4f4a15b4: 78 of 79 suites passed.
   `codex-command-permission-check.mjs` failed because it used `rm` as its ask-bucket example and
-  `delete-files` now allows it; fixed in afd22abd (uses `git pull`) and the suite passes there. The
-  final-commit gate waits for the `delete-files` answer
+  `delete-files` now allows it; fixed in afd22abd (uses `git pull`) and the suite passes there
 
 ### Result
 
