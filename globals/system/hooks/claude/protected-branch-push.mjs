@@ -405,11 +405,18 @@ function askDelete(command, { top, branch }) {
   return { decision: 'ask', reason: `roborepo: \`${command}\` deletes in ${where}. Confirm this delete.` }
 }
 
+// Marks where a subshell or command substitution opens and closes, as words of their own, so the
+// walk can give it its own working folder: a `cd` inside `( … )` ends with it.
+const SCOPE_OPEN = '\u0001('
+const SCOPE_CLOSE = '\u0001)'
+
 // Splits subshells and command substitutions into their own commands: an unquoted, unescaped `(`,
-// `)`, `$(`, or backtick becomes a separator. Single-quoted text is never run, so it is kept.
+// `)`, `$(`, or backtick becomes a scope marker between separators. Single-quoted text is never
+// run, so it is kept.
 function exposeNestedCommands(text) {
   let out = ''
   let quote = null
+  let backtickOpen = false
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i]
     if (quote === "'") {
@@ -431,7 +438,9 @@ function exposeNestedCommands(text) {
       }
     } else if ((ch === '$' && text[i + 1] === '(') || ch === '`' || ((ch === '(' || ch === ')') && quote !== '"')) {
       // Close an open double quote so the nested command is split out unquoted.
-      out += quote === '"' ? '" ; ' : ' ; '
+      const opens = ch === '`' ? !backtickOpen : ch !== ')'
+      if (ch === '`') backtickOpen = !backtickOpen
+      out += `${quote === '"' ? '"' : ''} ; ${opens ? SCOPE_OPEN : SCOPE_CLOSE} ; `
       quote = null
       if (ch === '$') i += 1
     } else {
@@ -441,20 +450,45 @@ function exposeNestedCommands(text) {
   return out
 }
 
-// The directory a `cd` or `pushd` word list moves to, or null when it cannot be followed.
+// The directory a `cd` or `pushd` word list moves to, or null when it cannot be followed. `$TMPDIR`
+// and `~` are expanded; other expansions are not.
 function changedDirectory(cwd, args) {
   const dir = args.filter((arg) => arg !== '--')
-  if (dir.length !== 1 || /[$`<>]/.test(dir[0]) || dir[0].startsWith('-')) return null
+  if (dir.length !== 1 || dir[0].startsWith('-') || /[`<>]/.test(dir[0])) return null
+  const tmpdir = /^\$\{?TMPDIR\}?(\/|$)/.exec(dir[0])
+  if (tmpdir) return path.resolve(process.env.TMPDIR || os.tmpdir(), dir[0].slice(tmpdir[0].length))
+  if (dir[0].includes('$')) return null
   const target = /^~(\/|$)/.test(dir[0]) ? os.homedir() + dir[0].slice(1) : dir[0]
   return path.resolve(cwd, target)
 }
 
-// Walks every simple command looking for deletes, following `cd`/`pushd`, shell keywords and
-// wrappers (`if … then rm`, `env rm`, `sudo rm`), subshells, command substitutions, and `sh -c`.
+// Walks every simple command looking for deletes, following `cd`, `cd -`, `pushd`, and `popd`,
+// shell keywords and wrappers (`if … then rm`, `env rm`, `sudo rm`), subshells and command
+// substitutions (each with its own working folder), and `sh -c`.
 function classifyDeletes(text, startCwd) {
   let cwd = startCwd
+  let previous = startCwd
+  const dirStack = []
+  const scopes = []
   let result = null
+  const moveTo = (next) => {
+    if (next === null) return
+    previous = cwd
+    cwd = next
+  }
   for (const words of splitCommands(exposeNestedCommands(text))) {
+    if (words[0] === SCOPE_OPEN) {
+      scopes.push({ cwd, previous, depth: dirStack.length })
+      continue
+    }
+    if (words[0] === SCOPE_CLOSE) {
+      const scope = scopes.pop()
+      if (scope) {
+        ;({ cwd, previous } = scope)
+        dirStack.length = scope.depth
+      }
+      continue
+    }
     let i = 0
     for (;;) {
       while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
@@ -464,8 +498,16 @@ function classifyDeletes(text, startCwd) {
     }
     const program = words[i] && path.basename(words[i])
     const args = words.slice(i + 1)
-    if (program === 'cd' || program === 'pushd') {
-      cwd = changedDirectory(cwd, args) ?? cwd
+    if (program === 'cd' && args.length === 1 && args[0] === '-') {
+      moveTo(previous)
+    } else if (program === 'cd') {
+      moveTo(changedDirectory(cwd, args))
+    } else if (program === 'pushd') {
+      const next = changedDirectory(cwd, args)
+      if (next !== null) dirStack.push(cwd)
+      moveTo(next)
+    } else if (program === 'popd') {
+      if (dirStack.length) moveTo(dirStack.pop())
     } else if (SHELLS.has(program)) {
       const flag = args.findIndex((w) => /^-[a-z]*c[a-z]*$/.test(w))
       if (flag !== -1 && args[flag + 1]) result = stricter(result, classifyDeletes(args[flag + 1], cwd))

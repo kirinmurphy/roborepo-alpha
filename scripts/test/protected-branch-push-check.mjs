@@ -433,10 +433,25 @@ const deleteCases = [
   // Deleting a folder that holds a main checkout takes the checkout with it.
   [scratch, `rm -rf ${tmp}`, "ask"],
   [scratch, `rm -rf ${onFeature}`, "defer"],
+  // A cd inside a subshell or substitution ends with it; popd and cd - return.
+  [onMain, `(cd ${scratch} && rm x); rm a.txt`, "ask"],
+  [onMain, `echo $(cd ${scratch}); rm a.txt`, "ask"],
+  [onMain, `pushd ${scratch} && rm x && popd && rm a.txt`, "ask"],
+  [onMain, `cd ${scratch} && rm x && cd - && rm a.txt`, "ask"],
+  [onMain, `(cd ${scratch} && rm x)`, "defer"],
+  // cd into $TMPDIR is followed, so a temp delete after it does not ask.
+  [onMain, 'cd "$TMPDIR" && rm -rf x', "defer"],
+  [onMain, "cd $TMPDIR/sub && rm x", "defer"],
+  [onMain, "cd $SOMEWHERE && rm x", "ask"],
 ];
 for (const [cwd, command, expected] of deleteCases) {
   assert.equal(decide(command, { cwd, env: temps }), expected, `${path.basename(cwd)}: ${command}`);
 }
+// A verified push never covers a delete chained onto it: the push alone is allowed, and with a
+// delete in a main checkout the whole command asks.
+assert.equal(decide("git push origin feature", { env: temps }), "allow", "the push alone is verified");
+assert.equal(decide(`git push origin feature && rm ${path.join(onMain, "a.txt")}`, { env: temps }), "ask", "a chained main delete asks");
+assert.equal(decide(`git push origin feature && rm ${path.join(scratch, "x")}`, { env: temps }), "defer", "a chained temp delete drops the allow");
 // Temp folders win: with the default temp roots, the system temp folder holding these fixtures is
 // temp, so even the checkout on main deletes freely there.
 assert.equal(decide("rm a.txt", { cwd: onMain }), "defer", "a checkout under a temp folder is temp");
