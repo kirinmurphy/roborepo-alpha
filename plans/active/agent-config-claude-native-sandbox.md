@@ -460,16 +460,23 @@ Acceptance criteria:
   reason. The desktop app therefore honors hook decisions on sandboxed commands, though it skipped
   the rule-based ask for `rm`.
 
+- **2026-11-15 — Deleting a folder that holds a main checkout asks.** Validation pass 14 found
+  `rm -rf <folder holding the main checkout>` deferred, since the target is not inside a checkout.
+  Claude's sandbox refuses such a delete, but Codex and unsandboxed runs would not. The guard now
+  looks for a checkout on a protected branch in the deleted folder and two levels below it,
+  skipping `.git` and `node_modules` and at most 200 folders per level. Alternative: listing the
+  repo's worktrees (rejected: it finds only worktrees of one repo, not separate clones).
+
 ## Not tested
 
 - [ ] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
       checkout file asks, and `rm` of a temp-folder file runs without a prompt. The hook decisions
       are asserted by `protected-branch-push-check.mjs`, and the desktop prompt path was observed
       with the push guard; this combination needs the installed hook and a person watching.
-- [ ] In a manual-mode desktop-app session, `rm` on a file in the checkout or a temp folder runs
-      without a prompt. Needs a person watching for prompts after the merged settings are applied.
-      The other half, a home-folder delete refused by the sandbox, is the enforcement runner's
-      home-write control and the 2026-11-13 desktop-app check.
+- [ ] In a manual-mode desktop-app session in a feature-branch checkout or worktree, `rm` on a
+      file in the checkout runs without a prompt. Needs a person watching for prompts after the
+      merged settings are applied. A home-folder delete refused by the sandbox is the enforcement
+      runner's home-write control and the 2026-11-13 desktop-app check.
 - [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks. Same reason. That
       `git switch main` stays denied is the rendered `occupy-main` deny rule, which
       `claude-sandbox-projection-check.mjs` asserts, applied to a command that now runs outside the
@@ -564,6 +571,17 @@ Acceptance criteria:
 - [x] The defaults tables implied `switch-branches` changed its default — fixed (fb76b09a)
 - [x] The `git switch main` half of a Not tested entry was not a prompt check — fixed in the plan
       record
+- [x] The delete guard missed `rm -rf .git` in a main checkout — fixed (e085f4ed)
+- [x] Shell keywords, grouping, subshells, and `$(…)` hid the delete program — fixed (e085f4ed)
+- [x] Wrappers (`command`, `env`, `nohup`, `time`, `sudo`) hid `rm` — fixed (e085f4ed)
+- [x] `xargs` option values were taken for the program — fixed (e085f4ed)
+- [x] `git stash -q drop` deferred — fixed (e085f4ed)
+- [x] Expanded words were judged by the working folder: `$TMPDIR/x` asked, `<main>/*.txt` from
+      elsewhere deferred — fixed (e085f4ed), judged by the literal prefix
+- [x] `cd --`, `pushd`, and `~` were not followed — fixed (e085f4ed)
+- [x] A Not tested entry promised a prompt-free `rm` in any checkout — fixed in the plan record
+- [x] Deleting a folder holding a main checkout deferred — escalated by the Validator, decided in
+      the Decision Log (2026-11-15) and fixed (e085f4ed)
 
 ### Verification
 
@@ -611,6 +629,9 @@ Acceptance criteria:
   Question and its two escalated findings remain open for the user
 - Desktop and headless hook probes, 2026-11-14: see the Decision Log entry "Desktop hook
   evidence"
+- Full local gate (`npm run check`, run unsandboxed) passed at 171ba56f ("CI checks passed")
+- Validation pass 14 at 171ba56f (fresh-context subagent): 7 `fix` and 1 `escalate` findings,
+  fixed in e085f4ed and the plan record; `bash scripts/doctor.sh --quiet` passed (97 checks) after it
 - Full local gate (`npm run check`, run unsandboxed) at 4f4a15b4: 78 of 79 suites passed.
   `codex-command-permission-check.mjs` failed because it used `rm` as its ask-bucket example and
   `delete-files` now allows it; fixed in afd22abd (uses `git pull`) and the suite passes there. The
