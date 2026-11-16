@@ -76,6 +76,45 @@ zero plans:
 Home's per-repository plan counts read the same states: a repository without a `scanned` state shows
 that Plans has not scanned it.
 
+### Branch protection notice
+
+On load and on **Refresh**, the page reads the
+[branch protection](roborepo-cli.md#branch-protection) status of each `scanned` repository whose
+remote is on GitHub. The read runs apart from the plan list, one repository at a time, so a slow
+answer from GitHub never delays the plans. A read that fails or times out shows nothing.
+
+A repository in one of these states gets one line above the board:
+
+| State | Who sees the line | The line says |
+| --- | --- | --- |
+| `missing` | Everyone | Which protection is absent and what that allows, such as plan history being deleted or rewritten |
+| `conflicting` | Everyone | Which rule, from which ruleset, will refuse plan saves |
+| `drifted` | Repo admins | Which RoboRepo ruleset no longer matches the policy |
+
+For a repo admin the line offers **Protect**, which runs the same steps as `roborepo protect` and
+then opens the status panel with the result. For anyone else it names the signed-in GitHub account
+and says a repo admin must run `roborepo protect`. **Details** opens the status panel.
+
+Each viewer sees a line once. The browser remembers, per repository, the state and admin flag it
+last showed; nothing is written to the repository. The line returns only when one of these changes:
+
+| Change since the line was last seen | Line returns? |
+| --- | --- |
+| The account becomes a repo admin | Yes, now with **Protect** |
+| The state becomes `missing` or `conflicting` from another state | Yes |
+| The state becomes `drifted`, for a repo admin | Yes |
+| Anything else, including a move to `protected`, `unmanaged`, or `unavailable` | No |
+
+After a line has gone, the status stays available from the repository's **Branch protection** menu
+item on [Home](repositories.md#branch-protection).
+
+The page and the panel use two routes. `:id` is the repository's canonical id, percent-encoded:
+
+| Route | Does |
+| --- | --- |
+| `GET /api/repositories/:id/protection` | Returns the status report, the same JSON as `roborepo protect --check --json` |
+| `POST /api/repositories/:id/protection` | Runs one action from the body, `{ "action": "protect" \| "skip" \| "unskip" }`, and returns the report after it. Like every portal write, it requires the portal's origin and token |
+
 ### Onboarding
 
 The page shows one call to action at a time:

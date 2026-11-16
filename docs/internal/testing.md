@@ -54,7 +54,8 @@ The pre-push check catches the mistakes that have turned main red: skill structu
 generated-output drift (doctor), broken doc links, and whitespace errors or conflict markers in the
 pushed commits. Doctor and the docs check read the working tree, not the pushed commits, so a dirty
 tree can make them disagree with what is pushed; CI covers that gap. The check skips doctor's Node
-release lookup (`ROBOREPO_SKIP_NODE_RELEASE_CHECK=1`) and makes no network calls beyond the push's
+release lookup (`ROBOREPO_SKIP_NODE_RELEASE_CHECK=1`) and its branch protection read
+(`ROBOREPO_SKIP_PROTECTION_CHECK=1`), and makes no network calls beyond the push's
 own remote, which it asks for its default branch only when `<remote>/HEAD` is not recorded. It does
 not run the plan validator: CI does not
 validate plans, and the lifecycle transition commands already validate each plan they move.
@@ -81,36 +82,31 @@ flake, so read it when a CI run passes with retries.
 
 ### Require CI before merging to main
 
-The repository owner configures required status checks in the active `no-push-to-main` ruleset
-(26185384) for `kirinmurphy/roborepo-alpha`. GitHub uses these checks to block ordinary merges
-while CI is pending or failing. The owner needs an **Always allow** bypass to publish plan
-lifecycle commits directly.
+GitHub blocks an ordinary merge to `main` while CI is pending or failing because the
+`roborepo-main-merge` ruleset requires the CI job names as status checks. `roborepo protect`
+creates that ruleset and keeps it current; the rules and states are in
+[Branch protection](../user/reference/roborepo-cli.md#branch-protection).
 
-1. In the repository's GitHub settings, open **Rulesets** and edit **no-push-to-main**. Confirm
-   that the bypass list covers the owner with **Always allow**. If the entry is missing or uses
-   a different bypass mode, settle the bypass with the owner before saving changes.
-2. Leave the existing pull request review settings in place. Turn on **Require status checks
-   before merging**, then select the three check names from a recent CI run.
+The repository owner runs these steps, since the command needs repo admin rights:
 
-   | Setting | Value |
-   | --- | --- |
-   | Required status checks | `check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer` |
-   | Require branches to be up to date before merging | Off |
+1. From a checkout of this repository, run `roborepo protect`. It prints the rulesets it will
+   create or update, then the state it ends in. Expect `protected`.
+2. Read the **Other rulesets** lines of the report. Each hand-made ruleset marked as covered is
+   safe to delete in the repository's GitHub settings under **Rulesets**. Leave any that the report
+   says is still needed.
+3. Run `roborepo protect --check`. It reports `protected` and exits 0.
+4. On a PR with a failing or pending required check, verify that the ordinary merge path is
+   blocked.
 
-3. Save the ruleset and recheck the bypass and required checks in settings. On a PR with a failing
-   or pending required check, verify that the ordinary merge path is blocked.
-4. Verify that the next already-authorized lifecycle push succeeds using the owner's account.
+After a CI job is added, removed, or renamed in `.github/workflows/ci.yml`, the state reads
+`drifted` once the change has a successful run on `main`. The pull request that renames a job is
+itself held by the old check name, so the owner merges it with the admin bypass and then runs
+`roborepo protect` again. `roborepo doctor` reports the drift as a hint.
 
-After the owner confirms the change, read back the ruleset.
-
-```sh
-gh ruleset view 26185384 --repo kirinmurphy/roborepo-alpha
-```
-
-Use an account with ruleset write access to verify the bypass list from the command output.
-[GitHub ruleset settings](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository)
-and [ruleset API access](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset)
-describe the setup and who can see bypass entries.
+`scripts/test/protect-check.mjs`, `scripts/test/doctor-protection-check.mjs`, and
+`scripts/test/portal-ui/branch-protection.spec.mjs` cover the command, the doctor line, and the
+portal against a fake `gh` (`scripts/test/lib/fake-gh.mjs`) that answers the ruleset API from a
+JSON state file. None of them reaches GitHub.
 
 ## Publish Matrix
 

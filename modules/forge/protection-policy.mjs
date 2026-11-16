@@ -83,12 +83,12 @@ export function rulesetBody(policy, enforcement = "active") {
   };
 }
 
-const PULL_REQUEST_FLAGS = [
-  "dismiss_stale_reviews_on_push", "require_code_owner_review", "require_last_push_approval", "required_review_thread_resolution",
-];
 const ALL_MERGE_METHODS = ["merge", "rebase", "squash"];
 
-const checkContexts = (parameters) => (parameters?.required_status_checks || []).map((check) => check.context);
+const requiredChecks = (parameters) => parameters?.required_status_checks || [];
+const checkContexts = (parameters) => requiredChecks(parameters).map((check) => check.context);
+// False, null, and an empty list ask for nothing.
+const asksForNothing = (value) => value === undefined || value === null || value === false || (Array.isArray(value) && value.length === 0);
 
 // Whether `actual` is at least as strict as `wanted`, for two rules of one type. A parameter
 // `wanted` leaves out asks for nothing, so GitHub's defaults on `actual` never count against it.
@@ -98,14 +98,19 @@ export function ruleAtLeastAsStrict(actual, wanted) {
   const want = wanted.parameters || {};
   if (wanted.type === "pull_request") {
     const methods = (parameters) => parameters.allowed_merge_methods || ALL_MERGE_METHODS;
-    return (have.required_approving_review_count || 0) >= (want.required_approving_review_count || 0)
-      && PULL_REQUEST_FLAGS.every((flag) => !want[flag] || have[flag] === true)
-      && methods(have).every((method) => methods(want).includes(method));
+    const { required_approving_review_count: wantedCount = 0, allowed_merge_methods: _wantedMethods, ...requirements } = want;
+    return (have.required_approving_review_count || 0) >= wantedCount
+      && methods(have).every((method) => methods(want).includes(method))
+      // Every other setting is a requirement that is either off or has to be matched exactly.
+      && Object.entries(requirements).every(([key, value]) => asksForNothing(value) || isDeepStrictEqual(have[key], value));
   }
   if (wanted.type === "required_status_checks") {
-    const present = new Set(checkContexts(have));
-    return checkContexts(want).every((context) => present.has(context))
-      && (!want.strict_required_status_checks_policy || have.strict_required_status_checks_policy === true);
+    // A check tied to one app is stricter than the same check from any source.
+    const supplied = (check) => requiredChecks(have).some((candidate) => candidate.context === check.context
+      && (check.integration_id == null || candidate.integration_id === check.integration_id));
+    return requiredChecks(want).every(supplied)
+      && (!want.strict_required_status_checks_policy || have.strict_required_status_checks_policy === true)
+      && (!have.do_not_enforce_on_create || want.do_not_enforce_on_create === true);
   }
   // Types with no comparison of their own match only when their parameters are identical.
   return isDeepStrictEqual(have, want);

@@ -16,6 +16,17 @@ if (process.platform === "win32") {
   process.exit(0);
 }
 
+// modules/forge/ is the one home for `gh`: nothing else in shipped code may start it.
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
+const startsGh = /\b(?:execFile|execFileSync|execFileAsync|spawn|spawnSync)\(\s*["'`]gh["'`]/;
+const ghCallers = ["modules", "scripts/cli", "scripts/harnesses", "scripts/build", "scripts/lib", "scripts/install", "globals"]
+  .flatMap((dir) => fs.readdirSync(path.join(repoRoot, dir), { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.(?:mjs|js|cjs)$/.test(entry.name))
+    .map((entry) => path.relative(repoRoot, path.join(entry.parentPath, entry.name))))
+  .filter((file) => startsGh.test(fs.readFileSync(path.join(repoRoot, file), "utf8")));
+assert.deepEqual(ghCallers.map((file) => file.split(path.sep).join("/")), ["modules/forge/github.mjs"]);
+console.log("✓ Only modules/forge/ starts the GitHub CLI.");
+
 const cli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-protect-"));
 isolateGitConfig(root);
@@ -41,7 +52,10 @@ const handMade = (id, name, conditions, rules, extra = {}) => ({
   bypass_actors: [], conditions, rules, ...extra,
 });
 const protectMain = handMade(11, "protect-main", MAIN, [{ type: "deletion" }, { type: "non_fast_forward" }]);
-const noPushToMain = handMade(12, "no-push-to-main", MAIN, [pullRequest({ require_last_push_approval: false })], { bypass_actors: ADMIN_BYPASS });
+// The parameters GitHub returns for a pull_request rule made in its settings page.
+const noPushToMain = handMade(12, "no-push-to-main", MAIN, [pullRequest({
+  require_last_push_approval: false, require_extra_approval_for_unattributed_changes: false, required_reviewers: [],
+})], { bypass_actors: ADMIN_BYPASS });
 // Hand-made rulesets that together apply every policy rule.
 const fullyHandMade = [
   protectMain,
@@ -175,6 +189,10 @@ try {
   assert.equal(coverage(handMade(22, "all-branches", { ref_name: { include: ["~ALL"], exclude: [] } }, [{ type: "deletion" }])).covered, false, "a wider target is not covered");
   assert.equal(coverage(handMade(23, "two-approvals", MAIN, [pullRequest({ required_approving_review_count: 2 })], { bypass_actors: ADMIN_BYPASS })).covered, false, "a stricter rule is not covered");
   assert.equal(coverage(handMade(24, "signed", MAIN, [{ type: "required_signatures" }])).covered, false, "a rule the policy lacks is not covered");
+  assert.equal(coverage(handMade(28, "attributed-changes", MAIN, [pullRequest({ require_extra_approval_for_unattributed_changes: true })], { bypass_actors: ADMIN_BYPASS })).covered, false, "a requirement the managed rule lacks is not covered");
+  assert.equal(coverage(handMade(29, "squash-only", MAIN, [pullRequest({ allowed_merge_methods: ["squash"] })], { bypass_actors: ADMIN_BYPASS })).covered, false, "fewer allowed merge methods is stricter");
+  const oneAppCheck = { type: "required_status_checks", parameters: { strict_required_status_checks_policy: false, required_status_checks: [{ context: CHECKS[0], integration_id: 15368 }] } };
+  assert.equal(coverage(handMade(30, "one-app-check", MAIN, [oneAppCheck], { bypass_actors: ADMIN_BYPASS })).covered, false, "a check tied to one app is stricter");
   assert.equal(coverage(handMade(25, "explicit-main", { ref_name: { include: ["refs/heads/main"], exclude: [] } }, [{ type: "non_fast_forward" }])).covered, true, "the default branch named explicitly is the same target");
   const disabled = coverage(handMade(26, "paused", MAIN, [{ type: "deletion" }], { enforcement: "disabled" }));
   assert.deepEqual([disabled.covered, disabled.note], [false, "not enforced (disabled)"]);

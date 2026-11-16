@@ -66,6 +66,9 @@ const INTENTIONALLY_UNCLASSIFIED = new Set([
   // `browser run` executes scenario code, so a `roborepo browser` prefix entry would authorize
   // arbitrary code without a prompt. Asserted below.
   "browser",
+  // Writes repository rulesets on GitHub with the signed-in account's admin rights, so an agent
+  // must never run it unprompted. Asserted below.
+  "protect",
 ]);
 
 const unclassified = [...topLevel]
@@ -97,6 +100,7 @@ assert.ok(behaviorIds.has("mutate-harness-config"), "manifest must keep a 'mutat
 // --- agent-run must never be reachable as an allowlisted roborepo subcommand of itself ---------
 assert.equal(classified.get("run"), undefined, "plain `roborepo run` must NOT be bucketed allow — its payload is invisible to the prefix matcher");
 assert.equal(classified.get("browser"), undefined, "`roborepo browser` must NOT be bucketed — `browser run` executes scenario code and must always prompt");
+assert.equal(classified.get("protect"), undefined, "`roborepo protect` must NOT be bucketed — it changes GitHub repository settings and must always prompt");
 
 // agent-run IS manifest-allowed (that is the point: one safe prefix for the harness allowlist),
 // so the only thing keeping it from laundering a payload is the policy's nesting refusal. Pin

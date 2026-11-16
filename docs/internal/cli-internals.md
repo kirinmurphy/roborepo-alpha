@@ -27,6 +27,7 @@ thin composition root; commands are declared as JSON under
 | `scripts/harnesses/transcript-locate.mjs`, `scripts/harnesses/transcript-parse.mjs` | locate and parse harness transcripts for telemetry capture |
 | `scripts/cli/telemetry-analyze.mjs` | sessions, spikes, spike causes, token contributors, usage windows, spike-vs-normal |
 | `scripts/cli/portal-server.mjs` + `portal/` | loopback-only web portal routes and static assets |
+| `scripts/cli/protect.mjs` | `protect`: argument parsing, the printed report, exit codes, and doctor's one-line form (`--doctor`, run directly by `scripts/doctor.sh`) |
 | `scripts/cli/paths.mjs` | shared `repoRoot` / `sharedSkillsDir` |
 | `scripts/cli/skill-lib.mjs` | shared Node core (zip, prompts, symlink helpers) |
 
@@ -130,6 +131,22 @@ remove it. It never touches the real `claude.jsonl` / `codex.jsonl` spools.
 
 The capture record schema, markers, experiments, and API routes are documented in
 [Telemetry](../user/reference/telemetry.md).
+
+## Git host calls
+
+`modules/forge/` is the only code that runs the GitHub CLI. Nothing outside it calls `gh`, so the
+timeout, the disabled prompts, and the error mapping live in one place.
+
+| Module | Owns |
+| --- | --- |
+| `modules/forge/index.mjs` | `forgeClient(host)`: returns the client for a Git host, or `{ supported: false }` for a host with none |
+| `modules/forge/github.mjs` | The `gh` runner and the GitHub calls built on it: repository permissions, effective branch rules, rulesets, and the newest successful run's job names. Maps a failed call to an HTTP answer or to `unavailable` |
+| `modules/forge/protection-policy.mjs` | The managed rulesets as data, and the comparisons between a ruleset and the policy |
+| `modules/forge/protection.mjs` | Reading a repo's state, deciding which hand-made rulesets are covered, and the apply-then-read-again flow |
+
+`modules/delivery/operations.mjs` takes its `gh` runner from `forgeClient("github.com")`. The
+`roborepo protect` command, doctor, and the portal's `/api/repositories/:id/protection` routes all
+call `readProtection` and `applyProtection` in `protection.mjs`, so the three report the same state.
 
 ## Tests
 
