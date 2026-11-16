@@ -132,6 +132,9 @@
       <!-- The filters in effect, as removable tags; empty (and so hidden) when none are. -->
       <div class="filter-chips" id="filter-chips"></div>
       <section id="warnings" class="warnings" hidden></section>
+      <!-- One-time branch protection lines (protection-notice.js); kept apart from #warnings, which
+           the snapshot render replaces wholesale. -->
+      <section id="protection-notices" class="warnings" aria-label="Branch protection" hidden></section>
       <section id="groups" class="groups"></section>
     </main>
     <!-- The enable-skill onboarding banner (tpl-package-banner) lives in plan-drawer-partial.html,
@@ -320,6 +323,7 @@
     </template>
     {{PLAN_DRAWER}}
     {{REPOSITORY_SOURCES}}
+    {{PROTECTION_PANEL}}
 
     <script src="/portal/shared/icon.js" type="module"></script>
     <script src="/portal/shared/notice.js" type="module"></script>

@@ -175,6 +175,11 @@ const renderPlanDrawer = () => fs.readFileSync(PLAN_DRAWER_PARTIAL_PATH, "utf8")
 const REPOSITORY_SOURCES_PARTIAL_PATH = path.join(PORTAL_DIR, "shared", "repository-sources-partial.html");
 const renderRepositorySources = () => fs.readFileSync(REPOSITORY_SOURCES_PARTIAL_PATH, "utf8");
 
+// The branch protection panel (dialog and templates) Home and Plans share. Only pages that place
+// {{PROTECTION_PANEL}} get it.
+const PROTECTION_PANEL_PARTIAL_PATH = path.join(PORTAL_DIR, "shared", "protection-panel-partial.html");
+const renderProtectionPanel = () => fs.readFileSync(PROTECTION_PANEL_PARTIAL_PATH, "utf8");
+
 const pageHtml = (page, token, routeParams = {}) =>
   fs
     .readFileSync(path.join(PORTAL_DIR, page.dir, "index.html"), "utf8")
@@ -184,6 +189,7 @@ const pageHtml = (page, token, routeParams = {}) =>
     .replace("{{WIDGET_TEMPLATES}}", renderWidgetTemplates())
     .replace("{{PLAN_DRAWER}}", () => renderPlanDrawer())
     .replace("{{REPOSITORY_SOURCES}}", () => renderRepositorySources())
+    .replace("{{PROTECTION_PANEL}}", () => renderProtectionPanel())
     .replace(
       "</head>",
       `<meta name="cli-portal-token" content="${token}" />\n` +

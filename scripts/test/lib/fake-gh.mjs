@@ -28,20 +28,23 @@ export function fakeGitHubState(overrides = {}) {
 // Creates the executable under `root` and returns helpers for driving it from a check.
 export function createFakeGh(root) {
   const dir = path.join(root, "fake-gh-bin");
-  const statePath = path.join(root, "fake-gh-state.json");
-  const logPath = path.join(root, "fake-gh.log");
+  const env = { FAKE_GH_STATE: path.join(root, "fake-gh-state.json"), FAKE_GH_LOG: path.join(root, "fake-gh.log") };
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "gh"), FAKE_GH_SOURCE, { mode: 0o755 });
-  fs.writeFileSync(logPath, "");
-  const setState = (state) => fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
-  setState(fakeGitHubState());
+  const fake = { dir, env, ...fakeGhControls(env) };
+  fake.clearCalls();
+  fake.setState(fakeGitHubState());
+  return fake;
+}
+
+// The state and log helpers for a fake created elsewhere, located by the `env` it was given. A
+// browser spec uses this to drive the fake its portal server was started with.
+export function fakeGhControls(env) {
   return {
-    dir,
-    env: { FAKE_GH_STATE: statePath, FAKE_GH_LOG: logPath },
-    setState,
-    readState: () => JSON.parse(fs.readFileSync(statePath, "utf8")),
-    clearCalls: () => fs.writeFileSync(logPath, ""),
-    calls: () => fs.readFileSync(logPath, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)),
+    setState: (state) => fs.writeFileSync(env.FAKE_GH_STATE, JSON.stringify(state, null, 2)),
+    readState: () => JSON.parse(fs.readFileSync(env.FAKE_GH_STATE, "utf8")),
+    clearCalls: () => fs.writeFileSync(env.FAKE_GH_LOG, ""),
+    calls: () => fs.readFileSync(env.FAKE_GH_LOG, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line)),
   };
 }
 

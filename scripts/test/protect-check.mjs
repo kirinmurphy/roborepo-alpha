@@ -249,7 +249,7 @@ try {
   result = run([]);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /is conflicting/);
-  assert.match(result.stdout, /Rule pull_request from ruleset everything-needs-review reaches the plans branch/);
+  assert.match(result.stdout, /Rule pull_request from ruleset everything-needs-review reaches the repo-plans branch and will refuse plan saves\. Exclude that branch from the ruleset\./);
   assert.deepEqual(writes(), []);
   result = run(["--skip", "main-merge"]);
   assert.match(result.stdout, /Nothing was changed while the state is conflicting\./);

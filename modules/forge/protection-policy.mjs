@@ -39,6 +39,7 @@ export function managedRulesets({ requiredChecks = [] } = {}) {
       },
     });
   }
+  // `risk` completes "Without it, …" wherever a missing ruleset is reported.
   return [
     {
       key: "plans",
@@ -47,6 +48,7 @@ export function managedRulesets({ requiredChecks = [] } = {}) {
       include: [`refs/heads/${PLANS_BRANCH}`],
       rules: [{ type: "deletion" }, { type: "non_fast_forward" }, { type: "required_linear_history" }],
       bypass_actors: [],
+      risk: "plan history can be deleted or rewritten",
     },
     {
       key: "main-integrity",
@@ -55,6 +57,7 @@ export function managedRulesets({ requiredChecks = [] } = {}) {
       include: [DEFAULT_BRANCH_REF],
       rules: [{ type: "deletion" }, { type: "non_fast_forward" }],
       bypass_actors: [],
+      risk: "the default branch can be deleted or force-pushed",
     },
     {
       key: MERGE_POLICY_KEY,
@@ -63,6 +66,7 @@ export function managedRulesets({ requiredChecks = [] } = {}) {
       include: [DEFAULT_BRANCH_REF],
       rules: mergeRules,
       bypass_actors: [REPO_ADMIN_BYPASS],
+      risk: "changes can reach the default branch without review or passing CI",
     },
   ];
 }

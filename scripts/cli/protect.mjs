@@ -64,23 +64,14 @@ async function currentRepositoryId(cwd) {
   return origin.ok ? normalizeGitRemote(origin.stdout.trim()) : null;
 }
 
-const STATE_SUMMARY = {
-  protected: "protected: both branches match the RoboRepo policy",
-  unmanaged: "unmanaged: both branches are protected, but by hand-made rulesets rather than RoboRepo's",
-  missing: "missing: part of the policy does not apply yet",
-  drifted: "drifted: a RoboRepo ruleset no longer matches the policy",
-  conflicting: `conflicting: a rule on the plans branch will refuse plan saves`,
-  unavailable: "unavailable: GitHub could not be read",
-  unsupported: "unsupported: RoboRepo cannot manage protection for this repo",
-};
-
 function formatReport(report) {
-  const lines = [`Branch protection${report.repository ? ` for ${report.repository}` : ""} is ${STATE_SUMMARY[report.state]}.`];
+  const lines = [`Branch protection${report.repository ? ` for ${report.repository}` : ""} is ${report.state}. ${report.headline}`];
   if (report.reason) lines.push(`  Reason: ${report.reason}`);
-  for (const policy of report.policies) lines.push(`  ${policy.name} (${policy.branch}): ${describePolicy(policy)}`);
-  for (const conflict of report.conflicts) {
-    lines.push(`  Rule ${conflict.rule} from ruleset ${conflict.ruleset} reaches the plans branch. Exclude that branch from the ruleset.`);
+  for (const policy of report.policies) {
+    const unskip = policy.status === "skipped" ? "; roborepo protect --unskip main-merge turns it back on" : "";
+    lines.push(`  ${policy.name} (${policy.branch}): ${policy.detail}${unskip}`);
   }
+  for (const conflict of report.conflicts) lines.push(`  ${conflict.detail}`);
   if (report.policies.length > 0) {
     lines.push(report.requiredChecks.length > 0
       ? `  Required CI checks: ${report.requiredChecks.join(", ")}`
@@ -96,15 +87,6 @@ function formatReport(report) {
     report.manualSteps.forEach((step, index) => lines.push(`    ${index + 1}. ${step}`));
   }
   return lines.join("\n");
-}
-
-function describePolicy(policy) {
-  if (policy.status === "skipped") return "skipped (turned off for this repo; roborepo protect --unskip main-merge turns it back on)";
-  if (policy.status === "ok") return "matches the policy";
-  if (policy.status === "drifted") return `differs from the policy: ${policy.drift.join("; ")}`;
-  return policy.missingRules.length > 0
-    ? `not created; missing ${policy.missingRules.join(", ")}`
-    : "not created; hand-made rulesets apply its rules";
 }
 
 function formatChanges(changes) {

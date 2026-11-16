@@ -16,6 +16,8 @@ import { createBacklogController } from "./backlog.js";
 import { NAMESPACE_PARAM, hrefWithNamespace } from "./backlog-model.js";
 import { createBlockersPopover } from "./blockers-popover.js";
 import { createPlanImportDialog } from "./plan-import-dialog.js";
+import { createProtectionNotices } from "./protection-notice.js";
+import { createProtectionPanel } from "/portal/shared/protection-panel.js";
 import { mountOverflowNav } from "/portal/shared/overflow-nav.js";
 import {
   clearRepositoryScope,
@@ -53,6 +55,8 @@ const state = {
 
 const groupsEl = document.getElementById("groups");
 const warningsEl = document.getElementById("warnings");
+const protectionPanel = createProtectionPanel({ onChange: (repositoryId, report) => protectionNotices.update(repositoryId, report) });
+const protectionNotices = createProtectionNotices({ container: document.getElementById("protection-notices"), panel: protectionPanel });
 const bannerEl = document.getElementById("package-banner");
 const plansHeaderEl = document.getElementById("plans-header");
 const filtersToggleEl = document.getElementById("filters-toggle");
@@ -146,7 +150,7 @@ function bindStaticControls() {
     refreshIconEl.hidden = true;
     refreshSpinnerEl.hidden = false;
     void refreshOverview();
-    api.refreshSnapshot().then(applySnapshot).catch(showLoadError).finally(() => {
+    api.refreshSnapshot().then(applyFreshSnapshot).catch(showLoadError).finally(() => {
       refreshEl.disabled = false;
       refreshIconEl.hidden = false;
       refreshSpinnerEl.hidden = true;
@@ -235,7 +239,7 @@ async function load() {
   const sequence = ++loadSequence;
   try {
     const snapshot = await api.fetchSnapshot();
-    if (sequence === loadSequence) applySnapshot(snapshot);
+    if (sequence === loadSequence) applyFreshSnapshot(snapshot);
   } catch (err) {
     if (sequence === loadSequence) showLoadError(err);
   } finally {
@@ -271,6 +275,14 @@ async function reloadAfterChange() {
   }
   applySnapshot(snapshot);
   return true;
+}
+
+// A page load or Refresh: also re-read branch protection for the repos on the board. That read
+// goes to GitHub, so it runs apart from the snapshot and never delays the plan list.
+function applyFreshSnapshot(snapshot) {
+  applySnapshot(snapshot);
+  const scanned = (snapshot.repositoryScans || []).filter((scan) => scan.state === "scanned" && scan.repositoryId.startsWith("git:github.com/"));
+  void protectionNotices.refresh(scanned.map((scan) => scan.repositoryId));
 }
 
 function applySnapshot(snapshot) {

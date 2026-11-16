@@ -110,24 +110,31 @@ export function assessProtection(snapshot) {
 
   const policies = managedRulesets({ requiredChecks }).map((policy) => {
     const ruleset = managed.get(policy.name);
-    const base = { key: policy.key, name: policy.name, branch: policy.branch === "plans" ? PLANS_BRANCH : defaultBranch, rulesetId: ruleset?.id ?? null };
+    const base = {
+      key: policy.key, name: policy.name, branch: policy.branch === "plans" ? PLANS_BRANCH : defaultBranch,
+      rulesetId: ruleset?.id ?? null, risk: policy.risk,
+    };
     if (policy.key === MERGE_POLICY_KEY && ruleset?.enforcement === "disabled") {
-      return { ...base, status: "skipped", missingRules: [], drift: [] };
+      return describedPolicy({ ...base, status: "skipped", missingRules: [], drift: [] });
     }
     if (ruleset) {
       const drift = rulesetDrift(ruleset, policy, { defaultBranch, bypassVisible });
-      return { ...base, status: drift.length ? "drifted" : "ok", missingRules: [], drift };
+      return describedPolicy({ ...base, status: drift.length ? "drifted" : "ok", missingRules: [], drift });
     }
     // With no managed ruleset, a policy rule is missing unless some other ruleset applies it.
     const effective = policy.branch === "plans" ? plansRules : mainRules;
     const missingRules = policy.rules.filter((wanted) => !effective.some((rule) => ruleAtLeastAsStrict(rule, wanted))).map((rule) => rule.type);
-    return { ...base, status: "absent", missingRules, drift: [] };
+    return describedPolicy({ ...base, status: "absent", missingRules, drift: [] });
   });
 
   const names = new Map(rulesets.map((ruleset) => [ruleset.id, ruleset.name]));
-  const conflicts = plansRules.filter((rule) => !PLANS_SAFE_RULE_TYPES.has(rule.type)).map((rule) => ({
-    rule: rule.type, rulesetId: rule.ruleset_id ?? null, ruleset: names.get(rule.ruleset_id) || rule.ruleset_source || "an unnamed ruleset",
-  }));
+  const conflicts = plansRules.filter((rule) => !PLANS_SAFE_RULE_TYPES.has(rule.type)).map((rule) => {
+    const ruleset = names.get(rule.ruleset_id) || rule.ruleset_source || "an unnamed ruleset";
+    return {
+      rule: rule.type, rulesetId: rule.ruleset_id ?? null, ruleset,
+      detail: `Rule ${rule.type} from ruleset ${ruleset} reaches the ${PLANS_BRANCH} branch and will refuse plan saves. Exclude that branch from the ruleset.`,
+    };
+  });
 
   const state = conflicts.length ? "conflicting"
     : policies.some((policy) => policy.missingRules.length) ? "missing"
@@ -136,11 +143,31 @@ export function assessProtection(snapshot) {
           : "protected";
 
   return {
-    state, reason: null, repository: repo, defaultBranch, login, admin, bypassVisible,
+    state, headline: STATE_HEADLINES[state], reason: null, repository: repo, defaultBranch, login, admin, bypassVisible,
     policies, conflicts,
     requiredChecks,
     handMade: handMadeRulesets(rulesets, { defaultBranch, bypassVisible }),
   };
+}
+
+// One sentence per state, shared by the command and the portal panel.
+const STATE_HEADLINES = {
+  protected: "Both branches match the RoboRepo policy.",
+  unmanaged: "Both branches are protected, but by hand-made rulesets rather than RoboRepo's.",
+  missing: "Part of the policy does not apply yet.",
+  drifted: "A RoboRepo ruleset no longer matches the policy.",
+  conflicting: "A rule on the plans branch will refuse plan saves.",
+  unavailable: "GitHub could not be read.",
+  unsupported: "RoboRepo cannot manage protection for this repo.",
+};
+
+function describedPolicy(policy) {
+  const detail = policy.status === "skipped" ? "skipped (turned off for this repo)"
+    : policy.status === "ok" ? "matches the policy"
+      : policy.status === "drifted" ? `differs from the policy: ${policy.drift.join("; ")}`
+        : policy.missingRules.length > 0 ? `not created; missing ${policy.missingRules.join(", ")}`
+          : "not created; hand-made rulesets apply its rules";
+  return { ...policy, detail };
 }
 
 // Each ruleset RoboRepo does not manage, and whether the active managed rulesets make it
@@ -185,7 +212,7 @@ export function planChanges(report, action) {
 }
 
 function unsupportedReport(repo, reason) {
-  return { ...emptyReport(repo), state: "unsupported", reason, manualSteps: MANUAL_STEPS };
+  return { ...emptyReport(repo, "unsupported"), reason, manualSteps: MANUAL_STEPS };
 }
 
 function failureReport(repo, error) {
@@ -193,12 +220,12 @@ function failureReport(repo, error) {
     return unsupportedReport(repo, `GitHub does not offer rulesets for this repo: ${error.message}`);
   }
   const reason = error.kind === "http" ? `GitHub answered ${error.status}: ${error.message}` : error.message;
-  return { ...emptyReport(repo), state: "unavailable", reason };
+  return { ...emptyReport(repo, "unavailable"), reason };
 }
 
-function emptyReport(repo) {
+function emptyReport(repo, state) {
   return {
-    state: null, reason: null, repository: repo, defaultBranch: null, login: null, admin: false, bypassVisible: false,
+    state, headline: STATE_HEADLINES[state], reason: null, repository: repo, defaultBranch: null, login: null, admin: false, bypassVisible: false,
     policies: [], conflicts: [], requiredChecks: [], handMade: [],
   };
 }
