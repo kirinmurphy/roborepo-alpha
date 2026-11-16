@@ -504,6 +504,14 @@ Acceptance criteria:
 - **2026-11-16 — Merged `main` into the branch (d1d9eb20).** `main` added a `plan-lifecycle` behavior
   that owns `plans sync-base` and `stop-servers`, so `plan-store-commands` no longer lists them.
 
+- **2026-11-16 — A branch switch counts alongside the branch before it.** The hook cannot see
+  whether `git switch` succeeds, and `;` or `||` would run the next command either way. So a
+  checkout is treated as protected if either branch is. Alternative: tracking `&&` versus `;`
+  (rejected: the command splitter drops the operator, and the gain is only fewer over-denials). Cost:
+  `git checkout feat && git merge main` from a main checkout is denied, which agents should not run
+  there anyway. The two Validator escalations (tracking branches and `@{-N}`; a later `--no-ff`)
+  were taken as fixes because each only makes the guard stricter.
+
 ## Not tested
 
 - [ ] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
@@ -648,6 +656,16 @@ Acceptance criteria:
 - [x] A merge finished by `git commit` (after a conflict or `--no-commit`) skipped the backstop —
       fixed (ede8eaa4): `pre-commit` refuses while `MERGE_HEAD` exists on a protected branch
 - [x] A hook comment still said `gh pr merge` asks — fixed (ede8eaa4)
+- [x] A trailing slash, glob, or `..` through a symlink escaped the real-path check — fixed
+      (88ecb126): operands are resolved segment by segment
+- [x] Not following a `cd` to a missing folder broke `mkdir d && cd d && rm -rf ../../main` — fixed
+      (88ecb126): later commands are judged in both folders
+- [x] A switch that fails before `;` or `||` was trusted — fixed (88ecb126): the branch before it
+      still counts
+- [x] `git checkout -b/-B/--orphan main` was not recorded — fixed (88ecb126)
+- [x] `--track origin/main` and `@{-N}` were under-asked, and a later `--no-ff` did not cancel
+      `--ff-only` — escalated by the Validator, decided in the Decision Log (2026-11-16) and fixed
+      (88ecb126)
 
 ### Verification
 
@@ -718,6 +736,9 @@ Acceptance criteria:
   dash): 4 `fix` findings, fixed in ede8eaa4, which also denies `git am` and reads option values
   correctly; the remaining forms it named (`--git-dir`/`GIT_DIR`, quoted program names, `timeout`,
   `eval`, aliases) are shared with the delete guard and documented as not seen
+- Validation pass 20 at ede8eaa4 (fresh-context subagent, about 3,500 probe commands): 4 `fix`,
+  2 `escalate`, and 3 `base` findings; fixes and both escalations in 88ecb126. The `base` items
+  (`env -C`, Codex escalations, `--no-verify` commits) predate this branch's changes
 - Full local gate at 8ea28b21: one `test-cli.sh` MCP case failed (`claude mcp add` found no validated
   Claude executable). It ran while a Validator ran thousands of probe commands, and its fake
   `claude` must answer `--version` within 2 seconds; the hook change does not reach it, and the
