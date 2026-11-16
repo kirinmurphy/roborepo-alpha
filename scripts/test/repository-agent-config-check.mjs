@@ -383,6 +383,27 @@ try {
       "codex:.codex/agents/own.toml:agent:false",
     ],
   );
+  // Inside a harness's own folder, a skill or command named like a build output is still listed,
+  // while the same names elsewhere stay skipped.
+  const NAMED_REMOTE = "https://github.com/acme/build-named-skills.git";
+  const named = makeRepo("build-named-skills", {
+    ".claude/skills/build/SKILL.md": "---\nname: build\n---\n",
+    ".claude/skills/coverage/SKILL.md": "---\nname: coverage\n---\n",
+    ".agents/skills/vendor/SKILL.md": "---\nname: vendor\n---\n",
+    ".claude/commands/out/ship.md": "Ship it\n",
+    "build/CLAUDE.md": "# generated\n",
+    "vendor/lib/AGENTS.md": "# vendored\n",
+  }, { remote: NAMED_REMOTE });
+  const namedRegistry = registryWith(normalizeGitRemote(NAMED_REMOTE), [{ path: named, kind: "primary" }]);
+  const namedInventory = await loadRepositoryAgentConfig({ registry: namedRegistry, repositoryId: normalizeGitRemote(NAMED_REMOTE), runtime });
+  assert.deepEqual(namedInventory.entries.map((entry) => entry.path).sort(), [
+    ".agents/skills/vendor/SKILL.md", ".claude/commands/out/ship.md",
+    ".claude/skills/build/SKILL.md", ".claude/skills/coverage/SKILL.md",
+  ]);
+  assert.deepEqual(namedInventory.truncated, []);
+  const namedPreview = (id) => loadRepositoryAgentConfigSource({ registry: namedRegistry, repositoryId: normalizeGitRemote(NAMED_REMOTE), id, runtime });
+  assert.equal((await namedPreview("claude:.claude/skills/build/SKILL.md")).ok, true, "the preview agrees with the walk");
+  assert.equal((await namedPreview("claude:build/CLAUDE.md")).ok, false, "a real build folder stays skipped");
   const linkedCapped = await loadRepositoryAgentConfig({
     registry: linkedRegistry, repositoryId: normalizeGitRemote(LINKED_REMOTE), runtime, limits: { ...INVENTORY_LIMITS, maxFiles: 1 },
   });

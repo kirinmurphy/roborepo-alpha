@@ -109,7 +109,8 @@ unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answer
   checkout substitutes. HEAD is read from the checkout's `HEAD` file; a reftable repo's placeholder
   there is resolved with `git symbolic-ref` and `git rev-parse` instead.
 - **Discovery.** A breadth-first walk bounded by `INVENTORY_LIMITS` (depth, entries visited, files
-  returned, bytes per file and in total). It skips `.git`, dependency trees, and build outputs, skips
+  returned, bytes per file and in total). It skips `.git`, dependency trees, and build outputs (inside
+  `.claude`, `.agents`, or `.codex` only `.git`, so a skill named `build` is still found), skips
   any subfolder with its own `.git`, and never follows symlinks: a symlink that names a native source
   is returned as a reference. Each relative path goes to every provider's `projectInventory.classify`
   (see `docs/internal/harness-provider-interface.md`), whatever the machine's enablement.

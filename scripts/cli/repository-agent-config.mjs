@@ -40,6 +40,17 @@ const SKIPPED_DIRECTORIES = new Set([
 ]);
 
 const SKIPPED_LOWERCASE = new Set([...SKIPPED_DIRECTORIES].map((name) => name.toLowerCase()));
+// Inside a harness's own folder, names like `build` or `vendor` are a skill's or command's name, not
+// a build output, so only Git internals are skipped there.
+const NATIVE_FOLDERS = new Set([".claude", ".agents", ".codex"]);
+
+// Whether the walk skips folder `name` when its ancestors are `ancestors` (path segments).
+// Compared case-insensitively: on a case-insensitive filesystem `Node_Modules` is `node_modules`.
+function skippedFolder(name, ancestors) {
+  const lower = name.toLowerCase();
+  if (ancestors.some((segment) => NATIVE_FOLDERS.has(segment.toLowerCase()))) return lower === ".git";
+  return SKIPPED_LOWERCASE.has(lower);
+}
 
 const GIT_TIMEOUT_MS = 5000;
 const GIT_BATCH = 200;
@@ -205,7 +216,7 @@ function walkCheckout(root, providers, limits) {
         continue;
       }
       if (dirent.isDirectory()) {
-        if (SKIPPED_LOWERCASE.has(dirent.name.toLowerCase())) continue;
+        if (skippedFolder(dirent.name, rel ? rel.split("/") : [])) continue;
         if (depth + 1 > limits.maxDepth) {
           truncated.add("depth");
           continue;
@@ -231,11 +242,10 @@ function cleanSegments(relPath) {
 
 // Whether the walk could have reached these segments: no skipped folder on the way and no deeper
 // than its depth limit. A preview names only what the inventory could list.
-// Compared case-insensitively: on a case-insensitive filesystem `Node_Modules` is `node_modules`.
 function withinWalk(parts, limits) {
   if (!parts) return false;
   const folders = parts.slice(0, -1);
-  return folders.length <= limits.maxDepth && !folders.some((folder) => SKIPPED_LOWERCASE.has(folder.toLowerCase()));
+  return folders.length <= limits.maxDepth && !folders.some((folder, index) => skippedFolder(folder, folders.slice(0, index)));
 }
 
 // Reads a regular file inside the checkout, rechecking at read time that every parent is a real

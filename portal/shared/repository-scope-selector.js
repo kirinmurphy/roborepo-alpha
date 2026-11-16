@@ -2,8 +2,9 @@
 // `repositoryScope`. It lists the visible repositories, writes the choice to the URL through
 // repository-scope.js, and opens the shared Manage repositories dialog from an action row.
 //
-// Pages that need to know what the scope resolved to (Agents, which loads no repository data) use
-// onRepositoryScopeResolved; pages with scoped data routes also get the same answer from the route.
+// Pages that need to know what the scope resolved to use onRepositoryScopeResolved. Agents uses it to
+// choose between its global page and the repo inspector before any data request; pages with scoped
+// data routes also get the same answer from the route.
 import "/portal/shared/option-dropdown.js";
 import { portalGetJson, portalTpl as tpl } from "/portal/shared/api.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
