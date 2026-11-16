@@ -144,10 +144,12 @@ if (route === "actions/workflows") {
   const workflows = state.workflows || [...new Set(state.runs.map(workflowOf))].map((id) => ({ id, state: "active" }));
   reply({ total_count: workflows.length, workflows });
 }
-if (route === "actions/runs") {
+const workflowRuns = route.match(/^actions\\/workflows\\/(\\d+)\\/runs$/);
+if (workflowRuns) {
   const wanted = params.get("status");
   const event = params.get("event");
-  const runs = state.runs.filter((run) => (!wanted || run.conclusion === wanted) && (!event || (run.event || "pull_request") === event));
+  const runs = state.runs.filter((run) => workflowOf(run) === Number(workflowRuns[1])
+    && (!wanted || run.conclusion === wanted) && (!event || (run.event || "pull_request") === event));
   reply({ workflow_runs: runs.slice(0, Number(params.get("per_page") || 30)).map((run) => ({ id: run.id, conclusion: run.conclusion, status: "completed", event: run.event || "pull_request", workflow_id: workflowOf(run) })) });
 }
 const jobs = route.match(/^actions\\/runs\\/(\\d+)\\/jobs$/);

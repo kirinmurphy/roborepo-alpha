@@ -229,6 +229,11 @@ try {
   result = run(["--check", "--json"]);
   assert.deepEqual(result.json.requiredChecks, ["build", "lint"], "every pull-request workflow counts; a push-only workflow and a disabled one do not");
 
+  // A quiet workflow whose newest run sits behind 150 newer runs of a busy one still counts.
+  const busy = Array.from({ length: 150 }, (_, index) => ({ id: 2000 - index, conclusion: "success", workflow: 1, jobs: [{ name: "build", conclusion: "success" }] }));
+  start({ runs: [...busy, { id: 800, conclusion: "success", workflow: 2, jobs: [{ name: "nightly-lint", conclusion: "success" }] }] });
+  assert.deepEqual(run(["--check", "--json"]).json.requiredChecks, ["build", "nightly-lint"]);
+
   // No successful pull-request run and no managed merge ruleset: the status-check rule is left out.
   start({ runs: [{ id: 611, conclusion: "failure", jobs: [{ name: "broken", conclusion: "failure" }] }] });
   result = run([]);
@@ -241,7 +246,8 @@ try {
   start();
   assert.equal(run([]).status, 0);
   const guarded = gh.readState();
-  for (const overrides of [{ runs: [] }, { failure: "actions-off" }]) {
+  const allSkipped = [{ id: 900, conclusion: "success", jobs: [{ name: "check (ubuntu-latest)", conclusion: "skipped" }] }];
+  for (const overrides of [{ runs: [] }, { failure: "actions-off" }, { runs: allSkipped }]) {
     start({ ...guarded, ...overrides });
     result = run(["--check", "--json"]);
     assert.deepEqual([result.json.state, result.json.checksSource, result.json.requiredChecks], ["protected", "kept", ["check (macos-latest)", "check (ubuntu-latest)"]]);
