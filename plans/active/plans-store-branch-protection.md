@@ -504,6 +504,11 @@ implementation task depends on it.
       say why — fixed with a browser test (ee8c010c)
 - [x] A comment in `scripts/cli/repository-protection.mjs` said GitHub failures reject — fixed
       (ee8c010c)
+- [x] The Plans notice comment said a line stays up for the whole page load; it clears on the next
+      refresh — fixed (ae8aa292)
+- [x] A write GitHub refuses partway through an apply had no test — added (ae8aa292)
+- [x] `plans-portal.md` said the GET protection route returns the same JSON as the CLI, which adds
+      `changes` and `refusal` — fixed (ae8aa292)
 - [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
       Open questions
 
@@ -511,6 +516,7 @@ implementation task depends on it.
 
 - Validation pass 1 (fresh-context subagent) at bb4ce734: 4 fix, 1 escalate (plus one fix split
   across code and docs).
+- Validation pass 2 (fresh-context subagent) at ee8c010c: 3 fix, 0 escalate.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
