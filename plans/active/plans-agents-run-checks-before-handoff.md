@@ -1,6 +1,6 @@
 ---
 id: 5xw1mmqy
-next_action: Built and committed, with fixes from three validation passes; the third pass's fixes are not yet revalidated. Run /plan-execute on this plan to run the next validation pass and submit it for review.
+next_action: Built, validated, and waiting for a person to review it; one check needs you (run a real plan with this branch's skills installed and confirm the review asks only for what an agent cannot do). Run /plan-review on this plan.
 blocked_by: []
 depends_on: []
 related: ["9671042v", "i5mnkm7z", "0jped168", "9njvfh5z", "vzgsx5vz"]
@@ -459,6 +459,8 @@ None.
   `base`
 - Validation pass 3 at 0a565aa7 (fresh-context subagent): three `fix` findings, no `escalate`, no
   `base`
+- Validation: clean on pass 4 at 6cb5f0a4 (fresh-context subagent): no findings, nothing outside
+  this plan
 - New test cases shown to fail before the change: the new `plan-lifecycle-transitions-check.mjs`
   run against an untouched copy of `main` at 26dad21f failed on the freshness case ("a check
   nobody recorded evidence for cannot sit under a complete review": `fresh`, expected
