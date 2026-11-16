@@ -195,7 +195,7 @@
     {
       "id": "push-code",
       "label": "Push code",
-      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history.",
+      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history. Under Claude, ask renders no rule: an ask rule outranks the hook's approval, so the hook alone asks about a push it cannot verify.",
       "kind": "commands",
       "commands": [
         [
@@ -204,6 +204,7 @@
         ]
       ],
       "bucket": "ask",
+      "askDecidedByHook": true,
       "category": "git"
     },
     {

@@ -120,7 +120,6 @@
       "Bash(gh workflow run:*)"
     ],
     "ask": [
-      "Bash(git push:*)",
       "Bash(git pull:*)",
       "Bash(git checkout:*)",
       "Bash(git switch:*)",

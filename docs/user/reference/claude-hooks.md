@@ -31,9 +31,16 @@ force-push to any branch.
 So the same hooks also refuse a hand-made commit or merge commit in a checkout of `repo-plans`: the
 `pre-commit` and `pre-merge-commit` hooks in the same folder stop it before it is recorded.
 
-The permission settings leave `git push` at **ask**. The protected-branch hook is what approves a
-push, and only one it has checked. So an install without the hooks, a harness without them (Gemini),
-and `roborepo agent-run` all keep the prompt.
+The permission settings leave `git push` (`push-code`) at **ask**. The protected-branch hook is
+what approves a push, and only one it has checked. So a harness without the hook (Gemini) and
+`roborepo agent-run` keep the prompt.
+
+For Claude, that ask renders no permission rule. Claude applies an ask rule even when a hook
+approves the call, so with the rule in place every push prompted, verified or not. Without it, the
+hook decides: it allows a verified feature-branch push, asks about one it cannot check, and denies
+`main` and force pushes, which the `rewrite-history` deny rules also block. If the hook is missing,
+an unlisted `git push` still prompts in Claude's default permission mode. Setting `push-code` to
+`allow` or `deny` renders those rules as usual.
 
 Two checks enforce this, for Claude and Codex alike:
 

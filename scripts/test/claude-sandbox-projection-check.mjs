@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { CLAUDE_SANDBOX_EXCLUDED_COMMANDS } from "../harnesses/claude/sandbox-settings.mjs";
+import { claudePermissions } from "../harnesses/permissions-render.mjs";
 
 const manifest = JSON.parse(fs.readFileSync(new URL("../../manifests/inventory/agent-permissions.json", import.meta.url)));
 const claude = getHarnessProvider("claude");
@@ -42,6 +43,14 @@ assert.ok(permissions.deny.includes("Read(//**/*.pem)"), "read-secrets Read deni
 // branch switches run outside it because the desktop app skips ask rules for sandboxed commands.
 // Merging a pull request prompts rather than being refused; gh runs outside the sandbox anyway.
 const bucketOf = (rule) => ["allow", "ask", "deny"].filter((key) => permissions[key].includes(rule));
+// push-code at ask renders no Claude rule: an ask rule would outrank the protected-branch hook's
+// approval of a verified push. The force variants stay denied, and an explicit allow or deny renders.
+assert.deepEqual(bucketOf("Bash(git push:*)"), [], "push-code ask is left to the hook");
+assert.deepEqual(bucketOf("Bash(git push --force:*)"), ["deny"], "force pushes stay denied");
+for (const bucket of ["allow", "deny"]) {
+  const overridden = claudePermissions(manifest, { behaviors: { "push-code": bucket } });
+  assert.ok(overridden[bucket].includes("Bash(git push:*)"), `push-code ${bucket} still renders`);
+}
 assert.deepEqual(bucketOf("Bash(rm:*)"), ["allow"], "delete-files allows rm");
 assert.deepEqual(bucketOf("Bash(git rm:*)"), ["allow"], "delete-files allows git rm");
 assert.deepEqual(bucketOf("Bash(gh pr merge:*)"), ["deny"], "merge-pull-requests denies");

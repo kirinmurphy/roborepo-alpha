@@ -298,6 +298,10 @@ export function claudePermissions(manifest, overrides = {}, { home: _home = os.h
     // provider renders its own sandbox key from network-hosts and shell-sandbox.
     if (b.kind === "network" || b.kind === "network-hosts" || b.kind === "shell-sandbox") continue;
     if (b.kind !== "commands") continue;
+    // Claude applies an ask rule even when a PreToolUse hook allows the call, so a hook that approves
+    // what it can verify (the protected-branch hook for `git push`) needs no ask rule beside it: the
+    // hook asks about the rest itself. Allow and deny still render.
+    if (b.bucket === "ask" && b.askDecidedByHook) continue;
     const bucket = b.bucket === "deny" ? deny : b.bucket === "ask" ? ask : allow;
     for (const pattern of b.commands ?? []) bucket.push(commandToClaude(pattern));
   }
