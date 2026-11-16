@@ -500,9 +500,6 @@ function mockRepositorySummaries() {
       urlKey: displayName,
       name: MOCK_DISPLAY_NAMES[repositoryId] || displayName,
       providerUrl: `https://github.com/example/${displayName}`,
-      gitHead: "mock123",
-      branch: "main",
-      gitAvailable: true,
     }];
   }));
 }
@@ -524,7 +521,6 @@ function mockPlanRecord(definition, repository, now) {
     reviewState: "current",
     modifiedAt: definition.changedAt,
     gitLastChangedAt: definition.changedAt,
-    gitStatus: "clean",
     taskCounts: { ...taskCounts, remaining: taskCounts.total - taskCounts.complete },
     headings: [{ depth: 1, text: definition.title, line: 1, hasContent: true }],
     excerpt: definition.excerpt,
