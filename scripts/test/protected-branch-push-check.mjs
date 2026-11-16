@@ -454,6 +454,17 @@ const deleteCases = [
   [onMain, `pushd ${scratch} && (popd) && popd && rm a.txt`, "ask"],
   [scratch, `cd ${onMain} && cd $FOO && cd - && rm a.txt`, "ask"],
   [scratch, `pushd ${onMain} && pushd $FOO && popd && rm a.txt`, "ask"],
+  // A cd to a substitution is not followed; it is not a bare cd home.
+  [onMain, "cd $(git rev-parse --show-toplevel) && rm -rf src", "ask"],
+  [onMain, "cd `pwd` && rm a.txt", "ask"],
+  [onMain, `pushd ${scratch} && pushd $(pwd) && rm x`, "defer"],
+  [onMain, 'cd ">x" && rm a.txt', "ask"],
+  // Bare cd goes home and bare pushd swaps; redirects around the target are dropped.
+  [onMain, `cd ${scratch} && cd && cd - && rm x`, "defer"],
+  [onMain, `pushd ${scratch} && pushd && rm a.txt`, "ask"],
+  [onMain, `cd ${scratch} 2>/dev/null && rm x`, "defer"],
+  [scratch, `cd ${onMain} >/dev/null && rm a.txt`, "ask"],
+  [onMain, `cd > out ${scratch} && rm x`, "defer"],
 ];
 for (const [cwd, command, expected] of deleteCases) {
   assert.equal(decide(command, { cwd, env: temps }), expected, `${path.basename(cwd)}: ${command}`);

@@ -409,11 +409,14 @@ function askDelete(command, { top, branch }) {
 // walk can give it its own working folder: a `cd` inside `( … )` ends with it.
 const SCOPE_OPEN = '\u0001('
 const SCOPE_CLOSE = '\u0001)'
+// Stands in for a substitution's output; the `$` keeps every reader from following it.
+const SUBSTITUTION_PLACEHOLDER = '$__SUBSTITUTION'
 
 // Splits subshells and command substitutions into their own commands: an unquoted, unescaped `(`,
 // `)`, `$(`, or backtick becomes a scope marker between separators. Single-quoted text is never
 // run, so it is kept. A substitution inside double quotes ends the quote before it and reopens it
-// after it, so the rest of that string stays one quoted word.
+// after it, so the rest of that string stays one quoted word. A `$(…)` or backtick substitution
+// leaves an unexpanded placeholder in the outer command, so `cd $(…)` is not read as a bare `cd`.
 function exposeNestedCommands(text) {
   let out = ''
   let quote = null
@@ -443,7 +446,8 @@ function exposeNestedCommands(text) {
       const opens = ch === '`' ? open.at(-1)?.kind !== '`' : ch !== ')'
       if (opens) {
         open.push({ kind, quoted: quote === '"' })
-        out += `${quote === '"' ? '"' : ''} ; ${SCOPE_OPEN} ; `
+        const placeholder = ch === '(' ? '' : SUBSTITUTION_PLACEHOLDER
+        out += `${placeholder}${quote === '"' ? '"' : ''} ; ${SCOPE_OPEN} ; `
         quote = null
       } else {
         const scope = open.pop()
@@ -520,11 +524,13 @@ function classifyDeletes(text, startCwd) {
     const program = words[i] && path.basename(words[i])
     const args = words.slice(i + 1)
     const dirArgs = ['cd', 'pushd'].includes(program) ? withoutRedirects(args) : args
+    // Only redirect-looking words: `cd ">x"` loses its quotes before this, so its target is unknown.
+    const onlyRedirects = args.length > 0 && dirArgs.length === 0
     if (program === 'cd' && dirArgs.length === 1 && dirArgs[0] === '-') {
       moveTo(previous)
     } else if (program === 'cd') {
-      moveTo(changedDirectory(cwd, dirArgs))
-    } else if (program === 'pushd' && dirArgs.length === 0) {
+      moveTo(onlyRedirects ? null : changedDirectory(cwd, dirArgs))
+    } else if (program === 'pushd' && args.length === 0) {
       // Bare `pushd` swaps the current folder with the top of the stack.
       if (dirStack.length) {
         const top = dirStack.pop()
@@ -533,7 +539,7 @@ function classifyDeletes(text, startCwd) {
       }
     } else if (program === 'pushd') {
       dirStack.push(cwd)
-      moveTo(changedDirectory(cwd, dirArgs))
+      moveTo(onlyRedirects ? null : changedDirectory(cwd, dirArgs))
     } else if (program === 'popd') {
       if (dirStack.length) moveTo(dirStack.pop())
     } else if (SHELLS.has(program)) {
