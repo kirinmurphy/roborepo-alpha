@@ -412,11 +412,13 @@ const SCOPE_CLOSE = '\u0001)'
 
 // Splits subshells and command substitutions into their own commands: an unquoted, unescaped `(`,
 // `)`, `$(`, or backtick becomes a scope marker between separators. Single-quoted text is never
-// run, so it is kept.
+// run, so it is kept. A substitution inside double quotes ends the quote before it and reopens it
+// after it, so the rest of that string stays one quoted word.
 function exposeNestedCommands(text) {
   let out = ''
   let quote = null
-  let backtickOpen = false
+  // One entry per open scope: its kind and whether a double quote was open where it started.
+  const open = []
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i]
     if (quote === "'") {
@@ -437,11 +439,17 @@ function exposeNestedCommands(text) {
         out += ch
       }
     } else if ((ch === '$' && text[i + 1] === '(') || ch === '`' || ((ch === '(' || ch === ')') && quote !== '"')) {
-      // Close an open double quote so the nested command is split out unquoted.
-      const opens = ch === '`' ? !backtickOpen : ch !== ')'
-      if (ch === '`') backtickOpen = !backtickOpen
-      out += `${quote === '"' ? '"' : ''} ; ${opens ? SCOPE_OPEN : SCOPE_CLOSE} ; `
-      quote = null
+      const kind = ch === '`' ? '`' : '('
+      const opens = ch === '`' ? open.at(-1)?.kind !== '`' : ch !== ')'
+      if (opens) {
+        open.push({ kind, quoted: quote === '"' })
+        out += `${quote === '"' ? '"' : ''} ; ${SCOPE_OPEN} ; `
+        quote = null
+      } else {
+        const scope = open.pop()
+        out += ` ; ${SCOPE_CLOSE} ; ${scope?.quoted ? '"' : ''}`
+        if (scope?.quoted) quote = '"'
+      }
       if (ch === '$') i += 1
     } else {
       out += ch
@@ -450,10 +458,22 @@ function exposeNestedCommands(text) {
   return out
 }
 
+// Drops redirections (`>/dev/null`, `2>&1`, `> out`) from a word list.
+function withoutRedirects(args) {
+  const out = []
+  for (let i = 0; i < args.length; i += 1) {
+    const redirect = /^(\d*|&)(>>?|<)(.*)$/.exec(args[i])
+    if (!redirect) out.push(args[i])
+    else if (redirect[3] === '') i += 1
+  }
+  return out
+}
+
 // The directory a `cd` or `pushd` word list moves to, or null when it cannot be followed. `$TMPDIR`
 // and `~` are expanded; other expansions are not.
 function changedDirectory(cwd, args) {
   const dir = args.filter((arg) => arg !== '--')
+  if (dir.length === 0) return os.homedir()
   if (dir.length !== 1 || dir[0].startsWith('-') || /[`<>]/.test(dir[0])) return null
   const tmpdir = /^\$\{?TMPDIR\}?(\/|$)/.exec(dir[0])
   if (tmpdir) return path.resolve(process.env.TMPDIR || os.tmpdir(), dir[0].slice(tmpdir[0].length))
@@ -471,21 +491,22 @@ function classifyDeletes(text, startCwd) {
   const dirStack = []
   const scopes = []
   let result = null
+  // A move the walk cannot follow still makes the current folder the shell's previous one, so a
+  // later `cd -` returns there; the walk itself stays put.
   const moveTo = (next) => {
-    if (next === null) return
     previous = cwd
-    cwd = next
+    if (next !== null) cwd = next
   }
   for (const words of splitCommands(exposeNestedCommands(text))) {
     if (words[0] === SCOPE_OPEN) {
-      scopes.push({ cwd, previous, depth: dirStack.length })
+      scopes.push({ cwd, previous, stack: dirStack.slice() })
       continue
     }
     if (words[0] === SCOPE_CLOSE) {
       const scope = scopes.pop()
       if (scope) {
         ;({ cwd, previous } = scope)
-        dirStack.length = scope.depth
+        dirStack.splice(0, dirStack.length, ...scope.stack)
       }
       continue
     }
@@ -498,14 +519,21 @@ function classifyDeletes(text, startCwd) {
     }
     const program = words[i] && path.basename(words[i])
     const args = words.slice(i + 1)
-    if (program === 'cd' && args.length === 1 && args[0] === '-') {
+    const dirArgs = ['cd', 'pushd'].includes(program) ? withoutRedirects(args) : args
+    if (program === 'cd' && dirArgs.length === 1 && dirArgs[0] === '-') {
       moveTo(previous)
     } else if (program === 'cd') {
-      moveTo(changedDirectory(cwd, args))
+      moveTo(changedDirectory(cwd, dirArgs))
+    } else if (program === 'pushd' && dirArgs.length === 0) {
+      // Bare `pushd` swaps the current folder with the top of the stack.
+      if (dirStack.length) {
+        const top = dirStack.pop()
+        dirStack.push(cwd)
+        moveTo(top)
+      }
     } else if (program === 'pushd') {
-      const next = changedDirectory(cwd, args)
-      if (next !== null) dirStack.push(cwd)
-      moveTo(next)
+      dirStack.push(cwd)
+      moveTo(changedDirectory(cwd, dirArgs))
     } else if (program === 'popd') {
       if (dirStack.length) moveTo(dirStack.pop())
     } else if (SHELLS.has(program)) {

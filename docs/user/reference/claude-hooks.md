@@ -80,8 +80,9 @@ It recognizes `rm`, `rmdir`, `unlink`, `find … -delete` or `-exec rm`, `xargs 
 `clear`. It finds them chained, in loops and `if` blocks, in subshells and `$(…)`, behind wrappers
 such as `env`, `command`, `nohup`, `time`, and `sudo`, and inside `sh -c`. It follows `cd`, `cd -`,
 `pushd`, `popd`, `~`, `$TMPDIR`, and `git -C`, and a `cd` inside `( … )` or `$(…)` ends with it. A
-`cd` to any other variable is not followed, so later deletes are judged by the folder before it. It cannot see a delete hidden in a script, `mv` over a file, or a redirect that
-truncates one. Protected branches are the same list as for pushes. `ROBOREPO_TEMP_ROOTS`
+`cd` to any other variable is not followed, so later deletes are judged by the folder before it,
+though a `cd -` or `popd` after it still returns where the shell does. It cannot see a delete
+hidden in a script, `mv` over a file, or a redirect that truncates one. Protected branches are the same list as for pushes. `ROBOREPO_TEMP_ROOTS`
 (comma-separated) replaces the temp folder list.
 
 The hook runs on every shell call, sandboxed or not. That matters because the desktop app was seen

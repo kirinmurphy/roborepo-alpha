@@ -443,6 +443,17 @@ const deleteCases = [
   [onMain, 'cd "$TMPDIR" && rm -rf x', "defer"],
   [onMain, "cd $TMPDIR/sub && rm x", "defer"],
   [onMain, "cd $SOMEWHERE && rm x", "ask"],
+  // A substitution inside double quotes does not hide the commands after the string.
+  [onMain, 'git commit -m "$(cat x)" && rm a.txt', "ask"],
+  [onMain, 'echo "a $(pwd) b"; rm a.txt', "ask"],
+  [onMain, 'echo "`pwd`" ; rm a.txt', "ask"],
+  [onMain, 'X="$(date)"; rm a.txt', "ask"],
+  [onMain, 'echo "$(cd x) ; rm a.txt"', "defer"],
+  // cd - with a redirect, popd after a popd in a subshell, and moves to unknown folders.
+  [onMain, `cd ${scratch} && cd - >/dev/null && rm a.txt`, "ask"],
+  [onMain, `pushd ${scratch} && (popd) && popd && rm a.txt`, "ask"],
+  [scratch, `cd ${onMain} && cd $FOO && cd - && rm a.txt`, "ask"],
+  [scratch, `pushd ${onMain} && pushd $FOO && popd && rm a.txt`, "ask"],
 ];
 for (const [cwd, command, expected] of deleteCases) {
   assert.equal(decide(command, { cwd, env: temps }), expected, `${path.basename(cwd)}: ${command}`);
