@@ -427,8 +427,17 @@ None.
 - [x] Comment on `notTestedOpen` in `index.mjs` still says unchecked entries never block
       implementation completion — fixed (38596676)
 - [x] No test covers the reason markers matching in any letter case — fixed (38596676)
+- [ ] Comment above `NOT_TESTED_UNEXPLAINED` in `findings.mjs` says `plans save` reports the
+      finding; save accepts the plan without reporting it
+- [ ] `plan-schema.md` says `plans save` and moves into `active/` report the finding; both accept
+      the plan silently
+- [ ] `docs/user/reference/plans-portal.md` table row repeats that `plans save` reports the finding
+- [ ] The plan's `next_action` still tells a reader to start building
+- [ ] `### Verification` does not record the checks rerun after the pass 1 fixes
 
 ### Verification
 
 - Validation pass 1 at 6eec1dc4 (fresh-context subagent): four `fix` findings, no `escalate`, no
+  `base`
+- Validation pass 2 at 38596676 (fresh-context subagent): five `fix` findings, no `escalate`, no
   `base`
