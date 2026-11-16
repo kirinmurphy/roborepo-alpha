@@ -674,8 +674,16 @@ function classifyDeletes(text, startCwd) {
     if (next === null) return [from]
     return fs.existsSync(next) ? [next] : [next, from]
   }
+  // Past 16 folders, each missing one is replaced by its nearest existing parent, where a delete
+  // inside it would be judged anyway, and the starting folder is always kept.
+  const nearestExisting = (folder) => {
+    while (!fs.existsSync(folder) && path.dirname(folder) !== folder) folder = path.dirname(folder)
+    return folder
+  }
   const keepOthers = (folders) => {
-    others = [...new Set(folders)].filter((folder) => folder !== cwd).slice(0, 16)
+    let kept = [...new Set(folders)].filter((folder) => folder !== cwd)
+    if (kept.length > 16) kept = [...new Set([startCwd, ...kept.map(nearestExisting)])].filter((folder) => folder !== cwd)
+    others = kept
   }
   const dirStack = []
   const scopes = []
@@ -723,11 +731,17 @@ function classifyDeletes(text, startCwd) {
       moveTo(previous)
       keepOthers(back)
     } else if (program === 'cd' || (program === 'pushd' && dirArgs.length > 0)) {
-      // Each stack entry holds every folder the shell may have been in.
-      if (program === 'pushd') dirStack.push(before)
       const all = onlyRedirects ? before : before.flatMap((folder) => outcomes(folder, dirArgs))
+      // A move that may fail leaves the shell's previous folder, and its directory stack, as they
+      // were, so a later `cd -` or `popd` may land on those too.
+      const mayFail = all.some((folder) => before.includes(folder))
+      const earlierPrevious = [previous, ...previousOthers]
+      // Each stack entry holds every folder the shell may have been in; `maybe` marks a pushd that
+      // may have failed and pushed nothing.
+      if (program === 'pushd') dirStack.push(Object.assign([...before], { maybe: mayFail }))
       moveTo(onlyRedirects ? null : changedDirectory(cwd, dirArgs))
       keepOthers(all)
+      if (mayFail) previousOthers = [...new Set([...previousOthers, ...earlierPrevious])].filter((folder) => folder !== previous)
     } else if (program === 'pushd') {
       // Bare `pushd` swaps the current folder with the top of the stack.
       if (dirStack.length) {
@@ -739,8 +753,10 @@ function classifyDeletes(text, startCwd) {
     } else if (program === 'popd') {
       if (dirStack.length) {
         const top = dirStack.pop()
+        // If the pushd that made `top` may have failed, popd may pop the entry beneath it instead.
+        const beneath = top.maybe && dirStack.length ? dirStack.at(-1) : []
         moveTo(top[0])
-        keepOthers(top)
+        keepOthers([...top, ...beneath])
       }
     } else {
       for (const base of [cwd, ...others]) result = stricter(result, judgeCommand(base, program, args))

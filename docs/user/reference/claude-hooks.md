@@ -74,7 +74,9 @@ forms stay allowed because they bring in no new commits:
 - stopping one in progress: `--abort` or `--quit`.
 
 A fast-forward from anything else is denied: `git merge --ff-only feature` would land the feature
-branch, and `git pull --ff-only <path or URL>` another repository's history. To bring `main` into a
+branch, and `git pull --ff-only <path or URL>` another repository's history. So is one with
+`--upload-pack` or `git -c`/`--config-env`, which can point the fetch at another repository under
+the remote's name. To bring `main` into a
 feature branch, run `roborepo plans sync-base` from that branch's worktree.
 
 The agents' git hooks back this up, however the command reached git, such as through an alias:
@@ -111,11 +113,12 @@ A few more rules keep a temp-looking path from reaching a protected checkout:
 - Paths are followed through symlinks the way the shell walks them, so `/tmp/link/x`, `/tmp/link/`,
   and `/tmp/link/../x` are judged where they land, and so is `$TMPDIR/../x`. Deleting the link
   itself (`rm /tmp/link`) removes only the link, so it is judged as the temp folder.
-- After a `cd` to a folder that does not exist yet, later commands are judged both there and in the
-  folder before it, since the `cd` may fail or follow a `mkdir`.
+- After a `cd` or `pushd` to a folder that does not exist yet, later commands are judged both there
+  and in the folder before it, since the move may fail or follow a `mkdir`. Every such folder stays
+  in play through further moves, `cd -`, and `popd`.
 - Operands written after `find … -exec rm` or `xargs rm` count, not only where the command runs.
 - A `git switch` or `git checkout` earlier in the command counts alongside the branch already
-  checked out, since the switch may fail. `-b main`, `--track origin/main`, and a name the hook
+  checked out, since the switch may fail. `-b main` (or `-bmain`, `--create=main`), `--track origin/main`, and a name the hook
   cannot read (`-`, `@{-1}`, a variable) count as protected.
 - When Claude runs a command outside its sandbox (`dangerouslyDisableSandbox`), nothing limits a
   delete to the checkout, so any delete outside the temp folders asks.

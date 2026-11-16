@@ -538,6 +538,11 @@ const deleteCases = [
   [onMain, `cd ${scratch}/n1; pushd ${scratch}; popd; rm -rf a.txt`, "ask"],
   [onMain, `cd ${scratch}/n1; pushd ${scratch}/n2; rm -rf a.txt`, "ask"],
   [onMain, `cd ${scratch} && cd ${scratch} && rm -rf x`, "defer"],
+  [onMain, `${Array.from({ length: 18 }, (_, k) => `cd ../q${k}`).join("; ")}; rm -rf a.txt`, "ask"],
+  [onMain, `${Array.from({ length: 18 }, (_, k) => `cd ../q${k}`).join("; ")}; git merge feature`, "deny"],
+  // A failed cd or pushd leaves `cd -` and `popd` pointing where they did before it.
+  [onMain, `cd ${scratch}; cd ${scratch}/n1; cd -; rm -rf a.txt`, "ask"],
+  [onMain, `pushd ${scratch}; pushd ${scratch}/n1; popd; rm -rf a.txt`, "ask"],
   // Attached create options name the new branch too.
   [onFeature, "git switch -cmain && rm a.txt", "ask"],
   [onFeature, "git switch --create=main && rm a.txt", "ask"],
