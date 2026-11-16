@@ -201,6 +201,17 @@ try {
   assert.ok(offline.commit, "keeps the commit");
   refused(run(root, "init"), "init never reports local-only success", /could not be reached/);
   git(root, "remote", "set-url", "origin", url);
+  const offlinePath = "plans/backlog/test-offline.md";
+  const local = ok(run(root, "show", offlinePath, "--local"), "show the local plan");
+  assert.equal(local.id, "off00001");
+  assert.equal(local.synchronized, false);
+  assert.equal(local.reason, "remote synchronization skipped (--local)");
+  const localText = roborepo(["plans", "show", "off00001", "--local"], { cwd: root });
+  assert.equal(localText.status, 0);
+  assert.equal(localText.stdout, local.markdown);
+  assert.equal(localText.stderr, "");
+  git(otherStore, "fetch", "--quiet", "origin");
+  assert.notEqual(fx.tryGit(otherStore, "cat-file", "-e", `origin/repo-plans:${offlinePath}`).status, 0, "local reads leave the pending commit unpushed");
   const back = ok(run(root, "save", source("test-online.md", planDoc({ id: "onl00001" }))), "the next reachable save");
   assert.equal(back.synchronized, true);
   git(otherStore, "fetch", "--quiet", "origin");
