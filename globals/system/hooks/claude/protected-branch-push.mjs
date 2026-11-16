@@ -412,54 +412,75 @@ const SCOPE_CLOSE = '\u0001)'
 // Stands in for a substitution's output; the `$` keeps every reader from following it.
 const SUBSTITUTION_PLACEHOLDER = '$__SUBSTITUTION'
 
-// Splits subshells and command substitutions into their own commands: an unquoted, unescaped `(`,
-// `)`, `$(`, or backtick becomes a scope marker between separators. Single-quoted text is never
-// run, so it is kept. A substitution inside double quotes ends the quote before it and reopens it
-// after it, so the rest of that string stays one quoted word. A `$(…)` or backtick substitution
-// leaves an unexpanded placeholder in the outer command, so `cd $(…)` is not read as a bare `cd`.
+// Splits subshells and command substitutions into their own commands, each between scope markers.
+// An unquoted `( … )` is marked where it stands. A `$(…)` or backtick substitution leaves an
+// unexpanded placeholder word in the command around it, which keeps the rest of that command whole
+// (`git -C $(pwd) clean -f`, `cd $(…)`), and its own commands are walked right after that command
+// ends; a substitution's `cd` cannot change the folder its outer command runs in. Single-quoted
+// text is never run, so it is kept.
 function exposeNestedCommands(text) {
-  let out = ''
-  let quote = null
-  // One entry per open scope: its kind and whether a double quote was open where it started.
-  const open = []
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i]
-    if (quote === "'") {
-      if (ch === "'") quote = null
-      out += ch
-    } else if (ch === '\\' && i + 1 < text.length) {
-      out += ch + text[++i]
-    } else if (ch === "'" && quote !== '"') {
-      quote = "'"
-      out += ch
-    } else if (ch === '"') {
-      // Inside double quotes `$(...)` still runs, so it is exposed the same way.
-      if (quote === '"') {
-        quote = null
-        out += ch
-      } else {
-        quote = '"'
-        out += ch
-      }
-    } else if ((ch === '$' && text[i + 1] === '(') || ch === '`' || ((ch === '(' || ch === ')') && quote !== '"')) {
-      const kind = ch === '`' ? '`' : '('
-      const opens = ch === '`' ? open.at(-1)?.kind !== '`' : ch !== ')'
-      if (opens) {
-        open.push({ kind, quoted: quote === '"' })
-        const placeholder = ch === '(' ? '' : SUBSTITUTION_PLACEHOLDER
-        out += `${placeholder}${quote === '"' ? '"' : ''} ; ${SCOPE_OPEN} ; `
-        quote = null
-      } else {
-        const scope = open.pop()
-        out += ` ; ${SCOPE_CLOSE} ; ${scope?.quoted ? '"' : ''}`
-        if (scope?.quoted) quote = '"'
-      }
-      if (ch === '$') i += 1
-    } else {
-      out += ch
+  let i = 0
+  // Reads until `end` (`)` or a backtick; null for the whole text) and returns the rewritten text.
+  const parse = (end) => {
+    let out = ''
+    let quote = null
+    let depth = 0
+    let pending = []
+    const flush = () => {
+      for (const inner of pending) out += ` ; ${SCOPE_OPEN} ; ${inner} ; ${SCOPE_CLOSE} ; `
+      pending = []
     }
+    while (i < text.length) {
+      const ch = text[i]
+      if (quote === "'") {
+        if (ch === "'") quote = null
+        out += ch
+        i += 1
+      } else if (ch === '\\' && i + 1 < text.length) {
+        out += ch + text[i + 1]
+        i += 2
+      } else if (ch === '`' && end === '`') {
+        i += 1
+        flush()
+        return out
+      } else if ((ch === '$' && text[i + 1] === '(') || ch === '`') {
+        i += ch === '$' ? 2 : 1
+        pending.push(parse(ch === '$' ? ')' : '`'))
+        // The placeholder joins the word it is part of (`$TMPDIR/$(date)`), except after a bare
+        // name or option, so `rm$(…)` and `-delete$(…)` still read as `rm` and `-delete`.
+        const word = /[^\s;&|]*$/.exec(out)[0]
+        out += quote === null && /^-*[A-Za-z]+$/.test(word) ? ` ${SUBSTITUTION_PLACEHOLDER}` : SUBSTITUTION_PLACEHOLDER
+      } else if (ch === '"' || (ch === "'" && quote === null)) {
+        quote = quote === ch ? null : quote ?? ch
+        out += ch
+        i += 1
+      } else if (quote === '"') {
+        out += ch
+        i += 1
+      } else if (ch === '(') {
+        depth += 1
+        flush()
+        out += ` ; ${SCOPE_OPEN} ; `
+        i += 1
+      } else if (ch === ')') {
+        i += 1
+        flush()
+        if (depth === 0 && end === ')') return out
+        if (depth > 0) depth -= 1
+        out += ` ; ${SCOPE_CLOSE} ; `
+      } else if (';|\n'.includes(ch) || (ch === '&' && !/[<>]$/.test(out))) {
+        out += ch
+        i += 1
+        flush()
+      } else {
+        out += ch
+        i += 1
+      }
+    }
+    flush()
+    return out
   }
-  return out
+  return parse(null)
 }
 
 // Drops redirections (`>/dev/null`, `2>&1`, `> out`) from a word list.
@@ -530,7 +551,7 @@ function classifyDeletes(text, startCwd) {
       moveTo(previous)
     } else if (program === 'cd') {
       moveTo(onlyRedirects ? null : changedDirectory(cwd, dirArgs))
-    } else if (program === 'pushd' && args.length === 0) {
+    } else if (program === 'pushd' && dirArgs.length === 0) {
       // Bare `pushd` swaps the current folder with the top of the stack.
       if (dirStack.length) {
         const top = dirStack.pop()

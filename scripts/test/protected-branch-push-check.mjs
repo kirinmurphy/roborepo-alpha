@@ -459,6 +459,15 @@ const deleteCases = [
   [onMain, "cd `pwd` && rm a.txt", "ask"],
   [onMain, `pushd ${scratch} && pushd $(pwd) && rm x`, "defer"],
   [onMain, 'cd ">x" && rm a.txt', "ask"],
+  [onMain, "rm$(echo ' -rf') src", "ask"],
+  [onMain, "find . -delete`true`", "ask"],
+  // The words after a substitution stay part of its command.
+  [onMain, "git -C $(pwd) clean -f", "ask"],
+  [onMain, "rm -rf $TMPDIR/$(date)", "defer"],
+  [onMain, "find $(pwd) -delete", "ask"],
+  [onMain, `rm -rf "$(echo x)" && cd ${scratch} && rm x`, "ask"],
+  [onMain, `echo $(cd ${scratch} && rm x) && rm -rf "$TMPDIR/y"`, "defer"],
+  [onMain, `pushd ${scratch} >/dev/null && pushd >/dev/null && rm a.txt`, "ask"],
   // Bare cd goes home and bare pushd swaps; redirects around the target are dropped.
   [onMain, `cd ${scratch} && cd && cd - && rm x`, "defer"],
   [onMain, `pushd ${scratch} && pushd && rm a.txt`, "ask"],
