@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Answer the open question on which workflows supply the required CI checks (recommended: combine each workflow's newest successful pull-request run), then rerun /plan-execute to apply it and submit
+next_action: Answer the two open questions on required CI checks (which workflows supply them; whether an empty run read keeps existing checks), then rerun /plan-execute to apply the answers and submit
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -491,6 +491,26 @@ requires on GitHub in other repos, and B adds a public flag the plan did not spe
 Blocks: submitting the plan for review (the escalated finding under `## Review`). No
 implementation task depends on it.
 
+### What happens to existing required checks when no successful run is found?
+
+Raised by the validator, pass 5. When GitHub returns no successful default-branch run (old runs
+aged out of retention, or Actions turned off), the policy has no `required_status_checks` rule. An
+existing `roborepo-main-merge` that requires checks then reads `drifted`, and `roborepo protect`
+updates it to `pull_request` alone, removing the required checks. Reproduced with
+`assessProtection` and `planChanges`. The design says only that a repo with no successful run
+*gets* the merge ruleset without checks; it says nothing about one that already has them.
+
+| Option | For | Against |
+| --- | --- | --- |
+| A. Keep the existing ruleset's checks when no run is found, and do not count them as drift | Never loosens protection by accident; no new flags | A truly retired check stays required until a run appears |
+| B. Refuse the update and report why | Explicit; nothing changes silently | Blocks repairing other drift in the same ruleset |
+| C. Keep current behavior | No change | A quiet repo or one with Actions off loses its CI gate on the next `protect` |
+
+Recommendation: A. Blocked rather than decided because it changes what the command writes in other
+repos, and it interacts with the workflow question above, so the two are best answered together.
+
+Blocks: submitting the plan for review. No implementation task depends on it.
+
 ## Review
 
 ### Findings
@@ -518,6 +538,10 @@ implementation task depends on it.
       fixed (cbffbbad)
 - [x] A comment in `protection-policy.mjs` said `risk` is shown wherever a missing ruleset is
       reported; only the Plans notice shows it — fixed (cbffbbad)
+- [x] A comment in `protection-panel.js` said `onChange` runs only after writes; it runs after
+      every answered action — fixed (29a9fe2a)
+- [ ] With no successful run found, `protect` removes the required checks from an existing
+      `roborepo-main-merge` — escalated, see Open questions
 - [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
       Open questions
 
@@ -528,6 +552,7 @@ implementation task depends on it.
 - Validation pass 2 (fresh-context subagent) at ee8c010c: 3 fix, 0 escalate.
 - Validation pass 3 (fresh-context subagent) at ae8aa292: 3 fix, 0 escalate.
 - Validation pass 4 (fresh-context subagent) at 55f250c7: 2 fix, 0 escalate.
+- Validation pass 5 (fresh-context subagent) at cbffbbad: 1 fix, 1 escalate.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
