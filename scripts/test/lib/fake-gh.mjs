@@ -3,7 +3,7 @@
 // active rulesets, and appends every request to a log. Put `dir` first on PATH to use it.
 //
 // State file fields (see `fakeGitHubState` for defaults):
-//   failure   null | "not-signed-in" | "unreachable" | "rulesets-refused"
+//   failure   null | "not-signed-in" | "unreachable" | "hang" | "rulesets-refused"
 //   login, admin, defaultBranch
 //   rulesets  full ruleset objects; `source_type` other than "Repository" marks an inherited one
 //   runs      workflow runs on the default branch, newest first: { id, conclusion, jobs: [{ name, conclusion }] }
@@ -63,6 +63,11 @@ fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ method, endpoint, bo
 
 if (state.failure === "not-signed-in") fail(4, "To get started with GitHub CLI, please run:  gh auth login");
 if (state.failure === "unreachable") fail(1, "error connecting to api.github.com");
+// Never answers; the caller's timeout ends it.
+if (state.failure === "hang") setTimeout(() => {}, 60_000);
+else respond();
+
+function respond() {
 
 const [pathname, query = ""] = endpoint.split("?");
 const params = new URLSearchParams(query);
@@ -135,6 +140,7 @@ const jobs = route.match(/^actions\\/runs\\/(\\d+)\\/jobs$/);
 if (jobs) reply({ jobs: (state.runs.find((run) => run.id === Number(jobs[1])) || { jobs: [] }).jobs });
 
 httpError(404, "Not Found");
+}
 
 // GitHub fills in the pull_request defaults a request leaves out.
 function stored(identity, body) {

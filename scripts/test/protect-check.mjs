@@ -284,7 +284,13 @@ try {
     assert.equal(run(["--check", "--json"]).json.state, "unavailable");
     assert.deepEqual(writes(), []);
   }
-  console.log("✓ A signed-out or unreachable GitHub reads as unavailable.");
+  // A GitHub that never answers ends at the caller's timeout, which is how the portal bounds a read.
+  start({ failure: "hang" });
+  Object.assign(process.env, gh.env, { PATH: `${gh.dir}${path.delimiter}${process.env.PATH}` });
+  const { readProtection } = await import("../../modules/forge/protection.mjs");
+  const slow = await readProtection({ repositoryId: "git:github.com/example/project", cwd: checkout, timeoutMs: 300 });
+  assert.deepEqual([slow.state, slow.reason], ["unavailable", "GitHub did not answer in time"]);
+  console.log("✓ A signed-out, unreachable, or unanswering GitHub reads as unavailable.");
 
   // unsupported: GitHub refuses rulesets for the repo, or the remote is another host.
   start({ failure: "rulesets-refused" });
