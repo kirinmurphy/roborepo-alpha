@@ -12,9 +12,8 @@ worktree:
 
 ## Summary
 
-A plan that reaches review today has a pushed branch at best: no pull request, no body explaining
-the change, nobody watching CI, and fixes from `/plan-review` that never reach GitHub. The user
-fills each gap by hand. This plan makes `/plan-execute` and `/plan-review` carry the work to a pull
+Each plan step today ends with its feature branch pushed, and nothing more: no pull request, no
+body explaining the change, and nobody watching CI. The user fills each gap by hand. This plan makes `/plan-execute` and `/plan-review` carry the work to a pull
 request with a written body and a known CI result. The user still approves and merges.
 
 The long-term goal is that an approved plan reaches a green, mergeable pull request without
@@ -49,11 +48,11 @@ Skill paths such as `plan-execute/SKILL.md` are under `globals/packages/plan-sui
 
 | Step | Today | Source |
 | --- | --- | --- |
-| First push | After the submit transition | `plan-execute/SKILL.md`, Push the feature branch |
-| Pull request | No skill opens one; the user does, often with an empty or commit-list body (#56, #59) | `plan-review/SKILL.md:370` forbids it |
-| Validator's gate evidence | Asks for CI on the head commit, which cannot exist before the first push | `plan-execute/references/validation-loop.md:29` |
+| Push | At the end of every `/plan-execute` and `/plan-review` run that commits to the feature branch (since `bb8b6653`) | `plan-execute/SKILL.md` and `plan-review/SKILL.md`, Push the feature branch |
+| Pull request | No skill opens one; the user does, often with an empty or commit-list body (#56, #59) | `plan-review/SKILL.md` Boundaries forbid it |
+| Validator's gate evidence | Asks for CI on the head commit, which cannot exist before the run's push at its end | `plan-execute/references/validation-loop.md:29` |
 | CI after the push | Nothing watches it; runs take 15–22 minutes | No caller of `gh pr checks` in the skills |
-| Fixes in review | Committed in the worktree, never pushed: "which this skill never does itself" | `plan-review/SKILL.md:235` |
+| Fixes in review | Committed one by one, pushed together at step 6 before approval is asked; nothing watches the resulting CI run | `plan-review/SKILL.md`, steps 5 and 6 |
 | Merge readiness | Reads local refs only | `modules/plan-suite/review-gates.mjs:123` |
 
 `gh pr checks --required` is not usable here: it reported "no required checks" on pull request #59
@@ -128,9 +127,9 @@ telling the user to push the base branch before merging.
 | `references/validation-loop.md` | Gate evidence becomes the affected checks' commands and output, plus the latest finished CI result when one exists. Passes never wait for CI, because a run takes 15–22 minutes and the loop can run eight passes |
 | New step after the loop | Push, then watch CI per the shared procedure |
 | Implementation Completion | Preflight, submit, then mark ready, in that order. A blocked CI failure keeps the plan in `active/` |
-| Review Findings | Commit the fix, push, watch CI |
+| Review Findings | Watch CI after the existing end-of-run push |
 | "Push the feature branch" section | Replaced by a link to `references/pr-delivery.md` |
-| `references/final-report.md` | The Record gains the pull request link. Replace the example row "plan-review never pushes", and show the push row only when a push failed |
+| `references/final-report.md` | The Record gains the pull request link, and the push row shows only when a push failed |
 | Boundaries | Allow opening, editing, and marking ready this plan's pull request; merging stays forbidden |
 
 ### `/plan-review` changes
@@ -138,10 +137,10 @@ telling the user to push the base branch before merging.
 | Part | Change |
 | --- | --- |
 | Step 2, after base synchronization | Push the merge, opening the draft pull request first if none exists |
-| Step 5, fixing findings | Push each fix and use CI's result at the fixed commit, per the shared procedure |
+| Step 5, fixing findings | Push each fix as it lands, instead of once at step 6, and use CI's result at the fixed commit, per the shared procedure |
 | Step 6, before presenting | Run `git fetch`, confirm with `gh pr view` that the pull request's head equals the local tip, and confirm CI is green there or name the exception. Link the pull request in the packet |
 | Step 6a, after approval | Push the approval commit, run `roborepo plans merge-readiness`, mark ready when the conditions hold, and tell the user to merge |
-| Boundaries | Line 370 forbids only merging the feature branch into the base branch and merging pull requests. Pushing the plan's feature branch and managing its pull request are allowed |
+| Boundaries | Already allow pushing the plan's feature branch. Add opening and managing its pull request; merging the feature branch into the base branch and merging pull requests stay forbidden |
 
 The approval commit is plan-only, so it does not make approval stale, but pushing it reruns CI. Once
 this repo requires checks, the user waits one more CI run after approving. Not pushing it would leave
@@ -196,7 +195,7 @@ because `modules/forge/`, the one module meant to call the host, does not exist 
 
 | Doc | Update |
 | --- | --- |
-| `docs/user/guides/plan/lifecycle/plan-suite.md` | The push paragraph under `/plan-execute`, the review steps, and "open and merge the pull request yourself", which becomes "merge" |
+| `docs/user/guides/plan/lifecycle/plan-suite.md` | The push paragraph under `/plan-execute` (it covers both skills since `bb8b6653`), the review steps, and "open and merge the pull request yourself", which becomes "merge" |
 | `docs/user/reference/roborepo-cli.md` | The new check in the `merge-readiness` row |
 | `docs/user/reference/plans-portal.md`, `docs/internal/plans-portal-internals.md` | What merge readiness requires |
 
