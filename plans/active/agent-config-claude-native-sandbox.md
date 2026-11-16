@@ -512,6 +512,13 @@ Acceptance criteria:
   there anyway. The two Validator escalations (tracking branches and `@{-N}`; a later `--no-ff`)
   were taken as fixes because each only makes the guard stricter.
 
+- **2026-11-16 — Temp work started from a main checkout may ask.** `mkdir -p $TMPDIR/y && cd
+  $TMPDIR/y && rm -rf *` run from a main checkout asks: the walker cannot tell `&&` from `;`, so it
+  also judges the delete in the main checkout, where it would land if the `cd` failed and the shell
+  went on. Alternative: tracking `&&` short-circuits (rejected for now: the command splitter drops
+  the operator, and this over-asks only when the agent starts in a main checkout, which the user
+  wants protected). The same command from a feature checkout or a temp folder does not ask.
+
 ## Not tested
 
 - [ ] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
@@ -670,6 +677,12 @@ Acceptance criteria:
       folder the shell may still be in — fixed (37ce7430): every possible folder is kept
 - [x] `--upload-pack` became a value option, so an ff-only pull could fetch from another repository
       — fixed (37ce7430): it, and `git -c`, rule out the fast-forward exception
+- [x] The 16-folder cap dropped the starting folder, so 17 chained missing `cd`s deferred on main —
+      fixed (c4a3329c)
+- [x] The docs did not cover `--upload-pack`/`git -c`, `pushd` to a missing folder, or attached
+      create options — fixed (c4a3329c)
+- [x] `cd -` after a failed `cd`, and `popd` after a failed `pushd`, could land on main unasked
+      (`base`, cheap in the same code) — fixed (c4a3329c)
 
 ### Verification
 
@@ -746,6 +759,9 @@ Acceptance criteria:
 - Validation pass 21 at 88ecb126 (fresh-context subagent): 2 `fix` findings and 4 `base` items,
   fixed in 37ce7430 along with the attached `-cmain`/`--create=main` forms from the `base` list; the
   remaining `base` items (a glob inside a folder name, deleting `/`) predate this branch
+- Validation pass 22 at 37ce7430 (fresh-context subagent, 3,686 earlier cases plus 49 new): 1 `fix`
+  finding with a doc gap, 2 `base` items fixed alongside in c4a3329c, and 1 `escalate` decided in
+  the Decision Log (2026-11-16, temp work started from a main checkout)
 - Full local gate at 8ea28b21: one `test-cli.sh` MCP case failed (`claude mcp add` found no validated
   Claude executable). It ran while a Validator ran thousands of probe commands, and its fake
   `claude` must answer `--version` within 2 seconds; the hook change does not reach it, and the
