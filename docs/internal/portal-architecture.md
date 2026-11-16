@@ -141,8 +141,9 @@ Subscribers, one line each, re-read their own data:
 | Tokens | Forgets the report version and refetches; again when the dialog closes, since the report does not repaint under an open dialog |
 | Runtime | Forced load |
 | Settings | Setup re-read (its inline list re-renders itself) |
+| Agents | Re-reads the repo inspector (`/api/config/repository`) while a repo stays selected, keeping the current listing shown until it arrives; a cleared scope redraws the global page through the selector's resolution |
 
-Agents loads no repo data; it follows the selector's resolution. A new page part that shows repos
+A new page part that shows repos
 or repo-scoped data subscribes with `onRepositoriesChanged` instead of passing a callback to the
 dialog. Browser coverage: `scripts/test/portal-ui/repository-list-change.spec.mjs`.
 

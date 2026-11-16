@@ -16,6 +16,7 @@ import { createConfigModal, createRecommendationsDialog } from "./panels.js";
 import { snapshotChanged, inspectChipSpecs, contentsEntryChipSpec, setBulkInFlight, isBulkInFlight } from "./state.js";
 import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/repository-scope.js";
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
+import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 
 const modal = createConfigModal();
 const recommendationsDialog = createRecommendationsDialog();
@@ -173,10 +174,13 @@ function gitLabel(git) {
 let repoInventory = null;
 let repoInventorySeq = 0;
 
-async function loadRepositoryInventory(scope) {
+// `keepShown` re-reads behind the listing already on screen instead of swapping in the loading state.
+async function loadRepositoryInventory(scope, { keepShown = false } = {}) {
   const seq = ++repoInventorySeq;
-  repoInventory = { scope, status: "loading" };
-  renderScoped();
+  if (!keepShown || repoInventory?.scope !== scope) {
+    repoInventory = { scope, status: "loading" };
+    renderScoped();
+  }
   try {
     const data = await api.fetchRepositoryInventory(scope);
     if (seq !== repoInventorySeq || currentRepositoryScope() !== scope) return;
@@ -284,6 +288,14 @@ onRepositoryScopeResolved((resolution) => {
   }
   if (lastSnapshot) render(lastSnapshot);
   else renderScoped();
+});
+// A repo that stays listed after a Manage Repos change can still have moved or been refreshed, so the
+// inspector re-reads it. A selected repo that left the list was already cleared to All repos, and
+// the selector's resolution redraws the global page.
+onRepositoriesChanged(() => {
+  const scope = currentRepositoryScope();
+  if (!scope || scopeResolution?.scope !== scope || scopeResolution.status !== "repository") return;
+  return loadRepositoryInventory(scope, { keepShown: true });
 });
 function applySnapshot(snap) {
   lastSnapshot = snap;
