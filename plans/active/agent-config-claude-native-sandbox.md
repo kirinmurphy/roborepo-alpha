@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run /plan-execute to build the 2026-11-16 merge guards (deny gh pr merge; deny merges into a protected checkout), then resubmit for review.
+next_action: Finish the validation loop on the merge guards (pass 20), run the full gate, then submit for review and push.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -255,14 +255,14 @@ so a repository's `.claude/settings.local.json` can still add entries.
 - [x] Move `gh pr merge` out of `change-github-directly` into a new `merge-pull-requests` behavior,
       default `ask`. The other `change-github-directly` commands stay denied. Superseded by the
       next task (user decision, 2026-11-16).
-- [ ] Set the `merge-pull-requests` default to `deny`, and restore `pr merge` in the protected-branch
+- [x] Set the `merge-pull-requests` default to `deny`, and restore `pr merge` in the protected-branch
       hook's `GH_DENIED` list so `gh -R owner/repo pr merge` is denied too.
-- [ ] Make the protected-branch hook deny (Claude and Codex) `git merge`, `git pull`, `git rebase`,
+- [x] Make the protected-branch hook deny (Claude and Codex) `git merge`, `git pull`, `git rebase`,
       and `git cherry-pick` in a checkout that has a protected branch checked out, following the same
       `cd`, `git -C`, wrapper, and substitution handling as the delete guard. `--ff-only` pulls and
       merges, and `--abort`/`--quit` forms, stay allowed. Back it with the agents' `pre-merge-commit`
       git hook refusing a merge commit on a protected branch, as it already does for `repo-plans`.
-- [ ] Extend `protected-branch-push-check.mjs`, the projection, defaults, and coverage checks, and
+- [x] Extend `protected-branch-push-check.mjs`, the projection, defaults, and coverage checks, and
       update `docs/user/reference/claude-hooks.md`, `codex-hooks.md`, `config-control-panel.md`, and
       `docs/internal/config-panel-internals.md` for both guards.
 - [x] Add `git checkout *` and `git switch *` to the Claude sandbox's excluded commands, so the
@@ -641,6 +641,13 @@ Acceptance criteria:
 - [x] Words after a substitution became a separate command, so `git -C $(pwd) clean -f` and
       `find $(pwd) -delete` deferred on main — fixed (e5dcedd3)
 - [x] The docs did not say a `cd` to `$(…)` is not followed — fixed (e5dcedd3)
+- [x] The `--ff-only` merge allowance accepted any ref ending in `/<branch>` (`x/main`) — fixed
+      (ede8eaa4): only `@{u}` or `<configured remote>/<branch>`
+- [x] The `--ff-only` pull allowance accepted any path or URL — fixed (ede8eaa4): only the branch's
+      configured remote
+- [x] A merge finished by `git commit` (after a conflict or `--no-commit`) skipped the backstop —
+      fixed (ede8eaa4): `pre-commit` refuses while `MERGE_HEAD` exists on a protected branch
+- [x] A hook comment still said `gh pr merge` asks — fixed (ede8eaa4)
 
 ### Verification
 
@@ -703,6 +710,14 @@ Acceptance criteria:
   by a fresh Validator. They are covered by `protected-branch-push-check.mjs` and a probe comparison
   against 8ea28b21 (7 case files and 3,000 fuzzed commands, no crashes, every changed decision an
   intended fix)
+- Pull request review (CodeRabbit, 2026-11-16) on PR 66: 9 inline findings; 8 fixed in 840a37ae
+  (real paths and `$TMPDIR/..`, failed `cd`, `find -exec rm` and `xargs rm` operands, per-wrapper
+  options, branch switches before a delete or merge, unsandboxed deletes ask), and the `gh -R … pr
+  merge` one already fixed by b56f5a2f
+- Validation pass 19 at b56f5a2f (fresh-context subagent, 151 merge probes plus the backstop under
+  dash): 4 `fix` findings, fixed in ede8eaa4, which also denies `git am` and reads option values
+  correctly; the remaining forms it named (`--git-dir`/`GIT_DIR`, quoted program names, `timeout`,
+  `eval`, aliases) are shared with the delete guard and documented as not seen
 - Full local gate at 8ea28b21: one `test-cli.sh` MCP case failed (`claude mcp add` found no validated
   Claude executable). It ran while a Validator ran thousands of probe commands, and its fake
   `claude` must answer `--version` within 2 seconds; the hook change does not reach it, and the
