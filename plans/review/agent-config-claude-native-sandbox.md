@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run /plan-review; then, after merge, confirm the Not tested desktop prompt checks.
+next_action: Run /plan-execute to build the 2026-11-16 merge guards (deny gh pr merge; deny merges into a protected checkout), then resubmit for review.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -150,7 +150,10 @@ Four findings shape the design:
 - The shared permission source states the intent; the Claude provider owns every Claude-native key.
 - Deleting files runs without a prompt: the sandbox already limits shell writes to the session's
   checkout and temp folders.
-- Merging a pull request asks instead of being denied.
+- Agents never merge into a protected branch. `gh pr merge` is denied, and in a checkout that has
+  a protected branch checked out, `git merge`, `git pull`, `git rebase`, and `git cherry-pick` are
+  denied. A fast-forward-only pull or merge stays allowed, so local `main` can catch up with its
+  remote.
 - Switching branches asks in desktop-app sessions as it does in headless ones.
 - Creating, reading, and editing plans in the plans store through `roborepo plans` never needs
   approval.
@@ -160,8 +163,10 @@ Four findings shape the design:
 - Changing Claude's default permission mode, including auto mode.
 - Changing the Codex profile, including what `go-online` does for Codex.
 - Isolating app and browser test runs (`8bjltk2n`).
-- Changing ask or deny defaults beyond the three named in Goals, such as `push-code`, or
+- Changing ask or deny defaults beyond those named in Goals, such as `push-code`, or
   redesigning the permissions editor (`permissions-ui-revamp`).
+- Merging the base branch into feature branches without a prompt. That is a separate change to
+  `sync-base` and `/plan-execute`, after `plans-agents-run-checks-before-handoff` lands.
 - Making agents enter their worktree before editing. That is agent behavior the global rules
   already state, not a permission rule.
 
@@ -248,7 +253,18 @@ so a repository's `.claude/settings.local.json` can still add entries.
       checkout that has a protected branch checked out; temp folders and feature-branch checkouts
       never prompt. Rewrite the `tool-call-optimization` rule that forbade relying on an `rm` allow.
 - [x] Move `gh pr merge` out of `change-github-directly` into a new `merge-pull-requests` behavior,
-      default `ask`. The other `change-github-directly` commands stay denied.
+      default `ask`. The other `change-github-directly` commands stay denied. Superseded by the
+      next task (user decision, 2026-11-16).
+- [ ] Set the `merge-pull-requests` default to `deny`, and restore `pr merge` in the protected-branch
+      hook's `GH_DENIED` list so `gh -R owner/repo pr merge` is denied too.
+- [ ] Make the protected-branch hook deny (Claude and Codex) `git merge`, `git pull`, `git rebase`,
+      and `git cherry-pick` in a checkout that has a protected branch checked out, following the same
+      `cd`, `git -C`, wrapper, and substitution handling as the delete guard. `--ff-only` pulls and
+      merges, and `--abort`/`--quit` forms, stay allowed. Back it with the agents' `pre-merge-commit`
+      git hook refusing a merge commit on a protected branch, as it already does for `repo-plans`.
+- [ ] Extend `protected-branch-push-check.mjs`, the projection, defaults, and coverage checks, and
+      update `docs/user/reference/claude-hooks.md`, `codex-hooks.md`, `config-control-panel.md`, and
+      `docs/internal/config-panel-internals.md` for both guards.
 - [x] Add `git checkout *` and `git switch *` to the Claude sandbox's excluded commands, so the
       `switch-branches` ask rule applies in desktop-app sessions. Record that a chained call (for
       example `make x && git switch y`) stays sandboxed and still skips the prompt.
@@ -288,11 +304,14 @@ Acceptance criteria:
 - [x] ~~In a manual-mode desktop-app session, `rm` …, `git switch` asks …, and the plans commands
       run without a prompt.~~ Moved to `## Not tested`: an agent cannot observe its own permission
       prompts. The rendered rules behind each are asserted by `claude-sandbox-projection-check.mjs`.
-- [x] `gh pr merge` asks; `gh api` and the other `change-github-directly` commands stay denied.
-      Rendered rules asserted for Claude, and the Codex and Gemini outputs changed to `prompt` /
-      `ask_user`; `agent-run-coverage-check.mjs` asserts the ask, and `protected-branch-push-check.mjs`
-      asserts the hook defers on `gh pr merge` (bare and flag-first) and still denies `gh -R … api`.
-- [x] `npm run check` passes on the final commit. Passed at e5dcedd3 ("CI checks passed").
+- [ ] `gh pr merge` is denied in the rendered rules for Claude, Codex, and Gemini, and the hook
+      denies it bare and flag-first (`gh -R owner/repo pr merge`); `gh api` and the other
+      `change-github-directly` commands stay denied.
+- [ ] In a checkout with a protected branch checked out, `git merge <branch>`, `git pull`,
+      `git rebase`, and `git cherry-pick` are denied, including after `cd` or with `git -C`;
+      `git pull --ff-only` and `git merge --ff-only origin/main` are not. In a feature-branch
+      checkout none of them is denied by the hook.
+- [ ] `npm run check` passes on the final commit.
 
 ## Risks
 
@@ -472,6 +491,18 @@ Acceptance criteria:
   inside the checkout) look the same. The guard treats both as a move it cannot follow and keeps the
   folder before it. Alternative: going home (rejected: `cd ">x" && rm a.txt` on main would then
   defer). Keeping the folder can only over-ask, and only when home is not a protected checkout.
+
+- **2026-11-16 — User decision: agents never merge into main.** The user asked for three rules: no
+  merges into main locally, no pull request merges into main, and merges from main into feature
+  branches without a prompt. The first two widen this plan: `merge-pull-requests` goes back to
+  `deny` (reversing the 2026-11-14 `ask`), and the protected-branch hook denies merge-type commands
+  in a protected checkout. Fast-forward-only updates stay allowed because they add no commits and
+  `sync-base` refuses while local `main` is behind its remote. The third rule is left to a separate
+  change after `plans-agents-run-checks-before-handoff`, which rewrites the same `/plan-execute`
+  handoff text. `git-github-01-agent-identity`, `git-github-02-pr-autofix`, and
+  `plans-suite-quick-wins-2-git-delivery` already assume `gh pr merge` is denied.
+- **2026-11-16 — Merged `main` into the branch (d1d9eb20).** `main` added a `plan-lifecycle` behavior
+  that owns `plans sync-base` and `stop-servers`, so `plan-store-commands` no longer lists them.
 
 ## Not tested
 
