@@ -11,6 +11,8 @@ cd "${repo_root}"
 # doctor's Node release check reads nodejs.org. Keep the gate off the network so a slow or
 # unreachable host cannot change its timing or output; node-release-health-check.mjs covers the logic.
 export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
+# doctor's branch protection check reads GitHub through gh; doctor-protection-check.mjs covers it.
+export ROBOREPO_SKIP_PROTECTION_CHECK=1
 
 # An agent shell points git at RoboRepo's agent hooks through GIT_CONFIG_* (see
 # docs/user/reference/claude-hooks.md). Fixture repositories push to bare remotes with no default

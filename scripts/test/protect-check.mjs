@@ -1,0 +1,326 @@
+#!/usr/bin/env node
+// `roborepo protect` against a fake `gh`: every state's output and exit code, exactly which
+// rulesets a run creates or updates, and that no run ever touches a ruleset it does not manage.
+
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { RULESETS_REFUSED_MESSAGE, createFakeGh, fakeGitHubState } from "./lib/fake-gh.mjs";
+import { isolateGitConfig } from "./lib/git-config.mjs";
+
+if (process.platform === "win32") {
+  console.log("skip: the fake gh executable requires a POSIX executable fixture");
+  process.exit(0);
+}
+
+const cli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
+const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-protect-"));
+isolateGitConfig(root);
+
+const ADMIN_BYPASS = [{ actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" }];
+const MAIN = { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } };
+const PLANS = { ref_name: { include: ["refs/heads/repo-plans"], exclude: [] } };
+const CHECKS = ["check (macos-latest)", "check (ubuntu-latest)"];
+const pullRequest = (overrides = {}) => ({
+  type: "pull_request",
+  parameters: {
+    required_approving_review_count: 1, require_last_push_approval: true, dismiss_stale_reviews_on_push: false,
+    require_code_owner_review: false, required_review_thread_resolution: false,
+    allowed_merge_methods: ["merge", "squash", "rebase"], ...overrides,
+  },
+});
+const statusChecks = (contexts) => ({
+  type: "required_status_checks",
+  parameters: { strict_required_status_checks_policy: false, required_status_checks: contexts.map((context) => ({ context })) },
+});
+const handMade = (id, name, conditions, rules, extra = {}) => ({
+  id, name, target: "branch", source_type: "Repository", source: "example/project", enforcement: "active",
+  bypass_actors: [], conditions, rules, ...extra,
+});
+const protectMain = handMade(11, "protect-main", MAIN, [{ type: "deletion" }, { type: "non_fast_forward" }]);
+const noPushToMain = handMade(12, "no-push-to-main", MAIN, [pullRequest({ require_last_push_approval: false })], { bypass_actors: ADMIN_BYPASS });
+// Hand-made rulesets that together apply every policy rule.
+const fullyHandMade = [
+  protectMain,
+  handMade(13, "hand-plans", PLANS, [{ type: "deletion" }, { type: "non_fast_forward" }, { type: "required_linear_history" }]),
+  handMade(14, "hand-merge", MAIN, [pullRequest(), statusChecks(CHECKS)], { bypass_actors: ADMIN_BYPASS }),
+];
+
+try {
+  const gh = createFakeGh(root);
+  const checkout = clone("checkout", "git@github.com:example/project.git");
+  const run = (args, cwd = checkout) => {
+    const result = spawnSync(process.execPath, [cli, "protect", ...args], {
+      cwd, encoding: "utf8", env: { ...process.env, ...gh.env, PATH: `${gh.dir}${path.delimiter}${process.env.PATH}` },
+    });
+    return { ...result, json: args.includes("--json") ? JSON.parse(result.stdout) : null };
+  };
+  const writes = () => gh.calls().filter((call) => call.method !== "GET");
+  const start = (overrides) => {
+    gh.setState(fakeGitHubState(overrides));
+    gh.clearCalls();
+  };
+  const policy = (report, key) => report.policies.find((entry) => entry.key === key);
+
+  // missing: nothing protects either branch.
+  start();
+  let result = run(["--check"]);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /Branch protection for example\/project is missing/);
+  assert.match(result.stdout, /roborepo-plans \(repo-plans\): not created; missing deletion, non_fast_forward, required_linear_history/);
+  assert.match(result.stdout, /roborepo-main-integrity \(main\): not created; missing deletion, non_fast_forward/);
+  assert.match(result.stdout, /roborepo-main-merge \(main\): not created; missing pull_request, required_status_checks/);
+  assert.deepEqual(writes(), [], "--check never writes");
+  result = run(["--check", "--json"]);
+  assert.equal(result.status, 1);
+  assert.equal(result.json.state, "missing");
+  assert.equal(result.json.admin, true);
+  assert.deepEqual(result.json.policies.map((entry) => [entry.name, entry.status]), [
+    ["roborepo-plans", "absent"], ["roborepo-main-integrity", "absent"], ["roborepo-main-merge", "absent"],
+  ]);
+  console.log("✓ An unprotected repo reads as missing and --check writes nothing.");
+
+  // missing, admin: one create per absent managed ruleset, then a single re-read.
+  gh.clearCalls();
+  result = run([]);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Changes:\n {2}create roborepo-plans\n {2}create roborepo-main-integrity\n {2}create roborepo-main-merge\n/);
+  assert.ok(result.stdout.indexOf("Changes:") < result.stdout.indexOf("Branch protection for"), "planned changes print before the final state");
+  assert.match(result.stdout, /is protected/);
+  assert.deepEqual(writes().map((call) => [call.method, call.endpoint]), [
+    ["POST", "repos/example/project/rulesets"], ["POST", "repos/example/project/rulesets"], ["POST", "repos/example/project/rulesets"],
+  ]);
+  const [plansBody, integrityBody, mergeBody] = writes().map((call) => call.body);
+  assert.deepEqual(plansBody, {
+    name: "roborepo-plans", target: "branch", enforcement: "active", bypass_actors: [], conditions: PLANS,
+    rules: [{ type: "deletion" }, { type: "non_fast_forward" }, { type: "required_linear_history" }],
+  });
+  assert.deepEqual(integrityBody, {
+    name: "roborepo-main-integrity", target: "branch", enforcement: "active", bypass_actors: [], conditions: MAIN,
+    rules: [{ type: "deletion" }, { type: "non_fast_forward" }],
+  });
+  assert.deepEqual(mergeBody, {
+    name: "roborepo-main-merge", target: "branch", enforcement: "active", bypass_actors: ADMIN_BYPASS, conditions: MAIN,
+    rules: [
+      { type: "pull_request", parameters: {
+        required_approving_review_count: 1, require_last_push_approval: true, dismiss_stale_reviews_on_push: false,
+        require_code_owner_review: false, required_review_thread_resolution: false,
+      } },
+      statusChecks(CHECKS),
+    ],
+  });
+  const lastWrite = gh.calls().findLastIndex((call) => call.method !== "GET");
+  assert.ok(gh.calls().slice(lastWrite + 1).some((call) => call.endpoint.includes("rules/branches/main")), "the state is read again after the writes");
+  gh.clearCalls();
+  result = run(["--json"]);
+  assert.equal(result.status, 0);
+  assert.equal(result.json.state, "protected");
+  assert.deepEqual(result.json.changes, []);
+  assert.deepEqual(writes(), [], "a second run sends nothing");
+  console.log("✓ protect creates the three managed rulesets with the policy bodies, then changes nothing on a second run.");
+
+  // drifted: a renamed CI job leaves the managed merge ruleset behind the policy.
+  const protectedState = gh.readState();
+  const renamed = [{ id: 502, conclusion: "success", jobs: [{ name: "check (ubuntu-latest)", conclusion: "success" }, { name: "verify (macos-latest)", conclusion: "success" }] }];
+  start({ ...protectedState, rulesets: [...protectedState.rulesets, protectMain], runs: renamed });
+  result = run(["--check"]);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /is drifted/);
+  assert.match(result.stdout, /roborepo-main-merge \(main\): differs from the policy: required checks differ \(not required yet: verify \(macos-latest\); no longer a CI job: check \(macos-latest\)\)/);
+  result = run([]);
+  assert.equal(result.status, 0, result.stdout);
+  const mergeId = gh.readState().rulesets.find((ruleset) => ruleset.name === "roborepo-main-merge").id;
+  assert.deepEqual(writes().map((call) => [call.method, call.endpoint]), [["PUT", `repos/example/project/rulesets/${mergeId}`]], "only the drifted managed ruleset is updated");
+  assert.deepEqual(writes()[0].body.rules[1], statusChecks(["check (ubuntu-latest)", "verify (macos-latest)"]));
+  assert.deepEqual(gh.readState().rulesets.find((ruleset) => ruleset.id === 11), protectMain, "the hand-made ruleset is untouched");
+  // A managed ruleset someone disabled or loosened is drift too, even though its rules went missing.
+  const loosened = gh.readState();
+  loosened.rulesets.find((ruleset) => ruleset.name === "roborepo-main-integrity").enforcement = "disabled";
+  start({ ...loosened, rulesets: loosened.rulesets.filter((ruleset) => ruleset.id !== 11) });
+  result = run(["--check", "--json"]);
+  assert.equal(result.json.state, "drifted");
+  assert.deepEqual(policy(result.json, "main-integrity").drift, ["enforcement is disabled"]);
+  console.log("✓ A renamed CI job reads as drifted, and protect updates only the managed ruleset.");
+
+  // unmanaged: hand-made rulesets apply every policy rule.
+  start({ rulesets: structuredClone(fullyHandMade) });
+  result = run(["--check"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /is unmanaged/);
+  assert.match(result.stdout, /roborepo-main-merge \(main\): not created; hand-made rulesets apply its rules/);
+  result = run([]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /is protected/);
+  assert.equal(writes().length, 3);
+  assert.ok(writes().every((call) => call.method === "POST" && call.body.name.startsWith("roborepo-")));
+  assert.deepEqual(gh.readState().rulesets.filter((ruleset) => ruleset.id < 100), fullyHandMade, "hand-made rulesets are left as they were");
+  for (const name of ["protect-main", "hand-plans", "hand-merge"]) {
+    assert.match(result.stdout, new RegExp(`${name}: covered by the managed rulesets; safe to delete`));
+  }
+  console.log("✓ Hand-made protection reads as unmanaged; protect adds the managed rulesets beside it and reports the covered ones.");
+
+  // Coverage: target, rules, enforcement, and bypass all have to line up.
+  const managedOnly = gh.readState().rulesets.filter((ruleset) => ruleset.id >= 100);
+  const coverage = (ruleset) => {
+    start({ rulesets: [...structuredClone(managedOnly), ruleset] });
+    return run(["--check", "--json"]).json.handMade.find((entry) => entry.id === ruleset.id);
+  };
+  assert.equal(coverage(noPushToMain).covered, true, "a looser pull_request rule with the same admin bypass is covered");
+  const noBypass = coverage(handMade(21, "strict-reviews", MAIN, [pullRequest()]));
+  assert.equal(noBypass.covered, false, "a pull_request ruleset with no bypass is never covered by roborepo-main-merge");
+  assert.match(noBypass.note, /still needed for: pull_request/);
+  assert.equal(coverage(handMade(22, "all-branches", { ref_name: { include: ["~ALL"], exclude: [] } }, [{ type: "deletion" }])).covered, false, "a wider target is not covered");
+  assert.equal(coverage(handMade(23, "two-approvals", MAIN, [pullRequest({ required_approving_review_count: 2 })], { bypass_actors: ADMIN_BYPASS })).covered, false, "a stricter rule is not covered");
+  assert.equal(coverage(handMade(24, "signed", MAIN, [{ type: "required_signatures" }])).covered, false, "a rule the policy lacks is not covered");
+  assert.equal(coverage(handMade(25, "explicit-main", { ref_name: { include: ["refs/heads/main"], exclude: [] } }, [{ type: "non_fast_forward" }])).covered, true, "the default branch named explicitly is the same target");
+  const disabled = coverage(handMade(26, "paused", MAIN, [{ type: "deletion" }], { enforcement: "disabled" }));
+  assert.deepEqual([disabled.covered, disabled.note], [false, "not enforced (disabled)"]);
+  const organization = coverage({ id: 27, name: "org-baseline", target: "branch", source_type: "Organization", source: "example", enforcement: "active" });
+  assert.deepEqual([organization.covered, organization.note], [false, "set by the organization"]);
+  console.log("✓ A hand-made ruleset is covered only when target, rules, enforcement, and bypass all match.");
+
+  // Required checks come from the newest successful run; a repo with none omits the rule.
+  start({ runs: [
+    { id: 610, conclusion: "cancelled", jobs: [{ name: "half-finished", conclusion: "cancelled" }] },
+    { id: 609, conclusion: "failure", jobs: [{ name: "broken", conclusion: "failure" }] },
+    { id: 608, conclusion: "success", jobs: [{ name: "build", conclusion: "success" }, { name: "docs-only", conclusion: "skipped" }] },
+  ] });
+  result = run(["--json"]);
+  assert.deepEqual(result.json.requiredChecks, ["build"], "cancelled and failed runs, and skipped jobs, are passed over");
+  assert.deepEqual(writes()[2].body.rules[1], statusChecks(["build"]));
+  start({ runs: [{ id: 611, conclusion: "failure", jobs: [{ name: "broken", conclusion: "failure" }] }] });
+  result = run([]);
+  assert.equal(result.status, 0);
+  assert.deepEqual(writes()[2].body.rules.map((rule) => rule.type), ["pull_request"], "no successful run leaves the status-check rule out");
+  assert.match(result.stdout, /Required CI checks: none\. main has no successful CI run/);
+  console.log("✓ Required checks come from the newest successful default-branch run.");
+
+  // Not an admin: every state is reported, nothing is written, and the account is named.
+  start({ admin: false, login: "octo-reader" });
+  result = run([]);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /is missing/);
+  assert.match(result.stdout, /Octo-reader is not an admin of example\/project; a repo admin must run roborepo protect\./);
+  assert.deepEqual(writes(), []);
+  result = run(["--check", "--json"]);
+  assert.deepEqual([result.json.state, result.json.admin, result.json.login], ["missing", false, "octo-reader"]);
+  start({ admin: false, login: "octo-reader", rulesets: [...structuredClone(managedOnly), noPushToMain] });
+  result = run(["--check"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Bypass lists are visible only to admins, so they were not compared\./);
+  result = run(["--skip", "main-merge"]);
+  assert.match(result.stdout, /Octo-reader is not an admin/);
+  assert.deepEqual(writes(), []);
+  console.log("✓ A non-admin gets the state and the account name, and no write is sent.");
+
+  // Skipping the merge policy lives on GitHub, so another clone reads the same answer.
+  start({ rulesets: structuredClone(managedOnly) });
+  result = run(["--skip", "main-merge"]);
+  assert.equal(result.status, 0, result.stdout);
+  assert.match(result.stdout, /update roborepo-main-merge \(disabled\)/);
+  assert.equal(writes().length, 1);
+  assert.equal(writes()[0].body.enforcement, "disabled");
+  assert.deepEqual(writes()[0].body.rules.map((rule) => rule.type), ["pull_request", "required_status_checks"], "a skipped ruleset keeps its policy rules");
+  const secondClone = clone("second-clone", "https://github.com/example/project.git");
+  gh.clearCalls();
+  result = run(["--check", "--json"], secondClone);
+  assert.equal(result.status, 0);
+  assert.equal(result.json.state, "protected");
+  assert.equal(policy(result.json, "main-merge").status, "skipped");
+  result = run([], secondClone);
+  assert.deepEqual(writes(), [], "protect never re-enables a skipped policy");
+  result = run(["--unskip", "main-merge"]);
+  assert.equal(result.status, 0);
+  assert.equal(writes().length, 1);
+  assert.equal(writes()[0].body.enforcement, "active");
+  assert.equal(policy(run(["--check", "--json"]).json, "main-merge").status, "ok");
+  start();
+  result = run(["--skip", "main-merge"]);
+  assert.deepEqual(writes().map((call) => [call.method, call.body.name, call.body.enforcement]), [["POST", "roborepo-main-merge", "disabled"]], "skipping before protecting creates only the disabled merge ruleset");
+  assert.equal(result.status, 1, "the plans and integrity rules are still missing");
+  console.log("✓ --skip main-merge disables the managed merge ruleset for every clone, and --unskip restores it.");
+
+  // conflicting: a rule that can refuse a plan save reaches the plans branch.
+  const wide = handMade(31, "everything-needs-review", { ref_name: { include: ["~ALL"], exclude: [] } }, [pullRequest()]);
+  start({ rulesets: [...structuredClone(managedOnly), wide] });
+  result = run([]);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /is conflicting/);
+  assert.match(result.stdout, /Rule pull_request from ruleset everything-needs-review reaches the plans branch/);
+  assert.deepEqual(writes(), []);
+  result = run(["--skip", "main-merge"]);
+  assert.match(result.stdout, /Nothing was changed while the state is conflicting\./);
+  assert.deepEqual(writes(), []);
+  console.log("✓ A push-blocking rule on the plans branch reads as conflicting, naming the rule and ruleset.");
+
+  // unavailable: no answer from GitHub.
+  for (const [failure, reason] of [["not-signed-in", /not signed in \(run: gh auth login\)/], ["unreachable", /GitHub could not be reached/]]) {
+    start({ failure });
+    result = run([]);
+    assert.equal(result.status, 1);
+    assert.match(result.stdout, /is unavailable/);
+    assert.match(result.stdout, reason);
+    assert.equal(run(["--check", "--json"]).json.state, "unavailable");
+    assert.deepEqual(writes(), []);
+  }
+  console.log("✓ A signed-out or unreachable GitHub reads as unavailable.");
+
+  // unsupported: GitHub refuses rulesets for the repo, or the remote is another host.
+  start({ failure: "rulesets-refused" });
+  result = run([]);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /is unsupported/);
+  assert.ok(result.stdout.includes(`GitHub does not offer rulesets for this repo: ${RULESETS_REFUSED_MESSAGE}`));
+  assert.match(result.stdout, /Protect the branches by hand/);
+  assert.deepEqual(writes(), []);
+  assert.equal(run(["--skip", "main-merge"]).status, 1);
+  assert.deepEqual(writes(), []);
+  const elsewhere = clone("gitlab-clone", "git@gitlab.com:example/project.git");
+  start();
+  result = run([], elsewhere);
+  assert.equal(result.status, 1);
+  assert.match(result.stdout, /is unsupported/);
+  assert.match(result.stdout, /gitlab\.com is not GitHub/);
+  assert.match(result.stdout, /1\. On the repo-plans branch: block deletion, block force pushes, and require linear history\./);
+  assert.deepEqual(gh.calls(), [], "another host never calls gh");
+  console.log("✓ A repo GitHub offers no rulesets for, or on another host, reads as unsupported with the manual steps.");
+
+  // Across every run above, no request edited or deleted a ruleset RoboRepo does not manage.
+  start({ rulesets: structuredClone(fullyHandMade) });
+  run([]);
+  run(["--skip", "main-merge"]);
+  run(["--unskip", "main-merge"]);
+  const managedIds = new Set(gh.readState().rulesets.filter((ruleset) => ruleset.name.startsWith("roborepo-")).map((ruleset) => String(ruleset.id)));
+  for (const call of writes()) {
+    assert.notEqual(call.method, "DELETE");
+    if (call.method === "PUT") assert.ok(managedIds.has(call.endpoint.split("/").pop()), `update went to a managed ruleset: ${call.endpoint}`);
+    else assert.ok(call.body.name.startsWith("roborepo-"));
+  }
+  console.log("✓ Only roborepo-* rulesets were ever created or updated.");
+
+  // Usage errors change nothing.
+  start();
+  for (const args of [["--skip", "plans"], ["--check", "--skip", "main-merge"], ["--force"], ["--skip"]]) {
+    result = run(args);
+    assert.equal(result.status, 2, args.join(" "));
+    assert.match(result.stderr, /Usage: roborepo protect/);
+  }
+  assert.deepEqual(gh.calls(), []);
+  console.log("✓ Unknown flags and unsupported skips are refused before any GitHub call.");
+} finally {
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
+function clone(name, origin) {
+  const dir = path.join(root, name);
+  const git = (...args) => {
+    const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  git("init", "-q", "-b", "main", dir);
+  git("-C", dir, "remote", "add", "origin", origin);
+  return dir;
+}
