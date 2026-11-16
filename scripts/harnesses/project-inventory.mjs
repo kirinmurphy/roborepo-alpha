@@ -61,15 +61,22 @@ export function matchSkillPath(relPath, base, { symlink = false } = {}) {
 }
 
 // A symlinked native folder (`folders` maps its trailing path, like ".claude/skills", to a record)
-// is listed as a reference, so files behind it show as unread rather than as an empty scan.
+// is listed as a reference, so files behind it show as unread rather than as an empty scan. A record
+// with `fileExtension` also covers any symlink deeper inside that folder whose name lacks the
+// extension: a linked subfolder of rules, say, rather than a linked rule file.
 export function matchLinkedFolder(relPath, folders, { symlink = false } = {}) {
   if (!symlink) return null;
   const parts = segmentsOf(relPath);
+  const containsAt = (tail, at) => tail.every((part, index) => parts[at + index] === part);
   for (const [suffix, record] of Object.entries(folders)) {
     const tail = suffix.split("/");
-    if (parts.length >= tail.length && tail.every((part, index) => parts[parts.length - tail.length + index] === part)) {
+    const exact = parts.length >= tail.length && containsAt(tail, parts.length - tail.length);
+    const inside = record.fileExtension && !parts.at(-1).endsWith(record.fileExtension)
+      && parts.slice(0, -tail.length).some((_, at) => containsAt(tail, at));
+    if (exact || inside) {
+      const { fileExtension, ...shown } = record;
       return {
-        ...record,
+        ...shown,
         kind: "linked-folder",
         loading: LOADING.unknown,
         format: "text",
@@ -192,6 +199,8 @@ export function scanTomlStructure(text, { rootStrings = [] } = {}) {
     for (const name of inlineTableKeys(value)) keys.push([...keyPath, name]);
     openValue = continueValue({ depth: 0, quote: null }, value);
   });
+  // A value still open at the end means everything after it went unread.
+  if (openValue) diagnostic ??= "Could not parse TOML: a value is never closed.";
   return { rootKeys, tables, keys, strings, diagnostic };
 }
 
@@ -272,8 +281,10 @@ function inlineTableKeys(value) {
   for (let i = 0; i < value.length; i += 1) {
     const char = value[i];
     if (char === "\"" || char === "'") {
-      const end = value.indexOf(char, i + 1);
-      if (end === -1) break;
+      // Basic strings honor backslash escapes; literal strings have none.
+      let end = i + 1;
+      while (end < value.length && value[end] !== char) end += char === "\"" && value[end] === "\\" ? 2 : 1;
+      if (end >= value.length) break;
       if (depth === 1 && expectKey && /^\s*=/.test(value.slice(end + 1))) names.push(value.slice(i + 1, end));
       expectKey = false;
       i = end;

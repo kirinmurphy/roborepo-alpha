@@ -41,9 +41,9 @@ const HANDLED_SETTINGS = new Set([
 
 const LINKED_FOLDERS = {
   ".claude/skills": { area: "skills", label: "Skills folder" },
-  ".claude/rules": { area: "instructions", label: "Rules folder" },
-  ".claude/agents": { area: "config", label: "Custom agents folder" },
-  ".claude/commands": { area: "config", label: "Commands folder" },
+  ".claude/rules": { area: "instructions", label: "Rules folder", fileExtension: ".md" },
+  ".claude/agents": { area: "config", label: "Custom agents folder", fileExtension: ".md" },
+  ".claude/commands": { area: "config", label: "Commands folder", fileExtension: ".md" },
   ".claude": { area: "config", label: "Claude Code folder" },
 };
 

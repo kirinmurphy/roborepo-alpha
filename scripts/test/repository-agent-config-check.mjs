@@ -364,6 +364,25 @@ try {
       "claude:.claude/rules:instructions:linked-folder", "codex:.codex/agents:config:linked-folder",
     ],
   );
+  // A linked subfolder inside a real rules or agents folder is a reference; a linked rule file is a rule.
+  const NESTED_REMOTE = "https://github.com/acme/nested-links.git";
+  const nested = makeRepo("nested-links", { ".claude/rules/own.md": "# own\n", ".codex/agents/own.toml": 'name = "own"\n' }, { remote: NESTED_REMOTE });
+  fs.symlinkSync(path.join(tmp, "shared-rules"), path.join(nested, ".claude/rules/linkedsub"));
+  fs.symlinkSync(path.join(tmp, "shared-rules", "always.md"), path.join(nested, ".claude/rules/linked.md"));
+  fs.symlinkSync(path.join(tmp, "shared-rules"), path.join(nested, ".codex/agents/linkedsub"));
+  const nestedInventory = await loadRepositoryAgentConfig({
+    registry: registryWith(normalizeGitRemote(NESTED_REMOTE), [{ path: nested, kind: "primary" }]),
+    repositoryId: normalizeGitRemote(NESTED_REMOTE),
+    runtime,
+  });
+  assert.deepEqual(
+    nestedInventory.entries.map((entry) => `${entry.harness}:${entry.path}:${entry.kind}:${entry.symlink}`).sort(),
+    [
+      "claude:.claude/rules/linked.md:rule:true", "claude:.claude/rules/linkedsub:linked-folder:true",
+      "claude:.claude/rules/own.md:rule:false", "codex:.codex/agents/linkedsub:linked-folder:true",
+      "codex:.codex/agents/own.toml:agent:false",
+    ],
+  );
   const linkedCapped = await loadRepositoryAgentConfig({
     registry: linkedRegistry, repositoryId: normalizeGitRemote(LINKED_REMOTE), runtime, limits: { ...INVENTORY_LIMITS, maxFiles: 1 },
   });
@@ -400,6 +419,10 @@ try {
   assert.deepEqual(inline('"mcp_servers" . docs . command = "x"\n'), ["MCP servers: docs"]);
   assert.deepEqual(inline("'notes' = '''\n[profiles.ghp_LEAKTOKEN]\n'''\n"), []);
   assert.deepEqual(inline('a."b" = """\n[mcp_servers.ghp_LEAK2]\n"""\n'), []);
+  assert.deepEqual(inline('mcp_servers = { a = "x\\", LEAKED = 2" }\n'), ["MCP servers: a"], "an escaped quote does not end a string");
+  assert.deepEqual(describeCodexProjectFile({ kind: "config" }, 'x = [\n[mcp_servers.foo]\n'), {
+    sections: [], diagnostic: "Could not parse TOML: a value is never closed.",
+  });
   const badKey = describeCodexProjectFile({ kind: "config" }, 'bad key = """\n[mcp_servers.ghp_LEAK3]\n"""\n');
   assert.deepEqual(badKey, { sections: [], diagnostic: "Could not parse TOML on line 1." }, "a malformed key line still closes its value");
   const innerName = describeCodexProjectFile({ kind: "agent" }, 'developer_instructions = """\nname = "inner-value"\n"""\nname = "real"\n');
