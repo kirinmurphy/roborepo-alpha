@@ -366,6 +366,12 @@ function recordBranchChange(dir, subcommand, args) {
       created = true
       break
     }
+    const attached = /^(?:-[cCbB]|--(?:create|force-create|orphan)=)(.+)$/.exec(args[k])
+    if (attached) {
+      target = attached[1]
+      created = true
+      break
+    }
     if (args[k] === '-' || !args[k].startsWith('-')) {
       target = args[k]
       break
@@ -505,14 +511,16 @@ const INTEGRATING_SUBCOMMANDS = ['merge', 'pull', 'rebase', 'cherry-pick', 'am']
 // merge and pull options that take the next word as their value.
 const INTEGRATE_VALUE_OPTIONS = new Set([
   '-m', '-F', '-s', '-X', '--strategy', '--strategy-option', '--file', '--message',
-  '--depth', '--deepen', '--shallow-since', '--shallow-exclude', '-j', '--jobs', '--upload-pack', '-o', '--server-option',
+  '--depth', '--deepen', '--shallow-since', '--shallow-exclude', '-j', '--jobs', '-o', '--server-option',
 ])
 
 // Stopping one in progress (`--abort`, `--quit`) brings nothing in. A fast-forward-only pull or
 // merge from the branch's own upstream adds no new commits, so it stays allowed: the remote must be
 // the branch's configured remote (origin when none is set), and the branch its own. A fast-forward
 // to anything else would land that other history, so it does not.
-function gitIntegrates(dir, subcommand, args, branch) {
+// `git -c …` (`configured`) or `--upload-pack` can point the fetch at another repository, so either
+// one rules the fast-forward exception out.
+function gitIntegrates(dir, subcommand, args, branch, configured = false) {
   if (!INTEGRATING_SUBCOMMANDS.includes(subcommand)) return null
   if (args.some((arg) => arg === '--abort' || arg === '--quit')) return null
   const operands = []
@@ -521,7 +529,8 @@ function gitIntegrates(dir, subcommand, args, branch) {
     else if (!args[k].startsWith('-')) operands.push(args[k])
   }
   // git honors the last of --ff-only, --ff, and --no-ff.
-  if (args.lastIndexOf('--ff-only') > Math.max(args.lastIndexOf('--ff'), args.lastIndexOf('--no-ff'))) {
+  const redirected = configured || args.some((arg) => arg.startsWith('--upload-pack'))
+  if (!redirected && args.lastIndexOf('--ff-only') > Math.max(args.lastIndexOf('--ff'), args.lastIndexOf('--no-ff'))) {
     const remote = git(dir, ['config', `branch.${branch}.remote`]) || 'origin'
     const ownBranch = (ref) => ref === branch || ref === `refs/heads/${branch}`
     if (subcommand === 'pull' && (operands.length === 0 || (operands[0] === remote && (operands.length === 1 || (operands.length === 2 && ownBranch(operands[1])))))) return null
@@ -655,28 +664,40 @@ function changedDirectory(cwd, args) {
 // substitutions (each with its own working folder), and `sh -c`.
 function classifyDeletes(text, startCwd) {
   let cwd = startCwd
-  // After a cd to a folder that does not exist yet, the shell is in one of two places: the new folder
-  // (an earlier mkdir made it) or the old one (the cd failed). Later commands are judged in both.
-  let otherCwd = null
+  // Other folders the shell may be in. A cd or pushd to a folder that does not exist yet may succeed
+  // (an earlier mkdir made it) or fail (the shell stays put), so both outcomes are kept, through any
+  // number of such moves; later commands are judged in every one.
+  let others = []
   let previous = startCwd
+  const outcomes = (from, args) => {
+    const next = changedDirectory(from, args)
+    if (next === null) return [from]
+    return fs.existsSync(next) ? [next] : [next, from]
+  }
+  const keepOthers = (folders) => {
+    others = [...new Set(folders)].filter((folder) => folder !== cwd).slice(0, 16)
+  }
   const dirStack = []
   const scopes = []
   let result = null
   // A move the walk cannot follow still makes the current folder the shell's previous one, so a
   // later `cd -` returns there; the walk itself stays put.
+  // `previousOthers` are the other folders the shell may have been in before its last move.
+  let previousOthers = []
   const moveTo = (next) => {
     previous = cwd
+    previousOthers = others
     if (next !== null) cwd = next
   }
   for (const words of splitCommands(exposeNestedCommands(text))) {
     if (words[0] === SCOPE_OPEN) {
-      scopes.push({ cwd, otherCwd, previous, stack: dirStack.slice() })
+      scopes.push({ cwd, others, previous, previousOthers, stack: dirStack.slice() })
       continue
     }
     if (words[0] === SCOPE_CLOSE) {
       const scope = scopes.pop()
       if (scope) {
-        ;({ cwd, otherCwd, previous } = scope)
+        ;({ cwd, others, previous, previousOthers } = scope)
         dirStack.splice(0, dirStack.length, ...scope.stack)
       }
       continue
@@ -694,31 +715,35 @@ function classifyDeletes(text, startCwd) {
     const dirArgs = ['cd', 'pushd'].includes(program) ? withoutRedirects(args) : args
     // Only redirect-looking words: `cd ">x"` loses its quotes before this, so its target is unknown.
     const onlyRedirects = args.length > 0 && dirArgs.length === 0
+    // `cd -`, `popd`, and bare `pushd` return to a folder recorded earlier, together with the other
+    // folders that were possible then.
+    const before = [cwd, ...others]
     if (program === 'cd' && dirArgs.length === 1 && dirArgs[0] === '-') {
-      otherCwd = null
+      const back = [previous, ...previousOthers]
       moveTo(previous)
-    } else if (program === 'cd') {
-      const next = onlyRedirects ? null : changedDirectory(cwd, dirArgs)
-      const otherNext = otherCwd && !onlyRedirects ? changedDirectory(otherCwd, dirArgs) : null
-      otherCwd = next !== null && !fs.existsSync(next) ? cwd : otherNext
-      moveTo(next)
-    } else if (program === 'pushd' && dirArgs.length === 0) {
+      keepOthers(back)
+    } else if (program === 'cd' || (program === 'pushd' && dirArgs.length > 0)) {
+      // Each stack entry holds every folder the shell may have been in.
+      if (program === 'pushd') dirStack.push(before)
+      const all = onlyRedirects ? before : before.flatMap((folder) => outcomes(folder, dirArgs))
+      moveTo(onlyRedirects ? null : changedDirectory(cwd, dirArgs))
+      keepOthers(all)
+    } else if (program === 'pushd') {
       // Bare `pushd` swaps the current folder with the top of the stack.
-      otherCwd = null
       if (dirStack.length) {
         const top = dirStack.pop()
-        dirStack.push(cwd)
-        moveTo(top)
+        dirStack.push(before)
+        moveTo(top[0])
+        keepOthers(top)
       }
-    } else if (program === 'pushd') {
-      otherCwd = null
-      dirStack.push(cwd)
-      moveTo(onlyRedirects ? null : changedDirectory(cwd, dirArgs))
     } else if (program === 'popd') {
-      otherCwd = null
-      if (dirStack.length) moveTo(dirStack.pop())
+      if (dirStack.length) {
+        const top = dirStack.pop()
+        moveTo(top[0])
+        keepOthers(top)
+      }
     } else {
-      for (const base of otherCwd ? [cwd, otherCwd] : [cwd]) result = stricter(result, judgeCommand(base, program, args))
+      for (const base of [cwd, ...others]) result = stricter(result, judgeCommand(base, program, args))
     }
   }
   return result
@@ -744,18 +769,22 @@ function judgeCommand(cwd, program, args) {
     }
   } else if (program === 'git') {
     let gitCwd = cwd
+    let configured = false
     let j = 0
     while (j < args.length && args[j].startsWith('-')) {
       if (args[j] === '-C') {
         gitCwd = path.resolve(gitCwd, args[j + 1] ?? '')
         j += 2
-      } else j += ['-c', '--git-dir', '--work-tree', '--namespace'].includes(args[j]) ? 2 : 1
+      } else {
+        if (args[j] === '-c' || args[j].startsWith('--config-env')) configured = true
+        j += ['-c', '--git-dir', '--work-tree', '--namespace', '--config-env'].includes(args[j]) ? 2 : 1
+      }
     }
     if (['switch', 'checkout'].includes(args[j])) recordBranchChange(gitCwd, args[j], args.slice(j + 1))
     const deletes = args[j] && gitDeletes(args[j], args.slice(j + 1))
     if (deletes) result = stricter(result, classifyDelete(gitCwd, deletes, []))
     const checkout = args[j] && INTEGRATING_SUBCOMMANDS.includes(args[j]) && checkoutAt(gitCwd)
-    const integrates = checkout && gitIntegrates(gitCwd, args[j], args.slice(j + 1), checkout.branch)
+    const integrates = checkout && gitIntegrates(gitCwd, args[j], args.slice(j + 1), checkout.branch, configured)
     if (integrates) result = stricter(result, denyIntegrate(integrates, checkout))
   }
   return result

@@ -531,6 +531,17 @@ const deleteCases = [
   [scratch, `rm -rf ${path.join(scratch, "src-link")}/../a.txt`, "ask"],
   // A cd to a missing folder may follow a mkdir, so the folder it names counts too.
   [scratch, `mkdir d && cd d && rm -rf ../../${path.basename(onMain)}`, "ask"],
+  // Through any number of such moves, the folder before them stays possible.
+  [onMain, `pushd ${scratch}/nope; rm -rf a.txt`, "ask"],
+  [onMain, `cd ${scratch}/n1; cd ${scratch}/n2; rm -rf a.txt`, "ask"],
+  [onMain, `cd ${scratch}/n1 || cd ${scratch}/n2; rm -rf a.txt`, "ask"],
+  [onMain, `cd ${scratch}/n1; pushd ${scratch}; popd; rm -rf a.txt`, "ask"],
+  [onMain, `cd ${scratch}/n1; pushd ${scratch}/n2; rm -rf a.txt`, "ask"],
+  [onMain, `cd ${scratch} && cd ${scratch} && rm -rf x`, "defer"],
+  // Attached create options name the new branch too.
+  [onFeature, "git switch -cmain && rm a.txt", "ask"],
+  [onFeature, "git switch --create=main && rm a.txt", "ask"],
+  [onFeature, "git checkout -bmain && rm a.txt", "ask"],
   // A switch that may fail leaves the branch before it in play.
   [onMain, "git checkout feature; rm a.txt", "ask"],
   [onMain, "git switch feature || git merge feature", "deny"],
@@ -614,6 +625,10 @@ const mergeCases = [
   // git honors the last of --ff-only, --ff, --no-ff; fetch options take values.
   [onMain, "git merge --ff-only origin/main --no-ff", "deny"],
   [onMain, "git pull --ff-only --depth 1 origin main", "defer"],
+  // --upload-pack and git -c can fetch from another repository under the remote's name.
+  [onMain, "git pull --ff-only --upload-pack 'git-upload-pack /elsewhere' origin main", "deny"],
+  [onMain, "git pull --ff-only --upload-pack=x origin main", "deny"],
+  [onMain, "git -c remote.origin.url=/elsewhere pull --ff-only origin main", "deny"],
   [onMain, "git merge --abort", "defer"],
   [onMain, "git rebase --abort", "defer"],
   [onMain, "git cherry-pick --quit", "defer"],
