@@ -39,7 +39,7 @@ export function managedRulesets({ requiredChecks = [] } = {}) {
       },
     });
   }
-  // `risk` completes "Without it, …" wherever a missing ruleset is reported.
+  // `risk` is the clause the Plans notice lists after "is not fully protected on GitHub:".
   return [
     {
       key: "plans",

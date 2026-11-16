@@ -209,7 +209,7 @@ export function planChanges(report, action) {
   const none = (refusal) => ({ changes: [], refusal });
   if (["unsupported", "unavailable", "conflicting"].includes(report.state)) return none(`nothing was changed while the state is ${report.state}`);
   if (action === "protect" && !REPAIRABLE_STATES.has(report.state)) return none(null);
-  if (!report.admin) return none(`${report.login} is not an admin of ${report.repository}; a repo admin must run roborepo protect`);
+  if (!report.admin) return none(`signed in to GitHub as ${report.login}, who is not an admin of ${report.repository}; a repo admin must run roborepo protect`);
 
   const policyBodies = new Map(managedRulesets({ requiredChecks: report.requiredChecks }).map((policy) => [policy.key, policy]));
   const change = (policy, enforcement) => {

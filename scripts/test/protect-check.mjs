@@ -236,7 +236,7 @@ try {
   result = run([]);
   assert.equal(result.status, 1);
   assert.match(result.stdout, /is missing/);
-  assert.match(result.stdout, /Octo-reader is not an admin of example\/project; a repo admin must run roborepo protect\./);
+  assert.match(result.stdout, /Signed in to GitHub as octo-reader, who is not an admin of example\/project; a repo admin must run roborepo protect\./);
   assert.deepEqual(writes(), []);
   result = run(["--check", "--json"]);
   assert.deepEqual([result.json.state, result.json.admin, result.json.login], ["missing", false, "octo-reader"]);
@@ -245,7 +245,7 @@ try {
   assert.equal(result.status, 0);
   assert.match(result.stdout, /Bypass lists are visible only to admins, so they were not compared\./);
   result = run(["--skip", "main-merge"]);
-  assert.match(result.stdout, /Octo-reader is not an admin/);
+  assert.match(result.stdout, /Signed in to GitHub as octo-reader, who is not an admin/);
   assert.deepEqual(writes(), []);
   console.log("✓ A non-admin gets the state and the account name, and no write is sent.");
 
