@@ -619,6 +619,9 @@ function testNotTestedEntriesNeedAReasonOrEvidence() {
   }
   assert.deepEqual(codesFor(explained, "active"), ["UNCONFIRMED_NOT_TESTED"], "open entries with a reason are still reported as open");
 
+  const lowercase = notTestedPlan(["- [ ] The theme reads well; needs a person: look is a human call.", "- [ ] The portal starts; blocked: `serve` failed with EPERM."]);
+  assert.equal(unexplainedIn(lowercase, "active"), undefined, "the check wants a stated reason, not a capital letter");
+
   const emptyResolution = notTestedPlan(["- [x] The approval question names the commit. —"]);
   assert.equal(unexplainedIn(emptyResolution, "active")?.count, 1, "a dash with nothing after it is not evidence");
 

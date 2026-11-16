@@ -299,8 +299,9 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
       gitLastChangedAt: git.lastChangedAt,
       gitStatus: git.status,
       taskCounts: parsed.taskCounts,
-      // Unchecked `## Not tested` entries, which are tasks too but never block implementation
-      // completion; `taskCounts.remaining` minus this is the work still open.
+      // Unchecked `## Not tested` entries, which are tasks too but are not implementation work: one
+      // that gives its reason may reach review open. `taskCounts.remaining` minus this is the work
+      // still open.
       notTestedOpen: parsed.notTested.unchecked,
       // The outcome recorded in `## Review`, kept apart from task progress: open findings and the
       // recorded decision. Whether an approval is still fresh needs Git and is checked at close.

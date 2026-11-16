@@ -197,7 +197,7 @@ findings; earlier findings may stay for readable history.
 ### Verification
 - `npm run check` passed at <short commit>
 - Base failure: `<check>` fails on the base branch too
-- Manual: the setup dialog enables every component (confirmed by the user)
+- Manual: the setup dialog's wording reads clearly to a new user (confirmed by the user)
 
 ### Result
 - Status: pending

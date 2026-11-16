@@ -177,7 +177,7 @@ const DEFS = {
     kind: "lifecycle",
     severity: "advisory",
     message: ({ count }) => `${count} unconfirmed Not tested entr${count === 1 ? "y" : "ies"}.`,
-    resolution: "Run the check each entry describes and check it off with the evidence after ` — `. Leave open only an entry an agent cannot clear, ending it with `Needs a person: <why>` or `Blocked: <command> failed with <error>`; the user confirms those. Delete an entry only on the user's decision, with the reason recorded in the plan's `## Decision Log`.",
+    resolution: "Run the check each entry describes and check it off with the evidence after ` — `. Leave open only an entry an agent cannot clear: end it with `Needs a person: <why>` for a check the user must make, or `Blocked: <command> failed with <error>` for a command the user must allow before an agent can run it. Delete an entry only on the user's decision, with the reason recorded in the plan's `## Decision Log`.",
   },
   // Emitted for active and review plans only. `plans validate` and `plans save` report it; the move
   // into Review and the completion preflight refuse it, so a plan reaches review with every open
