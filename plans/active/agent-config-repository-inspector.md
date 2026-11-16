@@ -1,6 +1,6 @@
 ---
 id: nrvwti51
-next_action: Run validation pass 8 (the last under the eight-pass cap) on the agent-config-repository-inspector worktree at 4c11db18, fix its findings, then run the completion preflight, submit to review, and push the feature branch.
+next_action: Implementation is finished and validated; run /plan-review on this plan for the human review.
 blocked_by: []
 depends_on: []
 related: ["permva27"]
@@ -165,6 +165,8 @@ Run the new provider and safety fixtures through `scripts/test/run-checks.mjs` a
 - [x] An escaped quote in an inline-table string let value text surface as an MCP server name — fixed (4c11db18)
 - [x] A TOML value never closed gave no diagnostic — fixed (4c11db18)
 - [x] Symlinked subfolders inside rules, agents, and commands folders produced no entry — fixed (4c11db18)
+- [x] Skills and commands named like build outputs (`build`, `vendor`, `out`) inside `.claude`, `.agents`, or `.codex` were silently skipped — fixed (641e32f9)
+- [x] Two scope-selector comments still said Agents loads no repo data — fixed (641e32f9)
 
 ### Verification
 
@@ -173,5 +175,6 @@ Run the new provider and safety fixtures through `scripts/test/run-checks.mjs` a
 - `npm run test:portal-ui -- repository-scope.spec.mjs`: 17 passed; `portal-ui.spec.mjs`: 99 passed.
 - `node scripts/test/run-checks.mjs --filter harness`: 14/14 passed; `docs-reference-check.mjs` passed; `bash scripts/doctor.sh --quiet` passed (99 checks).
 - `bash scripts/test/test-cli.sh --quiet`: 426 passed, 0 failed (at e5233532). An earlier run at the first commit reported 1 failure whose line was not captured; both later runs were clean.
-- Validation loop: passes 1–7 ran as fresh-context subagents; each reported `fix` findings, all fixed above. Pass 8 (the last under the cap) has not run yet, at 4c11db18.
+- Validation loop: reached the eight-pass cap. Passes 1–8 ran as fresh-context subagents; each reported `fix` findings, all fixed above. Pass 8's fixes (641e32f9: build-named folders inside harness folders, two comments) were not revalidated by a further pass; they are covered by a new assertion in `repository-agent-config-check.mjs`.
+- After pass 8 at 641e32f9: `repository-agent-config-check.mjs`, `repository-scope-portal-check.mjs`, `repository-scope.spec.mjs` (18 passed), `run-checks.mjs --filter harness` (14/14), `docs-reference-check.mjs`, `doctor.sh --quiet`, and `git diff --check` all passed.
 - Browser (observed, not asserted): the scoped Agents view against this branch showed checkout path, branch, the three sections, the machine-wide grid, plain-text previews with config values withheld, no horizontal scroll at 375px, and the checkout-unavailable state. `roborepo browser run` was blocked: Playwright is not installed in RoboRepo's tool directory.
