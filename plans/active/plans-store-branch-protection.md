@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Answer the two open questions on required CI checks (which workflows supply them; whether an empty run read keeps existing checks), then rerun /plan-execute to apply the answers and submit
+next_action: Run /plan-review; before /plan-close the owner runs the live GitHub checks under Not tested, starting with roborepo protect --check in this repo
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -130,11 +130,14 @@ are unsigned), and the commit-message or file restrictions. Any of them would ma
 ### Policy
 
 `modules/forge/protection-policy.mjs` defines the three managed rulesets as data: name, target,
-rules, and bypass. The required status checks are the job names from the latest successful CI run
-on the default branch, read when the command runs. A renamed job still blocks the pull request
-that renames it until an admin reruns `roborepo protect` after the merge (see Risks). CI cancels
-superseded runs (`cancel-in-progress: true`), so cancelled and failed runs are passed over. A repo whose default branch has no successful run gets `roborepo-main-merge`
-without the `required_status_checks` rule, and the report says so.
+rules, and bypass. The required status checks are the checks that report on pull requests: for
+each active workflow, the jobs that passed in its newest successful pull-request run, combined,
+read when the command runs. A workflow that never runs on pull requests adds no check. A renamed
+job still blocks the pull request that renames it until an admin reruns `roborepo protect` after
+the merge (see Risks). CI cancels superseded runs (`cancel-in-progress: true`), so cancelled and
+failed runs are passed over. When no workflow has a successful pull-request run, an existing
+`roborepo-main-merge` keeps the checks it already requires; a repo without one gets
+`roborepo-main-merge` without the `required_status_checks` rule, and the report says so.
 
 ### Opting out of the merge policy
 
@@ -467,49 +470,22 @@ Manual, on a scratch GitHub repo where the user is admin:
   "no run" made the policy drop `required_status_checks`, and a `protect` run would then have
   loosened `roborepo-main-merge`.
 
+- 2026-11-16, user: required checks combine the jobs from each active workflow's newest successful
+  pull-request run (`event=pull_request`), instead of the newest successful run on the default
+  branch from any workflow. A release or docs workflow can then never add a check that pull
+  requests do not report. Alternatives were naming the workflow with a flag (every clone must pass
+  the same flag) and keeping the old rule with a documented limit. Consequence, documented in
+  `roborepo-cli.md` and `testing.md`: a successful run on an open pull request that renames a job
+  reads as `drifted` before it merges, so `roborepo protect` should wait for the merge.
+- 2026-11-16, user: when no workflow has a successful pull-request run (runs expired, or Actions
+  off), an existing `roborepo-main-merge` keeps the checks it already requires, and the report says
+  they were kept (`checksSource: "kept"`). Alternatives were refusing the update, which would block
+  other repairs, and removing the checks, which would let a quiet repo lose its CI gate.
+
 ## Open questions
 
-### Which workflows supply the required CI checks?
-
-Raised by the validator, pass 1. The required checks are the jobs of the newest successful run on
-the default branch, from any workflow (`latestSuccessfulRunJobs` in `modules/forge/github.mjs`).
-The design says "the latest successful CI run". In a repo with more than one workflow on the
-default branch, such as release or docs, the newest run can come from a workflow that never runs on
-pull requests. The required checks then switch to that workflow's jobs, the state reads `drifted`,
-and `roborepo protect` would require checks that never report on a pull request, blocking every
-merge for non-admins. This repo has only `ci.yml`, so it is not affected today.
-
-| Option | For | Against |
-| --- | --- | --- |
-| A. Combine the newest successful pull-request run of each workflow (`event=pull_request`) | No configuration; requires exactly the checks that report on pull requests; works in any repo | More API calls per read; a job skipped by a path filter is still required (the existing risk) |
-| B. Name the workflow, with a flag such as `--workflow ci.yml` | Explicit and predictable | Each clone must pass the same flag, or the choice must be stored somewhere every clone reads, which the design avoided |
-| C. Keep the current rule and document the limit | No change | Wrong checks in any multi-workflow repo |
-
-Recommendation: A. Blocked rather than decided because each option changes what the command
-requires on GitHub in other repos, and B adds a public flag the plan did not specify.
-
-Blocks: submitting the plan for review (the escalated finding under `## Review`). No
-implementation task depends on it.
-
-### What happens to existing required checks when no successful run is found?
-
-Raised by the validator, pass 5. When GitHub returns no successful default-branch run (old runs
-aged out of retention, or Actions turned off), the policy has no `required_status_checks` rule. An
-existing `roborepo-main-merge` that requires checks then reads `drifted`, and `roborepo protect`
-updates it to `pull_request` alone, removing the required checks. Reproduced with
-`assessProtection` and `planChanges`. The design says only that a repo with no successful run
-*gets* the merge ruleset without checks; it says nothing about one that already has them.
-
-| Option | For | Against |
-| --- | --- | --- |
-| A. Keep the existing ruleset's checks when no run is found, and do not count them as drift | Never loosens protection by accident; no new flags | A truly retired check stays required until a run appears |
-| B. Refuse the update and report why | Explicit; nothing changes silently | Blocks repairing other drift in the same ruleset |
-| C. Keep current behavior | No change | A quiet repo or one with Actions off loses its CI gate on the next `protect` |
-
-Recommendation: A. Blocked rather than decided because it changes what the command writes in other
-repos, and it interacts with the workflow question above, so the two are best answered together.
-
-Blocks: submitting the plan for review. No implementation task depends on it.
+None. The two questions raised during validation were answered by the user on 2026-11-16; see
+the Decision Log.
 
 ## Review
 
@@ -546,10 +522,10 @@ Blocks: submitting the plan for review. No implementation task depends on it.
       with one — fixed with a browser test (d7fe4655)
 - [x] Comments said `refusal` means nothing was written; a refusal partway keeps the earlier
       writes — fixed (6eeba909, not revalidated: pass 8 was the last)
-- [ ] With no successful run found, `protect` removes the required checks from an existing
-      `roborepo-main-merge` — escalated, see Open questions
-- [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
-      Open questions
+- [x] With no successful run found, `protect` removes the required checks from an existing
+      `roborepo-main-merge` — escalated; user chose to keep them, fixed (a96508c4)
+- [x] Required checks can come from a workflow that does not run on pull requests — escalated; user
+      chose to combine each workflow's newest pull-request run, fixed (a96508c4)
 
 ### Verification
 
@@ -581,9 +557,13 @@ Blocks: submitting the plan for review. No implementation task depends on it.
 - [ ] A private repo on GitHub Free answers rulesets with HTTP 403 and a message matching
       "Upgrade to GitHub" or "make this repository public", so it reads as `unsupported`. The
       message is taken from GitHub's documentation, not observed.
-- [ ] A repo with GitHub Actions turned off answers `GET /repos/{owner}/{repo}/actions/runs` with
+- [ ] A repo with GitHub Actions turned off answers `GET /repos/{owner}/{repo}/actions/workflows` and
+      `/actions/runs` with
       HTTP 404, so it reads as having no successful run rather than `unavailable`. The 404 is taken
       from GitHub's documentation; confirming it needs a real repo with Actions disabled.
+- [ ] In this repo, `roborepo protect --check` lists the required checks from real pull-request
+      runs: `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`. The
+      `event=pull_request` filter and the `workflow_id` field are from GitHub's documentation.
 - [ ] With the managed rulesets in place, `roborepo plans save` reports `synchronized: true`, and
       GitHub rejects force-push and deletion of `repo-plans` and `main`, including for the admin.
 - [ ] A pull request with a failing check cannot be merged by a non-admin, and the admin sees the
