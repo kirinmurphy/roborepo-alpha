@@ -8,6 +8,7 @@ import { createHistoryView } from "./history-view.js";
 import { buildRoutesDropdown, fillApiRouteDialog } from "./suggestions-view.js";
 import { configureLinksTrigger } from "/portal/shared/repository-components.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
+import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import { autoDiscoveryPrompt } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
 import "/portal/shared/notice.js";
@@ -24,9 +25,8 @@ const historyView = createHistoryView({ onStale: () => load({ force: true }) });
 // that same in-flight scan, so the page fills in as soon as it lands.
 const sourcesDialog = createRepositorySourcesDialog({
   onPending: (isPending) => { if (isPending) setRuntimeSyncStatus(true, true); },
-  onChange: () => load({ force: true }),
-  onAutoDiscoveryEnabled: () => sourcesDialog.refresh(),
 });
+onRepositoriesChanged(() => load({ force: true }));
 const autoDiscoveryCta = document.getElementById("auto-discovery-cta");
 autoDiscoveryCta.append(autoDiscoveryPrompt({ onEnable: () => sourcesDialog.enableAutoDiscovery() }));
 

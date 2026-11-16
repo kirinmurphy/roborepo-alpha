@@ -2,24 +2,25 @@
 // and Settings' inline surface. Top to bottom: auto-discovery (primary), one list of every known
 // repository, then folders (secondary).
 import { portalWireBackdropClose } from "/portal/shared/api.js";
+import { notifyRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import * as api from "./repository-sources-api.js";
 import { autoDiscoveryBlock, folderRow, ignoredRow, repositoryRow } from "./repository-sources-templates.js";
 
 // One controller per page, since every caller drives the same #repository-sources-dialog: the page
-// itself and the repository selector both open it. Each caller subscribes its own
-// `onChange`, which runs after every successful mutation so it can re-read its own data.
+// itself and the repository selector both open it. After every successful mutation the surface fires
+// the shared "repos changed" signal (repository-list-change.js), which pages subscribe to for their
+// own data; `onPending` here only tracks auto-discovery's scan.
 let sharedDialog = null;
 
-export function createRepositorySourcesDialog({ onChange = () => {}, onPending = () => {} } = {}) {
+export function createRepositorySourcesDialog({ onPending = () => {} } = {}) {
   sharedDialog ??= buildRepositorySourcesDialog();
-  sharedDialog.subscribers.push({ onChange, onPending });
+  sharedDialog.pendingSubscribers.push(onPending);
   return sharedDialog.controller;
 }
 
 function buildRepositorySourcesDialog() {
-  const subscribers = [];
-  const onChange = (...args) => { for (const subscriber of subscribers) subscriber.onChange(...args); };
-  const onPending = (isPending) => { for (const subscriber of subscribers) subscriber.onPending(isPending); };
+  const pendingSubscribers = [];
+  const onPending = (isPending) => { for (const subscriber of pendingSubscribers) subscriber(isPending); };
   const dialog = document.getElementById("repository-sources-dialog");
   const syncStatus = dialog.querySelector("[data-repository-sync-status]");
   const info = document.getElementById("folder-scan-info");
@@ -27,7 +28,6 @@ function buildRepositorySourcesDialog() {
   const surface = createRepositorySourcesSurface({
     host: dialog.querySelector("[data-sources-host]"),
     info,
-    onChange,
     onPending: (isPending) => {
       if (isPending) setDialogSyncStatus("syncing", true);
       else void refreshDialogSyncStatus();
@@ -76,7 +76,7 @@ function buildRepositorySourcesDialog() {
   dialog.addEventListener("close", () => clearTimeout(syncPollTimer));
 
   return {
-    subscribers,
+    pendingSubscribers,
     controller: {
       open,
       close: () => dialog.close(),
@@ -86,14 +86,14 @@ function buildRepositorySourcesDialog() {
   };
 }
 
-export function createRepositorySourcesInline({ host = document.getElementById("repository-sources-inline"), onChange = () => {}, onPending = () => {}, onAutoDiscoveryEnabled = () => {} } = {}) {
+export function createRepositorySourcesInline({ host = document.getElementById("repository-sources-inline"), onPending = () => {}, onAutoDiscoveryEnabled = () => {} } = {}) {
   const info = document.getElementById("folder-scan-info");
-  const surface = createRepositorySourcesSurface({ host, info, onChange, onPending, onAutoDiscoveryEnabled });
+  const surface = createRepositorySourcesSurface({ host, info, onPending, onAutoDiscoveryEnabled });
   surface.refresh();
   return surface;
 }
 
-function createRepositorySourcesSurface({ host, info, onChange, onPending, onAutoDiscoveryEnabled }) {
+function createRepositorySourcesSurface({ host, info, onPending, onAutoDiscoveryEnabled }) {
   onAutoDiscoveryEnabled ??= refreshAfterAutoDiscovery;
   host.replaceChildren(document.getElementById("tpl-repository-sources-surface").content.cloneNode(true));
   const surface = host.querySelector("[data-sources-surface]");
@@ -194,7 +194,7 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending, onAut
     try {
       payload = await action();
       render();
-      if (notify) await onChange(payload);
+      if (notify) await notifyRepositoriesChanged();
       return true;
     } catch (error) {
       if (!onError(error)) showError(error);
@@ -284,7 +284,7 @@ function createRepositorySourcesSurface({ host, info, onChange, onPending, onAut
     await api.refreshDeveloperRuntime();
     payload = await api.loadSources();
     render();
-    await onChange(payload);
+    await notifyRepositoriesChanged();
   }
 
   return {

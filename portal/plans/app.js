@@ -10,6 +10,7 @@ import {
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
+import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import { createPlanDrawer } from "./plan-drawer.js";
 import { lifecycleLabel, lifecycleTabs, setLifecycleModel } from "./lifecycle.js";
 import { createBacklogController } from "./backlog.js";
@@ -82,11 +83,10 @@ let repositoryAutoDiscoveryEnabled = false;
 let staleReason = null;
 
 // Plans no longer owns which repositories exist: the header count and the onboarding states open the
-// shared Manage repositories dialog, and any change there re-reads the Plans snapshot.
-const sourcesDialog = createRepositorySourcesDialog({
-  onPending: setPlansSyncPending,
-  onChange: () => api.refreshSnapshot().then(applySnapshot).catch(showLoadError),
-});
+// shared Manage repositories dialog, and any change there rebuilds the Plans snapshot. A change that
+// cleared the selected repo has already started a scope-change load; this later one supersedes it.
+const sourcesDialog = createRepositorySourcesDialog({ onPending: setPlansSyncPending });
+onRepositoriesChanged(() => load({ rebuild: true }));
 const onboarding = {
   onEnable: () => sourcesDialog.enableAutoDiscovery(),
   onAddFolder: () => sourcesDialog.open({ addFolder: true }),
@@ -231,10 +231,11 @@ function resetFilter(id) {
   render();
 }
 
-async function load() {
+// `rebuild` asks the server to recompute the snapshot rather than serve the one it holds.
+async function load({ rebuild = false } = {}) {
   const sequence = ++loadSequence;
   try {
-    const snapshot = await api.fetchSnapshot();
+    const snapshot = await (rebuild ? api.refreshSnapshot() : api.fetchSnapshot());
     if (sequence === loadSequence) applySnapshot(snapshot);
   } catch (err) {
     if (sequence === loadSequence) showLoadError(err);
