@@ -365,10 +365,8 @@ Behavior that must not change, each case passing before and after:
       `Needs a person:` reasons, and its report and review packet asked only for those two, each
       with steps, expected result, and reason, with no commands to allow. `lifecycleFindings` on the
       fixture: `NOT_TESTED_UNEXPLAINED` naming both runnable entries before, none after.
-- [ ] The review this produces asks for nothing an agent could have done. Needs a person: whether
-      the request reads as person-only work is the user's own judgment. Steps: read the dry-run's
-      review packet (two checks: the greeting's tone, and how it looks in the company Slack).
-      Expected: neither is something an agent could have run.
+- [x] The review this produces asks for nothing an agent could have done. — Confirmed by the user
+      2026-11-16, after reading the dry-run's review packet (tone and Slack): "Yes, both need me".
 
 ## Documentation impact
 
@@ -519,8 +517,11 @@ None.
   (the Not tested entry above), nothing outside this plan; merged `findings.mjs` and `index.mjs`
   keep `NOT_TESTED_UNEXPLAINED` and wrapped-line parsing with no references to what `main` removed
 
+- Manual: the dry-run's review packet asks only for person-only checks (confirmed by the user,
+  2026-11-16: "Yes, both need me")
+
 ### Result
 
-- Status: pending
+- Status: complete
 - Reviewed implementation commit: 39d4dfa915f6ea4f65eb111baf6dc286910f73f3
 - Base commit: 8f53ffdc276774d90ae5275a9be6c3c10ce72810
