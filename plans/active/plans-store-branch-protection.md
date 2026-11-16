@@ -542,6 +542,8 @@ Blocks: submitting the plan for review. No implementation task depends on it.
       every answered action — fixed (29a9fe2a)
 - [x] `roborepo-cli.md` left out that a GitHub HTTP error reads as `unavailable` — fixed
       (2d52c926)
+- [x] **Protect** from the Plans notice dropped GitHub's refusal reason when the portal answered
+      with one — fixed with a browser test (d7fe4655)
 - [ ] With no successful run found, `protect` removes the required checks from an existing
       `roborepo-main-merge` — escalated, see Open questions
 - [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
@@ -556,6 +558,8 @@ Blocks: submitting the plan for review. No implementation task depends on it.
 - Validation pass 4 (fresh-context subagent) at 55f250c7: 2 fix, 0 escalate.
 - Validation pass 5 (fresh-context subagent) at cbffbbad: 1 fix, 1 escalate.
 - Validation pass 6 (fresh-context subagent) at 29a9fe2a: 1 fix, 0 escalate.
+- Validation pass 7 (fresh-context subagent) at 2d52c926: 1 fix, 0 escalate. Branch-protection
+  browser spec, 8 passed at d7fe4655; its new refusal test fails with the fix removed.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
