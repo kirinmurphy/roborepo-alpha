@@ -108,15 +108,20 @@ hidden in a script, `mv` over a file, or a redirect that truncates one.
 
 A few more rules keep a temp-looking path from reaching a protected checkout:
 
-- Folders are compared by their real path, so `/tmp/link/x` where `link` points into a main checkout
-  asks, and `$TMPDIR/../x` is judged where it lands.
-- A `cd` to a folder that does not exist yet fails in the shell, so it is not followed.
+- Paths are followed through symlinks the way the shell walks them, so `/tmp/link/x`, `/tmp/link/`,
+  and `/tmp/link/../x` are judged where they land, and so is `$TMPDIR/../x`. Deleting the link
+  itself (`rm /tmp/link`) removes only the link, so it is judged as the temp folder.
+- After a `cd` to a folder that does not exist yet, later commands are judged both there and in the
+  folder before it, since the `cd` may fail or follow a `mkdir`.
 - Operands written after `find … -exec rm` or `xargs rm` count, not only where the command runs.
-- A `git switch` or `git checkout` earlier in the command decides the branch a later delete or merge
-  lands on; one the hook cannot read (`-`, a variable) counts as protected.
+- A `git switch` or `git checkout` earlier in the command counts alongside the branch already
+  checked out, since the switch may fail. `-b main`, `--track origin/main`, and a name the hook
+  cannot read (`-`, `@{-1}`, a variable) count as protected.
 - When Claude runs a command outside its sandbox (`dangerouslyDisableSandbox`), nothing limits a
-  delete to the checkout, so any delete outside the temp folders asks. Protected branches are the same list as for pushes. `ROBOREPO_TEMP_ROOTS`
-(comma-separated) replaces the temp folder list.
+  delete to the checkout, so any delete outside the temp folders asks.
+
+Protected branches are the same list as for pushes. `ROBOREPO_TEMP_ROOTS` (comma-separated)
+replaces the temp folder list.
 
 The hook runs on every shell call, sandboxed or not. That matters because the desktop app was seen
 running a sandboxed `rm` without the prompt its ask rule called for, while a hook's ask on a

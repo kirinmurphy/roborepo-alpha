@@ -1,5 +1,6 @@
-# Sourced by pre-merge-commit and pre-rebase. Agents never merge into a protected branch: main,
-# master, each remote's recorded default branch, and ROBOREPO_PROTECTED_BRANCHES (comma-separated).
+# Sourced by pre-merge-commit, pre-commit, and pre-rebase. Agents never merge into a protected
+# branch: main, master, each remote's recorded default branch, and ROBOREPO_PROTECTED_BRANCHES
+# (comma-separated).
 # The protected-branch shell hook denies the commands first; this catches what reaches git another
 # way (an alias, a script). A fast-forward makes no merge commit, so it never gets here.
 roborepo_protected_branch() {

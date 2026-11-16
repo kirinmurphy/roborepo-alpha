@@ -304,21 +304,29 @@ function realDirectory(dir) {
   }
 }
 
-// `target` with every existing folder above it resolved, so `/tmp/link/x` where the link points into
-// a checkout is judged as that checkout. The last part is kept: rm removes a symlink, not what it
-// points to.
-function realTarget(target) {
-  let dir = path.dirname(target)
-  const rest = [path.basename(target)]
-  while (!fs.existsSync(dir) && path.dirname(dir) !== dir) {
-    rest.unshift(path.basename(dir))
-    dir = path.dirname(dir)
+// The physical path the shell reaches through `raw`, an absolute path as written: each existing part
+// is resolved through its symlink before the next `..` applies, the way the kernel walks it, so
+// `/tmp/link/../x` and `/tmp/link/` reach what the link points to. With `keepLast`, a final part that
+// is itself a symlink stays unresolved, because rm removes the link, not what it points to.
+function physicalPath(raw, keepLast = false) {
+  const parts = raw.split('/')
+  const last = keepLast && !raw.endsWith('/') && !['.', '..'].includes(parts.at(-1)) ? parts.pop() : null
+  let current = '/'
+  for (const part of parts) {
+    if (part === '' || part === '.') continue
+    if (part === '..') {
+      current = path.dirname(current)
+      continue
+    }
+    const next = path.join(current, part)
+    current = fs.existsSync(next) ? realDirectory(next) : next
   }
-  return path.join(realDirectory(dir), ...rest)
+  return last === null ? current : path.join(current, last)
 }
 
-// Branches a `git switch` or `git checkout` earlier in the same command moves a checkout to, by its
-// top folder. The hook runs before the command, so the checkout's own HEAD would be stale.
+// Branches a `git switch` or `git checkout` earlier in the same command may move a checkout to, by its
+// top folder. The hook runs before the command, so the checkout's own HEAD would be stale; and since
+// a switch can fail (`git switch x; rm f`), the branch before it still counts too.
 const branchChanges = new Map()
 const UNKNOWN_BRANCH = '(a branch this hook cannot read)'
 
@@ -331,23 +339,31 @@ function checkoutAt(dir) {
   if (checkoutCache.has(dir) && !branchChanges.size) return checkoutCache.get(dir)
   let found = null
   const top = git(dir, ['rev-parse', '--show-toplevel'])
-  const branch = top && (branchChanges.get(top) ?? currentBranch(dir))
-  if (branch === UNKNOWN_BRANCH) found = { top, branch }
-  else if (branch && protectedBranches(dir, defaultRemote(dir, branch)).names.has(branch)) found = { top, branch }
+  const branches = top ? [currentBranch(dir), ...(branchChanges.get(top) ?? [])].filter(Boolean) : []
+  for (const branch of branches) {
+    if (branch === UNKNOWN_BRANCH || protectedBranches(dir, defaultRemote(dir, branch)).names.has(branch)) {
+      found = { top, branch }
+      break
+    }
+  }
   if (!branchChanges.size) checkoutCache.set(dir, found)
   return found
 }
 
 // Records the branch `git switch` or `git checkout` moves the checkout at `dir` to. A file checkout
-// (`git checkout -- x`, or a name that is no branch) changes nothing; a name the hook cannot read
-// (`-`, a variable) counts as protected.
+// (`git checkout -- x`, or a name that is no branch) changes nothing. A new branch (`-b`, `-c`,
+// `--orphan`) is a branch by definition, and `--track origin/main` lands on `main`. A name the hook
+// cannot read (`-`, `@{-1}`, a variable) counts as protected.
 function recordBranchChange(dir, subcommand, args) {
   const top = git(dir, ['rev-parse', '--show-toplevel'])
   if (!top || (subcommand === 'checkout' && args.includes('--'))) return
+  const record = (branch) => branchChanges.set(top, new Set([...(branchChanges.get(top) ?? []), branch]))
   let target = null
+  let created = false
   for (let k = 0; k < args.length; k += 1) {
     if (['-c', '-C', '-b', '-B', '--create', '--force-create', '--orphan'].includes(args[k])) {
       target = args[k + 1] ?? null
+      created = true
       break
     }
     if (args[k] === '-' || !args[k].startsWith('-')) {
@@ -356,14 +372,19 @@ function recordBranchChange(dir, subcommand, args) {
     }
   }
   if (target === null) return
-  if (target === '-' || /[$`]/.test(target)) {
-    branchChanges.set(top, UNKNOWN_BRANCH)
+  if (target === '-' || /[$`]|@\{/.test(target)) {
+    record(UNKNOWN_BRANCH)
     return
   }
-  const isBranch = subcommand === 'switch'
+  const tracking = !created && args.some((arg) => arg === '-t' || arg.startsWith('--track'))
+  if (tracking && target.includes('/')) {
+    record(target.slice(target.indexOf('/') + 1))
+    return
+  }
+  const isBranch = created || subcommand === 'switch'
     || git(dir, ['rev-parse', '--verify', '-q', `refs/heads/${target}`])
     || git(dir, ['for-each-ref', '--count=1', '--format=%(refname)', `refs/remotes/*/${target}`])
-  if (isBranch) branchChanges.set(top, target)
+  if (isBranch) record(target)
 }
 
 // The protected checkout `target` lies in, or that lies within `target` when it is a folder (a
@@ -402,12 +423,13 @@ function containedCheckout(dir, depth) {
 // command runs in.
 function operandPath(cwd, word) {
   const tmpdir = /^\$\{?TMPDIR\}?(\/|$)/.exec(word)
-  if (tmpdir) word = path.join(process.env.TMPDIR || os.tmpdir(), word.slice(tmpdir[0].length))
+  if (tmpdir) word = `${process.env.TMPDIR || os.tmpdir()}/${word.slice(tmpdir[0].length)}`
   const home = /^~(\/|$)/.test(word) ? os.homedir() + word.slice(1) : word
+  const absolute = (written) => (written.startsWith('/') ? written : `${cwd}/${written}`)
   const literal = home.split(/[$`*?[{]/)[0]
-  if (literal === home) return path.resolve(cwd, home)
-  if (!literal) return cwd
-  return path.resolve(cwd, literal.endsWith('/') ? literal : path.dirname(literal))
+  if (literal === home) return physicalPath(absolute(home), true)
+  if (!literal) return physicalPath(cwd)
+  return physicalPath(absolute(literal.endsWith('/') ? literal : literal.slice(0, literal.lastIndexOf('/') + 1) || '.'))
 }
 
 // Asks when any target lies in, or holds, a checkout on a protected branch. A command Claude runs
@@ -417,7 +439,7 @@ let unsandboxed = false
 
 function classifyDelete(cwd, command, targets) {
   for (const word of targets.length ? targets : ['.']) {
-    const target = realTarget(operandPath(cwd, word))
+    const target = operandPath(cwd, word)
     if (inTemp(target)) continue
     const checkout = protectedCheckout(target)
     if (checkout) return askDelete(command, checkout)
@@ -481,7 +503,10 @@ function gitDeletes(subcommand, args) {
 // The git subcommands that bring other commits into the checked-out branch.
 const INTEGRATING_SUBCOMMANDS = ['merge', 'pull', 'rebase', 'cherry-pick', 'am']
 // merge and pull options that take the next word as their value.
-const INTEGRATE_VALUE_OPTIONS = new Set(['-m', '-F', '-s', '-X', '--strategy', '--strategy-option', '--file', '--message'])
+const INTEGRATE_VALUE_OPTIONS = new Set([
+  '-m', '-F', '-s', '-X', '--strategy', '--strategy-option', '--file', '--message',
+  '--depth', '--deepen', '--shallow-since', '--shallow-exclude', '-j', '--jobs', '--upload-pack', '-o', '--server-option',
+])
 
 // Stopping one in progress (`--abort`, `--quit`) brings nothing in. A fast-forward-only pull or
 // merge from the branch's own upstream adds no new commits, so it stays allowed: the remote must be
@@ -495,7 +520,8 @@ function gitIntegrates(dir, subcommand, args, branch) {
     if (INTEGRATE_VALUE_OPTIONS.has(args[k])) k += 1
     else if (!args[k].startsWith('-')) operands.push(args[k])
   }
-  if (args.includes('--ff-only')) {
+  // git honors the last of --ff-only, --ff, and --no-ff.
+  if (args.lastIndexOf('--ff-only') > Math.max(args.lastIndexOf('--ff'), args.lastIndexOf('--no-ff'))) {
     const remote = git(dir, ['config', `branch.${branch}.remote`]) || 'origin'
     const ownBranch = (ref) => ref === branch || ref === `refs/heads/${branch}`
     if (subcommand === 'pull' && (operands.length === 0 || (operands[0] === remote && (operands.length === 1 || (operands.length === 2 && ownBranch(operands[1])))))) return null
@@ -618,15 +644,10 @@ function changedDirectory(cwd, args) {
   if (dir.length === 0) return os.homedir()
   if (dir.length !== 1 || dir[0].startsWith('-') || /[`<>]/.test(dir[0])) return null
   const tmpdir = /^\$\{?TMPDIR\}?(\/|$)/.exec(dir[0])
-  if (tmpdir) {
-    const next = path.resolve(process.env.TMPDIR || os.tmpdir(), dir[0].slice(tmpdir[0].length))
-    return fs.existsSync(next) ? next : null
-  }
+  if (tmpdir) return path.resolve(process.env.TMPDIR || os.tmpdir(), dir[0].slice(tmpdir[0].length))
   if (dir[0].includes('$')) return null
   const target = /^~(\/|$)/.test(dir[0]) ? os.homedir() + dir[0].slice(1) : dir[0]
-  const next = path.resolve(cwd, target)
-  // A cd to a folder that does not exist yet fails, leaving the shell where it was.
-  return fs.existsSync(next) ? next : null
+  return path.resolve(cwd, target)
 }
 
 // Walks every simple command looking for deletes, following `cd`, `cd -`, `pushd`, and `popd`,
@@ -634,6 +655,9 @@ function changedDirectory(cwd, args) {
 // substitutions (each with its own working folder), and `sh -c`.
 function classifyDeletes(text, startCwd) {
   let cwd = startCwd
+  // After a cd to a folder that does not exist yet, the shell is in one of two places: the new folder
+  // (an earlier mkdir made it) or the old one (the cd failed). Later commands are judged in both.
+  let otherCwd = null
   let previous = startCwd
   const dirStack = []
   const scopes = []
@@ -646,13 +670,13 @@ function classifyDeletes(text, startCwd) {
   }
   for (const words of splitCommands(exposeNestedCommands(text))) {
     if (words[0] === SCOPE_OPEN) {
-      scopes.push({ cwd, previous, stack: dirStack.slice() })
+      scopes.push({ cwd, otherCwd, previous, stack: dirStack.slice() })
       continue
     }
     if (words[0] === SCOPE_CLOSE) {
       const scope = scopes.pop()
       if (scope) {
-        ;({ cwd, previous } = scope)
+        ;({ cwd, otherCwd, previous } = scope)
         dirStack.splice(0, dirStack.length, ...scope.stack)
       }
       continue
@@ -671,52 +695,68 @@ function classifyDeletes(text, startCwd) {
     // Only redirect-looking words: `cd ">x"` loses its quotes before this, so its target is unknown.
     const onlyRedirects = args.length > 0 && dirArgs.length === 0
     if (program === 'cd' && dirArgs.length === 1 && dirArgs[0] === '-') {
+      otherCwd = null
       moveTo(previous)
     } else if (program === 'cd') {
-      moveTo(onlyRedirects ? null : changedDirectory(cwd, dirArgs))
+      const next = onlyRedirects ? null : changedDirectory(cwd, dirArgs)
+      const otherNext = otherCwd && !onlyRedirects ? changedDirectory(otherCwd, dirArgs) : null
+      otherCwd = next !== null && !fs.existsSync(next) ? cwd : otherNext
+      moveTo(next)
     } else if (program === 'pushd' && dirArgs.length === 0) {
       // Bare `pushd` swaps the current folder with the top of the stack.
+      otherCwd = null
       if (dirStack.length) {
         const top = dirStack.pop()
         dirStack.push(cwd)
         moveTo(top)
       }
     } else if (program === 'pushd') {
+      otherCwd = null
       dirStack.push(cwd)
       moveTo(onlyRedirects ? null : changedDirectory(cwd, dirArgs))
     } else if (program === 'popd') {
+      otherCwd = null
       if (dirStack.length) moveTo(dirStack.pop())
-    } else if (SHELLS.has(program)) {
-      const flag = args.findIndex((w) => /^-[a-z]*c[a-z]*$/.test(w))
-      if (flag !== -1 && args[flag + 1]) result = stricter(result, classifyDeletes(args[flag + 1], cwd))
-    } else if (DELETE_PROGRAMS.has(program)) {
-      result = stricter(result, classifyDelete(cwd, program, deleteTargets(args)))
-    } else if (program === 'find') {
-      const targets = findDeleteTargets(args)
-      if (targets) result = stricter(result, classifyDelete(cwd, 'find -delete', targets))
-    } else if (program === 'xargs') {
-      // Most paths arrive on stdin, so the directory xargs runs in stands in for them; any written
-      // after the program are checked too.
-      const deleter = xargsProgram(args)
-      if (deleter && DELETE_PROGRAMS.has(path.basename(deleter.program))) {
-        result = stricter(result, classifyDelete(cwd, `xargs ${deleter.program}`, ['.', ...deleteTargets(deleter.args)]))
-      }
-    } else if (program === 'git') {
-      let gitCwd = cwd
-      let j = 0
-      while (j < args.length && args[j].startsWith('-')) {
-        if (args[j] === '-C') {
-          gitCwd = path.resolve(gitCwd, args[j + 1] ?? '')
-          j += 2
-        } else j += ['-c', '--git-dir', '--work-tree', '--namespace'].includes(args[j]) ? 2 : 1
-      }
-      if (['switch', 'checkout'].includes(args[j])) recordBranchChange(gitCwd, args[j], args.slice(j + 1))
-      const deletes = args[j] && gitDeletes(args[j], args.slice(j + 1))
-      if (deletes) result = stricter(result, classifyDelete(gitCwd, deletes, []))
-      const checkout = args[j] && INTEGRATING_SUBCOMMANDS.includes(args[j]) && checkoutAt(gitCwd)
-      const integrates = checkout && gitIntegrates(gitCwd, args[j], args.slice(j + 1), checkout.branch)
-      if (integrates) result = stricter(result, denyIntegrate(integrates, checkout))
+    } else {
+      for (const base of otherCwd ? [cwd, otherCwd] : [cwd]) result = stricter(result, judgeCommand(base, program, args))
     }
+  }
+  return result
+}
+
+// The delete or merge decision for one simple command run in `cwd`.
+function judgeCommand(cwd, program, args) {
+  let result = null
+  if (SHELLS.has(program)) {
+    const flag = args.findIndex((w) => /^-[a-z]*c[a-z]*$/.test(w))
+    if (flag !== -1 && args[flag + 1]) result = stricter(result, classifyDeletes(args[flag + 1], cwd))
+  } else if (DELETE_PROGRAMS.has(program)) {
+    result = stricter(result, classifyDelete(cwd, program, deleteTargets(args)))
+  } else if (program === 'find') {
+    const targets = findDeleteTargets(args)
+    if (targets) result = stricter(result, classifyDelete(cwd, 'find -delete', targets))
+  } else if (program === 'xargs') {
+    // Most paths arrive on stdin, so the directory xargs runs in stands in for them; any written
+    // after the program are checked too.
+    const deleter = xargsProgram(args)
+    if (deleter && DELETE_PROGRAMS.has(path.basename(deleter.program))) {
+      result = stricter(result, classifyDelete(cwd, `xargs ${deleter.program}`, ['.', ...deleteTargets(deleter.args)]))
+    }
+  } else if (program === 'git') {
+    let gitCwd = cwd
+    let j = 0
+    while (j < args.length && args[j].startsWith('-')) {
+      if (args[j] === '-C') {
+        gitCwd = path.resolve(gitCwd, args[j + 1] ?? '')
+        j += 2
+      } else j += ['-c', '--git-dir', '--work-tree', '--namespace'].includes(args[j]) ? 2 : 1
+    }
+    if (['switch', 'checkout'].includes(args[j])) recordBranchChange(gitCwd, args[j], args.slice(j + 1))
+    const deletes = args[j] && gitDeletes(args[j], args.slice(j + 1))
+    if (deletes) result = stricter(result, classifyDelete(gitCwd, deletes, []))
+    const checkout = args[j] && INTEGRATING_SUBCOMMANDS.includes(args[j]) && checkoutAt(gitCwd)
+    const integrates = checkout && gitIntegrates(gitCwd, args[j], args.slice(j + 1), checkout.branch)
+    if (integrates) result = stricter(result, denyIntegrate(integrates, checkout))
   }
   return result
 }

@@ -391,6 +391,8 @@ for (const [dir, branch] of [[onMain, "main"], [onFeature, "feature"]]) {
 }
 gitOk(onFeature, "branch", "main");
 fs.symlinkSync(onMain, path.join(scratch, "main-link"));
+fs.mkdirSync(path.join(onMain, "src"));
+fs.symlinkSync(path.join(onMain, "src"), path.join(scratch, "src-link"));
 const temps = { ROBOREPO_TEMP_ROOTS: scratch, TMPDIR: scratch };
 const deleteCases = [
   [onMain, "rm a.txt", "ask"],
@@ -522,6 +524,21 @@ const deleteCases = [
   [onFeature, "git checkout - && rm a.txt", "ask"],
   [onFeature, "git checkout -- a.txt && rm a.txt", "defer"],
   [onFeature, "git switch -c other && rm a.txt", "defer"],
+  // Through a symlink: a trailing slash, a glob, and `..` reach what the link points to.
+  [scratch, `rm -rf ${path.join(scratch, "main-link")}/`, "ask"],
+  [scratch, `rm -rf ${path.join(scratch, "main-link")}/*`, "ask"],
+  [scratch, `find ${path.join(scratch, "main-link")}/ -delete`, "ask"],
+  [scratch, `rm -rf ${path.join(scratch, "src-link")}/../a.txt`, "ask"],
+  // A cd to a missing folder may follow a mkdir, so the folder it names counts too.
+  [scratch, `mkdir d && cd d && rm -rf ../../${path.basename(onMain)}`, "ask"],
+  // A switch that may fail leaves the branch before it in play.
+  [onMain, "git checkout feature; rm a.txt", "ask"],
+  [onMain, "git switch feature || git merge feature", "deny"],
+  // New and tracking branches, and @{-N}, are what they name.
+  [onFeature, "git checkout -b main && rm a.txt", "ask"],
+  [onFeature, "git checkout --orphan main && rm a.txt", "ask"],
+  [onFeature, "git switch --track origin/main && rm a.txt", "ask"],
+  [onFeature, "git checkout @{-1} && rm a.txt", "ask"],
 ];
 for (const [cwd, command, expected] of deleteCases) {
   assert.equal(decide(command, { cwd, env: temps }), expected, `${path.basename(cwd)}: ${command}`);
@@ -594,6 +611,9 @@ const mergeCases = [
   [onMain, "git pull --ff-only https://example.com/other.git main", "deny"],
   [onMain, "git am patch.mbox", "deny"],
   [onMain, "git am --abort", "defer"],
+  // git honors the last of --ff-only, --ff, --no-ff; fetch options take values.
+  [onMain, "git merge --ff-only origin/main --no-ff", "deny"],
+  [onMain, "git pull --ff-only --depth 1 origin main", "defer"],
   [onMain, "git merge --abort", "defer"],
   [onMain, "git rebase --abort", "defer"],
   [onMain, "git cherry-pick --quit", "defer"],
