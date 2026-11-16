@@ -357,17 +357,18 @@ Behavior that must not change, each case passing before and after:
 
 ## Not tested
 
-- [ ] On a real plan run, `/plan-execute` runs its runnable checks and the review asks the user
-      only for person-only checks. Needs a person: only the user can judge whether the request
-      they receive contains nothing an agent could have done, and installing skills and running
-      another plan command are the user's actions. Steps: the installed plan skills still carry
-      the old text until this branch's skills are installed, so with them installed, run
-      `/plan-execute` on a real plan, then `/plan-review`. Expected: every `## Not tested` entry
-      the run leaves open ends with `Needs a person:` or `Blocked:` and a reason, checks an agent
-      could run are checked off with evidence, and the review asks only for person-only checks and
-      blocked commands. The check must be settled before approval; if installing the branch's
-      skills before merge is not wanted, the alternative is the user's decision to move this check
-      to another plan, recorded in the Decision Log.
+- [x] An agent following this branch's skill text runs its runnable checks and the review asks only
+      for person-only checks. — Verified by agent 2026-11-16 at 39d4dfa9: a fresh subagent given only
+      the branch's plan-execute "Not Tested" and completion text, `final-report.md`, `plan-schema.md`,
+      and `plan-review` steps 5–6 settled a fixture plan with four open entries. It ran and cleared
+      the two command-line checks with exact-match evidence, left tone and Slack open with
+      `Needs a person:` reasons, and its report and review packet asked only for those two, each
+      with steps, expected result, and reason, with no commands to allow. `lifecycleFindings` on the
+      fixture: `NOT_TESTED_UNEXPLAINED` naming both runnable entries before, none after.
+- [ ] The review this produces asks for nothing an agent could have done. Needs a person: whether
+      the request reads as person-only work is the user's own judgment. Steps: read the dry-run's
+      review packet (two checks: the greeting's tone, and how it looks in the company Slack).
+      Expected: neither is something an agent could have run.
 
 ## Documentation impact
 
@@ -419,6 +420,14 @@ Decisions `/plan-execute` made on its own while implementing, 2026-11-16:
   nothing after the dash still yields the finding. Alternative: accept any dash. Why: a bare dash
   records no evidence.
 
+Decided by the user in review, 2026-11-16:
+
+- **The real-run check is split: an agent dry-run, then a person's look.** The user chose "Agent
+  dry-run first" when asked how to settle the open `## Not tested` entry. A fresh agent follows
+  this branch's skill text against a fixture plan and the result is checked; the person then judges
+  only whether the resulting review asks for nothing an agent could have done. Alternatives: keep
+  the full real-plan run as a person check, or move the check to `0jped168`.
+
 ## Open Questions
 
 None.
@@ -450,11 +459,10 @@ None.
 - [x] The plan's `## Not tested` entry gives no steps the user can follow before approval, and
       leans on "behavior evals do not exist yet", which the new schema lists as a non-reason —
       entry rewritten with steps, the expected result, and the alternative
-- [ ] Review: the `## Not tested` entry only partly holds as `Needs a person:` — the Validator is
+- [x] Review: the `## Not tested` entry only partly holds as `Needs a person:` — the Validator is
       meant to judge "nothing an agent could have done", and an agent could dry-run the branch's
-      skill text against a fixture plan; installing skills reads as `Blocked:` — escalated to the
-      human (keep as a person check, replace with an agent fixture dry-run plus a person look, or
-      move to `0jped168` by decision)
+      skill text against a fixture plan; installing skills reads as `Blocked:` — escalated; the user
+      chose an agent dry-run plus a person's look (Decision Log); dry-run done, entry split
 
 ### Verification
 
