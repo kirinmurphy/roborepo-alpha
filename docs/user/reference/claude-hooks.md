@@ -10,7 +10,7 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 | Event | Hook | What it does | Installed by |
 | --- | --- | --- | --- |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | always |
-| PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes; asks before a delete in a checkout on a protected branch (see below) | always |
+| PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes; denies merges into a checkout on a protected branch and asks before a delete there (see below) | always |
 | PreToolUse `Bash` | Output minimizer | Trims noisy build, lint, and typecheck output; denies `--watch`, `--verbose`, and `--debug`; auto-allows a short list of safe read-only commands, alone or piped into read-only filters such as `head` or `wc`, never with anything chained or redirected | always |
 | PreToolUse `Bash` | Dense command log | Records commands of three or more lines to `<stateRoot>/capture/claude/dense-bash.jsonl` so you can find ones worth scripting. Never blocks | `capture-dense-bash` |
 | PreToolUse `Read`, `Write`, `Edit` | Repository scope | Reads across the repository and its worktrees are quiet; writes outside the checkout in use prompt. See [Config Control Panel](config-control-panel.md#changing-path-scopes) | always |
@@ -61,6 +61,25 @@ do not run in agent shells.
 A push from your own terminal is never blocked. Pair this with branch protection on the remote for
 a guard that does not depend on the local machine.
 
+### Merges into a protected branch
+
+Agents never merge into a protected branch, locally or on GitHub. In a checkout that has one checked
+out, the hook denies `git merge`, `git pull`, `git rebase`, and `git cherry-pick` (Claude and Codex
+alike), following `cd`, `git -C`, subshells, and `sh -c` the same way as for deletes. Two forms stay
+allowed because they bring in no new commits:
+
+- a fast-forward-only update from the branch's own upstream: `git pull --ff-only`,
+  `git pull --ff-only origin main`, `git merge --ff-only origin/main`;
+- stopping one in progress: `--abort` or `--quit`.
+
+`git merge --ff-only feature` on `main` is denied: it would land the feature branch. To bring `main`
+into a feature branch, run `roborepo plans sync-base` from that branch's worktree.
+
+The agents' `pre-merge-commit` and `pre-rebase` git hooks back this up. They refuse a merge commit on
+a protected branch and a rebase of one, however the command reached git, such as through an alias.
+A fast-forward makes no merge commit, so only the shell hook sees it. Your own terminal is
+unaffected.
+
 ### Deletes on a protected branch
 
 Deleting files is allowed by default (`delete-files`), because Claude's shell sandbox keeps shell
@@ -99,12 +118,12 @@ they can reach:
 | Bucket | Commands |
 | --- | --- |
 | allow | `gh pr create`; read-only `gh pr view`, `pr list`, `pr status`, `pr checks`, `pr diff`, `gh run list`, `run view`, `gh repo view` |
-| ask | `gh pr merge`; `gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`, `gh issue create`, `issue comment` |
-| deny | `gh api`, `gh auth token`, `gh repo edit`, `repo delete`, `repo rename`, `gh secret`, `gh variable`, `gh release`, `gh workflow run` |
+| ask | `gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`, `gh issue create`, `issue comment` |
+| deny | `gh pr merge`, `gh api`, `gh auth token`, `gh repo edit`, `repo delete`, `repo rename`, `gh secret`, `gh variable`, `gh release`, `gh workflow run` |
 
 The protected-branch hook also denies the deny-bucket commands when global flags come first
-(`gh -R owner/repo api …`), a form the prefix rules miss. Merging asks (`merge-pull-requests`), so
-you approve each merge; GitHub branch protection is the only guard the merge itself passes through.
+(`gh -R owner/repo api …`), a form the prefix rules miss. Agents never merge a pull request
+(`merge-pull-requests`): you merge it on GitHub.
 
 The workflow an agent should follow:
 

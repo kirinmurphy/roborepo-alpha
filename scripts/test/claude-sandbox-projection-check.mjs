@@ -44,7 +44,7 @@ assert.ok(permissions.deny.includes("Read(//**/*.pem)"), "read-secrets Read deni
 const bucketOf = (rule) => ["allow", "ask", "deny"].filter((key) => permissions[key].includes(rule));
 assert.deepEqual(bucketOf("Bash(rm:*)"), ["allow"], "delete-files allows rm");
 assert.deepEqual(bucketOf("Bash(git rm:*)"), ["allow"], "delete-files allows git rm");
-assert.deepEqual(bucketOf("Bash(gh pr merge:*)"), ["ask"], "merge-pull-requests asks");
+assert.deepEqual(bucketOf("Bash(gh pr merge:*)"), ["deny"], "merge-pull-requests denies");
 assert.deepEqual(bucketOf("Bash(gh api:*)"), ["deny"], "the rest of change-github-directly stays denied");
 assert.deepEqual(bucketOf("Bash(roborepo plans sync-base:*)"), ["allow"], "plans sync-base runs without approval");
 assert.deepEqual(bucketOf("Bash(roborepo plans stop-servers:*)"), ["allow"], "plan-close stops worktree servers without approval");

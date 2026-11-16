@@ -22,9 +22,13 @@ import { fileURLToPath } from 'node:url'
 // This reads the command text, so it can be fooled by indirection it cannot see (an alias, a
 // script). The pre-push hook in ../git-hooks/ is the backstop: git hands it the exact refs.
 //
-// It also denies the gh commands that act on GitHub without git (API calls, the token, settings) in
-// the forms the permission prefix rules miss: global flags before the subcommand, as in
-// `gh -R owner/repo api …`. Those never reach either protected-branch guard.
+// It also denies the gh commands that act on GitHub without git (API calls, the token, settings,
+// merging a pull request) in the forms the permission prefix rules miss: global flags before the
+// subcommand, as in `gh -R owner/repo pr merge …`. Those never reach either protected-branch guard.
+//
+// In a checkout that has a protected branch checked out, it denies git merge, pull, rebase, and
+// cherry-pick, so agents never merge into it. A fast-forward-only pull or merge of the branch's own
+// upstream, and stopping one in progress, stay allowed.
 //
 // It also guards a checkout that has a protected branch checked out against deletes. Claude's shell
 // sandbox runs commands that stay inside the checkout and temp folders without a prompt, and the
@@ -58,7 +62,7 @@ const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected
 // Mirrors the change-github-directly behavior in agent-permissions.json; a test keeps them equal.
 // `gh pr merge` is absent: merge-pull-requests asks, so the permission rules decide it.
 const GH_DENIED = [
-  ['api'], ['auth', 'token'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
+  ['api'], ['auth', 'token'], ['pr', 'merge'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
   ['secret'], ['variable'], ['release'], ['workflow', 'run'],
 ]
 // gh options that take their value as the next word, before or between subcommands.
@@ -394,6 +398,28 @@ function gitDeletes(subcommand, args) {
   return null
 }
 
+// The git subcommands that bring other commits into the checked-out branch: `merge`, `pull`,
+// `rebase`, and `cherry-pick`. Stopping one in progress (`--abort`, `--quit`) brings nothing in. A
+// fast-forward-only pull or merge of the branch's own upstream adds no new commits, so it stays
+// allowed; a fast-forward to any other branch would land that branch, so it does not.
+function gitIntegrates(subcommand, args, branch) {
+  if (!['merge', 'pull', 'rebase', 'cherry-pick'].includes(subcommand)) return null
+  if (args.some((arg) => arg === '--abort' || arg === '--quit')) return null
+  const operands = args.filter((arg) => !arg.startsWith('-'))
+  if (args.includes('--ff-only')) {
+    if (subcommand === 'pull' && (operands.length <= 1 || (operands.length === 2 && operands[1] === branch))) return null
+    if (subcommand === 'merge' && operands.length === 1 && (/^@\{u(pstream)?\}$/.test(operands[0]) || operands[0].endsWith(`/${branch}`))) return null
+  }
+  return `git ${subcommand}`
+}
+
+function denyIntegrate(command, { top, branch }) {
+  return {
+    decision: 'deny',
+    reason: `roborepo: \`${command}\` would bring other commits into protected branch "${branch}", checked out at ${top}. Agents never merge into ${branch}: merge it into a feature branch instead (\`roborepo plans sync-base\` from that branch's worktree), and update ${branch} itself only with \`git pull --ff-only\`.`,
+  }
+}
+
 function askDelete(command, { top, branch }) {
   const where = `${top}, which has protected branch "${branch}" checked out`
   if (forCodex) {
@@ -586,6 +612,9 @@ function classifyDeletes(text, startCwd) {
       }
       const deletes = args[j] && gitDeletes(args[j], args.slice(j + 1))
       if (deletes) result = stricter(result, classifyDelete(gitCwd, deletes, []))
+      const checkout = args[j] && ['merge', 'pull', 'rebase', 'cherry-pick'].includes(args[j]) && checkoutAt(gitCwd)
+      const integrates = checkout && gitIntegrates(args[j], args.slice(j + 1), checkout.branch)
+      if (integrates) result = stricter(result, denyIntegrate(integrates, checkout))
     }
   }
   return result
@@ -692,10 +721,10 @@ const toolName = input.tool_name || input.toolName || ''
 const toolInput = input.tool_input || input.toolInput || {}
 const rawCommand = toolInput.command ?? toolInput.cmd
 const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).replaceAll("'", "'\\''")}'`).join(' ') : rawCommand
-if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash)\b/.test(command)) process.exit(0)
+if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick)\b/.test(command)) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
-// A delete's ask or deny outranks a verified push, so the push allow never covers a chained delete.
+// A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
 const result = stricter(classifyCommand(command, cwd), classifyDeletes(command, cwd))
 if (!result) process.exit(0)
 

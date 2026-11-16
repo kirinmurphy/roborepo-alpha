@@ -56,12 +56,12 @@ function makeHome() {
   const home = makeHome();
   try {
     fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
-    const old = { permissions: { allow: [], ask: ["Bash(rm:*)"], deny: ["Bash(gh pr merge:*)"] } };
+    const old = { permissions: { allow: [], ask: ["Bash(rm:*)", "Bash(gh pr merge:*)"], deny: [] } };
     fs.writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify(old));
     renderPermissionsTo(home, { manifest });
     const { permissions } = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
     assert.ok(permissions.allow.includes("Bash(rm:*)") && !permissions.ask.includes("Bash(rm:*)"), "rm moves from ask to allow");
-    assert.ok(permissions.ask.includes("Bash(gh pr merge:*)") && !permissions.deny.includes("Bash(gh pr merge:*)"), "gh pr merge moves from deny to ask");
+    assert.ok(permissions.deny.includes("Bash(gh pr merge:*)") && !permissions.ask.includes("Bash(gh pr merge:*)"), "gh pr merge moves from ask to deny");
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

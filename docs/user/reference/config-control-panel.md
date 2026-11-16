@@ -179,8 +179,8 @@ These default-allow behaviors cover the named workflow operations.
 The guarded delivery commands validate their repository, branch, and head targets before acting.
 The lifecycle commands retain their transition, synchronization, and process guards. The plan-store
 allow covers shell invocation. The archive and close skills still require their workflow approvals. Raw fetch and GitHub commands follow their
-existing policies, including the prompts for `gh pr edit`, `gh pr ready`, and `gh pr merge`, and
-the denials for direct `gh api` and force-push.
+existing policies, including the prompts for `gh pr edit` and `gh pr ready`, and the denials for
+`gh pr merge`, direct `gh api`, and force-push.
 
 | Provider | Projection and scope |
 | --- | --- |
@@ -270,7 +270,7 @@ on it; `merge-pull-requests` does not, since `gh` runs outside it either way:
 | Behavior | Change | Why |
 | --- | --- | --- |
 | `delete-files` (`rm`, `git rm`) | Default `ask` → `allow` | The sandbox limits deletes to the checkout and temp folders, and the protected-branch hook asks before any delete in a checkout on `main` ([Deletes on a protected branch](claude-hooks.md#deletes-on-a-protected-branch)). Set it to `ask` if you run agents in Gemini, which has neither |
-| `merge-pull-requests` (`gh pr merge`) | New, default `ask` (was denied) | You approve each merge; other `gh` commands that skip git stay denied (`change-github-directly`) |
+| `merge-pull-requests` (`gh pr merge`) | New, default `deny` (was part of `change-github-directly`) | Agents never merge a pull request; you merge on GitHub. With the protected-branch hook's merge guard, agents also never merge into `main` locally ([Merges into a protected branch](claude-hooks.md#merges-into-a-protected-branch)) |
 | `switch-branches` (`git checkout`, `git switch`) | Default stays `ask`; the commands now run outside the sandbox | So the prompt also appears in the desktop app. `git switch main` stays denied (`occupy-main`) |
 
 | Inside the sandbox | Bound |

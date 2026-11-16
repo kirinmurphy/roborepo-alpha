@@ -224,7 +224,7 @@ every provider renders them; `delete-files` and `switch-branches` depend on the 
 | Behavior | Change | Reason |
 | --- | --- | --- |
 | `delete-files` | Default `ask` → `allow` | Claude's shell sandbox confines deletes; `protected-branch-push.mjs` asks (Codex: denies) before deletes and discarded work in a checkout on a protected branch. Gemini has neither |
-| `merge-pull-requests` | New, default `ask` | Split from `change-github-directly`, which stays `deny`; the protected-branch hook's `GH_DENIED` list no longer names `pr merge` |
+| `merge-pull-requests` | New, default `deny` | Split from `change-github-directly` so it shows as its own row; agents never merge into the base branch. The protected-branch hook's `GH_DENIED` list also names `pr merge`, for the flag-first form |
 | `switch-branches` | Default stays `ask` | `git checkout *` and `git switch *` are now in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
 
 `plan-store-commands` and `plan-lifecycle` (`roborepo plans sync-base` and `stop-servers`) together

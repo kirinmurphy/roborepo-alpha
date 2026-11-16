@@ -23,11 +23,10 @@ for (const behavior of guarded) {
     assert.ok(gemini.includes(`commandPrefix = "${tokens.join(" ")}"\ndecision = "allow"`));
   }
 }
-// Merging asks (`merge-pull-requests`), so the user approves each merge.
-for (const command of ["gh pr edit", "gh pr ready", "gh pr merge"]) {
+for (const command of ["gh pr edit", "gh pr ready"]) {
   assert.ok(claude.ask.includes(`Bash(${command}:*)`));
 }
-for (const command of ["gh api", "git push --force"]) {
+for (const command of ["gh pr merge", "gh api", "git push --force"]) {
   assert.ok(claude.deny.includes(`Bash(${command}:*)`));
 }
 for (const command of ["git fetch", "gh run rerun", "git worktree add", "git merge"]) {

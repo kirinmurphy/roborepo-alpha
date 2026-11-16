@@ -135,9 +135,9 @@ const cases = [
 cases.push(
   ["gh --repo=owner/repo api -X PATCH repos/o/r/git/refs/heads/main", "deny"],
   ["git push origin feat && gh -R o/r api repos/o/r", "deny"],
-  // Merging asks through the merge-pull-requests rule, so the hook leaves it to the rules.
-  ["gh -R owner/repo pr merge 12 --admin", "defer"],
-  ["gh pr merge 12", "defer"],
+  // Agents never merge a pull request (merge-pull-requests), in either flag position.
+  ["gh -R owner/repo pr merge 12 --admin", "deny"],
+  ["gh pr merge 12", "deny"],
   ["gh -R owner/repo pr create --head feat", "defer"],
   ["gh pr view 12", "defer"],
 );
@@ -322,6 +322,26 @@ gitOk(work, "switch", "-q", "feature");
 assert.equal(git(work, ["commit", "-q", "--allow-empty", "-m", "elsewhere"], agentEnv).status, 0, "other branches still commit");
 gitOk(work, "branch", "-q", "-D", "repo-plans");
 
+// The backstop refuses a merge commit or a rebase on a protected branch, however the command reached
+// git; a feature branch still merges and rebases, and a person's own shell is unaffected.
+gitOk(work, "switch", "-q", "-c", "master", "HEAD~1");
+r = git(work, ["merge", "-q", "--no-ff", "--no-edit", "feature"], agentEnv);
+assert.notEqual(r.status, 0, "a merge commit on master should be refused");
+assert.match(r.stderr, /protected branch "master"/);
+gitOk(work, "merge", "--abort");
+r = git(work, ["rebase", "-q", "feature"], agentEnv);
+assert.notEqual(r.status, 0, "rebasing master should be refused");
+assert.match(r.stderr, /a rebase into protected branch "master"/);
+r = git(work, ["rebase", "-q", "feature", "master"], agentEnv);
+assert.notEqual(r.status, 0, "rebasing master by name should be refused");
+gitOk(work, "switch", "-q", "-c", "side", "HEAD~1");
+assert.equal(git(work, ["merge", "-q", "--no-ff", "--no-edit", "feature"], agentEnv).status, 0, "a feature branch takes merges");
+gitOk(work, "switch", "-q", "master");
+r = git(work, ["merge", "-q", "--no-ff", "--no-edit", "side"]);
+assert.equal(r.status, 0, `a human merge is not affected: ${r.stderr}`);
+gitOk(work, "switch", "-q", "feature");
+gitOk(work, "branch", "-q", "-D", "master", "side");
+
 // The repo's own hooks still run under the override, from .git/hooks or its own core.hooksPath.
 const log = path.join(tmp, "hook.log");
 const repoHook = (dir, name) => {
@@ -498,6 +518,51 @@ const reason = spawnSync(process.execPath, [hook], {
   encoding: "utf8", env: { ...gitEnv, ...temps },
 }).stdout;
 assert.match(JSON.parse(reason).hookSpecificOutput.permissionDecisionReason, /protected branch "main"/, "the ask names the branch");
+
+// Agents never merge into a protected branch: merge, pull, rebase, and cherry-pick are denied in a
+// checkout that has one checked out, wherever the command runs from. A fast-forward-only update
+// from the branch's own upstream, and stopping one in progress, are not.
+const mergeCases = [
+  [onMain, "git merge feature", "deny"],
+  [onMain, "git merge --no-ff --no-edit feature", "deny"],
+  [onMain, "git merge --ff-only feature", "deny"],
+  [onMain, "git merge --continue", "deny"],
+  [onMain, "git pull", "deny"],
+  [onMain, "git pull --rebase origin main", "deny"],
+  [onMain, "git pull --ff-only origin feature", "deny"],
+  [onMain, "git rebase feature", "deny"],
+  [onMain, "git cherry-pick abc123", "deny"],
+  [onMain, "git fetch origin && git merge origin/feature", "deny"],
+  [onFeature, `git -C ${onMain} merge feature`, "deny"],
+  [onFeature, `cd ${onMain} && git merge feature`, "deny"],
+  [onFeature, `(cd ${onMain} && git pull)`, "deny"],
+  [onFeature, `sh -c 'cd ${onMain} && git rebase feature'`, "deny"],
+  [onMain, "git pull --ff-only", "defer"],
+  [onMain, "git pull --ff-only origin", "defer"],
+  [onMain, "git pull --ff-only origin main", "defer"],
+  [onMain, "git merge --ff-only origin/main", "defer"],
+  [onMain, "git merge --ff-only @{u}", "defer"],
+  [onMain, "git merge --abort", "defer"],
+  [onMain, "git rebase --abort", "defer"],
+  [onMain, "git cherry-pick --quit", "defer"],
+  [onFeature, "git merge main", "defer"],
+  [onFeature, "git pull origin main", "defer"],
+  [onFeature, "git rebase main", "defer"],
+  [onFeature, `cd ${onMain} && git merge feature; cd ${onFeature} && git merge main`, "deny"],
+];
+for (const [cwd, command, expected] of mergeCases) {
+  assert.equal(decide(command, { cwd, env: temps }), expected, `${path.basename(cwd)}: ${command}`);
+  if (expected === "deny") {
+    assert.equal(decide(command, { cwd, env: temps, toolName: "exec_command", hookPath: codexHook, key: "cmd" }), "deny", `Codex: ${command}`);
+  }
+}
+assert.equal(decide("git merge feature", { cwd: onFeature, env: { ...temps, ROBOREPO_PROTECTED_BRANCHES: "feature" } }), "deny", "extra protected names guard merges");
+assert.equal(decide("git push origin feature && git merge feature", { cwd: onMain, env: temps }), "deny", "a chained merge into main drops the push allow");
+const mergeReason = spawnSync(process.execPath, [hook], {
+  input: JSON.stringify({ cwd: onMain, tool_name: "Bash", tool_input: { command: "git merge feature" } }),
+  encoding: "utf8", env: { ...gitEnv, ...temps },
+}).stdout;
+assert.match(JSON.parse(mergeReason).hookSpecificOutput.permissionDecisionReason, /never merge into main.*sync-base/, "the deny names the way forward");
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("protected-branch-push-check passed");
