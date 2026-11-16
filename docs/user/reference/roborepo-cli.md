@@ -326,7 +326,7 @@ Only the merge rules can be skipped. The plans and integrity rulesets have no op
 | `missing` | A policy rule is absent from its branch: no ruleset applies it, or the RoboRepo ruleset that should was disabled or lost it | 1 |
 | `drifted` | A RoboRepo ruleset exists but differs from the policy | 1 |
 | `conflicting` | A rule other than the three on `roborepo-plans` reaches `repo-plans` and will refuse plan saves. The report names the rule and its ruleset; exclude `repo-plans` from that ruleset | 1 |
-| `unavailable` | `gh` is not installed or not signed in, or GitHub did not answer | 1 |
+| `unavailable` | `gh` is not installed or not signed in, GitHub did not answer, or GitHub answered with an error such as a rate limit; the report gives the reason | 1 |
 | `unsupported` | The remote is not GitHub, or GitHub does not offer rulesets for this repo. The report lists the steps to protect the branches by hand | 1 |
 
 The exit code follows the final state for every form. A usage error exits 2. In `conflicting`,
