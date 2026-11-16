@@ -25,8 +25,9 @@ export const LOADING = Object.freeze({
 
 export const INVENTORY_AREAS = Object.freeze(["instructions", "skills", "config"]);
 
-// Names a repo chose (MCP servers, agents) are shown only when they look like identifiers, so a
-// value pasted into a key position cannot reach the browser.
+// Names a repo chose (MCP servers, agents) are shown only when they look like identifiers, which
+// keeps URLs, commands, and spaced text out of the browser. It is not a secret detector: a
+// token-shaped string used as a name still matches and is shown as written.
 const SAFE_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
 
 export function safeName(value) {

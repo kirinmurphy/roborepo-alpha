@@ -291,6 +291,33 @@ test("scoped Agents lists the repo's own files read-only, previews them as text,
   await expect(page.getByRole("heading", { name: "Repo agent config" })).toHaveCount(0);
 });
 
+test("scoped Agents says when the scan is partial or a harness is unsupported, and never shows another checkout's files", async ({ page }) => {
+  // Real inventory, marked partial: the notices come from the response, not the page.
+  await page.route((url) => url.pathname === "/api/config/repository", async (route) => {
+    const response = await route.fetch();
+    const data = await response.json();
+    await route.fulfill({ response, json: { ...data, truncated: ["files"] } });
+  });
+  await page.goto(`/agents?repo=${ALPHA}`);
+  const notices = page.locator(".repo-inspector-notices");
+  await expect(notices).toContainText("Partial results: the scan stopped at its limit for the number of files listed.");
+  await expect(notices).toContainText("Gemini CLI: repo file discovery is not supported yet.");
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+
+  // The server's checkout-unavailable answer: a splash, no files, and a way back to global Agents.
+  await page.route((url) => url.pathname === "/api/config/repository", (route) => route.fulfill({ json: {
+    status: "checkout-unavailable", reason: "ambiguous", message: "More than one checkout is marked primary.", providers: [],
+  } }));
+  await page.goto(`/agents?repo=${BETA}`);
+  const splash = page.locator(".page-splash");
+  await expect(splash.getByRole("heading", { name: "Primary checkout unavailable" })).toBeVisible();
+  await expect(splash).toContainText("More than one checkout is marked primary. Files from other checkouts are not shown in its place.");
+  await expect(page.locator(".repo-inspector-section")).toHaveCount(0);
+  await splash.getByRole("button", { name: "View Global Config" }).click();
+  await expect(page).toHaveURL(/\/agents$/);
+  await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
+});
+
 test("switching repos while an inventory or preview is pending shows only the current repo", async ({ page }) => {
   // Hold Alpha's responses until after the switch, so they arrive late.
   let release;
