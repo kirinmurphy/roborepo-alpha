@@ -96,8 +96,8 @@ export function describeCodexProjectFile(entry, text) {
     return { sections: hookSections(parsed.value.hooks, HOOK_EVENTS) };
   }
   if (entry.kind === "agent") {
-    const { diagnostic, rootKeys } = scanTomlStructure(text);
-    const name = /^\s*name\s*=\s*"([^"\n]*)"/m.exec(String(text ?? ""))?.[1];
+    const { diagnostic, rootKeys, strings } = scanTomlStructure(text, { rootStrings: ["name"] });
+    const name = strings.name;
     const keys = rootKeys.map((key) => key.join("."));
     const sections = ["description", "model", "developer_instructions", "sandbox_mode"]
       .filter((key) => keys.includes(key))

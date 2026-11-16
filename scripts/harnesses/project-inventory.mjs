@@ -137,19 +137,22 @@ export function parseJsonObject(text) {
 }
 
 // TOML structure without values, line by line: table headers, root key names, and `keys` — every
-// declared key as a full path (table prefix + dotted key), plus the top-level names of a one-line
-// inline table (`mcp_servers = { docs = {...} }` gives ["mcp_servers", "docs"]). Enough to say which
-// sections a file declares however it spells them; a header with unbalanced brackets is reported,
-// not guessed at. Values are never returned, and lines inside a value that spans lines (a """ or '''
-// string, or an array or inline table left open) are never read as keys or headers.
-export function scanTomlStructure(text) {
+// declared key as a full path (table prefix + dotted key; bare, "basic", and 'literal' segments),
+// plus the top-level names of a one-line inline table (`mcp_servers = { docs = {...} }` gives
+// ["mcp_servers", "docs"]). A header or key line that does not parse is reported, not guessed at.
+// Lines inside a value that spans lines (a """ or ''' string, or an array or inline table left
+// open) are never read as keys or headers. Values are not returned, except a one-line string for a
+// root key the caller names in `rootStrings` (a Codex agent's `name`).
+export function scanTomlStructure(text, { rootStrings = [] } = {}) {
   const rootKeys = [];
   const tables = [];
   const keys = [];
+  const strings = {};
   let current = null;
   let diagnostic = null;
   let openValue = null;
   const lines = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+  const report = (index) => { diagnostic ??= `Could not parse TOML on line ${index + 1}.`; };
   lines.forEach((raw, index) => {
     if (openValue) {
       openValue = continueValue(openValue, raw);
@@ -158,24 +161,66 @@ export function scanTomlStructure(text) {
     const line = raw.trim();
     if (!line || line.startsWith("#")) return;
     if (line.startsWith("[")) {
-      const header = /^\[\[?\s*([^\[\]]+?)\s*\]\]?\s*(?:#.*)?$/.exec(line);
-      if (!header) {
-        diagnostic ??= `Could not parse TOML table header on line ${index + 1}.`;
-        return;
-      }
-      current = splitTomlKey(header[1]);
+      const array = line.startsWith("[[");
+      const key = readTomlKey(line.slice(array ? 2 : 1));
+      const close = key && new RegExp(`^\\s*\\]${array ? "\\]" : ""}\\s*(?:#.*)?$`).test(key.rest);
+      if (!close) return report(index);
+      current = key.parts;
       tables.push(current);
       return;
     }
-    const key = /^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_.-]+)\s*=\s*(.*)$/.exec(line);
-    if (!key) return;
-    const keyPath = [...(current || []), ...splitTomlKey(key[1])];
-    if (!current) rootKeys.push(splitTomlKey(key[1]));
+    const key = readTomlKey(line);
+    const assignment = key && /^\s*=\s*(.*)$/.exec(key.rest);
+    if (!assignment) return report(index);
+    const value = assignment[1];
+    const keyPath = [...(current || []), ...key.parts];
+    if (!current) {
+      rootKeys.push(key.parts);
+      if (key.parts.length === 1 && rootStrings.includes(key.parts[0])) {
+        const string = /^(?:"((?:[^"\\\n]|\\.)*)"|'([^'\n]*)')\s*(?:#.*)?$/.exec(value);
+        if (string) strings[key.parts[0]] = string[1] ?? string[2];
+      }
+    }
     keys.push(keyPath);
-    for (const name of inlineTableKeys(key[2])) keys.push([...keyPath, name]);
-    openValue = continueValue({ depth: 0, quote: null }, key[2]);
+    for (const name of inlineTableKeys(value)) keys.push([...keyPath, name]);
+    openValue = continueValue({ depth: 0, quote: null }, value);
   });
-  return { rootKeys, tables, keys, diagnostic };
+  return { rootKeys, tables, keys, strings, diagnostic };
+}
+
+// A dotted TOML key at the start of `source`: { parts, rest } or null. Segments are bare
+// (A-Za-z0-9_-), "basic" (with escapes), or 'literal', separated by dots with optional spaces.
+function readTomlKey(source) {
+  const parts = [];
+  let i = 0;
+  const skipSpace = () => { while (source[i] === " " || source[i] === "\t") i += 1; };
+  for (;;) {
+    skipSpace();
+    const char = source[i];
+    if (char === "\"") {
+      let j = i + 1;
+      let value = "";
+      while (j < source.length && source[j] !== "\"") {
+        if (source[j] === "\\") { value += source[j + 1] ?? ""; j += 2; } else { value += source[j]; j += 1; }
+      }
+      if (j >= source.length) return null;
+      parts.push(value);
+      i = j + 1;
+    } else if (char === "'") {
+      const end = source.indexOf("'", i + 1);
+      if (end === -1) return null;
+      parts.push(source.slice(i + 1, end));
+      i = end + 1;
+    } else {
+      const bare = /^[A-Za-z0-9_-]+/.exec(source.slice(i));
+      if (!bare) return null;
+      parts.push(bare[0]);
+      i += bare[0].length;
+    }
+    skipSpace();
+    if (source[i] !== ".") return { parts, rest: source.slice(i) };
+    i += 1;
+  }
 }
 
 // Scans one line of a value and returns what is still open after it ({ depth, quote }), or null when
@@ -250,13 +295,6 @@ function inlineTableKeys(value) {
   return names;
 }
 
-function splitTomlKey(source) {
-  const parts = [];
-  const pattern = /\s*(?:"((?:[^"\\]|\\.)*)"|([A-Za-z0-9_-]+))\s*(?:\.|$)/gy;
-  let match;
-  while ((match = pattern.exec(source)) && match[0] !== "") parts.push(match[1] ?? match[2]);
-  return parts;
-}
 
 export function countLabel(count, singular, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;

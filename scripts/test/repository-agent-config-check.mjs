@@ -293,6 +293,15 @@ try {
   const limited = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, limits: { ...INVENTORY_LIMITS, maxFiles: 3 } });
   assert.equal(limited.entries.length, 3);
   assert.ok(limited.truncated.includes("files"), "a truncated scan says so");
+  // Previews: an oversized config says so, and the text limit counts bytes, not characters.
+  write(main, ".claude/agents/big.md", "é".repeat(INVENTORY_LIMITS.previewBytes));
+  const wide = await loadRepositoryAgentConfigSource({ registry, repositoryId: MAIN_ID, id: "claude:.claude/agents/big.md", runtime });
+  assert.equal(wide.truncated, true);
+  assert.ok(Buffer.byteLength(wide.content) <= INVENTORY_LIMITS.previewBytes + 3, "the preview is cut at the byte limit");
+  write(main, ".claude/settings.json", JSON.stringify({ permissions: { allow: ["x"] }, pad: "x".repeat(INVENTORY_LIMITS.maxFileBytes) }));
+  const bigConfig = await loadRepositoryAgentConfigSource({ registry, repositoryId: MAIN_ID, id: "claude:.claude/settings.json", runtime });
+  assert.match(bigConfig.diagnostic, /Larger than/);
+
   // A file cut short by the scan's byte budget marks the scan partial, even as the last file read.
   const budget = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, limits: { ...INVENTORY_LIMITS, maxTotalBytes: 40 } });
   assert.ok(budget.truncated.includes("bytes"));
@@ -366,6 +375,13 @@ try {
   assert.deepEqual(multiline, { sections: ["Declares: Model"] }, "no diagnostic, no key from inside a value");
   const agent = describeCodexProjectFile({ kind: "agent" }, 'name = "a"\ndeveloper_instructions = \'\'\'\nmodel = "not real"\n[Note]\n\'\'\'\n');
   assert.deepEqual(agent, { name: "a", sections: ["Declares developer instructions"] });
+  // Quoted, literal, and spaced dotted keys parse, so their values stay closed too.
+  assert.deepEqual(inline('mcp_servers."my-server".command = "npx"\n'), ["MCP servers: my-server"]);
+  assert.deepEqual(inline('"mcp_servers" . docs . command = "x"\n'), ["MCP servers: docs"]);
+  assert.deepEqual(inline("'notes' = '''\n[profiles.ghp_LEAKTOKEN]\n'''\n"), []);
+  assert.deepEqual(inline('a."b" = """\n[mcp_servers.ghp_LEAK2]\n"""\n'), []);
+  const innerName = describeCodexProjectFile({ kind: "agent" }, 'developer_instructions = """\nname = "inner-value"\n"""\nname = "real"\n');
+  assert.equal(innerName.name, "real", "an agent's name comes from its own key, not text inside another value");
 
   // ------------------------------------------------------------------ provider contract
   assert.throws(() => validateCapabilityAdapters([], { projectInventory: { classify() {} } }), /projectInventory\.describe/);

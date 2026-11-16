@@ -509,13 +509,15 @@ export async function loadRepositoryAgentConfigSource({
     size: read.size,
   };
   if (match.format !== "text") {
-    return { ...response, sections: described.sections || [], ...(described.diagnostic ? { diagnostic: described.diagnostic } : {}) };
+    const diagnostic = read.complete ? described.diagnostic : "Larger than the inspector reads; metadata is unavailable.";
+    return { ...response, sections: described.sections || [], ...(diagnostic ? { diagnostic } : {}) };
   }
-  const shown = text.length > limits.previewBytes ? text.slice(0, limits.previewBytes) : text;
+  // The preview limit is in bytes; a character cut at the boundary decodes as U+FFFD.
+  const shownBytes = read.buffer.subarray(0, limits.previewBytes);
   return {
     ...response,
-    content: shown,
-    truncated: !read.complete || shown.length < text.length,
+    content: textOf(shownBytes),
+    truncated: !read.complete || shownBytes.length < read.buffer.length,
     tokens: read.complete ? estimateTokens(text).tokens : null,
     loading: described.loading ?? match.loading,
   };
