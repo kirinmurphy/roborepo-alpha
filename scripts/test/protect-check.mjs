@@ -308,6 +308,18 @@ try {
   console.log("✓ A signed-out, unreachable, or unanswering GitHub reads as unavailable.");
 
   // unsupported: GitHub refuses rulesets for the repo, or the remote is another host.
+  // GitHub refusing one write partway: the earlier write stands, the rest are not sent, the
+  // refusal is reported, and the state is read once more.
+  start({ refuseCreate: "roborepo-main-integrity" });
+  result = run(["--json"]);
+  assert.equal(result.status, 1);
+  assert.deepEqual(result.json.changes, [{ action: "create", name: "roborepo-plans", enforcement: "active" }]);
+  assert.equal(result.json.refusal, "GitHub refused to create roborepo-main-integrity: Validation Failed");
+  assert.equal(result.json.state, "missing");
+  assert.deepEqual(writes().map((call) => call.body.name), ["roborepo-plans", "roborepo-main-integrity"], "nothing is sent after the refused write");
+  assert.deepEqual(gh.readState().rulesets.map((ruleset) => ruleset.name), ["roborepo-plans"]);
+  console.log("✓ A write GitHub refuses partway stops the apply, keeps earlier writes, and reports the refusal.");
+
   start({ failure: "rulesets-refused" });
   result = run([]);
   assert.equal(result.status, 1);

@@ -6,6 +6,7 @@
 //   failure   null | "not-signed-in" | "unreachable" | "hang" | "rulesets-refused"
 //             | "actions-off" (runs endpoint answers 404) | "runs-error" (runs endpoint answers 502)
 //   login, admin, defaultBranch
+//   refuseCreate  a ruleset name whose create answers 422, to fail an apply partway
 //   rulesets  full ruleset objects; `source_type` other than "Repository" marks an inherited one
 //   runs      workflow runs on the default branch, newest first: { id, conclusion, jobs: [{ name, conclusion }] }
 import fs from "node:fs";
@@ -107,6 +108,7 @@ if (route === "rulesets" && method === "GET") {
 }
 if (route === "rulesets" && method === "POST") {
   if (!state.admin) httpError(403, "Resource not accessible by personal access token");
+  if (state.refuseCreate && body.name === state.refuseCreate) httpError(422, "Validation Failed");
   const created = stored({ id: state.nextId, source_type: "Repository", source: "example/project" }, body);
   state.rulesets.push(created);
   state.nextId += 1;

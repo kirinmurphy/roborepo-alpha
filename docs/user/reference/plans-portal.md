@@ -112,7 +112,7 @@ The page and the panel use two routes. `:id` is the repository's canonical id, p
 
 | Route | Does |
 | --- | --- |
-| `GET /api/repositories/:id/protection` | Returns the status report, the same JSON as `roborepo protect --check --json` |
+| `GET /api/repositories/:id/protection` | Returns the status report: the JSON of `roborepo protect --check --json` without its `changes` and `refusal` fields |
 | `POST /api/repositories/:id/protection` | Runs one action from the body, `{ "action": "protect" \| "skip" \| "unskip" }`, and returns the report after it. Like every portal write, it requires the portal's origin and token |
 
 ### Onboarding

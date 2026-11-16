@@ -11,7 +11,8 @@ const seenInMemory = new Map();
 
 // `container` holds the lines; `panel` is the protection panel controller.
 export function createProtectionNotices({ container, panel }) {
-  // The lines on screen, by repository id. A line stays up for the rest of this page load.
+  // The lines on screen, by repository id. A line stays up until the next `refresh` (page load,
+  // Refresh, or a repo scope change); being seen once dismisses it from then on.
   const shown = new Map();
   let sequence = 0;
 
