@@ -453,8 +453,8 @@ evidence after a ` — ` dash, produce the `NOT_TESTED_UNEXPLAINED` finding, whi
 
 | Where | `NOT_TESTED_UNEXPLAINED` |
 | --- | --- |
-| `roborepo plans validate`, `roborepo plans save`, the Plans page | Reported as advisory; nothing is refused |
-| Moves into `active/` (start, reopen) | Tolerated |
+| `roborepo plans validate`, the Plans page | Reported as advisory |
+| `roborepo plans save`, moves into `active/` (start, reopen) | Accepted without a report |
 | `roborepo plans preflight` and the move into `review/` (submit) | Refused |
 | Review Result freshness (`roborepo plans approval`) | Incomplete while a checked entry has no evidence |
 | Completed plans | Not computed |

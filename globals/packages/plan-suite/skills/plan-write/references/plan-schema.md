@@ -297,9 +297,10 @@ How validation treats entries:
   in `/plan-review`, and `/plan-close` refuses to close a plan while any remain.
 - On an active or review plan, an unchecked entry with neither `Needs a person:` nor `Blocked:`, and
   a checked entry with no text after a ` — ` dash, are a second finding (`NOT_TESTED_UNEXPLAINED`),
-  which quotes each entry. `roborepo plans validate`, `plans save`, and moves into `active/` report
-  it without refusing. `roborepo plans preflight` and the move into `review/` refuse it, and a
-  review Result is incomplete while a checked entry has no evidence.
+  which quotes each entry. `roborepo plans validate` reports it as advisory. `plans save` and moves
+  into `active/` accept a plan that has it and say nothing, so a quiet save or start is no proof
+  that every entry is explained. `roborepo plans preflight` and the move into `review/` refuse it,
+  and a review Result is incomplete while a checked entry has no evidence.
 - The check confirms a reason or evidence exists, not that it is true. The Validator in
   `/plan-execute` and `/plan-review` judges that.
 - The heading must be exactly `## Not tested`. Headings and checkboxes inside fenced code blocks,
