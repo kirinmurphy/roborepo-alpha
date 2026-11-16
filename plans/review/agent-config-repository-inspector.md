@@ -101,11 +101,12 @@ Use tracked, untracked, ignored, or unavailable for the file's Git status. Call 
 Run the focused checks after implementation:
 
 ```sh
+node scripts/test/run-checks.mjs --filter repository-agent-config
 node scripts/test/run-checks.mjs --filter repository-scope
 npm run test:portal-ui -- repository-scope.spec.mjs
 ```
 
-Run the new provider and safety fixtures through `scripts/test/run-checks.mjs` as well. Capture the scoped Agents view with browser verification alongside the regression tests.
+`--filter` matches by filename substring, so each filter selects a different set: `repository-agent-config` runs the new provider and safety fixtures in `repository-agent-config-check.mjs`, and `repository-scope` runs `repository-scope-check.mjs` and `repository-scope-portal-check.mjs`. Run all three commands. Capture the scoped Agents view with browser verification alongside the regression tests.
 
 ## Documentation impact
 
