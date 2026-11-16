@@ -450,6 +450,11 @@ None.
 - [x] The plan's `## Not tested` entry gives no steps the user can follow before approval, and
       leans on "behavior evals do not exist yet", which the new schema lists as a non-reason —
       entry rewritten with steps, the expected result, and the alternative
+- [ ] Review: the `## Not tested` entry only partly holds as `Needs a person:` — the Validator is
+      meant to judge "nothing an agent could have done", and an agent could dry-run the branch's
+      skill text against a fixture plan; installing skills reads as `Blocked:` — escalated to the
+      human (keep as a person check, replace with an agent fixture dry-run plus a person look, or
+      move to `0jped168` by decision)
 
 ### Verification
 
@@ -491,3 +496,23 @@ None.
   `- [ ] The portal lists plans in a browser.`, `roborepo plans preflight` exited 1 naming the
   entry and what it must end with, and `roborepo plans submit` refused; after adding
   `Needs a person: judging the layout is a human call.`, submit moved the plan to review
+- Review 2026-11-16: `roborepo plans sync-base` merged `main` 8f53ffdc into the branch cleanly as
+  39d4dfa9 (no conflicts; base also edited `findings.mjs` and `index.mjs`)
+- Review at 39d4dfa9: no CI result exists (branch not pushed), so `npm run check` ran locally once:
+  76/80 unit suites passed; `browser-contract-check`, `browser-playwright-check`,
+  `browser-playwright-cache-check`, and `browser-playwright-cli-check` failed with
+  `ERR_MODULE_NOT_FOUND` for `@playwright/test` because the worktree had no `node_modules`; after
+  `npm ci` all four passed. The steps the failure skipped then ran: `test:package-install` and
+  `test:portal-ui` passed; the clean-machine and Windows installer suites skipped (no Docker or
+  `pwsh` on this machine), as the gate itself skips them here
+- Review at 39d4dfa9: `plan-suite-findings-check.mjs`, `plan-lifecycle-transitions-check.mjs`,
+  `plan-suite-skills-check.mjs`, and `plan-suite-commands-check.mjs` passed
+- Review Validator pass at 39d4dfa9 (fresh-context subagent): no `fix` findings, one `escalate`
+  (the Not tested entry above), nothing outside this plan; merged `findings.mjs` and `index.mjs`
+  keep `NOT_TESTED_UNEXPLAINED` and wrapped-line parsing with no references to what `main` removed
+
+### Result
+
+- Status: pending
+- Reviewed implementation commit: 39d4dfa915f6ea4f65eb111baf6dc286910f73f3
+- Base commit: 8f53ffdc276774d90ae5275a9be6c3c10ce72810
