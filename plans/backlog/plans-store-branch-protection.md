@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Run /plan-promote to confirm the GitHub endpoints, the ruleset bodies, and whether rulesets apply to private repos on the owner's plan
+next_action: Run /plan-execute; its first task checks the GitHub ruleset API against a scratch repo, including how GitHub answers for a private repo on a plan without rulesets, before any code is written
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -74,8 +74,15 @@ are unsigned), and the commit-message or file restrictions. Any of them would ma
   nothing checks the result.
 - `/plan-suite-init` (`globals/packages/plan-suite/skills/plan-suite-init/SKILL.md`) says nothing
   about branch rules.
-- No RoboRepo code runs `gh` for repository settings. Part 01 (`w7vls1yk`) plans
-  `modules/forge/github.mjs` as the one module that runs `gh`.
+- No RoboRepo code reads or writes repository settings through `gh`. One `gh` runner exists:
+  `modules/delivery/operations.mjs` runs `gh` for `roborepo delivery` (pull request body, ready,
+  and CI rerun), landed with `vzgsx5vz`. `modules/forge/` does not exist yet.
+- Root CLI commands are a JSON definition in `manifests/platform/cli/command-definitions/root/`
+  with the `module` adapter pointing at a `scripts/cli/<name>.mjs` export, as
+  `delivery/fetch.command.json` does for `scripts/cli/delivery.mjs`.
+- Doctor already runs one network check through Node: `check_node_release` in `scripts/doctor.sh`
+  calls `scripts/cli/node-release-health.mjs --check` and skips it when
+  `ROBOREPO_SKIP_NODE_RELEASE_CHECK=1`.
 - The Home page repo card has a ⋮ menu built by `homeMenuItems` in `portal/home/templates.js`,
   with **Pin** and **Ignore Repo** (or **Forget This Repo**). The Plans page lists repo-level
   warnings in `renderWarnings` (`portal/plans/app.js`).
@@ -83,6 +90,14 @@ are unsigned), and the commit-message or file restrictions. Any of them would ma
   `localStorage`, falling back to memory when storage is unavailable.
 - A repo's canonical id names its host: `git:github.com/<owner>/<repo>`.
   `providerUrlForRepositoryId` in `modules/repositories/identity.mjs` parses it.
+
+### Related plans
+
+| Plan | Relationship | What it means here |
+| --- | --- | --- |
+| GitHub Integration Part 01 (`w7vls1yk`), ready | Depends on this plan | This plan lands first, so it creates `modules/forge/` and moves the delivery `gh` runner there. Part 01 listed that move as its own work; after this plan lands, Part 01 only adds the bot identity to the runner. Part 01's prose still says it introduces `modules/forge/` and needs a sync then |
+| Clear agent friction (`vzgsx5vz`), completed | Landed dependency | It added the manual required-check procedure to `docs/internal/testing.md` and the delivery `gh` runner. This plan replaces the procedure and moves the runner |
+| Runtime PR and CI status (`developer-runtime-remote-branch-status`), backlog | Later consumer | It plans its GitHub lookup in `modules/forge/github.mjs`, which it credits to Part 01. The module this plan creates is the one it builds on; no conflict |
 
 ## Goals
 
@@ -149,7 +164,7 @@ The command reads three things:
 | `drifted` | A managed ruleset exists but differs from the policy, such as a renamed CI job | 1 | Notice, once, admins only |
 | `conflicting` | A push-blocking rule reaches `repo-plans` | 1 | Notice, once |
 | `unavailable` | `gh` missing, not signed in, or GitHub unreachable | 1 | Menu item gives the reason |
-| `unsupported` | The remote is not GitHub | 1 | Menu item shows the manual steps |
+| `unsupported` | The remote is not GitHub, or GitHub refuses rulesets for this repo (a private repo on a plan without them) | 1 | Menu item gives the reason; for another host it shows the manual steps |
 
 When several conditions hold, the first in this order wins: `unsupported`, `unavailable`,
 `conflicting`, `missing`, `drifted`, `unmanaged`, `protected`. A policy whose managed ruleset is
@@ -212,16 +227,17 @@ Managed and hand-made rulesets stack, so creating the managed ones never loosens
 
 | Piece | Location | Owns |
 | --- | --- | --- |
-| GitHub calls | `modules/forge/github.mjs` | Running `gh api`: effective branch rules, ruleset list and detail, repo permissions, login, the latest successful default-branch run's job names, and creating or updating a ruleset |
+| Host entry point | `modules/forge/index.mjs` | Takes a host name and returns its client; a non-GitHub host resolves to `unsupported` here |
+| GitHub calls | `modules/forge/github.mjs` | The one `gh` runner, moved from `modules/delivery/operations.mjs`, and the protection calls on it: effective branch rules, ruleset list and detail, repo permissions, login, the latest successful default-branch run's job names, and creating or updating a ruleset |
+| Delivery | `modules/delivery/operations.mjs` | Unchanged behavior; calls the runner through the entry point instead of its own `gh` function |
 | Policy and state | `modules/forge/protection-policy.mjs`, `modules/forge/protection.mjs` | The managed ruleset definitions, mapping GitHub's answers to a state, coverage of hand-made rulesets, the merge-policy skip, and the apply-then-recheck flow |
-| CLI | `scripts/cli/protect-command.mjs`, `manifests/platform/cli/command-definitions/root/` | Parsing, printing, exit codes |
+| CLI | `scripts/cli/protect.mjs`, `manifests/platform/cli/command-definitions/root/protect.command.json` | Parsing, printing, exit codes |
 | Portal API | `scripts/cli/portal-routes-repositories.mjs` | `GET` and `POST /api/repositories/:id/protection`, beside the existing per-repo routes |
 | Portal | `portal/plans/app.js`, `portal/home/templates.js`, a shared `portal/shared/protection-panel.js` | The one-time notice, the ⋮ menu item, and the status panel both open |
 | Doctor | `scripts/doctor.sh` | One line for the current repo |
 
-Whichever of this plan and Part 01 lands first creates `modules/forge/` with its host-name entry
-point and `github.mjs`. The second adds to them. A non-GitHub host resolves to `unsupported` at
-that entry point.
+Part 01 depends on this plan, so this plan creates `modules/forge/`. After it lands, nothing
+outside `modules/forge/` runs `gh`, which is the rule Part 01 and Part 03 build on.
 
 ### Portal
 
@@ -284,10 +300,13 @@ yes. For `admin: false` it reports that an admin must run the command.
 
 ## Implementation plan
 
-- [ ] Confirm the endpoints, the ruleset request bodies, the `actor_id` for the repo admin role, and
-      how rulesets behave on private repos under the owner's GitHub plan, against a scratch repo.
-- [ ] Add `modules/forge/` with its host-name entry point and `github.mjs`, or extend them if
-      Part 01 has added them.
+- [ ] Against a scratch repo, confirm the endpoints, the ruleset request bodies, the `actor_id`
+      for the repo admin role, and the response GitHub gives for rulesets on a private repo under a
+      plan without them. Record the exact status and message the `unsupported` mapping matches.
+- [ ] Add `modules/forge/index.mjs` and `github.mjs`, move the `gh` runner out of
+      `modules/delivery/operations.mjs`, and point delivery at the entry point.
+      `scripts/test/delivery-operations-check.mjs` and
+      `scripts/test/delivery-synthetic-provider-check.mjs` pass unchanged.
 - [ ] Add `protection-policy.mjs` and `protection.mjs` with the state mapping, coverage of
       hand-made rulesets, the merge-policy skip, and the apply-then-recheck flow.
 - [ ] Add `roborepo protect` with its command definition and usage text. Keep it out of the
@@ -327,7 +346,12 @@ records each request.
   - `--skip main-merge` writes `roborepo-main-merge` with enforcement `disabled`, a second clone
     against the same fake reads it as `skipped`, and `--unskip main-merge` sets it to `active`;
   - after an apply, the command reads the state once more and does not apply again;
-  - a non-GitHub `origin` prints the manual steps and never calls `gh`.
+  - a non-GitHub `origin` prints the manual steps and never calls `gh`;
+  - a fake that refuses rulesets the way GitHub does for a private repo without them reads as
+    `unsupported` with that reason and sends no write.
+- `scripts/test/delivery-operations-check.mjs` and
+  `scripts/test/delivery-synthetic-provider-check.mjs` pass after the runner moves, and no file
+  outside `modules/forge/` calls `execFile("gh", …)`.
 - `scripts/test/doctor-protection-check.mjs`, against a repo and the fake `gh`: the documented line
   per state, exit 0 in every case, and no `gh` call with `ROBOREPO_SKIP_PROTECTION_CHECK=1`.
 - `scripts/test/portal-ui/branch-protection.spec.mjs`, run by `npm run test:portal-ui`.
@@ -409,10 +433,18 @@ Manual, on a scratch GitHub repo where the user is admin:
   button pair and its tests. The portal already has the write route for **Protect**, so the toggle
   costs little, and a confirmation step guards the one action that loosens protection.
 
+- A repo where GitHub refuses rulesets, such as a private repo on GitHub Free, reads as
+  `unsupported` with GitHub's reason, not `unavailable`: rerunning will not fix it, and the owner's
+  options are a paid plan, a public repo, or the manual steps. GitHub's documentation limits
+  private-repo rulesets to paid plans; the first task confirms the exact response.
+- This plan creates `modules/forge/` and moves the delivery `gh` runner into it, because Part 01
+  depends on this plan and its own rule is that only `modules/forge/` runs `gh`. Keeping a second
+  runner until Part 01 would leave two copies of the same timeout and prompt settings.
+
 ## Open questions
 
-- Whether rulesets are enforced on private repos under the owner's GitHub plan. If they are not,
-  the command needs an `unsupported` reason for that case. The first implementation task settles it.
+None. The private-repo response is confirmed by the first implementation task and does not change
+the design.
 
 ## Documentation impact
 
@@ -425,4 +457,4 @@ Manual, on a scratch GitHub repo where the user is admin:
 | `docs/internal/testing.md` | Replace the manual required-check procedure with `roborepo protect` |
 | `globals/packages/plan-suite/skills/plan-suite-init/SKILL.md` | The check-and-offer step and its report lines |
 | `docs/internal/portal-architecture.md` | The `/api/repositories/:id/protection` routes |
-| `docs/internal/docs-map.md` | `modules/forge/`, if this plan creates it before Part 01 |
+| `docs/internal/docs-map.md` | `modules/forge/` as the one home for `gh` calls |
