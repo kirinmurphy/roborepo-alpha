@@ -476,7 +476,8 @@ None.
 - At 6cb5f0a4, after the pass 3 fixes: the new bare-marker case failed before the fix
   (`undefined !== 3`) and `plan-suite-findings-check.mjs` passed after it;
   `plan-suite-skills-check.mjs`, `skill-structure-check.mjs`, and
-  `plan-citation-comments-check.mjs` passed
+  `plan-citation-comments-check.mjs` passed; `plan-lifecycle-transitions-check.mjs` and
+  `plan-suite-commands-check.mjs` passed
 - At 6eec1dc4, unchanged by later commits' scope: `plan-suite-check.mjs`,
   `plan-suite-repair-check.mjs`, `plan-store-check.mjs`, `plans-portal-state-check.mjs`,
   `plan-lifecycle-manifest-check.mjs` passed, and `bash scripts/doctor.sh --quiet` reported
