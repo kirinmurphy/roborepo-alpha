@@ -201,6 +201,14 @@ Everything else (the two symlink levels, the layer table) lives in
   every `web --detach` SIGTERMed a healthy portal and respawned it. `resolvePortalPort` already
   covers what the early kill was for — it restarts a STALE portal (one running code that changed
   since it started) and waits for the port to free. Keep the two paths in the same order.
+- **Start a worktree's portal from inside that worktree.** Runtime files a listener under the
+  checkout that holds the process's working directory (`resolveIdentity(cwd, ...)` in
+  `modules/developer-runtime/discovery.mjs`), so `node <worktree>/scripts/cli/main.mjs web` run
+  from the primary checkout shows on the main branch's row. Use
+  `cd <worktree> && exec node scripts/cli/main.mjs web --no-open --port <port>`, including in a
+  `.claude/launch.json` entry (`/bin/sh -c`). Leave `ROBOREPO_STATE_ROOT` unset unless the check
+  needs isolated state: a portal under another state root is dropped from the main portal's scan
+  on purpose (`withoutForeignStateRoots`), so it never appears on the Repos page.
 
 ## The `roborepo` CLI (the single consumer front door)
 

@@ -8,7 +8,9 @@ How Runtime is built, for people changing it. User-facing behavior is in
 Discovery is split across provider boundaries:
 
 - `capabilities.mjs` reports aggregate platform support plus per-provider states.
-- `listeners.mjs` owns macOS listener and working-directory collection.
+- `listeners.mjs` owns macOS listener and working-directory collection. The working directory is
+  what places a listener under a checkout, so a server started from the primary checkout with a
+  worktree's script path shows under the primary checkout's branch.
 - `process-state-root.mjs` reads each listener's `ROBOREPO_STATE_ROOT` so the portal's scan can leave
   out test servers. Scans that pass no `stateRoot`, including worktree cleanup, keep them.
 - `origin.mjs` owns loopback-compatible origin candidates and hostname preference ordering.
