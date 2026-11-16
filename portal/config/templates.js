@@ -393,12 +393,190 @@ export function recommendationOption(rec) {
   return node;
 }
 
-export function repositorySplash(onRemoveFilter) {
+// --------------------------------------------------------------------------- repo inspector
+
+const LOADING_LABELS = {
+  "root-level": "Root-level",
+  "potentially-conditional": "Potentially conditional",
+  "on-demand": "On demand",
+  unknown: "Unknown",
+};
+const LOADING_TIPS = {
+  "root-level": "At the repo root, where the harness looks first. Whether a session loads it depends on harness settings.",
+  "potentially-conditional": "In a subfolder or scoped to paths, so it may apply only to work there.",
+  "on-demand": "Read when the harness invokes it, not at startup.",
+  unknown: "Whether the installed harness reads this location is not verified.",
+};
+const GIT_LABELS = {
+  tracked: "Tracked",
+  untracked: "Untracked",
+  ignored: "Ignored (local only)",
+  unavailable: "Git status unavailable",
+};
+const TRUNCATION_LABELS = {
+  entries: "the number of folder entries scanned",
+  depth: "folder depth",
+  files: "the number of files listed",
+  bytes: "the total bytes read",
+};
+
+export function repositoryInspectorLoading() {
+  return tpl("tpl-repo-inspector-loading");
+}
+
+// A repo whose primary checkout cannot be used shows why, and never another checkout's files.
+export function repositoryCheckoutUnavailable(inventory, onRemoveFilter) {
   return pageSplash({
-    title: "Repo-level agent config coming soon",
-    body: "View per repo agent configurations for rules, skills, hooks, etc.",
+    title: "Primary checkout unavailable",
+    body: `${inventory.message || "This repo's primary checkout cannot be read."} Files from other checkouts are not shown in its place.`,
     actions: [{ label: "View Global Config", onClick: onRemoveFilter }],
   });
+}
+
+export function repositoryInspectorError(message) {
+  return repositoryNotice(`Could not read this repo's agent files: ${message}`);
+}
+
+function repositoryNotice(text) {
+  return fill(tpl("tpl-repo-inspector-notice"), { text });
+}
+
+function badge(text, cls = "", title = "") {
+  const node = fill(tpl("tpl-badge"), { text });
+  if (cls) node.classList.add(cls);
+  if (title) node.title = title;
+  return node;
+}
+
+function entryBadges(entry) {
+  const badges = [
+    badge(entry.harnessName, "badge-harness"),
+    badge(entry.label),
+    badge(LOADING_LABELS[entry.loading] || entry.loading, "badge-loading", LOADING_TIPS[entry.loading] || ""),
+    badge(GIT_LABELS[entry.git?.status] || "Git status unavailable", "badge-git"),
+  ];
+  if (entry.git?.modified) badges.push(badge("Locally modified", "badge-warn"));
+  if (entry.override) badges.push(badge("Override", "badge-info"));
+  if (entry.symlink) badges.push(badge("Symbolic link", "badge-info", "Listed as a reference; its target is not read."));
+  return badges;
+}
+
+function repositoryEntry(entry, { onOpen, title }) {
+  const node = tpl("tpl-repo-inspector-entry");
+  node.dataset.entry = entry.id;
+  fill(node, { title, path: entry.path });
+  const open = node.querySelector('[data-slot="open"]');
+  if (entry.symlink) open.disabled = true;
+  else open.addEventListener("click", () => onOpen(entry));
+  open.setAttribute("aria-label", `${title}: ${entry.path}`);
+  node.querySelector('[data-slot="badges"]').replaceChildren(...entryBadges(entry));
+  if (entry.tokens != null) {
+    applyTokenChip(node.querySelector('[data-slot="chip"]'), {
+      tokens: entry.tokens,
+      level: entry.tokenLevel || null,
+      detail: "Estimated size of this file alone.",
+    });
+  }
+  toggleSlot(node, "description", !!entry.description, entry.description);
+  const sections = node.querySelector('[data-slot="sections"]');
+  if (entry.sections?.length) {
+    sections.replaceChildren(...entry.sections.map((line) => {
+      const item = document.createElement("li");
+      item.textContent = line;
+      return item;
+    }));
+    sections.hidden = false;
+  }
+  const note = [entry.diagnostic, entry.note, entry.symlink ? "Its target is not read." : null].filter(Boolean).join(" ");
+  toggleSlot(node, "note", !!note, note);
+  return node;
+}
+
+// Root first, then folders in path order.
+function byFolder(entries) {
+  const groups = new Map();
+  for (const entry of entries) {
+    if (!groups.has(entry.folder)) groups.set(entry.folder, []);
+    groups.get(entry.folder).push(entry);
+  }
+  return [...groups.entries()].sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b)));
+}
+
+function inventorySection({ heading, description, empty, entries, render }) {
+  const panel = fill(tpl("tpl-repo-inspector-section"), {
+    heading,
+    description,
+    count: entries.length ? String(entries.length) : "",
+  });
+  panel.dataset.area = heading;
+  panel.querySelector('[data-slot="items"]').replaceChildren(...render(entries));
+  toggleSlot(panel, "empty", entries.length === 0, empty);
+  return panel;
+}
+
+function folderGroups(entries, entryNode) {
+  return byFolder(entries).map(([folder, items]) => {
+    const group = fill(tpl("tpl-repo-inspector-folder"), { name: folder || "Repo root" });
+    group.querySelector('[data-slot="entries"]').replaceChildren(...items.map(entryNode));
+    return group;
+  });
+}
+
+function inspectorNotices(inventory) {
+  const notices = [];
+  if (inventory.truncated?.length) {
+    const reasons = inventory.truncated.map((reason) => TRUNCATION_LABELS[reason] || reason).join(", ");
+    notices.push(`Partial results: the scan stopped at its limit for ${reasons}. Some files may be missing.`);
+  }
+  for (const provider of inventory.providers || []) {
+    if (provider.error) notices.push(`${provider.displayName}: ${provider.error} Its files may be missing.`);
+    else if (!provider.supported) notices.push(`${provider.displayName}: repo file discovery is not supported yet.`);
+  }
+  return notices;
+}
+
+export function repositoryInspector(inventory, { onOpen }) {
+  const head = tpl("tpl-repo-inspector-head");
+  const gitHead = inventory.checkout?.head || {};
+  fill(head, {
+    path: inventory.checkout?.path || "",
+    "head-label": gitHead.kind === "detached" ? "Detached HEAD" : "Branch",
+    head: gitHead.kind === "branch" ? gitHead.name : gitHead.kind === "detached" ? gitHead.sha : "Unknown",
+  });
+  head.querySelector('[data-slot="notices"]').replaceChildren(...inspectorNotices(inventory).map(repositoryNotice));
+
+  const entries = inventory.entries || [];
+  const inArea = (area) => entries.filter((entry) => entry.area === area);
+  const titled = (entry) => repositoryEntry(entry, { onOpen, title: entry.path.split("/").at(-1) });
+  const skills = inArea("skills").sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  return [
+    head,
+    inventorySection({
+      heading: "Instructions",
+      description: "Instruction files grouped by folder. Root-level files are where each harness looks first; files in subfolders may apply only to work there. Imports stay as source text.",
+      empty: "No Claude Code or Codex instruction files found in this checkout.",
+      entries: inArea("instructions"),
+      render: (items) => folderGroups(items, titled),
+    }),
+    inventorySection({
+      heading: "Skills",
+      description: "Skills this repo carries. Each is read only when invoked, so its size is shown alone, with no startup total.",
+      empty: "No Claude Code or Codex skills found in this checkout.",
+      entries: skills,
+      render: (items) => items.map((entry) => repositoryEntry(entry, { onOpen, title: entry.name || entry.path })),
+    }),
+    inventorySection({
+      heading: "Other configuration",
+      description: "Where settings, hooks, MCP servers, agents, commands, and permissions are declared. Configuration shows section names only, never its values; permission entries are declarations, not the effective policy.",
+      empty: "No Claude Code or Codex configuration files found in this checkout.",
+      entries: inArea("config"),
+      render: (items) => folderGroups(items, titled),
+    }),
+  ];
+}
+
+export function repositoryMachineIntro() {
+  return tpl("tpl-repo-inspector-machine");
 }
 
 function wireInspectButton(btn, kind, id, harness, label, onInspectClick) {

@@ -154,15 +154,86 @@ function renderSection(section, contextCost) {
   return renderStandardSection(section, contextCost);
 }
 
+// --------------------------------------------------------------------------- repo inspector
+
+const GIT_STATUS_TEXT = {
+  tracked: "Tracked in Git",
+  untracked: "Untracked",
+  ignored: "Ignored by Git (local only)",
+  unavailable: "Git status unavailable",
+};
+
+function gitLabel(git) {
+  const text = GIT_STATUS_TEXT[git?.status] || GIT_STATUS_TEXT.unavailable;
+  return git?.modified ? `${text}, locally modified` : text;
+}
+
+// The inventory for the scope it was requested for. A response for an earlier scope is dropped,
+// so switching repos while a request is pending can never show the previous repo's files.
+let repoInventory = null;
+let repoInventorySeq = 0;
+
+async function loadRepositoryInventory(scope) {
+  const seq = ++repoInventorySeq;
+  repoInventory = { scope, status: "loading" };
+  renderScoped();
+  try {
+    const data = await api.fetchRepositoryInventory(scope);
+    if (seq !== repoInventorySeq || currentRepositoryScope() !== scope) return;
+    repoInventory = { scope, status: "ok", data };
+  } catch (error) {
+    if (seq !== repoInventorySeq || currentRepositoryScope() !== scope) return;
+    repoInventory = { scope, status: "error", message: error.message };
+  }
+  renderScoped();
+}
+
+function openRepositoryEntry(entry) {
+  const scope = repoInventory?.scope;
+  modal.openRepositorySource(entry, { load: () => api.fetchRepositorySource(scope, entry.id), gitLabel });
+}
+
+// The machine-wide grid and its controls, reused under their own heading: the same harness rows,
+// file previews, and setup banner the global page shows.
+function machineSection(snap) {
+  if (!snap) return [];
+  return [
+    tmpl.repositoryMachineIntro(),
+    tmpl.harnessWarning(lastSetup || snap, { onRefreshed: reloadSetup, watch: false }),
+    tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
+  ].filter(Boolean);
+}
+
+function renderScoped() {
+  const scope = currentRepositoryScope();
+  const resolution = scopeResolution?.scope === scope ? scopeResolution : null;
+  if (!scope || resolution?.status !== "repository") return;
+  const main = document.getElementById("main");
+  const inventory = repoInventory?.scope === scope ? repoInventory : null;
+  if (!inventory || inventory.status === "loading") {
+    main.replaceChildren(tmpl.repositoryInspectorLoading());
+  } else if (inventory.status === "error") {
+    main.replaceChildren(tmpl.repositoryInspectorError(inventory.message));
+  } else if (inventory.data.status === "checkout-unavailable") {
+    main.replaceChildren(tmpl.repositoryCheckoutUnavailable(inventory.data, clearRepositoryScope));
+  } else {
+    main.replaceChildren(
+      ...tmpl.repositoryInspector(inventory.data, { onOpen: openRepositoryEntry }),
+      ...machineSection(lastSnapshot),
+    );
+  }
+  portalHideLoading();
+}
+
 function render(snap) {
   const main = document.getElementById("main");
-  // Scoped to a repository, the page shows only what is true for it: a coming-soon splash, or the
+  // Scoped to a repository, the page shows only what is true for it: the repo inspector, or the
   // unavailable state. Until the selector has resolved the scope, nothing global is drawn either.
   const scope = currentRepositoryScope();
   if (scope) {
     const resolution = scopeResolution?.scope === scope ? scopeResolution : null;
     if (resolution?.status === "repository") {
-      main.replaceChildren(tmpl.repositorySplash(clearRepositoryScope));
+      renderScoped();
     } else if (resolution?.status === "unavailable") {
       main.replaceChildren(repositoryScopeUnavailableNotice());
     }
@@ -196,11 +267,23 @@ let last = null;
 let lastSnapshot = null;
 let lastSetup = null;
 let scopeResolution = null;
-// The splash and the global view are whole-page swaps, so a scope change redraws even when the
-// config snapshot itself has not changed.
+// The inspector and the global view are whole-page swaps, so a scope change redraws even when the
+// config snapshot itself has not changed. A new scope closes any open preview and drops pending
+// responses for the old one before the new inventory is requested.
 onRepositoryScopeResolved((resolution) => {
+  const previous = scopeResolution?.scope ?? null;
   scopeResolution = resolution;
+  if (resolution.scope !== previous) {
+    modal.reset();
+    repoInventorySeq += 1;
+    repoInventory = null;
+  }
+  if (resolution.status === "repository" && repoInventory?.scope !== resolution.scope) {
+    void loadRepositoryInventory(resolution.scope);
+    return;
+  }
   if (lastSnapshot) render(lastSnapshot);
+  else renderScoped();
 });
 function applySnapshot(snap) {
   lastSnapshot = snap;

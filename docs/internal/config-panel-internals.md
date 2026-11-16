@@ -88,6 +88,45 @@ one response.
 | `POST /api/config/skills` | `{ id, enabled }` | link/unlink a skill |
 | `POST /api/config/permissions` | `{ behaviorId, bucket }` or `{ tokens, bucket }` | set a named behavior or arbitrary command to `deny`, `ask`, `allow`, or `default` |
 
+### Repo inspector endpoints
+
+The scoped Agents view (`?repo=<urlKey>`) reads two GET routes in
+`scripts/cli/portal-routes-config.mjs`. Both resolve the scope with `readRepositoryScope`: an
+unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answers `400`.
+
+| Endpoint | Result |
+| --- | --- |
+| `GET /api/config/repository?repo=<urlKey>` | `{ status: "ok", checkout: { path, head }, providers, entries, truncated }`, or `{ status: "checkout-unavailable", reason, message }` |
+| `GET /api/config/repository/source?repo=<urlKey>&id=<harness>:<relPath>` | One entry's preview: `content` for text bodies, `sections` for structured config |
+
+`scripts/cli/repository-agent-config.mjs` owns the work:
+
+- **Checkout selection.** `selectPrimaryCheckout` reads the record's `localRoots`. Exactly one
+  `primary` root must have a recorded path; with none marked primary, the registered roots must
+  resolve to a single Git family. The family's main checkout comes from Git's common directory
+  (`mainCheckoutPath`), and its identity must still resolve to the requested `repositoryId`. Any
+  other case (`no-path`, `missing`, `ambiguous`, `moved`) is checkout-unavailable; no other
+  checkout substitutes. HEAD is read from the checkout's `HEAD` file.
+- **Discovery.** A breadth-first walk bounded by `INVENTORY_LIMITS` (depth, entries visited, files
+  returned, bytes per file and in total). It skips `.git`, dependency trees, and build outputs, skips
+  any subfolder with its own `.git`, and never follows symlinks: a symlink that names a native source
+  is returned as a reference. Each relative path goes to every provider's `projectInventory.classify`
+  (see `docs/internal/harness-provider-interface.md`), whatever the machine's enablement.
+- **Reads.** `readConfinedFile` rechecks at read time that each parent is a real directory inside the
+  checkout with no nested `.git`, that the file is regular and not a symlink, and that its realpath
+  stays under the checkout. Previews accept only an id the provider classifies again on the request.
+- **Git.** Status comes from `git ls-files` (cached, untracked, ignored) and `git check-attr` through
+  the hardened helper, never `git status`, which can run clean filters or an fsmonitor. Local
+  modification is the in-process blob hash of the working file against the index entry; when a
+  conversion attribute is set or the file contains CR bytes, the label is omitted.
+- **Safety.** Providers' `describe` returns allowlisted section labels only; raw config values,
+  commands, URLs, headers, and environment values never enter a response. Bodies render as plain
+  text in the dialog. Nothing writes to the checkout, its Git directory, or machine config.
+
+The page discards an inventory or preview response for a scope that is no longer current, and a
+scope change closes the preview dialog. `scripts/test/repository-agent-config-check.mjs` covers
+selection, discovery, confinement, and the no-process/no-write guarantees against real Git fixtures.
+
 ## Context Cost Estimates
 
 The snapshot carries `contextCost` (computed by `scripts/cli/context-cost.mjs`): per-harness

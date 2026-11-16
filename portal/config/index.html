@@ -97,6 +97,67 @@
     <!-- Persistent intro above the package sections: what the package manager provides. Not an
          onboarding notice — it renders on every load, whatever the onboarding state. A plain
          header, not a .panel: .panel is reserved for the package-group sections below it. -->
+    <!-- Repo inspector (a repo selected in Viewing): read-only lists of the repo's own Claude Code and
+         Codex files from its primary checkout, then the machine-wide harness grid under its own
+         heading. templates.js's repositoryInspector fills these; nothing here offers a toggle or
+         an edit, because the files belong to the repo. -->
+    <template id="tpl-repo-inspector-head">
+      <header class="repo-inspector-head">
+        <h2>Repo agent config</h2>
+        <p class="repo-inspector-lead">Claude Code and Codex files in this repo's primary checkout, including files that exist only on this computer. Read-only: it shows where each file is and what it declares, not what a session will load.</p>
+        <dl class="repo-inspector-checkout">
+          <dt>Checkout</dt>
+          <dd data-slot="path"></dd>
+          <dt data-slot="head-label">Branch</dt>
+          <dd data-slot="head"></dd>
+        </dl>
+        <div class="repo-inspector-notices" data-slot="notices"></div>
+      </header>
+    </template>
+    <template id="tpl-repo-inspector-notice">
+      <p class="repo-inspector-notice" role="status" data-slot="text"></p>
+    </template>
+    <template id="tpl-repo-inspector-loading">
+      <p class="repo-inspector-loading" role="status">Reading this repo's agent files…</p>
+    </template>
+    <template id="tpl-repo-inspector-section">
+      <section class="panel wide repo-inspector-section">
+        <div class="panel-head">
+          <h2 data-slot="heading"></h2>
+          <span class="repo-inspector-count" data-slot="count"></span>
+        </div>
+        <p class="panel-desc" data-slot="description"></p>
+        <div data-slot="items"></div>
+        <p class="repo-inspector-empty" data-slot="empty" hidden></p>
+      </section>
+    </template>
+    <template id="tpl-repo-inspector-folder">
+      <div class="repo-inspector-folder">
+        <h3 class="repo-inspector-folder-name" data-slot="name"></h3>
+        <ul class="repo-inspector-list" data-slot="entries"></ul>
+      </div>
+    </template>
+    <template id="tpl-repo-inspector-entry">
+      <li class="repo-inspector-entry">
+        <div class="repo-inspector-entry-head">
+          <button type="button" class="repo-inspector-open" data-slot="open">
+            <span class="repo-inspector-title" data-slot="title"></span>
+            <span class="repo-inspector-path" data-slot="path"></span>
+          </button>
+          <token-chip data-slot="chip" hidden></token-chip>
+        </div>
+        <div class="repo-inspector-badges" data-slot="badges"></div>
+        <p class="item-desc" data-slot="description" hidden></p>
+        <ul class="repo-inspector-sections" data-slot="sections" hidden></ul>
+        <p class="repo-inspector-note" data-slot="note" hidden></p>
+      </li>
+    </template>
+    <template id="tpl-repo-inspector-machine">
+      <header class="packages-intro repo-inspector-machine">
+        <h2>Machine-wide harnesses</h2>
+        <p>Installed on this computer and shared by every repo. The repo files above are listed whether or not their harness is installed or enabled here.</p>
+      </header>
+    </template>
     <template id="tpl-packages-intro">
       <header class="packages-intro">
         <h2>Available Agent Tools</h2>

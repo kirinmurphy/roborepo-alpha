@@ -39,6 +39,9 @@ export const GIT_READONLY_COMMANDS = new Set([
   "merge-base",
   "log",
   "for-each-ref",
+  // Index and attribute reads for the repo agent-config inspector. Neither runs filters or hooks.
+  "ls-files",
+  "check-attr",
 ]);
 
 // Config overrides applied to every invocation.

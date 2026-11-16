@@ -1,6 +1,6 @@
 // The shared repository scope in the browser: the selector's sub-header row, `?repo=` surviving
 // navigation between Plans, Tokens, and Agents (and dropping for the rest), browser history, the
-// unavailable state, Tokens' Activity outside listed repos, the scoped Agents splash, the Manage
+// unavailable state, Tokens' Activity outside listed repos, the scoped Agents repo inspector, the Manage
 // repositories action row, and Home's scoped Token Warnings link. Two throwaway repositories with
 // real plan files run through the real hermetic server.
 import crypto from "node:crypto";
@@ -20,11 +20,24 @@ test.beforeAll(() => {
   ALPHA = `alpha-${suffix}`;
   BETA = `beta-${suffix}`;
   fx = createPlanFixture("portal-ui-scope-");
+  // Each repo carries its own agent files, so the Agents inspector can tell them apart.
+  const agentFiles = {
+    [ALPHA]: {
+      "CLAUDE.md": "# Alpha instructions\n",
+      "docs/AGENTS.md": "# Alpha docs\n",
+      ".claude/skills/alpha-skill/SKILL.md": "---\nname: alpha-skill\ndescription: Alpha's own skill.\n---\nBody\n",
+      ".claude/settings.json": JSON.stringify({ permissions: { allow: ["Bash(ls:*)"] }, env: { TOKEN: "alpha-secret-value" } }),
+    },
+    [BETA]: { "AGENTS.md": "# Beta instructions\n" },
+  };
   for (const [name, title] of [[ALPHA, "Alpha"], [BETA, "Beta"]]) {
-    fx.repository(name, Object.fromEntries(["high", "low"].map((level) => [`plans/active/${level}.md`, [
-      "---", `id: ${name}-${level}`, "next_action: Check the scope", "---", "",
-      `# ${title} ${level} plan`, "", "## Summary", "", "Scope fixture.", "",
-    ].join("\n")])));
+    fx.repository(name, {
+      ...agentFiles[name],
+      ...Object.fromEntries(["high", "low"].map((level) => [`plans/active/${level}.md`, [
+        "---", `id: ${name}-${level}`, "next_action: Check the scope", "---", "",
+        `# ${title} ${level} plan`, "", "## Summary", "", "Scope fixture.", "",
+      ].join("\n")])),
+    });
   }
 });
 test.afterAll(() => removeFixtureContents(fx));
@@ -233,17 +246,89 @@ test("Activity outside listed repos is a Tokens-only scope", async ({ page }) =>
   await expect(selector(page)).toHaveAccessibleName("Repo: All repos");
 });
 
-test("scoped Agents is a coming-soon splash, and View Global Config returns to global Agents", async ({ page }) => {
-  await page.goto(`/agents?repo=${ALPHA}`);
-  const splash = page.locator(".page-splash");
-  await expect(splash.getByRole("heading", { name: "Repo-level agent config coming soon" })).toBeVisible();
-  await expect(splash).toContainText("View per repo agent configurations for rules, skills, hooks, etc.");
-  await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toHaveCount(0);
+const inspectorSection = (page, heading) => page.locator(".repo-inspector-section").filter({ has: page.getByRole("heading", { name: heading }) });
 
-  await splash.getByRole("button", { name: "View Global Config" }).click();
+test("scoped Agents lists the repo's own files read-only, previews them as text, and returns to global controls", async ({ page }) => {
+  await page.goto(`/agents?repo=${ALPHA}`);
+  await expect(page.getByRole("heading", { name: "Repo agent config" })).toBeVisible();
+  await expect(page.locator(".repo-inspector-checkout")).toContainText(ALPHA);
+  await expect(page.locator(".repo-inspector-checkout")).toContainText("main");
+
+  const instructions = inspectorSection(page, "Instructions");
+  await expect(instructions.locator(".repo-inspector-folder-name")).toHaveText(["Repo root", "docs"]);
+  await expect(instructions.getByRole("button", { name: "CLAUDE.md: CLAUDE.md" })).toBeVisible();
+  await expect(instructions.locator(".repo-inspector-entry").first()).toContainText("Root-level");
+  await expect(instructions.locator(".repo-inspector-entry").first().locator("token-chip")).toBeVisible();
+  const skills = inspectorSection(page, "Skills");
+  await expect(skills).toContainText("alpha-skill");
+  await expect(skills).toContainText("Alpha's own skill.");
+  const config = inspectorSection(page, "Other configuration");
+  await expect(config).toContainText("Permissions: 1 allow rules");
+  await expect(page.locator("main")).not.toContainText("alpha-secret-value");
+  await expect(page.locator("main")).not.toContainText("Beta instructions");
+  // Repo files are read-only: no package actions on repo skills, no editing on repo permissions.
+  await expect(page.locator(".repo-inspector-section config-toggle")).toHaveCount(0);
+  await expect(page.locator(".repo-inspector-section .bucket-btn")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Machine-wide harnesses" })).toBeVisible();
+
+  await instructions.getByRole("button", { name: "CLAUDE.md: CLAUDE.md" }).click();
+  const dialog = page.locator("dialog#config-modal");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("#modal-content")).toHaveText("# Alpha instructions");
+  await expect(dialog.locator("#modal-content h1")).toHaveCount(0);
+  await expect(dialog.locator("#modal-path")).toContainText("Tracked in Git");
+  await page.keyboard.press("Escape");
+
+  await config.getByRole("button", { name: "settings.json: .claude/settings.json" }).click();
+  await expect(dialog.locator("#modal-content")).toContainText("Environment variables: 1");
+  await expect(dialog.locator("#modal-content")).not.toContainText("alpha-secret-value");
+  await page.keyboard.press("Escape");
+
+  await chooseScope(page, "All repos");
   await expect(page).toHaveURL(/\/agents$/);
   await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
-  await expect(selector(page)).toHaveAccessibleName("Repo: All repos");
+  await expect(page.getByRole("heading", { name: "Repo agent config" })).toHaveCount(0);
+});
+
+test("switching repos while an inventory or preview is pending shows only the current repo", async ({ page }) => {
+  // Hold Alpha's responses until after the switch, so they arrive late.
+  let release;
+  const held = new Promise((resolve) => { release = resolve; });
+  await page.route((url) => url.pathname.startsWith("/api/config/repository") && url.searchParams.get("repo") === ALPHA && url.searchParams.has("id"), async (route) => {
+    await held;
+    await route.continue();
+  });
+  // The open preview covers the selector, so this switch comes from browser history.
+  await page.goto(`/agents?repo=${BETA}`);
+  await expect(inspectorSection(page, "Instructions")).toContainText("AGENTS.md");
+  await chooseScope(page, ALPHA);
+  await inspectorSection(page, "Instructions").getByRole("button", { name: "CLAUDE.md: CLAUDE.md" }).click();
+  await expect(page.locator("dialog#config-modal")).toBeVisible();
+  await page.goBack();
+  await expect(selector(page)).toHaveAccessibleName(`Repo: ${BETA}`);
+  await expect(page.locator("dialog#config-modal")).toBeHidden();
+  await expect(inspectorSection(page, "Instructions")).toContainText("AGENTS.md");
+
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  let releaseInventory;
+  const heldInventory = new Promise((resolve) => { releaseInventory = resolve; });
+  await page.route((url) => url.pathname === "/api/config/repository" && url.searchParams.get("repo") === ALPHA, async (route) => {
+    await heldInventory;
+    await route.continue();
+  });
+  await chooseScope(page, ALPHA);
+  await expect(page.getByText("Reading this repo's agent files…")).toBeVisible();
+  await chooseScope(page, BETA);
+  await expect(inspectorSection(page, "Instructions")).toContainText("AGENTS.md");
+  release();
+  releaseInventory();
+  // Alpha's late answers land after Beta's view; neither may replace it.
+  await page.waitForTimeout(500);
+  await expect(page.locator("main")).not.toContainText("Alpha instructions");
+  await expect(page.locator("main")).not.toContainText("alpha-skill");
+  await expect(page.locator("dialog#config-modal")).toBeHidden();
+  await expect(selector(page)).toHaveAccessibleName(`Repo: ${BETA}`);
 });
 
 test("a repository with no plans shows plain copy and View All Repos, not a panel", async ({ page }) => {

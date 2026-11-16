@@ -52,6 +52,14 @@ export const CAPABILITY_REQUIRED_METHODS = Object.freeze({
   "session-resume": { group: "session", methods: ["resume"] },
 });
 
+// Adapter groups no capability requires. A provider may omit one; one it supplies must be complete.
+//   projectInventory: read-only discovery of the provider's native files inside a repo checkout.
+//     classify(relPath, { symlink }) names a path; describe(entry, text) extracts safe display
+//     metadata from text the caller read. See project-inventory.mjs for the record shapes.
+export const OPTIONAL_ADAPTER_GROUPS = Object.freeze({
+  projectInventory: ["classify", "describe"],
+});
+
 const PLATFORMS = new Set(["darwin", "linux", "win32"]);
 const DETECTION_CONFIDENCES = new Set(["confirmed", "probable", "possible"]);
 const PATH_KINDS = new Set(["file", "directory"]);
@@ -260,6 +268,15 @@ export function validateCapabilityAdapters(capabilities, adapters) {
     for (const method of requirement.methods) {
       if (typeof group[method] !== "function") {
         fail(errors, `capability "${capability}" requires adapters.${requirement.group}.${method} to be a function`);
+      }
+    }
+  }
+  for (const [groupName, methods] of Object.entries(OPTIONAL_ADAPTER_GROUPS)) {
+    const group = adapters?.[groupName];
+    if (group === undefined) continue;
+    for (const method of methods) {
+      if (typeof group?.[method] !== "function") {
+        fail(errors, `optional adapter group "${groupName}" requires ${groupName}.${method} to be a function`);
       }
     }
   }

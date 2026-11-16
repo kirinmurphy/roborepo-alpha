@@ -59,6 +59,7 @@ export function createConfigModal() {
   }
 
   function setContent(data) {
+    contentEl.classList.remove("plain-source");
     if (data?.html) {
       contentEl.innerHTML = data.html;
       // Inspected sources are rendered markdown (skills, rules, guides), so any ```mermaid block
@@ -131,6 +132,7 @@ export function createConfigModal() {
     setBack(back);
     setRequires(requires, onRequire);
     setHeader(inspect.label || inspect.id, "", chips);
+    contentEl.classList.remove("plain-source");
     contentEl.replaceChildren(tmpl.packageContents(inspect, { entryChipSpec, onSelect }));
     setFooter(null);
     open();
@@ -147,7 +149,48 @@ export function createConfigModal() {
     open();
   }
 
-  return { openSource, openSnapshot, showContents };
+  // A repo file preview. Bodies are repo-supplied, so they are shown as plain text: no Markdown
+  // rendering, HTML, or remote media. Structured config shows only its safe section summary.
+  async function openRepositorySource(entry, { load, gitLabel }) {
+    const seq = ++viewSeq;
+    setBack(null);
+    setRequires();
+    setHeader(entry.name || entry.path, "loading…");
+    setPlainContent("");
+    setFooter(null);
+    open();
+    try {
+      const data = await load();
+      if (seq !== viewSeq) return;
+      const chips = data.tokens != null
+        ? [{ label: "Estimated size", spec: { tokens: data.tokens, level: entry.tokenLevel || null, detail: "Estimated size of this file alone." } }]
+        : [];
+      setHeader(data.title || entry.path, [`${data.harnessName} · ${data.label}`, data.path, gitLabel(data.git)], chips);
+      if (data.format === "text") {
+        setPlainContent(data.truncated ? `${data.content}\n\n… Preview truncated.` : data.content);
+      } else {
+        const lines = data.sections?.length ? data.sections : ["No recognized sections."];
+        setPlainContent([...lines, ...(data.diagnostic ? ["", data.diagnostic] : [])].join("\n"));
+      }
+    } catch (e) {
+      if (seq !== viewSeq) return;
+      setHeader(entry.name || entry.path, entry.path);
+      setPlainContent("error: " + e.message);
+    }
+  }
+
+  function setPlainContent(text) {
+    contentEl.classList.add("plain-source");
+    contentEl.textContent = text;
+  }
+
+  // A scope change abandons whatever the dialog shows or is still loading.
+  function reset() {
+    viewSeq += 1;
+    if (dialogEl.open) close();
+  }
+
+  return { openSource, openSnapshot, showContents, openRepositorySource, reset };
 }
 
 // The recommendations dialog: after an enable that left some recommended packages off, ask which
