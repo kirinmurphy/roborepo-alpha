@@ -81,8 +81,9 @@ function notTestedFindings(doc) {
   return unchecked > 0 ? [finding("UNCONFIRMED_NOT_TESTED", { count: unchecked })] : [];
 }
 
-// What an open entry must contain to say why an agent cannot clear it.
-const NOT_TESTED_REASON = /needs a person:|blocked:/i;
+// What an open entry must contain to say why an agent cannot clear it: one of the two markers as
+// its own word, with a reason after it. A bare marker explains no more than a missing one.
+const NOT_TESTED_REASON = /\b(?:needs a person|blocked):\s+\S/i;
 // A cleared entry's evidence: any text after a spaced em dash. The wording is the skills' to
 // prescribe; entries cleared before that wording existed stay valid.
 const NOT_TESTED_RESOLUTION = /\s—\s+\S/;

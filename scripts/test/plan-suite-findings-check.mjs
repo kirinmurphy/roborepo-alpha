@@ -622,6 +622,9 @@ function testNotTestedEntriesNeedAReasonOrEvidence() {
   const lowercase = notTestedPlan(["- [ ] The theme reads well; needs a person: look is a human call.", "- [ ] The portal starts; blocked: `serve` failed with EPERM."]);
   assert.equal(unexplainedIn(lowercase, "active"), undefined, "the check wants a stated reason, not a capital letter");
 
+  const bareMarkers = notTestedPlan(["- [ ] The theme reads well. Needs a person:", "- [ ] The portal starts. Blocked:", "- [ ] The dev server came unblocked: it starts now."]);
+  assert.equal(unexplainedIn(bareMarkers, "active")?.count, 3, "a marker with no reason after it, or inside another word, explains nothing");
+
   const emptyResolution = notTestedPlan(["- [x] The approval question names the commit. —"]);
   assert.equal(unexplainedIn(emptyResolution, "active")?.count, 1, "a dash with nothing after it is not evidence");
 

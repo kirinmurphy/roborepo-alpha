@@ -295,7 +295,7 @@ How validation treats entries:
 - Unchecked entries on an active, review, or completed plan are a finding (`UNCONFIRMED_NOT_TESTED`).
   An open entry that gives its reason does not block implementation completion; the user settles it
   in `/plan-review`, and `/plan-close` refuses to close a plan while any remain.
-- On an active or review plan, an unchecked entry with neither `Needs a person:` nor `Blocked:`, and
+- On an active or review plan, an unchecked entry with no reason after `Needs a person:` or `Blocked:`, and
   a checked entry with no text after a ` — ` dash, are a second finding (`NOT_TESTED_UNEXPLAINED`),
   which quotes each entry. `roborepo plans validate` reports it as advisory. `plans save` and moves
   into `active/` accept a plan that has it and say nothing, so a quiet save or start is no proof

@@ -88,8 +88,9 @@ prompt. If the user declines, the result stays `blocked`: fall back to other evi
 2. **Start only when justified,** with the project's established dev command and known local URL
    (`--url` with `--serve`). The command stops only what it started. Never stop a service that was
    already running, and never use Runtime's stop action for a service you did not start.
-   Run `roborepo browser run --serve` as a bare call: a pipe, `cd`, or chained command keeps it in
-   the Claude sandbox, where the dev server cannot open its port and the run comes back `blocked`.
+   Run `roborepo browser run --serve` as a bare call. Where Claude sandboxes shell commands but
+   excludes `roborepo`, a pipe, `cd`, or chained command keeps the call in the sandbox, where the
+   dev server cannot open its port and the run comes back `blocked`.
 3. **Verify and capture together** in one run, with the smallest useful artifact.
 4. **Fall back truthfully.** A missing tool, unreachable app, or unasserted behavior is stated as
    such, with whatever real test or command evidence exists.

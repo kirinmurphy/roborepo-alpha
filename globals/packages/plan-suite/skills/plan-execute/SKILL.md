@@ -326,8 +326,8 @@ one of the states `/plan-write`'s `references/plan-schema.md` defines:
 
 A blocked check is retried through the harness's normal route before it is written down:
 
-1. Run `roborepo browser run --serve` as a bare call, with no pipe, `cd`, or chained command, so
-   the harness's sandbox exclusion for `roborepo` applies.
+1. Run `roborepo browser run --serve` as a bare call, with no pipe, `cd`, or chained command.
+   Where the harness sandboxes shell commands but excludes `roborepo`, only a bare call is excluded.
 2. Use the app's preview tools where they exist.
 3. Otherwise rerun the command outside the sandbox, which goes through the permission prompt.
 
