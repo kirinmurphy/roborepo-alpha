@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
 reviewed_commit:
-worktree:
+worktree: plans-store-branch-protection
 ---
 
 # Protect a repo's plans and main branches on GitHub from one command
