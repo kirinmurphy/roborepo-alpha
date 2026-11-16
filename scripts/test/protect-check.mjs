@@ -307,7 +307,6 @@ try {
   assert.deepEqual([slow.state, slow.reason], ["unavailable", "GitHub did not answer in time"]);
   console.log("✓ A signed-out, unreachable, or unanswering GitHub reads as unavailable.");
 
-  // unsupported: GitHub refuses rulesets for the repo, or the remote is another host.
   // GitHub refusing one write partway: the earlier write stands, the rest are not sent, the
   // refusal is reported, and the state is read once more.
   start({ refuseCreate: "roborepo-main-integrity" });
@@ -320,6 +319,7 @@ try {
   assert.deepEqual(gh.readState().rulesets.map((ruleset) => ruleset.name), ["roborepo-plans"]);
   console.log("✓ A write GitHub refuses partway stops the apply, keeps earlier writes, and reports the refusal.");
 
+  // unsupported: GitHub refuses rulesets for the repo, or the remote is another host.
   start({ failure: "rulesets-refused" });
   result = run([]);
   assert.equal(result.status, 1);

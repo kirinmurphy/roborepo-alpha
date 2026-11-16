@@ -161,8 +161,8 @@ On another Git host, add the rules by hand:
    rule there. Required reviews, status checks, or signed commits would refuse plan saves, which
    push directly to the branch.
 2. On the default branch: block deletion and force pushes for everyone, admins included.
-3. On the default branch: require a pull request with 1 approval and passing CI checks, with a
-   bypass for repo admins only.
+3. On the default branch: require a pull request with 1 approval (including approval of the last
+   push) and passing CI checks, with a bypass for repo admins only.
 
 RoboRepo never force-pushes `repo-plans`. Pushes to it start no CI runs as long as your CI, like
 RoboRepo's, is limited to `main` and pull requests.
