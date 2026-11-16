@@ -544,6 +544,8 @@ Blocks: submitting the plan for review. No implementation task depends on it.
       (2d52c926)
 - [x] **Protect** from the Plans notice dropped GitHub's refusal reason when the portal answered
       with one — fixed with a browser test (d7fe4655)
+- [x] Comments said `refusal` means nothing was written; a refusal partway keeps the earlier
+      writes — fixed (6eeba909, not revalidated: pass 8 was the last)
 - [ ] With no successful run found, `protect` removes the required checks from an existing
       `roborepo-main-merge` — escalated, see Open questions
 - [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
@@ -560,6 +562,9 @@ Blocks: submitting the plan for review. No implementation task depends on it.
 - Validation pass 6 (fresh-context subagent) at 29a9fe2a: 1 fix, 0 escalate.
 - Validation pass 7 (fresh-context subagent) at 2d52c926: 1 fix, 0 escalate. Branch-protection
   browser spec, 8 passed at d7fe4655; its new refusal test fails with the fix removed.
+- Validation pass 8 (fresh-context subagent) at d7fe4655: 1 fix, 0 escalate. The loop stopped at
+  the eight-pass cap; pass 8's comment fix (6eeba909) was not revalidated. `protect-check.mjs`
+  passes at 6eeba909.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
