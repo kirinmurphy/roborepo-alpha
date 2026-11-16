@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Run /plan-review; before /plan-close the owner runs the live GitHub checks under Not tested, starting with roborepo protect --check in this repo
+next_action: Decide whether a quiet workflow's required checks are kept (open question; recommended: keep current behavior), then rerun /plan-execute to submit for review
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -486,8 +486,26 @@ Manual, on a scratch GitHub repo where the user is admin:
 
 ## Open questions
 
-None. The two questions raised during validation were answered by the user on 2026-11-16; see
-the Decision Log.
+The two questions raised during the first validation loop were answered by the user on
+2026-11-16; see the Decision Log.
+
+### Should a quiet workflow's checks be kept too?
+
+Raised by the validator after the answers were applied. Existing checks are kept only when no
+workflow at all has a successful pull-request run, as the decision says. If `roborepo-main-merge`
+requires checks from workflows A and B and only B has no recent successful pull-request run, the
+state reads `drifted` with only A's checks, and `roborepo protect` removes B's checks. GitHub does
+not record which workflow a required check came from, so a partial keep cannot be traced.
+
+| Option | For | Against |
+| --- | --- | --- |
+| A. Keep current behavior | Matches the decision's wording; the report names each check that would be dropped ("no longer a CI job"), and `protect` lists its changes before writing | A quiet workflow's checks drop on the next `protect` |
+| B. Keep all existing checks whenever any active workflow has no run | A quiet workflow never loses its checks | All-or-nothing: while B stays quiet, a job renamed in A is never updated, so the old name keeps blocking pull requests |
+
+Recommendation: A. Blocked rather than decided because each option weakens a different guarantee
+the user cares about.
+
+Blocks: submitting the plan for review.
 
 ## Review
 
@@ -533,6 +551,11 @@ the Decision Log.
 - [x] A newest run whose jobs were all skipped counted as finding no checks and would remove the
       existing ones — fixed (770ce9b1)
 - [x] The plan's code table, Validation, and Risks still described the default-branch rule — fixed
+- [x] The panel's no-checks text differed from the CLI's, contrary to both comments — fixed
+      (174d925c)
+- [x] Two Not tested entries named the endpoints and fields the code no longer uses — fixed
+- [ ] A quiet workflow's required checks are removed while other workflows still report — escalated,
+      see Open questions
 
 ### Verification
 
@@ -549,6 +572,7 @@ the Decision Log.
   the eight-pass cap; pass 8's comment fix (6eeba909) was not revalidated. `protect-check.mjs`
   passes at 6eeba909.
 - Validation after the user's answers (fresh-context subagent) at a96508c4: 3 fix, 0 escalate.
+- Validation at 770ce9b1 (fresh-context subagent): 2 fix, 1 escalate.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
@@ -565,13 +589,13 @@ the Decision Log.
 - [ ] A private repo on GitHub Free answers rulesets with HTTP 403 and a message matching
       "Upgrade to GitHub" or "make this repository public", so it reads as `unsupported`. The
       message is taken from GitHub's documentation, not observed.
-- [ ] A repo with GitHub Actions turned off answers `GET /repos/{owner}/{repo}/actions/workflows` and
-      `/actions/runs` with
-      HTTP 404, so it reads as having no successful run rather than `unavailable`. The 404 is taken
-      from GitHub's documentation; confirming it needs a real repo with Actions disabled.
+- [ ] A repo with GitHub Actions turned off answers `GET /repos/{owner}/{repo}/actions/workflows`
+      with HTTP 404, so existing checks are kept rather than the read becoming `unavailable`. The
+      404 is taken from GitHub's documentation; confirming it needs a real repo with Actions off.
 - [ ] In this repo, `roborepo protect --check` lists the required checks from real pull-request
-      runs: `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`. The
-      `event=pull_request` filter and the `workflow_id` field are from GitHub's documentation.
+      runs: `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`. The per-workflow
+      runs endpoint (`/actions/workflows/{id}/runs?event=pull_request&status=success`) and the
+      workflow `state` field are from GitHub's documentation.
 - [ ] With the managed rulesets in place, `roborepo plans save` reports `synchronized: true`, and
       GitHub rejects force-push and deletion of `repo-plans` and `main`, including for the admin.
 - [ ] A pull request with a failing check cannot be merged by a non-admin, and the admin sees the
