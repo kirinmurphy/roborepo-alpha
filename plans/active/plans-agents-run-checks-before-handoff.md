@@ -415,3 +415,20 @@ Decisions `/plan-execute` made on its own while implementing, 2026-11-16:
 ## Open Questions
 
 None.
+
+## Review
+
+### Findings
+
+- [ ] `plan-review/SKILL.md` Verification example still shows a browser-checkable behavior as a
+      manual check confirmed by the user
+- [ ] `UNCONFIRMED_NOT_TESTED` resolution in `findings.mjs` says the user confirms a `Blocked:`
+      entry; the user only allows the command and the agent runs the check
+- [ ] Comment on `notTestedOpen` in `index.mjs` still says unchecked entries never block
+      implementation completion
+- [ ] No test covers the reason markers matching in any letter case
+
+### Verification
+
+- Validation pass 1 at 6eec1dc4 (fresh-context subagent): four `fix` findings, no `escalate`, no
+  `base`
