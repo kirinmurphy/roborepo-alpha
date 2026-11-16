@@ -509,6 +509,11 @@ implementation task depends on it.
 - [x] A write GitHub refuses partway through an apply had no test — added (ae8aa292)
 - [x] `plans-portal.md` said the GET protection route returns the same JSON as the CLI, which adds
       `changes` and `refusal` — fixed (ae8aa292)
+- [x] A test comment labelled the partway-refusal block as the unsupported block — fixed
+      (55f250c7)
+- [x] The manual merge step in `plan-suite.md` left out approval of the last push, so a repo
+      protected by hand from it reads `missing` — fixed (55f250c7)
+- [x] The Actions-off 404 assumption had no `## Not tested` entry — added
 - [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
       Open questions
 
@@ -517,6 +522,7 @@ implementation task depends on it.
 - Validation pass 1 (fresh-context subagent) at bb4ce734: 4 fix, 1 escalate (plus one fix split
   across code and docs).
 - Validation pass 2 (fresh-context subagent) at ee8c010c: 3 fix, 0 escalate.
+- Validation pass 3 (fresh-context subagent) at ae8aa292: 3 fix, 0 escalate.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
@@ -533,6 +539,9 @@ implementation task depends on it.
 - [ ] A private repo on GitHub Free answers rulesets with HTTP 403 and a message matching
       "Upgrade to GitHub" or "make this repository public", so it reads as `unsupported`. The
       message is taken from GitHub's documentation, not observed.
+- [ ] A repo with GitHub Actions turned off answers `GET /repos/{owner}/{repo}/actions/runs` with
+      HTTP 404, so it reads as having no successful run rather than `unavailable`. The 404 is taken
+      from GitHub's documentation; confirming it needs a real repo with Actions disabled.
 - [ ] With the managed rulesets in place, `roborepo plans save` reports `synchronized: true`, and
       GitHub rejects force-push and deletion of `repo-plans` and `main`, including for the admin.
 - [ ] A pull request with a failing check cannot be merged by a non-admin, and the admin sees the
