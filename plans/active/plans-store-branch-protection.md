@@ -540,6 +540,8 @@ Blocks: submitting the plan for review. No implementation task depends on it.
       reported; only the Plans notice shows it — fixed (cbffbbad)
 - [x] A comment in `protection-panel.js` said `onChange` runs only after writes; it runs after
       every answered action — fixed (29a9fe2a)
+- [x] `roborepo-cli.md` left out that a GitHub HTTP error reads as `unavailable` — fixed
+      (2d52c926)
 - [ ] With no successful run found, `protect` removes the required checks from an existing
       `roborepo-main-merge` — escalated, see Open questions
 - [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
@@ -553,6 +555,7 @@ Blocks: submitting the plan for review. No implementation task depends on it.
 - Validation pass 3 (fresh-context subagent) at ae8aa292: 3 fix, 0 escalate.
 - Validation pass 4 (fresh-context subagent) at 55f250c7: 2 fix, 0 escalate.
 - Validation pass 5 (fresh-context subagent) at cbffbbad: 1 fix, 1 escalate.
+- Validation pass 6 (fresh-context subagent) at 29a9fe2a: 1 fix, 0 escalate.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
