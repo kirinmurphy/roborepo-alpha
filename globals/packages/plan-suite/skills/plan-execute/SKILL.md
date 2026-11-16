@@ -253,7 +253,8 @@ human accepted it.
 3. **Incomplete, blocked, or not yet validated:** the plan stays in `active/`. This includes a
    Validation Loop that left `escalate` findings open; their unchecked findings fail the preflight.
    Record the remaining tasks, findings, or blockers, set an actionable `next_action` written for a
-   cold reader, and save the plan. A later `/plan-execute` resumes from there.
+   cold reader, and save the plan. Push the feature branch (below). A later `/plan-execute` resumes
+   from there.
 4. **Complete:** run `roborepo plans submit <plan> --json`. It reruns the preflight, then commits and
    pushes the move from `active/` to `review/` on the plans branch. Then push the feature branch (below)
    and report that the plan awaits `/plan-review`.
@@ -263,8 +264,11 @@ they are resolved before `/plan-close`.
 
 ### Push the feature branch
 
-Work ready for review is pushed so CI runs the full gate before `/plan-review` starts. Push only
-after the submit transition succeeds, or after Review Findings commits its fixes:
+Every run that commits to the feature branch ends by pushing it, so the work never lives only on
+this machine and CI runs the full gate on each step's result, including before `/plan-review`
+starts. Push as the run's last Git step, after its final commit: after the submit transition
+succeeds, when the plan stays in `active/`, or after Review Findings commits its fixes. A run that
+made no feature-branch commit and whose branch already matches its remote has nothing to push.
 
 1. Re-read the worktree's branch and Git status. Push only the plan's feature branch, never the base
    branch or any other protected branch. Lifecycle commits are already on the plans branch.
@@ -345,7 +349,8 @@ trivial:
    - changes a public API or persistent schema;
    - affects security, privacy, permissions, migration, or compatibility;
    - pushes, merges, publishes, spends money, or affects an external system. The feature-branch
-     push in Push the feature branch is a fixed step of this skill, not a decision.
+     push at the end of each run (Push the feature branch) is a fixed step of this skill, not a
+     decision.
 7. A blocked decision becomes an Open Questions entry; see Blocker Policy.
 
 ### Decision Log
@@ -421,6 +426,8 @@ A run is complete when:
   link is recorded when one exists;
 - completed implementation changes are committed in the target worktree, or the final report
   explicitly says that no implementation commit was needed;
+- the feature branch was pushed after the run's last commit, or the final report gives the exact
+  push command and why it did not run;
 - the plan was moved to `review/` if and only if the Validation Loop ended and the completion
   preflight passed.
 
@@ -429,7 +436,7 @@ Completion does not authorize:
 - unrelated refactoring;
 - infinite retries around external blockers;
 - guessing through consequential product decisions;
-- pushing anything but the plan's feature branch at review handoff, or merging, publishing, or
+- pushing anything but the plan's feature branch, or merging, publishing, or
   deleting worktrees, without explicit permission or repository policy;
 - any commit on the base branch;
 - leaving completed implementation changes uncommitted in the target worktree.
