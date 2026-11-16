@@ -6,7 +6,7 @@ the test result, the plan's claims checked against the code, and the repository'
 | Verdict | When | Action |
 | --- | --- | --- |
 | Complete | Every success criterion is met, every required task is done in the code, and tests pass | Continue to the Not tested, approval, and landed checks; close only if all pass |
-| Incomplete | Required work remains, or a checked item is not implemented, after agent-resolvable repairs | Refuse. Untick false claims, list the remaining tasks, set `next_action`, leave the plan in `review/` |
+| Incomplete | Required work remains, or a checked item is not implemented, after agent-resolvable repairs | Refuse. Untick false claims, list the remaining tasks, set `next_action` for a cold reader, leave the plan in `review/` |
 | Blocked | Remaining work waits on a user decision, manual confirmation, or external dependency | Refuse. Record the blocker in `blocked_by` or the plan's Open Questions, leave the plan in `review/` |
 | Superseded | Another plan now owns the work | Stop. Name the plan that supersedes it and direct the user to `/plan-archive` |
 | Abandoned | The work will not be done | Stop. Name the reason and direct the user to `/plan-archive` |

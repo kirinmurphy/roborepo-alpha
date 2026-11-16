@@ -37,8 +37,10 @@ Load a matching skill before the work it governs, not after — and only the ski
 Ask before moving a checkout: `checkout`, `switch`, `reset --hard`, `rebase`, `merge`, or stashing
 edits you did not make. A branch that looks wrong for the task is still the one the user chose.
 
-Never create a branch or worktree without asking first, even to isolate work or to commit — ask
-whether to make one or stay on the current branch.
+Ask before creating a branch or worktree, even to isolate work or to commit. Invoking a workflow
+that explicitly creates its own worktree, such as `/plan-execute`, authorizes that worktree under
+the workflow's directory policy. Follow the selected delivery procedure for other work and retain
+the harness approval for worktree creation or checkout changes.
 
 Need a different base (once the user agrees)? `git worktree add -b <name> <path> <base>` — isolated tree, checkout untouched.
 
@@ -104,6 +106,29 @@ rerun locally. Fix a red result like any other failure.
 
 Done means the checks for the change's tier passed. If a required check is too expensive or
 blocked, say so and give the exact command not run; do not describe that work as complete.
+
+
+## Deliver Finished Work
+
+Deliver finished requested work through a pull request once its checks pass. Skip this workflow for
+unfinished experiments, when the user asks to keep work local, or when the repository has no
+remote. Follow the active skill's delivery rules when it defines its own.
+
+When eligible work starts on the default branch, confirm the proposed feature branch name is
+unused, refresh the remote tracking refs, and compare the local base with the pull request's remote
+base. If unrelated unpublished base commits would enter the pull request, report the mismatch and
+pause delivery. Request approval to run `git switch -c <branch>` in the primary checkout. The switch
+carries existing edits in place.
+
+Stage only the paths or hunks from the requested work. Check what the commit will include so any
+unrelated staged edits stay out of it. Commit on the feature branch. Confirm the target repository,
+base, and outgoing commits before pushing. Push the feature branch, open or update its pull
+request with a written body, and follow CI at the pushed head. Fix failures attributable
+to the change or report the blocker. Report the CI result and leave the merge to the user. If
+the push is refused, report the exact command and reason.
+
+Leave the primary checkout on the feature branch after a switch. Tell the user which branch is
+checked out and that they must return to the base branch before plan lifecycle transitions.
 
 
 ## Codex Specifics

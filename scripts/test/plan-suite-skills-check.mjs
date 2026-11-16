@@ -214,7 +214,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "every task that depends on it",
     "present every open entry to the user in one batch",
     "the run resumes in this same mode",
-    "`model: sonnet`",
+    "Launch them on a cheaper model where the harness offers a choice",
     "Never pass `isolation: \"worktree\"`",
     "reports it back instead of choosing",
     "## Not tested",
@@ -280,11 +280,25 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "without asking the human",
     "the eighth pass's findings are fixed like any other pass's",
   ]);
-  includesAll("plan-review packet", review.slice(order[5], order[6]), [
-    "each acceptance criterion with the code and test evidence",
-    "every commit this review made in step 5",
+  // The packet shows plain outcomes first; commits and evidence detail are offered on request.
+  const packet = review.slice(order[5], order[6]);
+  const secondLayer = packet.indexOf("The second layer is offered in one line and given when the human asks");
+  assert.ok(secondLayer > 0, "plan-review: packet offers a second layer on request");
+  includesAll("plan-review packet first layer", packet.slice(0, secondLayer), [
+    "`/plan-write`'s `references/completion-report.md`",
+    "what the plan is for, in one sentence",
+    "the acceptance criteria as a plain checklist of outcomes",
     "each escalated finding as a decision",
   ]);
+  includesAll("plan-review packet second layer", packet.slice(secondLayer), [
+    "the code and test evidence behind each criterion",
+    "each Validator pass's findings",
+    "every commit this review made in step 5",
+  ]);
+  includesAll("plan-review exact-commit approval", packet, ["Then ask the human directly for approval, naming the plan by its title and the exact commit"]);
+  const checkerAt = packet.indexOf("Before showing the first layer, run the checker agent");
+  assert.ok(checkerAt > secondLayer && checkerAt < packet.indexOf("Then ask the human directly for approval"),
+    "plan-review: the checker agent reads the packet before approval is asked");
   includesAll("plan-review", review, [
     "references/resume-review.md",
     "### Result",
@@ -310,6 +324,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "never returns to `ready/`",
     "Do not invoke either command yourself",
     "`/plan-close` never synchronizes",
+    "A complete review awaiting approval must include step 6's exact-commit approval question",
   ]);
   const resume = readPackageFile("plan-suite/skills/plan-review/references/resume-review.md");
   includesAll("plan-review resume", resume, [
@@ -342,13 +357,70 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     const skill = readSkill(id);
     includesAll(`${id} paired skills`, skill, ["## Paired Skills", "host's skill/package manager", "Enable it, or skip it for this run?", "never describe a drifted package as loaded"]);
     if (id !== "session-close") includesAll(`${id} plan naming`, skill, ["Name the plan by its H1 title, with its id in parentheses on first mention only"]);
-    if (!["plan-write", "session-close"].includes(id)) {
+    if (["plan-promote", "plan-execute"].includes(id)) {
       const report = id === "plan-execute"
         ? readPackageFile("plan-suite/skills/plan-execute/references/final-report.md")
         : skill;
       includesAll(`${id} report names the plan`, report, ['- Plan: "<title>" (<id>), <store-relative path>']);
     }
   }
+
+  // Every plan command reads the one shared completion-report reference before reporting, and the
+  // commands that end a stage of work run the checker agent; the short reports self-check.
+  const SHARED_REPORT = "`/plan-write`'s `references/completion-report.md`";
+  const reportSections = {
+    // plan-write ends with its Completion Report, so its section runs to the end of the file.
+    "plan-write": ["## Completion Report", null],
+    "plan-promote": ["## Completion Result", "## Boundaries"],
+    "plan-review": ["## Final Report", "## Boundaries"],
+    "plan-close": ["## Final Report", "## Boundaries"],
+    "plan-archive": ["## Final Report", "## Boundaries"],
+  };
+  for (const [id, [startHeading, endHeading]] of Object.entries(reportSections)) {
+    const skill = readSkill(id);
+    const reportStart = skill.indexOf(startHeading);
+    const end = endHeading ? skill.indexOf(endHeading, reportStart) : -1;
+    assert.ok(reportStart >= 0, `${id}: has a ${startHeading} section`);
+    const report = end > reportStart ? skill.slice(reportStart, end) : skill.slice(reportStart);
+    const pointer = id === "plan-write" ? "`references/completion-report.md`" : SHARED_REPORT;
+    includesAll(`${id} shared report`, report, [pointer]);
+    const check = ["plan-write", "plan-archive"].includes(id) ? "in-session self-check" : "checker agent";
+    includesAll(`${id} cold-reader check`, report, [check]);
+    if (id !== "plan-promote") assert.ok(!report.includes("```text"), `${id}: report has no fixed status template`);
+    assert.ok(!report.includes("where it applies"), `${id}: visual evidence is required, not optional`);
+  }
+  includesAll("plan-write lists the shared report reference", readSkill("plan-write"), [
+    "Before the completion report, read `references/completion-report.md`",
+  ]);
+  const executeReport = readPackageFile("plan-suite/skills/plan-execute/references/final-report.md");
+  includesAll("plan-execute final report builds on the shared reference", executeReport, [
+    `read ${SHARED_REPORT}`,
+    "This command runs the checker agent before delivering",
+    "## Decisions worth knowing",
+    "## Exceptions",
+  ]);
+
+  const shared = readPackageFile("plan-suite/skills/plan-write/references/completion-report.md");
+  includesAll("shared completion report", shared, [
+    "1. **Headline.**",
+    "2. **What this plan is for.**",
+    "3. **What changed.**",
+    "4. **Needs you.**",
+    "5. **Record.**",
+    "1. What is this plan for?",
+    "2. What changed, for a person using it?",
+    "3. What must I do or decide?",
+    "Allow at most two rewrites, then deliver",
+    "**In-session self-check.**",
+    "| `/plan-promote`, `/plan-execute`, `/plan-review`, `/plan-close` | Checker agent |",
+    "| `/plan-write`, `/plan-archive` | In-session self-check |",
+    "Give it only the drafted report",
+    "## No unintroduced terms",
+    "A change visible in an interface comes with a screenshot or recording",
+    "A change to a flow or sequence comes with a before/after diagram",
+    "the report says why in one line",
+    "## `next_action`",
+  ]);
 
   const close = readSkill("plan-close");
   const order = ["### 1. Run the tests", "### 3. Check the plan against the code", "### 5. Confirm `## Not tested` is clear", "### 6. Confirm a fresh human approval", "### 7. Confirm the work landed", "### 8. Close", "### 9. Stop the worktree's servers", "### 10. Remove the closed worktree"]

@@ -227,8 +227,8 @@ every provider renders them; `delete-files` and `switch-branches` depend on the 
 | `merge-pull-requests` | New, default `ask` | Split from `change-github-directly`, which stays `deny`; the protected-branch hook's `GH_DENIED` list no longer names `pr merge` |
 | `switch-branches` | Default stays `ask` | `git checkout *` and `git switch *` are now in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
 
-`plan-store-commands` also allows `roborepo plans sync-base` and `roborepo plans stop-servers` (which
-plan-close runs), so every plans subcommand a plan workflow runs is pre-approved. A plans command that is piped or redirected stays sandboxed, cannot
+`plan-store-commands` and `plan-lifecycle` (`roborepo plans sync-base` and `stop-servers`) together
+pre-approve every plans subcommand a plan workflow runs. A plans command that is piped or redirected stays sandboxed, cannot
 lock the plans store, and prompts when retried outside the sandbox.
 
 ## Codex credential profiles

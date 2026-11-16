@@ -79,6 +79,39 @@ Portal UI specs retry once on CI (`retries` in `scripts/test/portal-ui/playwrigh
 `list` reporter marks a test that passed on retry as flaky; that marker is the only signal of a new
 flake, so read it when a CI run passes with retries.
 
+### Require CI before merging to main
+
+The repository owner configures required status checks in the active `no-push-to-main` ruleset
+(26185384) for `kirinmurphy/roborepo-alpha`. GitHub uses these checks to block ordinary merges
+while CI is pending or failing. The owner needs an **Always allow** bypass to publish plan
+lifecycle commits directly.
+
+1. In the repository's GitHub settings, open **Rulesets** and edit **no-push-to-main**. Confirm
+   that the bypass list covers the owner with **Always allow**. If the entry is missing or uses
+   a different bypass mode, settle the bypass with the owner before saving changes.
+2. Leave the existing pull request review settings in place. Turn on **Require status checks
+   before merging**, then select the three check names from a recent CI run.
+
+   | Setting | Value |
+   | --- | --- |
+   | Required status checks | `check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer` |
+   | Require branches to be up to date before merging | Off |
+
+3. Save the ruleset and recheck the bypass and required checks in settings. On a PR with a failing
+   or pending required check, verify that the ordinary merge path is blocked.
+4. Verify that the next already-authorized lifecycle push succeeds using the owner's account.
+
+After the owner confirms the change, read back the ruleset.
+
+```sh
+gh ruleset view 26185384 --repo kirinmurphy/roborepo-alpha
+```
+
+Use an account with ruleset write access to verify the bypass list from the command output.
+[GitHub ruleset settings](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository)
+and [ruleset API access](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset)
+describe the setup and who can see bypass entries.
+
 ## Publish Matrix
 
 Before an npm publish decision, run these commands from a clean `main` checkout with Node 22 or

@@ -82,6 +82,8 @@ Read the references for the situation:
 - `update`: read `references/workflow-update.md` and `references/workflow-validate.md`; also read
   `references/writing-guidelines.md` when revising scope or design, or otherwise rewriting prose.
 - UI-generated prompts: read `references/prompt-contracts.md` when prompt shape matters.
+- Before the completion report, read `references/completion-report.md`. Every plan command shares
+  it; the others name it as "`/plan-write`'s `references/completion-report.md`".
 
 ## Creation Gates
 
@@ -130,6 +132,17 @@ These conditions must hold before a new plan can be called created. The full rul
 - Never write or edit a plan's `### Approval` record; only `/plan-review` records a human's approval.
 - Do not mark work complete from checked boxes alone; verify success criteria.
 - Do not add machine-specific absolute paths to repository docs.
-- Report changed files, verification run, and paired skills loaded or skipped.
 - Name the plan by its H1 title, with its id in parentheses on first mention only; the id is a
   stable reference for commands, not a name a person recognizes.
+- Write `next_action` to the cold-reader standard in `references/completion-report.md`.
+
+## Completion Report
+
+Follow the shape in `references/completion-report.md`, and run its in-session self-check before
+delivering. What is specific to this command:
+
+- **What changed** says whether the plan was created, revised, or synced, and which edits came from
+  the user's intent and which from repository evidence.
+- **Needs you** lists each open question in the plan with its options and a recommendation. For a
+  new plan, the next command is `/plan-promote`.
+- Name paired skills skipped or unavailable in one line; checks run belong in the Record offer.

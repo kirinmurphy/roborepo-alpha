@@ -143,7 +143,8 @@ dependency, or work outside this plan.
 Follow `references/verdict.md`:
 
 - **Incomplete or blocked after agent-resolvable repairs:** refuse. Name the remaining work, update
-  the plan's tasks and `next_action`, and leave it in `review/`.
+  the plan's tasks and `next_action` (written for a cold reader, as `/plan-write`'s
+  `references/completion-report.md` describes), and leave it in `review/`.
 - **Superseded or abandoned:** stop and direct the user to `/plan-archive`, naming the reason you
   found. `/plan-close` never archives.
 - **Complete:** continue to step 5.
@@ -330,34 +331,15 @@ approval, or merge decisions.
 
 ## Final Report
 
-Name the plan by its H1 title, with its id in parentheses on first mention only. The id is the
-stable reference for commands and frontmatter, not a name a person recognizes; the same goes for
-questions, review packets, and other prose in this run.
+Name the plan by its H1 title, with its id in parentheses on first mention only. Before writing the
+report, read `/plan-write`'s `references/completion-report.md` and follow its shape, its visual
+evidence rule, and its checker agent, which reads the report before the user does. What is specific
+to this command:
 
-```text
-Close result
-- Plan: "<title>" (<id>), <store-relative path>
-- Tests: <command> -> pass|fail|not run
-- Verdict: complete|incomplete|blocked|superseded|abandoned
-- Not tested entries open: <count>
-- Approval: fresh at <commit>|stale|missing|not-approved|invalid|unavailable
-- Landed: yes (evidence reused|scanned)|unconfirmed|not applicable
-- Lifecycle change: review -> completed, or none
-- Closed: yes|no
-- Close commit: <hash>|failed|not applicable
-- Servers stopped: <pid :port result, ...>|none|skipped
-- Follow-up: <title and path, next instruction, remaining prerequisites>|none|unavailable|not applicable (closure refused)
-```
-
-Also report the evidence behind the verdict, every refusal reason, unverified checks, paired skills
-loaded or skipped, the complete remaining-issues list when closure is refused, the help offer, and
-current Git status.
-
-For an already closed retry, report `Closed: yes (already closed)`, the existing close commit,
-`Lifecycle change: none`, and any resumed cleanup results. Mark tests, approval, and landing
-`not rerun (already closed)` rather than presenting historical results as fresh checks. Refresh
-the follow-up handoff from the current snapshot rather than repeating a stale next task. Paired
-skills not needed by this path are `not applicable`.
+For a refusal, follow **Refusal and blocker reporting**. Give every reason with the evidence and
+the action that resolves it. For a closure that was already committed, say so and report any
+cleanup that still needs attention. Use the current dependency state when naming a follow-up.
+Describe reused evidence as historical when it matters.
 
 ## Boundaries
 

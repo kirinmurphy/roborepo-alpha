@@ -31,6 +31,7 @@ manifests/platform/verify-content.tsv
 globals/system/skills
 local/skills	dev
 globals/system/rules/shared/05-skill-loading.md
+globals/system/rules/shared/09-deliver-finished-work.md
 globals/system/rules/claude/90-claude-specific.md
 globals/system/rules/codex/90-codex-specific.md
 scripts/build/render-rules.sh

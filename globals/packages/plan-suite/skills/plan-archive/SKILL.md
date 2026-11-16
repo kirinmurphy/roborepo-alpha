@@ -76,21 +76,13 @@ cleanup command so its guards still apply. Never remove one by hand.
 
 ## Final Report
 
-Name the plan by its H1 title, with its id in parentheses on first mention only. The id is the
-stable reference for commands and frontmatter, not a name a person recognizes; the same goes for
-questions, review packets, and other prose in this run.
+Name the plan by its H1 title, with its id in parentheses on first mention only. Before writing the
+report, read `/plan-write`'s `references/completion-report.md`, follow its shape, and run its
+in-session self-check before delivering. What is specific to this command:
 
-```text
-Archive result
-- Plan: "<title>" (<id>), <store-relative path>
-- Reason: superseded by <plan> | abandoned: <why>
-- Lifecycle change: <from> -> archived | none
-- Archive commit: <hash>, synchronized | not synchronized; refused | already recorded
-- Dependencies cleared: <plans> | none
-- Unmerged work left in place: <branch and worktree> | none
-```
-
-Also report every refusal reason with the action that resolves it, and current Git status.
+Give the archive reason and identify any worktree or branch holding unmerged work. Name affected
+dependencies when the reader needs to act. For a refusal, give every reason and the action that
+resolves it.
 
 ## Boundaries
 

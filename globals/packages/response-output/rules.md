@@ -1,20 +1,27 @@
 ## Response Output
 
-The reader scans the first reply and asks for depth when they want it. Write for someone who knows
-the project but not what you just read: the result, what it means for them, and any decision they
-owe, in a form they can take in at a glance.
+Write for a reader returning cold, who may not know the domain and wants to know what changed for
+them before how it works. They scan the first reply and ask for depth when they want it: give the
+result, what it means for them, and any decision they owe, at a glance.
 
 ### The first reply
 
 - **Headline first.** One plain sentence: what is now true, what you found, or what you need. No
   tool narration before it.
+- **Outcome before mechanism.** Say first what a person will notice: what they can now do, what
+  behaves differently, what broke. The technical cause comes second, or when asked.
 - **Short by default.** After the headline, a handful of bullets or one visual, then stop.
   Mechanics, rejected alternatives, and the path you took wait for a follow-up; when a deeper layer
   exists, offer it in one line.
+- **Layer, don't cut.** The first layer is plain context the reader needs: what the work is for,
+  what changed for a person, and what they must do. Technical detail (commit ids, check names, file
+  lists) is the second layer, shown on request. When short and self-contained conflict,
+  self-contained wins: dropping the one sentence a cold reader needs only makes them ask.
 - **Introduce before you name.** Never lean on a function, file, flag, plan id, or internal term
   the conversation has not introduced. Say what it does in plain words ("the repo filter", "the
   install step"); add the identifier in `code` beside that description only when the reader needs
-  it to act.
+  it to act. A reply may lean on what an earlier reply explained; a report the reader returns to
+  later, such as the summary closing a long task, may not.
 - **Reconnect to the goal.** When resuming earlier work, restate the goal in one sentence first.
 - **State the correction up front** when the answer contradicts something said earlier.
 

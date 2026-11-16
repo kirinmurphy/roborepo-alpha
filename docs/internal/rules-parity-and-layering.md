@@ -32,6 +32,7 @@ Source layout:
 globals/system/rules/
   shared/                       # rendered into every harness
     05-skill-loading.md
+    09-deliver-finished-work.md
     20-verification.md
     40-temp-files.md
   claude/                       # globals/system/rules/<harness-id>/ — one dir per harness
@@ -80,6 +81,24 @@ snapshotted under `~/.roborepo/backups/pre-install/<harness>/` before the manage
 - The renderer should preserve deliberate format differences:
   - Claude can keep Markdown sections.
   - Codex can keep short bullets matching `AGENTS.md` style.
+
+### Delivering finished work
+
+The shared fragment `09-deliver-finished-work.md` gives finished work a default delivery path.
+Once the work passes its checks, the agent commits the intended changes on a feature branch,
+opens or updates a pull request, and follows CI at the pushed commit. The user merges the pull
+request.
+
+For eligible work begun on the default branch, the agent checks the proposed branch name and
+outgoing commits, then requests approval to switch to a feature branch. Existing edits move with
+the switch. Unrelated unpublished base commits pause delivery for a decision. After delivery, the
+agent names the checked-out branch so the user can return to the base before plan lifecycle
+transitions.
+
+An active skill's own delivery procedure takes precedence over this default. For example,
+`/plan-execute` uses its feature-branch push procedure, and `/session-close` ends the chat without
+pushing. User instructions to keep work local also take precedence. Unfinished experiments and
+repositories without remotes skip delivery.
 
 ## Override Layers
 

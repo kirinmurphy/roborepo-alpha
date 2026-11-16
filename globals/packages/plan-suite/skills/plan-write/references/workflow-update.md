@@ -13,7 +13,7 @@ may cover both rubrics in one pass. Authority, lifecycle, and approval boundarie
 4. Remove or rewrite obsolete tasks only when supported by evidence; a scope or design change
    belongs to substantive revision and the owning lifecycle workflow.
 5. Add newly discovered required work.
-6. Update `next_action`.
+6. Update `next_action` as one sentence a cold reader can act on (see `completion-report.md`).
 7. Update blockers and dependencies. Adding a `depends_on` entry between same-namespace Backlog plans
    regroups them on the next read; run `roborepo plans order place <plan>` to record it now.
 8. Leave the plan in its folder. Moving it is the job of the command that owns that transition;

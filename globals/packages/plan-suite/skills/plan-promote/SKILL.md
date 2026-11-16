@@ -97,7 +97,8 @@ Each row is its own optional package, so check it before loading it:
    - recommend the strongest option;
    - ask the user for a decision.
 8. Update the existing plan through `roborepo plans save`, by the "Plan store" rule in `/plan-write`'s
-   `references/plan-schema.md`. It keeps the plan in its current folder.
+   `references/plan-schema.md`. It keeps the plan in its current folder. Write `next_action` for a
+   cold reader, as `/plan-write`'s `references/completion-report.md` describes.
 9. Preserve the plan ID, filename conventions, frontmatter conventions, and repository-relative paths.
 10. Convert vague implementation phases into an executable sequence without prescribing incidental
     details that can safely be decided during development. `/plan-write` wrote the initial
@@ -165,32 +166,28 @@ Name the plan by its H1 title, with its id in parentheses on first mention only.
 stable reference for commands and frontmatter, not a name a person recognizes; the same goes for
 questions, review packets, and other prose in this run.
 
-Include this in the promotion report:
+Before writing the report, read `/plan-write`'s `references/completion-report.md` and follow its
+shape and its checker agent, which reads the report before the user does. What is specific to this
+command:
+
+- **Headline:** whether the plan moved to `ready/`, was refined in `ready/`, or stays in `backlog/`.
+- **What changed:** what the plan now promises that it did not before, in plain words: scope
+  corrected, stale claims fixed, decisions settled. Not a count of edits.
+- **Needs you:** each open question or blocker, with options and a recommendation, and each related
+  plan in conflict with this one, named by title, with what the conflict means for the reader.
+- **Not verified:** any claim this run could not check against the code, in one line each.
+- **Record:**
 
 ```text
 Promotion result
 - Plan: "<title>" (<id>), <store-relative path>
-- Repository claims checked: yes/no
-- Plan updated: yes/no
-- Obvious issues fixed: <count>
-- Material decisions resolved: <count>
-- Open questions: <count>
-- Blockers: <count>
-- Promoted for implementation: yes/no
-- Lifecycle change: backlog -> ready | refined in ready | none
-- Promotion commit: <hash> | already recorded | not made (<reason>)
+- Lifecycle: backlog -> ready | refined in ready | stays in backlog
+- Details: related-plan classifications, checks run, and files changed; ask for any of them here
 ```
 
-Also report:
-
-- files changed;
-- repository areas reviewed;
-- validation performed, including the plan validator's output;
-- related plans checked, with each relationship classified as landed, unlanded, stale, or conflicting;
-- landed implementation commits verified against the current checkout;
-- active-story conflicts and lifecycle/prose drift found, including how the selected plan reconciles them;
-- paired skills loaded, and any skipped with the reason;
-- any claims that could not be verified.
+Files changed, areas reviewed, the validator's output, related plans that need nothing from the
+reader, and the commit stay in the second layer, offered in one line. Name paired skills skipped or
+unavailable in one line.
 
 After the report of a promoted plan, show this snippet with the actual repository-relative plan path:
 

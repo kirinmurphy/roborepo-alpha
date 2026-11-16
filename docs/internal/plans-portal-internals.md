@@ -206,8 +206,10 @@ current snapshot and rechecks repository boundaries before reading document cont
 - `portal/plans/app.js`
 - `portal/plans/lifecycle.js`, `portal/plans/plan-actions.js`
 - `portal/plans/styles.css`
-- `globals/packages/plan-suite/` (the six plan skills and the Code Outlives Plans rules fragment), `globals/packages/session-close/`
-- `scripts/test/plan-store-check.mjs`, `plan-suite-check.mjs`, `plan-suite-findings-check.mjs`, `plan-suite-commands-check.mjs`
+- `globals/packages/plan-suite/` (seven plan skills, including `plan-suite-init`, and the shared
+  plan rules fragment), `globals/packages/session-close/`
+- `scripts/test/plan-store-check.mjs`, `plan-suite-check.mjs`, `plan-suite-findings-check.mjs`,
+  `plan-suite-commands-check.mjs`
 - `scripts/test/plan-lifecycle-manifest-check.mjs`, `plan-lifecycle-transitions-check.mjs`, `plan-sync-base-check.mjs`
 
 ## Checks To Run
@@ -236,5 +238,5 @@ npm test
 
 ## Merge Readiness
 
-`mergeReadiness` requires a committed review packet, a clean index and filesystem, and a current
+`mergeReadiness` requires the plan's review Result and Approval committed (its output calls this the review packet), a clean index and filesystem, and a current
 reviewed base implementation before merging.

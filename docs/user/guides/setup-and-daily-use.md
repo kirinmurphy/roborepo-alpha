@@ -19,9 +19,10 @@ reconnect to them on a new machine.
 It works without enabling any workflow package: you can filter plans, open rendered Markdown, inspect
 warnings/tasks, and copy repository-aware context.
 
-Enable the plan suite when you want agent workflow prompts and one slash command per lifecycle
-step. The six plan commands ship as one `plan-suite` package, and `/session-close` is its own
-package. The Plans page banner enables both at once; from the CLI:
+Enable the plan suite for agent workflow prompts and one slash command per lifecycle step. The
+`plan-suite` package holds all seven plan commands, including `/plan-suite-init` for repository
+setup. The Plans page banner enables it alongside the separate `session-close` package. From the
+CLI, enable both packages with these commands.
 
 ```sh
 roborepo package enable plan-suite
