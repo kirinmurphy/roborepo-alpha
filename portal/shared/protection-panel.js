@@ -95,9 +95,7 @@ function buildProtectionPanel() {
 
     slot("policies-section").hidden = report.policies.length === 0;
     slot("policies").replaceChildren(...report.policies.map((policy) => fill(tpl("tpl-protection-item"), { name: `${policy.name} (${policy.branch}):`, detail: policy.detail })));
-    slot("checks").textContent = report.requiredChecks.length > 0
-      ? `Required CI checks: ${report.requiredChecks.join(", ")}`
-      : `No CI checks are required: ${report.defaultBranch} has no successful CI run to read job names from.`;
+    slot("checks").textContent = requiredChecksText(report);
     slot("conflicts").hidden = report.conflicts.length === 0;
     slot("conflicts").replaceChildren(...report.conflicts.map((conflict) => fill(tpl("tpl-protection-line"), { text: conflict.detail })));
     slot("hand-made-section").hidden = report.handMade.length === 0;
@@ -139,6 +137,14 @@ function buildProtectionPanel() {
     },
   };
   return { controller, subscribers };
+}
+
+// Matches the CLI's line for the same report (requiredChecksLine in scripts/cli/protect.mjs).
+function requiredChecksText(report) {
+  const names = report.requiredChecks.join(", ");
+  if (report.checksSource === "kept") return `Required CI checks: ${names} (kept from roborepo-main-merge: no workflow has a successful pull-request run to read them from).`;
+  if (report.requiredChecks.length > 0) return `Required CI checks: ${names}`;
+  return "No CI checks are required: no workflow has a successful pull-request run to read job names from.";
 }
 
 const mergeSkipped = (report) => report.policies.some((policy) => policy.status === "skipped");

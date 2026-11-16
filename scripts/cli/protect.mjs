@@ -37,6 +37,14 @@ export async function protectCommand(argv) {
   process.exitCode = PROTECTED_STATES.has(result.report.state) ? 0 : 1;
 }
 
+// The panel in portal/shared/protection-panel.js shows the same wording.
+function requiredChecksLine(report) {
+  const names = report.requiredChecks.join(", ");
+  if (report.checksSource === "kept") return `Required CI checks: ${names} (kept from roborepo-main-merge: no workflow has a successful pull-request run to read them from).`;
+  if (report.requiredChecks.length > 0) return `Required CI checks: ${names}`;
+  return "Required CI checks: none. No workflow has a successful pull-request run to read job names from, so merges are not held for CI.";
+}
+
 function parseArgs(argv) {
   const options = { check: false, json: false, action: "protect" };
   const args = [...argv];
@@ -73,9 +81,7 @@ function formatReport(report) {
   }
   for (const conflict of report.conflicts) lines.push(`  ${conflict.detail}`);
   if (report.policies.length > 0) {
-    lines.push(report.requiredChecks.length > 0
-      ? `  Required CI checks: ${report.requiredChecks.join(", ")}`
-      : `  Required CI checks: none. ${report.defaultBranch} has no successful CI run to read job names from, so merges are not held for CI.`);
+    lines.push(`  ${requiredChecksLine(report)}`);
   }
   if (report.handMade.length > 0) {
     lines.push("  Other rulesets:");

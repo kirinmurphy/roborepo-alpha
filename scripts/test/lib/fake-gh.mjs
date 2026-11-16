@@ -8,7 +8,9 @@
 //   login, admin, defaultBranch
 //   refuseCreate  a ruleset name whose create answers 422, to fail an apply partway
 //   rulesets  full ruleset objects; `source_type` other than "Repository" marks an inherited one
-//   runs      workflow runs on the default branch, newest first: { id, conclusion, jobs: [{ name, conclusion }] }
+//   runs      workflow runs, newest first: { id, conclusion, jobs: [{ name, conclusion }] }, plus optional
+//             `event` (default "pull_request") and `workflow` (workflow id, default 1)
+//   workflows optional [{ id, state }]; by default every workflow a run names, all "active"
 import fs from "node:fs";
 import path from "node:path";
 
@@ -134,12 +136,19 @@ if (one) {
   }
 }
 
-if (route === "actions/runs" && state.failure === "actions-off") httpError(404, "Not Found");
-if (route === "actions/runs" && state.failure === "runs-error") httpError(502, "Server Error");
+const actionsRoute = /^actions\\//.test(route);
+if (actionsRoute && state.failure === "actions-off") httpError(404, "Not Found");
+if (actionsRoute && state.failure === "runs-error") httpError(502, "Server Error");
+const workflowOf = (run) => run.workflow ?? 1;
+if (route === "actions/workflows") {
+  const workflows = state.workflows || [...new Set(state.runs.map(workflowOf))].map((id) => ({ id, state: "active" }));
+  reply({ total_count: workflows.length, workflows });
+}
 if (route === "actions/runs") {
   const wanted = params.get("status");
-  const runs = state.runs.filter((run) => !wanted || run.conclusion === wanted);
-  reply({ workflow_runs: runs.slice(0, Number(params.get("per_page") || 30)).map(({ id, conclusion }) => ({ id, conclusion, status: "completed" })) });
+  const event = params.get("event");
+  const runs = state.runs.filter((run) => (!wanted || run.conclusion === wanted) && (!event || (run.event || "pull_request") === event));
+  reply({ workflow_runs: runs.slice(0, Number(params.get("per_page") || 30)).map((run) => ({ id: run.id, conclusion: run.conclusion, status: "completed", event: run.event || "pull_request", workflow_id: workflowOf(run) })) });
 }
 const jobs = route.match(/^actions\\/runs\\/(\\d+)\\/jobs$/);
 if (jobs) reply({ jobs: (state.runs.find((run) => run.id === Number(jobs[1])) || { jobs: [] }).jobs });

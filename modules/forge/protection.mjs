@@ -76,7 +76,7 @@ async function readSnapshot({ client, context, repo }) {
     client.branchRules(context, repo, PLANS_BRANCH),
     client.branchRules(context, repo, defaultBranch),
     client.rulesets(context, repo),
-    latestRunJobs(client, context, repo, defaultBranch),
+    pullRequestCheckJobs(client, context, repo),
   ]);
   // Only repository rulesets are read in full; one set by an organization is reported by name.
   const rulesets = await settleAll(listed.map((entry) => (
@@ -84,7 +84,7 @@ async function readSnapshot({ client, context, repo }) {
   )));
   return {
     repo, defaultBranch, login, admin: repository.permissions?.admin === true,
-    plansRules, mainRules, rulesets, requiredChecks: run?.jobs ?? [],
+    plansRules, mainRules, rulesets, foundChecks: run ? run.jobs : null,
   };
 }
 
@@ -97,13 +97,13 @@ async function settleAll(promises) {
   return results.map((result) => result.value);
 }
 
-// A repository with Actions off answers the runs endpoint with 404; that is the same as having no
-// successful run to read job names from. Any other HTTP error (rate limit, 5xx) makes the whole
+// A repository with Actions off answers the Actions endpoints with 404; that is the same as having
+// no successful run to read job names from. Any other HTTP error (rate limit, 5xx) makes the whole
 // read `unavailable`: reading it as "no run" would drop the required checks, and a `protect` run
 // would then loosen the merge ruleset.
-async function latestRunJobs(client, context, repo, branch) {
+async function pullRequestCheckJobs(client, context, repo) {
   try {
-    return await client.latestSuccessfulRunJobs(context, repo, branch);
+    return await client.pullRequestCheckJobs(context, repo);
   } catch (error) {
     if (error instanceof GitHubError && error.kind === "http" && error.status === 404) return null;
     throw error;
@@ -115,8 +115,9 @@ const isManaged = (ruleset) => ruleset.source_type === "Repository" && String(ru
 // Maps what GitHub returned to a state and the detail behind it. Pure: every input is in
 // `snapshot`, so the mapping is the same for the command, doctor, and the portal.
 export function assessProtection(snapshot) {
-  const { repo, defaultBranch, login, admin, plansRules, mainRules, rulesets, requiredChecks } = snapshot;
+  const { repo, defaultBranch, login, admin, plansRules, mainRules, rulesets, foundChecks } = snapshot;
   const managed = new Map(rulesets.filter(isManaged).map((ruleset) => [ruleset.name, ruleset]));
+  const { requiredChecks, checksSource } = chooseRequiredChecks(foundChecks, managed);
   // GitHub returns bypass lists only to accounts that can manage the ruleset.
   const bypassVisible = rulesets.filter((ruleset) => ruleset.source_type === "Repository").every((ruleset) => Array.isArray(ruleset.bypass_actors));
 
@@ -161,9 +162,21 @@ export function assessProtection(snapshot) {
   return {
     state, headline: STATE_HEADLINES[state], reason: null, repository: repo, defaultBranch, login, admin, bypassVisible,
     policies, conflicts,
-    requiredChecks,
+    requiredChecks, checksSource,
     handMade: handMadeRulesets(rulesets, { defaultBranch, bypassVisible }),
   };
+}
+
+// The checks the merge policy requires. With no successful pull-request run to read them from
+// (runs aged out, or Actions off), an existing managed merge ruleset keeps the checks it already
+// requires, so a quiet repo never loses its CI gate on the next `protect`. `checksSource` says which:
+// `pull-requests`, `kept`, or `none`.
+function chooseRequiredChecks(foundChecks, managed) {
+  if (foundChecks) return { requiredChecks: foundChecks, checksSource: "pull-requests" };
+  const merge = managed.get(`${MANAGED_PREFIX}main-merge`);
+  const statusRule = (merge?.rules || []).find((rule) => rule.type === "required_status_checks");
+  const kept = (statusRule?.parameters?.required_status_checks || []).map((check) => check.context);
+  return kept.length > 0 ? { requiredChecks: kept, checksSource: "kept" } : { requiredChecks: [], checksSource: "none" };
 }
 
 // One sentence per state, shared by the command and the portal panel.
@@ -242,6 +255,6 @@ function failureReport(repo, error) {
 function emptyReport(repo, state) {
   return {
     state, headline: STATE_HEADLINES[state], reason: null, repository: repo, defaultBranch: null, login: null, admin: false, bypassVisible: false,
-    policies: [], conflicts: [], requiredChecks: [], handMade: [],
+    policies: [], conflicts: [], requiredChecks: [], checksSource: "none", handMade: [],
   };
 }

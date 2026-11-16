@@ -99,9 +99,9 @@ The repository owner runs these steps, since the command needs repo admin rights
    blocked.
 
 After a CI job is added, removed, or renamed in `.github/workflows/ci.yml`, the state reads
-`drifted` once the change has a successful run on `main`. The pull request that renames a job is
-itself held by the old check name, so the owner merges it with the admin bypass and then runs
-`roborepo protect` again. `roborepo doctor` reports the drift as a hint.
+`drifted` as soon as a pull request with the change has a successful run, before it merges. The
+pull request that renames a job is itself held by the old check name, so the owner merges it with
+the admin bypass and only then runs `roborepo protect` again. `roborepo doctor` reports the drift as a hint.
 
 `scripts/test/protect-check.mjs`, `scripts/test/doctor-protection-check.mjs`, and
 `scripts/test/portal-ui/branch-protection.spec.mjs` cover the command, the doctor line, and the

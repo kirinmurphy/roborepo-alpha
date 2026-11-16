@@ -16,8 +16,8 @@ const REPO_ADMIN_BYPASS = { actor_id: 5, actor_type: "RepositoryRole", bypass_mo
 // type GitHub adds later cannot be shown safe from here.
 export const PLANS_SAFE_RULE_TYPES = new Set(["deletion", "non_fast_forward", "required_linear_history"]);
 
-// `requiredChecks` is the list of CI job names to require, or empty when the default branch has
-// no successful run to read them from; the status-check rule is then left out.
+// `requiredChecks` is the list of CI job names to require, or empty when there are none to read;
+// the status-check rule is then left out.
 export function managedRulesets({ requiredChecks = [] } = {}) {
   const mergeRules = [{
     type: "pull_request",

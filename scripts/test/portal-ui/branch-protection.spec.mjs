@@ -146,6 +146,10 @@ test.describe("Branch protection", () => {
     await expect(state).toHaveText("protected");
     await expect(dialog).toContainText("protect-main: covered by the managed rulesets; safe to delete");
 
+    await reopen({ rulesets: managed, runs: [] });
+    await expect(state).toHaveText("protected");
+    await expect(dialog).toContainText("Required CI checks: check (macos-latest), check (ubuntu-latest) (kept from roborepo-main-merge: no workflow has a successful pull-request run to read them from).");
+
     const loosened = structuredClone(managed);
     loosened.find((ruleset) => ruleset.name === "roborepo-plans").rules.pop();
     await reopen({ rulesets: loosened });

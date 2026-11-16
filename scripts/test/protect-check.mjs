@@ -205,31 +205,62 @@ try {
   assert.deepEqual([organization.covered, organization.note], [false, "set by the organization"]);
   console.log("✓ A hand-made ruleset is covered only when target, rules, enforcement, and bypass all match.");
 
-  // Required checks come from the newest successful run; a repo with none omits the rule.
+  // Required checks combine the newest successful pull-request run of each active workflow.
   start({ runs: [
     { id: 610, conclusion: "cancelled", jobs: [{ name: "half-finished", conclusion: "cancelled" }] },
     { id: 609, conclusion: "failure", jobs: [{ name: "broken", conclusion: "failure" }] },
     { id: 608, conclusion: "success", jobs: [{ name: "build", conclusion: "success" }, { name: "docs-only", conclusion: "skipped" }] },
+    { id: 607, conclusion: "success", jobs: [{ name: "older-build", conclusion: "success" }] },
   ] });
   result = run(["--json"]);
-  assert.deepEqual(result.json.requiredChecks, ["build"], "cancelled and failed runs, and skipped jobs, are passed over");
+  assert.deepEqual(result.json.requiredChecks, ["build"], "only a workflow's newest successful run counts; cancelled and failed runs, and skipped jobs, are passed over");
+  assert.equal(result.json.checksSource, "pull-requests");
   assert.deepEqual(writes()[2].body.rules[1], statusChecks(["build"]));
+
+  start({
+    runs: [
+      { id: 705, conclusion: "success", event: "push", workflow: 3, jobs: [{ name: "publish", conclusion: "success" }] },
+      { id: 704, conclusion: "success", workflow: 2, jobs: [{ name: "lint", conclusion: "success" }] },
+      { id: 703, conclusion: "success", workflow: 4, jobs: [{ name: "retired-check", conclusion: "success" }] },
+      { id: 702, conclusion: "success", workflow: 1, jobs: [{ name: "build", conclusion: "success" }] },
+    ],
+    workflows: [{ id: 1, state: "active" }, { id: 2, state: "active" }, { id: 3, state: "active" }, { id: 4, state: "disabled_manually" }],
+  });
+  result = run(["--check", "--json"]);
+  assert.deepEqual(result.json.requiredChecks, ["build", "lint"], "every pull-request workflow counts; a push-only workflow and a disabled one do not");
+
+  // No successful pull-request run and no managed merge ruleset: the status-check rule is left out.
   start({ runs: [{ id: 611, conclusion: "failure", jobs: [{ name: "broken", conclusion: "failure" }] }] });
   result = run([]);
   assert.equal(result.status, 0);
   assert.deepEqual(writes()[2].body.rules.map((rule) => rule.type), ["pull_request"], "no successful run leaves the status-check rule out");
-  assert.match(result.stdout, /Required CI checks: none\. main has no successful CI run/);
+  assert.match(result.stdout, /Required CI checks: none\. No workflow has a successful pull-request run/);
+
+  // With a managed merge ruleset already requiring checks, finding no run keeps them: nothing drifts
+  // and nothing is written, whether the runs aged out or Actions was turned off (404).
+  start();
+  assert.equal(run([]).status, 0);
+  const guarded = gh.readState();
+  for (const overrides of [{ runs: [] }, { failure: "actions-off" }]) {
+    start({ ...guarded, ...overrides });
+    result = run(["--check", "--json"]);
+    assert.deepEqual([result.json.state, result.json.checksSource, result.json.requiredChecks], ["protected", "kept", ["check (macos-latest)", "check (ubuntu-latest)"]]);
+    result = run([]);
+    assert.equal(result.status, 0);
+    assert.match(result.stdout, /Required CI checks: check \(macos-latest\), check \(ubuntu-latest\) \(kept from roborepo-main-merge/);
+    assert.deepEqual(writes(), [], "protect never removes required checks it cannot read again");
+  }
   start({ failure: "actions-off" });
   result = run(["--check", "--json"]);
-  assert.deepEqual([result.json.state, result.json.requiredChecks], ["missing", []], "Actions turned off (404) reads as no successful run");
+  assert.deepEqual([result.json.state, result.json.requiredChecks, result.json.checksSource], ["missing", [], "none"], "Actions off with no managed ruleset has nothing to keep");
+
   // Any other runs error must not be read as "no run": protect would drop the required checks.
-  const withChecks = gh.readState();
-  start({ ...withChecks, failure: "runs-error" });
+  start({ ...guarded, failure: "runs-error" });
   result = run([]);
   assert.equal(result.status, 1);
   assert.equal(run(["--check", "--json"]).json.state, "unavailable");
   assert.deepEqual(writes(), [], "a failed runs read writes nothing");
-  console.log("✓ Required checks come from the newest successful default-branch run, and a failed runs read is unavailable.");
+  console.log("✓ Required checks combine each workflow's newest pull-request run, existing checks are kept when none is found, and a failed runs read is unavailable.");
 
   // Not an admin: every state is reported, nothing is written, and the account is named.
   start({ admin: false, login: "octo-reader" });

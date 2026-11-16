@@ -304,10 +304,19 @@ every rule in it:
 | `roborepo-main-integrity` | Default branch | Block deletion, block force pushes | No one | Deleting or rewriting the default branch, even by an admin |
 | `roborepo-main-merge` | Default branch | Require a pull request with 1 approval, including approval of the last push; require the CI checks to pass | Repo admins | Direct pushes, unapproved merges, and merges while a check is failing or pending |
 
-The required CI checks are the job names from the newest successful workflow run on the default
-branch, read each time the command runs. A repo whose default branch has no successful run gets
-the merge ruleset without required checks, and the report says so. After a CI job is renamed, the
-state reads `drifted` until an admin runs `roborepo protect` again.
+The required CI checks are the checks that report on pull requests: for each active workflow, the
+jobs that passed in its newest successful pull-request run, combined. They are read each time the
+command runs. A workflow that never runs on pull requests, such as a release or docs workflow, adds
+no check.
+
+When no workflow has a successful pull-request run (old runs expired, or Actions is turned off), an
+existing `roborepo-main-merge` keeps the checks it already requires, and the report says they were
+kept. A repo with no such ruleset gets the merge ruleset without required checks, and the report
+says so.
+
+After a CI job is renamed, the state reads `drifted` as soon as a pull request with the new name has
+a successful run, even before it merges. Running `roborepo protect` then requires the new name on
+every pull request, so wait until the rename has merged.
 
 The command writes only rulesets named `roborepo-*`. It never edits or deletes a ruleset you made by
 hand. Managed and hand-made rulesets stack, so adding the managed ones never loosens protection.

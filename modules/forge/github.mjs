@@ -90,14 +90,27 @@ export const githubClient = {
   createRuleset: (context, repo, body) => api(context, `${repoPath(repo)}/rulesets`, { method: "POST", body }),
   updateRuleset: (context, repo, id, body) => api(context, `${repoPath(repo)}/rulesets/${id}`, { method: "PUT", body }),
 
-  // Job names from the newest successful workflow run on the branch, or null when it has none.
-  // Asking GitHub for `status=success` passes over cancelled and failed runs.
-  async latestSuccessfulRunJobs(context, repo, branch) {
-    const runs = await api(context, `${repoPath(repo)}/actions/runs?branch=${encodeURIComponent(branch)}&status=success&per_page=1`);
-    const run = runs.workflow_runs?.[0];
-    if (!run) return null;
-    const jobs = await api(context, `${repoPath(repo)}/actions/runs/${run.id}/jobs?per_page=100`);
-    const names = (jobs.jobs || []).filter((job) => job.conclusion === "success").map((job) => job.name);
-    return { runId: run.id, jobs: [...new Set(names)].sort() };
+  // The checks that report on pull requests: the successful job names from the newest successful
+  // pull-request run of each active workflow, combined. A workflow that never runs on pull requests
+  // (release, docs) contributes nothing, so it never adds a check a pull request cannot satisfy.
+  // Null when no active workflow has a successful pull-request run. Asking GitHub for
+  // `status=success` passes over cancelled and failed runs.
+  async pullRequestCheckJobs(context, repo) {
+    const workflows = await api(context, `${repoPath(repo)}/actions/workflows?per_page=100`);
+    const active = new Set((workflows.workflows || []).filter((workflow) => workflow.state === "active").map((workflow) => workflow.id));
+    const runs = await api(context, `${repoPath(repo)}/actions/runs?event=pull_request&status=success&per_page=100`);
+    // Runs come newest first, so the first run seen for a workflow is its newest.
+    const newest = new Map();
+    for (const run of runs.workflow_runs || []) {
+      if (active.has(run.workflow_id) && !newest.has(run.workflow_id)) newest.set(run.workflow_id, run);
+    }
+    if (newest.size === 0) return null;
+    const names = new Set();
+    // One run at a time, so a failed read leaves no other `gh` request running.
+    for (const run of newest.values()) {
+      const jobs = await api(context, `${repoPath(repo)}/actions/runs/${run.id}/jobs?per_page=100`);
+      for (const job of jobs.jobs || []) if (job.conclusion === "success") names.add(job.name);
+    }
+    return { runIds: [...newest.values()].map((run) => run.id), jobs: [...names].sort() };
   },
 };

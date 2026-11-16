@@ -140,7 +140,7 @@ timeout, the disabled prompts, and the error mapping live in one place.
 | Module | Owns |
 | --- | --- |
 | `modules/forge/index.mjs` | `forgeClient(host)`: returns the client for a Git host, or `{ supported: false }` for a host with none |
-| `modules/forge/github.mjs` | The `gh` runner and the GitHub calls built on it: repository permissions, effective branch rules, rulesets, and the newest successful run's job names. Maps a failed call to an HTTP answer or to `unavailable` |
+| `modules/forge/github.mjs` | The `gh` runner and the GitHub calls built on it: repository permissions, effective branch rules, rulesets, and the job names from each active workflow's newest successful pull-request run. Maps a failed call to an HTTP answer or to `unavailable` |
 | `modules/forge/protection-policy.mjs` | The managed rulesets as data, and the comparisons between a ruleset and the policy |
 | `modules/forge/protection.mjs` | Reading a repo's state, deciding which hand-made rulesets are covered, and the apply-then-read-again flow |
 
