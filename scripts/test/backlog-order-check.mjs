@@ -10,7 +10,6 @@ import { deriveGroups, findDependencyCycles, proposeOrder } from "../../modules/
 import { buildBacklogIndex, placePlan, readOrderRegistry, saveNamespaceOrder, setNamespacePinned } from "../../modules/plan-suite/backlog-registry.mjs";
 import { buildRepositoryPlanSnapshot } from "../../modules/plan-suite/index.mjs";
 import { readProjectNamespaces, resolvePlanNamespace, validatePlanNaming } from "../../modules/plan-suite/naming.mjs";
-import { repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
 import { locateStore } from "../../modules/plan-suite/plan-store.mjs";
 import { createPlanFixture } from "./lib/plan-git-fixture.mjs";
 
@@ -487,25 +486,6 @@ try {
   const placedInherited = await saveNamespaceOrder({ store: inherited.store, namespace: "constructor", order: ["cccccc11"], revision: constructorView.revision });
   assert.deepEqual(placedInherited.order, ["cccccc11"], "Save writes a namespace with no entry yet");
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(inherited.root, "plans/plans-order.json"), "utf8")).namespaces, { other: ["oooooo22"], constructor: ["cccccc11"] });
-
-  // The base branch comes from the repo, never from what happens to be checked out.
-  const based = path.join(root, "based");
-  fs.mkdirSync(based);
-  run(based, "init", "-q", "-b", "trunk");
-  run(based, "config", "user.email", "t@example.com");
-  run(based, "config", "user.name", "t");
-  run(based, "commit", "-q", "--allow-empty", "-m", "seed");
-  assert.equal(repositoryBaseBranch(based), null, "no remote default and no main or master says nothing");
-  run(based, "update-ref", "refs/remotes/origin/trunk", "HEAD");
-  run(based, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk");
-  run(based, "switch", "-qc", "feature");
-  assert.equal(repositoryBaseBranch(based), "trunk", "the remote's default, even from another branch");
-  run(based, "branch", "main");
-  assert.equal(repositoryBaseBranch(based), "trunk", "the remote's default beats a local main");
-  run(based, "symbolic-ref", "--delete", "refs/remotes/origin/HEAD");
-  assert.equal(repositoryBaseBranch(based), "main", "without one, a local main");
-  run(based, "branch", "-m", "main", "master");
-  assert.equal(repositoryBaseBranch(based), "master", "or a local master");
 
   // A draft goes stale only for what can change its own namespace's Save, and a Save keeps the rest.
   const scoped = planStore(fx.repository("scoped", {

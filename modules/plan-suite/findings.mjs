@@ -21,14 +21,6 @@
 // are introduced to an agent as the ones to fix first. It does NOT decide whether a lifecycle move
 // is allowed; each destination's gate in transition.mjs does, from the findings themselves.
 
-// Why the primary copy stands in for a worktree-bound plan's worktree copy (resolvePlanAuthority reasons).
-const COPY_UNAVAILABLE_REASONS = {
-  "worktree-missing": "the worktree no longer exists",
-  "copy-missing": "the worktree has no readable copy of this plan",
-  "copy-not-active": "the worktree's copy is not in active/ or review/",
-  "copy-other-worktree": "the worktree's copy names a different worktree",
-};
-
 const DEFS = {
   // --- schema ---------------------------------------------------------------------------------
   MISSING_TITLE: {

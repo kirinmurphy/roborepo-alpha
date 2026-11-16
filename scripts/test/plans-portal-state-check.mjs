@@ -118,7 +118,6 @@ function record({ key = "k1", lifecycle = "backlog", id = "plan-1", repositoryId
       reviewedCommit: "",
       reviewState: "never-reviewed",
       modifiedAt: new Date().toISOString(),
-      gitStatus: null,
       taskCounts,
       headings: [],
       excerpt: "",
