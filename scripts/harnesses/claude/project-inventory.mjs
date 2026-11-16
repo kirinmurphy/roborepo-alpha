@@ -3,8 +3,10 @@
 // .claude/, nested), CLAUDE.local.md, .claude/rules/, .claude/skills/<name>/SKILL.md (root and
 // nested), .claude/settings*.json, .mcp.json, .claude/agents/, and .claude/commands/.
 //
-// Claude Code does not read AGENTS.md natively; a CLAUDE.md that imports it shows the import as
-// source text. So AGENTS.md is a Codex entry only.
+// Claude Code also reads AGENTS.md, but by default only where no CLAUDE.md, .claude/CLAUDE.md, or
+// CLAUDE.local.md sits in the working directory or above it, and its "Project instructions" setting
+// can change that. Whether it loads is not computed here, so AGENTS.md is listed for Claude as
+// potentially conditional, alongside its Codex entry.
 
 import {
   LOADING, segmentsOf, isRootLevel, matchSkillPath, describeMarkdown, parseJsonObject, safeName, countLabel,
@@ -53,6 +55,17 @@ export function classifyClaudeProjectPath(relPath, { symlink = false } = {}) {
       label: base === "CLAUDE.md" ? "Project instructions" : "Local instructions",
       loading: atRoot ? LOADING.rootLevel : LOADING.conditional,
       format: "text",
+    };
+  }
+  if (base === "AGENTS.md") {
+    if (parts.some((part) => part === ".claude" || part === ".codex" || part === ".agents")) return null;
+    return {
+      area: "instructions",
+      kind: "agents-md",
+      label: "AGENTS.md instructions",
+      loading: LOADING.conditional,
+      format: "text",
+      note: "Claude Code reads AGENTS.md by default only where no CLAUDE.md or CLAUDE.local.md is in the working directory or above it; its Project instructions setting can change that.",
     };
   }
   if (parts[0] !== ".claude" && !(parts.length === 1 && base === ".mcp.json")) return null;

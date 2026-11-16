@@ -221,6 +221,14 @@ function cleanSegments(relPath) {
   return parts;
 }
 
+// Whether the walk could have reached these segments: no skipped folder on the way and no deeper
+// than its depth limit. A preview names only what the inventory could list.
+function withinWalk(parts, limits) {
+  if (!parts) return false;
+  const folders = parts.slice(0, -1);
+  return folders.length <= limits.maxDepth && !folders.some((folder) => SKIPPED_DIRECTORIES.has(folder));
+}
+
 // Reads a regular file inside the checkout, rechecking at read time that every parent is a real
 // directory of this checkout (no symlink, no nested `.git`) and the file is not a symlink.
 // Returns { ok, buffer, size, complete } or { ok: false, diagnostic }.
@@ -456,7 +464,7 @@ export async function loadRepositoryAgentConfigSource({
   const checkout = selectPrimaryCheckout(registry, repositoryId);
   if (!checkout.ok) return { ok: false, status: 409, error: checkout.message, reason: checkout.reason };
   const provider = inventoryProviders(runtime).find((candidate) => candidate.id === harness && candidate.inventory);
-  if (!provider || !cleanSegments(rel)) return { ok: false, status: 404, error: "Not an inventory entry." };
+  if (!provider || !withinWalk(cleanSegments(rel), limits)) return { ok: false, status: 404, error: "Not an inventory entry." };
   const [found] = classifyWith([provider], rel, { symlink: false });
   if (!found) return { ok: false, status: 404, error: "Not an inventory entry." };
   const match = found.match;

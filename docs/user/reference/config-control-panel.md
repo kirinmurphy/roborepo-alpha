@@ -21,7 +21,9 @@ computer, including uncommitted and Git-ignored files that exist only there.
 - **Instructions.** `CLAUDE.md`, `CLAUDE.local.md`, `.claude/rules/`, `AGENTS.md`, and
   `AGENTS.override.md`, grouped by folder with the repo root first. A **Root-level** file is where
   the harness looks first; **Potentially conditional** means a subfolder file or a rule scoped to
-  paths, which may apply only to work there. The view does not compute which files a session loads.
+  paths, which may apply only to work there. `AGENTS.md` appears for Codex and again for Claude Code,
+  which reads it by default only where there is no `CLAUDE.md`. The view does not compute which
+  files a session loads.
 - **Skills.** `.claude/skills/<name>/SKILL.md` and `.agents/skills/<name>/SKILL.md`, at the root and
   in subfolders, with each skill's name, description, and estimated size. `.codex/skills/` is listed
   with an **Unknown** loading label, because RoboRepo links skills there but whether a given Codex

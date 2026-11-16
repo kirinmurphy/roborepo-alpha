@@ -45,14 +45,18 @@ export function isRootLevel(relPath) {
 
 // The `<prefix>/<base>/skills/<name>/SKILL.md` shape (or the `<name>` directory itself when it is a
 // symlink), with `base` like ".claude" or ".agents". Returns { name, nested } or null.
+// A symlink may be either the skill folder or its SKILL.md file.
 export function matchSkillPath(relPath, base, { symlink = false } = {}) {
   const parts = segmentsOf(relPath);
-  const tail = symlink ? 3 : 4;
-  if (parts.length < tail) return null;
-  const at = parts.length - tail;
-  if (parts[at] !== base || parts[at + 1] !== "skills") return null;
-  if (!symlink && parts[at + 3] !== "SKILL.md") return null;
-  return { name: parts[at + 2], nested: at > 0 };
+  const shapes = symlink && parts.at(-1) !== "SKILL.md" ? [3] : [4];
+  for (const tail of shapes) {
+    if (parts.length < tail) continue;
+    const at = parts.length - tail;
+    if (parts[at] !== base || parts[at + 1] !== "skills") continue;
+    if (tail === 4 && parts[at + 3] !== "SKILL.md") continue;
+    return { name: parts[at + 2], nested: at > 0 };
+  }
+  return null;
 }
 
 // YAML-ish frontmatter as skills and rules use it: `key: value` pairs and `>`/`|` blocks. Returns {}
@@ -106,8 +110,9 @@ export function parseJsonObject(text) {
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return { ok: true, value: parsed };
     return { ok: false, diagnostic: "Expected a JSON object." };
-  } catch (error) {
-    return { ok: false, diagnostic: `Could not parse JSON: ${String(error?.message || error).split("\n")[0].slice(0, 160)}` };
+  } catch {
+    // The engine's message quotes the source around the error, which can be a secret value.
+    return { ok: false, diagnostic: "Could not parse JSON." };
   }
 }
 

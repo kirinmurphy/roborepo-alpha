@@ -100,12 +100,15 @@ try {
     ".codex/hooks.json": JSON.stringify({ hooks: { Stop: [{ command: SECRETS[4] }] } }),
     ".codex/agents/helper.toml": 'name = "helper"\ndescription = "Helps"\n',
     ".gitignore": "CLAUDE.local.md\n",
-    ".gitattributes": "*.txt filter=evil\n",
+    // A discovered file under a repo-configured filter: hashing it cannot decide modification.
+    ".gitattributes": ".claude/rules/always.md filter=evil\n",
     "node_modules/pkg/CLAUDE.md": "# never listed\n",
   }, { remote: REMOTE });
   // Local-only and changed files.
   write(main, "CLAUDE.local.md", "# Local only\n");
-  write(main, ".claude/settings.local.json", "{ not json");
+  // Malformed JSON whose parse error would quote a secret.
+  write(main, ".claude/settings.local.json", `{"env":{"K": ${SECRETS[0]}}}`);
+  write(main, ".claude/rules/always.md", "# Always, edited locally\n");
   write(main, "packages/web/CLAUDE.md", "# Nested Claude, edited\n");
   write(main, ".claude/skills/draft/SKILL.md", "---\nname: draft\n---\n");
   write(main, ".claude/rules/huge.md", `# Huge\n${"x".repeat(INVENTORY_LIMITS.maxFileBytes + 10)}`);
@@ -114,6 +117,8 @@ try {
   fs.mkdirSync(path.join(tmp, "shared-skill"));
   fs.writeFileSync(path.join(tmp, "shared-skill", "SKILL.md"), "---\nname: shared\n---\n");
   fs.symlinkSync(path.join(tmp, "shared-skill"), path.join(main, ".claude/skills/shared"));
+  fs.mkdirSync(path.join(main, ".claude/skills/linked-file"));
+  fs.symlinkSync(path.join(tmp, "shared-skill", "SKILL.md"), path.join(main, ".claude/skills/linked-file/SKILL.md"));
   fs.symlinkSync(tmp, path.join(main, "linked-dir"));
   // A nested checkout is someone else's repo.
   makeRepo("main-checkout/vendored", { "CLAUDE.md": "# vendored\n" });
@@ -146,7 +151,9 @@ try {
   git(main, "config", "core.fsmonitor", run);
   write(main, ".git/hooks/post-index-change", `#!/bin/sh\ntouch ${marker}\n`);
   fs.chmodSync(path.join(main, ".git/hooks/post-index-change"), 0o755);
-  write(main, "notes.txt", "dirty\n");
+  // Files the preview must refuse even though their names match a native pattern.
+  write(main, ".git/CLAUDE.md", "# inside git\n");
+  write(main, "node_modules/pkg/CLAUDE.md", "# dependency\n");
   const before = snapshot(main);
 
   const registry = registryWith(MAIN_ID, [
@@ -173,13 +180,16 @@ try {
   assert.equal(byPath("CLAUDE.md").git.status, "tracked");
   assert.equal(byPath("CLAUDE.md").git.modified, false);
   assert.ok(byPath("CLAUDE.md").tokens > 0);
-  assert.equal(byPath("AGENTS.md").harness, "codex", "AGENTS.md is a Codex entry");
-  assert.equal(byPath("AGENTS.md", "claude"), undefined);
-  assert.equal(byPath("packages/api/AGENTS.md").loading, "potentially-conditional");
+  assert.equal(byPath("AGENTS.md", "codex").loading, "root-level", "AGENTS.md is a root-level Codex entry");
+  assert.equal(byPath("AGENTS.md", "claude").loading, "potentially-conditional", "and a conditional Claude entry");
+  assert.equal(byPath("packages/api/AGENTS.override.md", "claude"), undefined, "Claude has no override file");
+  assert.equal(byPath("packages/api/AGENTS.md", "codex").loading, "potentially-conditional");
   assert.equal(byPath("packages/api/AGENTS.override.md").override, true);
   assert.equal(byPath("packages/web/CLAUDE.md").git.modified, true, "a tracked local modification is labeled");
   assert.equal(byPath("CLAUDE.local.md").git.status, "ignored");
   assert.equal(byPath(".claude/rules/always.md").loading, "root-level");
+  assert.equal(byPath(".claude/rules/always.md").git.status, "tracked");
+  assert.equal(byPath(".claude/rules/always.md").git.modified, undefined, "a filtered file's modification is omitted, not guessed");
   assert.equal(byPath(".claude/rules/scoped.md").loading, "potentially-conditional");
   assert.match(byPath(".claude/rules/huge.md").diagnostic, /Larger than/);
   assert.equal(byPath(".claude/rules/huge.md").tokens, null);
@@ -197,6 +207,7 @@ try {
   assert.equal(byPath(".codex/skills/legacy-skill/SKILL.md").loading, "unknown");
   assert.equal(byPath(".claude/skills/draft/SKILL.md").git.status, "untracked");
   assert.equal(byPath(".claude/skills/shared").symlink, true);
+  assert.equal(byPath(".claude/skills/linked-file/SKILL.md").symlink, true, "a symlinked SKILL.md is a reference too");
   assert.equal(json.includes("name: shared"), false, "a symlink target is not read");
 
   // Other configuration: section labels only.
@@ -205,7 +216,7 @@ try {
   assert.ok(settings.sections.includes("Default permission mode: acceptEdits"));
   assert.ok(settings.sections.includes("Hooks: PreToolUse, 1 other event"));
   assert.ok(settings.sections.includes("Environment variables: 1"));
-  assert.match(byPath(".claude/settings.local.json").diagnostic, /Could not parse JSON/);
+  assert.match(byPath(".claude/settings.local.json").diagnostic, /^Could not parse JSON\.$/);
   assert.equal(byPath(".mcp.json").sections[0], "MCP servers: remote (http), local (stdio), 1 unnamed server");
   assert.equal(byPath(".claude/agents/reviewer.md").name, "reviewer");
   assert.equal(byPath(".claude/commands/ship.md").area, "config");
@@ -216,7 +227,7 @@ try {
   assert.ok(codexConfig.includes("Profiles: fast"));
   assert.deepEqual(byPath(".codex/hooks.json").sections, ["Hooks: Stop"]);
   assert.equal(byPath(".codex/agents/helper.toml").name, "helper");
-  for (const secret of SECRETS) assert.equal(json.includes(secret), false, `inventory never carries ${secret}`);
+  for (const secret of SECRETS) assert.equal(json.includes(secret.slice(0, 8)), false, `inventory never carries ${secret}`);
 
   // Previews: text bodies, summaries for config, and refusals.
   const preview = (id) => loadRepositoryAgentConfigSource({ registry, repositoryId: MAIN_ID, id, runtime });
@@ -227,13 +238,14 @@ try {
   const config = await preview("claude:.claude/settings.json");
   assert.equal(config.content, undefined, "structured config is never returned raw");
   assert.ok(config.sections.length > 0);
-  for (const id of ["codex:.codex/config.toml", "claude:.mcp.json"]) {
+  for (const id of ["codex:.codex/config.toml", "claude:.mcp.json", "claude:.claude/settings.local.json"]) {
     const summary = JSON.stringify(await preview(id));
-    for (const secret of SECRETS) assert.equal(summary.includes(secret), false, `${id} preview never carries ${secret}`);
+    for (const secret of SECRETS) assert.equal(summary.includes(secret.slice(0, 8)), false, `${id} preview never carries ${secret}`);
   }
   for (const id of [
     "claude:../outside.md", "claude:/etc/passwd", "claude:packages/api/CLAUDE.md", "claude:linked-dir/outside.md",
     "claude:vendored/CLAUDE.md", "claude:README.md", "gemini:GEMINI.md", "claude:", "nope",
+    "claude:node_modules/pkg/CLAUDE.md", "claude:.git/CLAUDE.md", "claude:.claude/skills/linked-file/SKILL.md",
   ]) {
     const refused = await preview(id);
     assert.equal(refused.ok, false, `${id} is refused`);
