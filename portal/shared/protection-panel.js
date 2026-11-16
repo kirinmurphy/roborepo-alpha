@@ -144,7 +144,7 @@ function requiredChecksText(report) {
   const names = report.requiredChecks.join(", ");
   if (report.checksSource === "kept") return `Required CI checks: ${names} (kept from roborepo-main-merge: no workflow has a successful pull-request run to read them from).`;
   if (report.requiredChecks.length > 0) return `Required CI checks: ${names}`;
-  return "No CI checks are required: no workflow has a successful pull-request run to read job names from.";
+  return "Required CI checks: none. No workflow has a successful pull-request run to read job names from, so merges are not held for CI.";
 }
 
 const mergeSkipped = (report) => report.policies.some((policy) => policy.status === "skipped");
