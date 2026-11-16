@@ -382,6 +382,8 @@ for (const [dir, branch] of [[onMain, "main"], [onFeature, "feature"]]) {
   gitOk(dir, "add", "a.txt");
   gitOk(dir, "commit", "-q", "-m", "init");
 }
+gitOk(onFeature, "branch", "main");
+fs.symlinkSync(onMain, path.join(scratch, "main-link"));
 const temps = { ROBOREPO_TEMP_ROOTS: scratch, TMPDIR: scratch };
 const deleteCases = [
   [onMain, "rm a.txt", "ask"],
@@ -461,7 +463,9 @@ const deleteCases = [
   [onMain, `(cd ${scratch} && rm x)`, "defer"],
   // cd into $TMPDIR is followed, so a temp delete after it does not ask.
   [onMain, 'cd "$TMPDIR" && rm -rf x', "defer"],
-  [onMain, "cd $TMPDIR/sub && rm x", "defer"],
+  // A cd to a folder that does not exist fails, so the delete runs where the shell already was.
+  [onMain, "cd $TMPDIR/sub && rm x", "ask"],
+  [onMain, `sh -c 'cd ${scratch}/missing; rm a.txt'`, "ask"],
   [onMain, "cd $SOMEWHERE && rm x", "ask"],
   // A substitution inside double quotes does not hide the commands after the string.
   [onMain, 'git commit -m "$(cat x)" && rm a.txt', "ask"],
@@ -494,6 +498,23 @@ const deleteCases = [
   [onMain, `cd ${scratch} 2>/dev/null && rm x`, "defer"],
   [scratch, `cd ${onMain} >/dev/null && rm a.txt`, "ask"],
   [onMain, `cd > out ${scratch} && rm x`, "defer"],
+  // `$TMPDIR/..` is judged where it lands, and a symlinked folder by what it points to.
+  [scratch, `rm "$TMPDIR/../${path.basename(onMain)}/a.txt"`, "ask"],
+  [scratch, `rm ${path.join(scratch, "main-link", "a.txt")}`, "ask"],
+  [scratch, `rm ${path.join(scratch, "main-link")}`, "defer"],
+  // Wrapper options: `command -p` takes no value, `sudo -u` does.
+  [onMain, "command -p rm a.txt", "ask"],
+  [onMain, "sudo -u root rm a.txt", "ask"],
+  // Operands written into find -exec rm and after xargs rm count, wherever the command runs.
+  [scratch, `find ${scratch} -maxdepth 0 -exec rm ${path.join(onMain, "a.txt")} {} \\;`, "ask"],
+  [onMain, `cd ${scratch} && printf x | xargs rm ${path.join(onMain, "a.txt")}`, "ask"],
+  [onMain, `cd ${scratch} && printf x | xargs rm`, "defer"],
+  // A branch switch earlier in the command decides what a later delete or merge lands on.
+  [onFeature, "git switch main && rm a.txt", "ask"],
+  [onFeature, "git checkout main && rm a.txt", "ask"],
+  [onFeature, "git checkout - && rm a.txt", "ask"],
+  [onFeature, "git checkout -- a.txt && rm a.txt", "defer"],
+  [onFeature, "git switch -c other && rm a.txt", "defer"],
 ];
 for (const [cwd, command, expected] of deleteCases) {
   assert.equal(decide(command, { cwd, env: temps }), expected, `${path.basename(cwd)}: ${command}`);
@@ -518,6 +539,18 @@ const reason = spawnSync(process.execPath, [hook], {
   encoding: "utf8", env: { ...gitEnv, ...temps },
 }).stdout;
 assert.match(JSON.parse(reason).hookSpecificOutput.permissionDecisionReason, /protected branch "main"/, "the ask names the branch");
+
+// Outside Claude's sandbox nothing limits a delete to the checkout, so any delete outside the temp
+// folders asks; a temp delete still does not.
+const unsandboxedDecision = (command, cwd) => {
+  const out = spawnSync(process.execPath, [hook], {
+    input: JSON.stringify({ cwd, tool_name: "Bash", tool_input: { command, dangerouslyDisableSandbox: true } }),
+    encoding: "utf8", env: { ...gitEnv, ...temps },
+  }).stdout;
+  return out ? JSON.parse(out).hookSpecificOutput.permissionDecision : "defer";
+};
+assert.equal(unsandboxedDecision(`rm ${path.join(onFeature, "a.txt")}`, onFeature), "ask", "an unsandboxed delete asks");
+assert.equal(unsandboxedDecision(`rm ${path.join(scratch, "x")}`, onFeature), "defer", "an unsandboxed temp delete does not");
 
 // Agents never merge into a protected branch: merge, pull, rebase, and cherry-pick are denied in a
 // checkout that has one checked out, wherever the command runs from. A fast-forward-only update

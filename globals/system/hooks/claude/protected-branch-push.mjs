@@ -277,16 +277,50 @@ const TEMP_ROOTS = [...new Set((process.env.ROBOREPO_TEMP_ROOTS
   ? process.env.ROBOREPO_TEMP_ROOTS.split(',')
   : ['/tmp', '/private/tmp', '/var/folders', '/private/var/folders', os.tmpdir(), process.env.TMPDIR])
   .map((root) => (root ?? '').trim().replace(/\/+$/, ''))
-  .filter(Boolean))]
+  .filter(Boolean)
+  .flatMap((root) => [root, realDirectory(root)]))]
 // Shell words that start a command without being its program.
 const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{', '}', 'time', 'exec', 'command', 'builtin', 'nohup', 'nice', 'sudo', 'env'])
-// Options of those wrappers that take the next word as their value.
-const WRAPPER_VALUE_OPTIONS = new Set(['-n', '-u', '-g', '-C', '-p', '-S', '-r', '-t'])
+// Options of each wrapper that take the next word as their value; `command -p` takes none.
+const WRAPPER_VALUE_OPTIONS = {
+  sudo: new Set(['-u', '-g', '-C', '-p', '-r', '-t', '-h', '-U', '-D']),
+  env: new Set(['-u', '-C', '-S', '--unset', '--chdir', '--split-string']),
+  nice: new Set(['-n', '--adjustment']),
+  exec: new Set(['-a']),
+  time: new Set(['-f', '-o', '--format', '--output']),
+}
 // xargs options that take the next word as their value.
 const XARGS_VALUE_OPTIONS = new Set(['-n', '-I', '-i', '-P', '-L', '-l', '-s', '-d', '-E', '-e', '-a', '--max-args', '--max-procs', '--max-lines', '--delimiter', '--arg-file', '--replace'])
 // How far below a deleted folder to look for a checkout on a protected branch.
 const CONTAINED_CHECKOUT_DEPTH = 2
 const checkoutCache = new Map()
+
+// `dir` with symlinks resolved, or `dir` itself when it cannot be read.
+function realDirectory(dir) {
+  try {
+    return fs.realpathSync(dir)
+  } catch {
+    return dir
+  }
+}
+
+// `target` with every existing folder above it resolved, so `/tmp/link/x` where the link points into
+// a checkout is judged as that checkout. The last part is kept: rm removes a symlink, not what it
+// points to.
+function realTarget(target) {
+  let dir = path.dirname(target)
+  const rest = [path.basename(target)]
+  while (!fs.existsSync(dir) && path.dirname(dir) !== dir) {
+    rest.unshift(path.basename(dir))
+    dir = path.dirname(dir)
+  }
+  return path.join(realDirectory(dir), ...rest)
+}
+
+// Branches a `git switch` or `git checkout` earlier in the same command moves a checkout to, by its
+// top folder. The hook runs before the command, so the checkout's own HEAD would be stale.
+const branchChanges = new Map()
+const UNKNOWN_BRANCH = '(a branch this hook cannot read)'
 
 function inTemp(target) {
   return TEMP_ROOTS.some((root) => target === root || target.startsWith(`${root}/`))
@@ -294,13 +328,42 @@ function inTemp(target) {
 
 // The checkout holding `dir` when it has a protected branch checked out, else null.
 function checkoutAt(dir) {
-  if (checkoutCache.has(dir)) return checkoutCache.get(dir)
+  if (checkoutCache.has(dir) && !branchChanges.size) return checkoutCache.get(dir)
   let found = null
   const top = git(dir, ['rev-parse', '--show-toplevel'])
-  const branch = top && currentBranch(dir)
-  if (branch && protectedBranches(dir, defaultRemote(dir, branch)).names.has(branch)) found = { top, branch }
-  checkoutCache.set(dir, found)
+  const branch = top && (branchChanges.get(top) ?? currentBranch(dir))
+  if (branch === UNKNOWN_BRANCH) found = { top, branch }
+  else if (branch && protectedBranches(dir, defaultRemote(dir, branch)).names.has(branch)) found = { top, branch }
+  if (!branchChanges.size) checkoutCache.set(dir, found)
   return found
+}
+
+// Records the branch `git switch` or `git checkout` moves the checkout at `dir` to. A file checkout
+// (`git checkout -- x`, or a name that is no branch) changes nothing; a name the hook cannot read
+// (`-`, a variable) counts as protected.
+function recordBranchChange(dir, subcommand, args) {
+  const top = git(dir, ['rev-parse', '--show-toplevel'])
+  if (!top || (subcommand === 'checkout' && args.includes('--'))) return
+  let target = null
+  for (let k = 0; k < args.length; k += 1) {
+    if (['-c', '-C', '-b', '-B', '--create', '--force-create', '--orphan'].includes(args[k])) {
+      target = args[k + 1] ?? null
+      break
+    }
+    if (args[k] === '-' || !args[k].startsWith('-')) {
+      target = args[k]
+      break
+    }
+  }
+  if (target === null) return
+  if (target === '-' || /[$`]/.test(target)) {
+    branchChanges.set(top, UNKNOWN_BRANCH)
+    return
+  }
+  const isBranch = subcommand === 'switch'
+    || git(dir, ['rev-parse', '--verify', '-q', `refs/heads/${target}`])
+    || git(dir, ['for-each-ref', '--count=1', '--format=%(refname)', `refs/remotes/*/${target}`])
+  if (isBranch) branchChanges.set(top, target)
 }
 
 // The protected checkout `target` lies in, or that lies within `target` when it is a folder (a
@@ -338,7 +401,8 @@ function containedCheckout(dir, depth) {
 // /repo/src, and a word that starts with an expansion (`"$f"`, `*.log`) is judged by the folder the
 // command runs in.
 function operandPath(cwd, word) {
-  if (/^\$\{?TMPDIR\}?(\/|$)/.test(word)) return process.env.TMPDIR || os.tmpdir()
+  const tmpdir = /^\$\{?TMPDIR\}?(\/|$)/.exec(word)
+  if (tmpdir) word = path.join(process.env.TMPDIR || os.tmpdir(), word.slice(tmpdir[0].length))
   const home = /^~(\/|$)/.test(word) ? os.homedir() + word.slice(1) : word
   const literal = home.split(/[$`*?[{]/)[0]
   if (literal === home) return path.resolve(cwd, home)
@@ -346,13 +410,20 @@ function operandPath(cwd, word) {
   return path.resolve(cwd, literal.endsWith('/') ? literal : path.dirname(literal))
 }
 
-// Asks when any target lies in, or holds, a checkout on a protected branch.
+// Asks when any target lies in, or holds, a checkout on a protected branch. A command Claude runs
+// outside its sandbox (`dangerouslyDisableSandbox`) has no write limit, so there any delete outside
+// the temp folders asks.
+let unsandboxed = false
+
 function classifyDelete(cwd, command, targets) {
   for (const word of targets.length ? targets : ['.']) {
-    const target = operandPath(cwd, word)
+    const target = realTarget(operandPath(cwd, word))
     if (inTemp(target)) continue
     const checkout = protectedCheckout(target)
     if (checkout) return askDelete(command, checkout)
+    if (unsandboxed) {
+      return { decision: 'ask', reason: `roborepo: \`${command}\` deletes ${target} outside Claude's shell sandbox, which would otherwise limit it to the checkout and temp folders. Confirm this delete.` }
+    }
   }
   return null
 }
@@ -366,11 +437,20 @@ function deleteTargets(args) {
 }
 
 // `find <paths> ... -delete` (or `-exec rm`): the starting paths, which precede the first expression.
+// The operands written into `-exec rm …` count as well: they are deleted wherever find runs.
 function findDeleteTargets(args) {
-  const deletes = args.includes('-delete') || args.some((arg, k) => ['-exec', '-execdir'].includes(arg) && DELETE_PROGRAMS.has(path.basename(args[k + 1] ?? '')))
+  const executed = []
+  let deletes = args.includes('-delete')
+  args.forEach((arg, k) => {
+    if (!['-exec', '-execdir'].includes(arg) || !DELETE_PROGRAMS.has(path.basename(args[k + 1] ?? ''))) return
+    deletes = true
+    for (let m = k + 2; m < args.length && ![';', '+'].includes(args[m]); m += 1) {
+      if (args[m] !== '{}' && !args[m].startsWith('-')) executed.push(args[m])
+    }
+  })
   if (!deletes) return null
   const first = args.findIndex((arg) => arg.startsWith('-') || arg === '(' || arg === '!')
-  return first === -1 ? args : args.slice(0, first)
+  return [...(first === -1 ? args : args.slice(0, first)), ...executed]
 }
 
 // The program xargs runs: the first word after its options and their values.
@@ -378,7 +458,7 @@ function xargsProgram(args) {
   for (let k = 0; k < args.length; k += 1) {
     const arg = args[k]
     if (XARGS_VALUE_OPTIONS.has(arg)) k += 1
-    else if (!arg.startsWith('-')) return arg
+    else if (!arg.startsWith('-')) return { program: arg, args: args.slice(k + 1) }
   }
   return null
 }
@@ -527,10 +607,15 @@ function changedDirectory(cwd, args) {
   if (dir.length === 0) return os.homedir()
   if (dir.length !== 1 || dir[0].startsWith('-') || /[`<>]/.test(dir[0])) return null
   const tmpdir = /^\$\{?TMPDIR\}?(\/|$)/.exec(dir[0])
-  if (tmpdir) return path.resolve(process.env.TMPDIR || os.tmpdir(), dir[0].slice(tmpdir[0].length))
+  if (tmpdir) {
+    const next = path.resolve(process.env.TMPDIR || os.tmpdir(), dir[0].slice(tmpdir[0].length))
+    return fs.existsSync(next) ? next : null
+  }
   if (dir[0].includes('$')) return null
   const target = /^~(\/|$)/.test(dir[0]) ? os.homedir() + dir[0].slice(1) : dir[0]
-  return path.resolve(cwd, target)
+  const next = path.resolve(cwd, target)
+  // A cd to a folder that does not exist yet fails, leaving the shell where it was.
+  return fs.existsSync(next) ? next : null
 }
 
 // Walks every simple command looking for deletes, following `cd`, `cd -`, `pushd`, and `popd`,
@@ -565,8 +650,9 @@ function classifyDeletes(text, startCwd) {
     for (;;) {
       while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
       if (!SHELL_KEYWORDS.has(words[i])) break
+      const valueOptions = WRAPPER_VALUE_OPTIONS[words[i]]
       i += 1
-      while (i < words.length && words[i].startsWith('-')) i += WRAPPER_VALUE_OPTIONS.has(words[i]) ? 2 : 1
+      while (i < words.length && words[i].startsWith('-')) i += valueOptions?.has(words[i]) ? 2 : 1
     }
     const program = words[i] && path.basename(words[i])
     const args = words.slice(i + 1)
@@ -598,9 +684,12 @@ function classifyDeletes(text, startCwd) {
       const targets = findDeleteTargets(args)
       if (targets) result = stricter(result, classifyDelete(cwd, 'find -delete', targets))
     } else if (program === 'xargs') {
-      // The paths arrive on stdin, so the directory xargs runs in stands in for them.
+      // Most paths arrive on stdin, so the directory xargs runs in stands in for them; any written
+      // after the program are checked too.
       const deleter = xargsProgram(args)
-      if (deleter && DELETE_PROGRAMS.has(path.basename(deleter))) result = stricter(result, classifyDelete(cwd, `xargs ${deleter}`, []))
+      if (deleter && DELETE_PROGRAMS.has(path.basename(deleter.program))) {
+        result = stricter(result, classifyDelete(cwd, `xargs ${deleter.program}`, ['.', ...deleteTargets(deleter.args)]))
+      }
     } else if (program === 'git') {
       let gitCwd = cwd
       let j = 0
@@ -610,6 +699,7 @@ function classifyDeletes(text, startCwd) {
           j += 2
         } else j += ['-c', '--git-dir', '--work-tree', '--namespace'].includes(args[j]) ? 2 : 1
       }
+      if (['switch', 'checkout'].includes(args[j])) recordBranchChange(gitCwd, args[j], args.slice(j + 1))
       const deletes = args[j] && gitDeletes(args[j], args.slice(j + 1))
       if (deletes) result = stricter(result, classifyDelete(gitCwd, deletes, []))
       const checkout = args[j] && ['merge', 'pull', 'rebase', 'cherry-pick'].includes(args[j]) && checkoutAt(gitCwd)
@@ -724,6 +814,7 @@ const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).
 if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick)\b/.test(command)) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
+unsandboxed = toolInput.dangerouslyDisableSandbox === true
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
 const result = stricter(classifyCommand(command, cwd), classifyDeletes(command, cwd))
 if (!result) process.exit(0)

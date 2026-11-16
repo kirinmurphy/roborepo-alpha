@@ -101,7 +101,18 @@ such as `env`, `command`, `nohup`, `time`, and `sudo`, and inside `sh -c`. It fo
 `pushd`, `popd`, `~`, `$TMPDIR`, and `git -C`, and a `cd` inside `( … )` or `$(…)` ends with it. A
 `cd` to any other variable or to a `$(…)` is not followed, so later deletes are judged by the folder before it,
 though a `cd -` or `popd` after it still returns where the shell does. It cannot see a delete
-hidden in a script, `mv` over a file, or a redirect that truncates one. Protected branches are the same list as for pushes. `ROBOREPO_TEMP_ROOTS`
+hidden in a script, `mv` over a file, or a redirect that truncates one.
+
+A few more rules keep a temp-looking path from reaching a protected checkout:
+
+- Folders are compared by their real path, so `/tmp/link/x` where `link` points into a main checkout
+  asks, and `$TMPDIR/../x` is judged where it lands.
+- A `cd` to a folder that does not exist yet fails in the shell, so it is not followed.
+- Operands written after `find … -exec rm` or `xargs rm` count, not only where the command runs.
+- A `git switch` or `git checkout` earlier in the command decides the branch a later delete or merge
+  lands on; one the hook cannot read (`-`, a variable) counts as protected.
+- When Claude runs a command outside its sandbox (`dangerouslyDisableSandbox`), nothing limits a
+  delete to the checkout, so any delete outside the temp folders asks. Protected branches are the same list as for pushes. `ROBOREPO_TEMP_ROOTS`
 (comma-separated) replaces the temp folder list.
 
 The hook runs on every shell call, sandboxed or not. That matters because the desktop app was seen
