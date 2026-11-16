@@ -59,6 +59,26 @@ export function matchSkillPath(relPath, base, { symlink = false } = {}) {
   return null;
 }
 
+// A symlinked native folder (`folders` maps its trailing path, like ".claude/skills", to a record)
+// is listed as a reference, so files behind it show as unread rather than as an empty scan.
+export function matchLinkedFolder(relPath, folders, { symlink = false } = {}) {
+  if (!symlink) return null;
+  const parts = segmentsOf(relPath);
+  for (const [suffix, record] of Object.entries(folders)) {
+    const tail = suffix.split("/");
+    if (parts.length >= tail.length && tail.every((part, index) => parts[parts.length - tail.length + index] === part)) {
+      return {
+        ...record,
+        kind: "linked-folder",
+        loading: LOADING.unknown,
+        format: "text",
+        note: "A symbolic link to a folder; the files behind it are not read.",
+      };
+    }
+  }
+  return null;
+}
+
 // YAML-ish frontmatter as skills and rules use it: `key: value` pairs and `>`/`|` blocks. Returns {}
 // when there is none. Values stay strings; nothing is evaluated.
 export function parseMarkdownFrontmatter(content) {
@@ -116,12 +136,16 @@ export function parseJsonObject(text) {
   }
 }
 
-// TOML structure without values: root key names and table headers, line by line. Enough to say
-// which sections a file declares; a header with unbalanced brackets is reported, not guessed at.
+// TOML structure without values, line by line: table headers, root key names, and `keys` — every
+// declared key as a full path (table prefix + dotted key), plus the top-level names of a one-line
+// inline table (`mcp_servers = { docs = {...} }` gives ["mcp_servers", "docs"]). Enough to say which
+// sections a file declares however it spells them; a header with unbalanced brackets is reported,
+// not guessed at. Values are never returned.
 export function scanTomlStructure(text) {
   const rootKeys = [];
   const tables = [];
-  let inTable = false;
+  const keys = [];
+  let current = null;
   let diagnostic = null;
   const lines = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
   lines.forEach((raw, index) => {
@@ -133,14 +157,57 @@ export function scanTomlStructure(text) {
         diagnostic ??= `Could not parse TOML table header on line ${index + 1}.`;
         return;
       }
-      tables.push(splitTomlKey(header[1]));
-      inTable = true;
+      current = splitTomlKey(header[1]);
+      tables.push(current);
       return;
     }
-    const key = /^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_.-]+)\s*=/.exec(line);
-    if (key && !inTable) rootKeys.push(splitTomlKey(key[1]));
+    const key = /^("(?:[^"\\]|\\.)*"|[A-Za-z0-9_.-]+)\s*=\s*(.*)$/.exec(line);
+    if (!key) return;
+    const keyPath = [...(current || []), ...splitTomlKey(key[1])];
+    if (!current) rootKeys.push(splitTomlKey(key[1]));
+    keys.push(keyPath);
+    for (const name of inlineTableKeys(key[2])) keys.push([...keyPath, name]);
   });
-  return { rootKeys, tables, diagnostic };
+  return { rootKeys, tables, keys, diagnostic };
+}
+
+// Top-level key names of a one-line inline table value, skipping nested tables, arrays, and strings.
+function inlineTableKeys(value) {
+  if (!value.startsWith("{")) return [];
+  const names = [];
+  let depth = 0;
+  let expectKey = false;
+  for (let i = 0; i < value.length; i += 1) {
+    const char = value[i];
+    if (char === "\"" || char === "'") {
+      const end = value.indexOf(char, i + 1);
+      if (end === -1) break;
+      if (depth === 1 && expectKey && /^\s*=/.test(value.slice(end + 1))) names.push(value.slice(i + 1, end));
+      expectKey = false;
+      i = end;
+      continue;
+    }
+    if (char === "{" || char === "[") {
+      depth += 1;
+      if (depth === 1) expectKey = true;
+      continue;
+    }
+    if (char === "}" || char === "]") {
+      depth -= 1;
+      continue;
+    }
+    if (depth === 1 && char === ",") {
+      expectKey = true;
+      continue;
+    }
+    if (depth === 1 && expectKey && /[A-Za-z0-9_-]/.test(char)) {
+      const bare = /^[A-Za-z0-9_-]+/.exec(value.slice(i))[0];
+      if (/^\s*[=.]/.test(value.slice(i + bare.length))) names.push(bare);
+      expectKey = false;
+      i += bare.length - 1;
+    }
+  }
+  return names;
 }
 
 function splitTomlKey(source) {

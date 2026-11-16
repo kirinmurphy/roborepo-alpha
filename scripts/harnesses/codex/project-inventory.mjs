@@ -7,7 +7,7 @@
 // installed Codex reads it is not verified here, so its loading is reported as unknown.
 
 import {
-  LOADING, segmentsOf, isRootLevel, matchSkillPath, describeMarkdown, parseJsonObject, scanTomlStructure,
+  LOADING, segmentsOf, isRootLevel, matchSkillPath, matchLinkedFolder, describeMarkdown, parseJsonObject, scanTomlStructure,
   safeName, hookSections, mcpServerSummary,
 } from "../project-inventory.mjs";
 
@@ -34,7 +34,16 @@ const TABLE_LABELS = {
   history: "History settings",
 };
 
+const LINKED_FOLDERS = {
+  ".agents/skills": { area: "skills", label: "Skills folder" },
+  ".codex/skills": { area: "skills", label: "Skills folder (legacy location)", legacy: true },
+  ".agents": { area: "skills", label: "Agents folder" },
+  ".codex": { area: "config", label: "Codex folder" },
+};
+
 export function classifyCodexProjectPath(relPath, { symlink = false } = {}) {
+  const folder = matchLinkedFolder(relPath, LINKED_FOLDERS, { symlink });
+  if (folder) return folder;
   const skill = matchSkillPath(relPath, ".agents", { symlink });
   if (skill) {
     return { area: "skills", kind: "skill", label: "Skill", loading: LOADING.onDemand, format: "text", name: skill.name };
@@ -99,21 +108,23 @@ export function describeCodexProjectFile(entry, text) {
 }
 
 function describeConfigToml(text) {
-  const { rootKeys, tables, diagnostic } = scanTomlStructure(text);
+  const { rootKeys, tables, keys, diagnostic } = scanTomlStructure(text);
+  // Every declared path, whether spelled as a [table], a dotted key, or an inline table.
+  const paths = [...tables, ...keys];
+  const namesUnder = (section) => unique(paths.filter((entry) => entry[0] === section && entry.length >= 2).map((entry) => entry[1]));
   const sections = [];
   const rootLabels = rootKeys
     .filter((key) => key.length === 1 && ROOT_KEY_LABELS[key[0]])
     .map((key) => ROOT_KEY_LABELS[key[0]]);
   if (rootLabels.length) sections.push(`Declares: ${[...new Set(rootLabels)].join(", ")}`);
 
-  const mcpNames = unique(tables.filter((table) => table[0] === "mcp_servers" && table.length >= 2).map((table) => table[1]));
+  const mcpNames = namesUnder("mcp_servers");
   if (mcpNames.length) sections.push(mcpServerSummary(mcpNames.map(safeName)));
 
-  const hookEvents = new Set(tables.filter((table) => table[0] === "hooks" && table.length >= 2).map((table) => table[1]));
-  if (tables.some((table) => table[0] === "hooks")) {
-    sections.push(...hookSections(Object.fromEntries([...hookEvents].map((event) => [event, true])), HOOK_EVENTS));
+  if (paths.some((entry) => entry[0] === "hooks")) {
+    sections.push(...hookSections(Object.fromEntries(namesUnder("hooks").map((event) => [event, true])), HOOK_EVENTS));
   }
-  const profiles = unique(tables.filter((table) => table[0] === "profiles" && table.length >= 2).map((table) => table[1]));
+  const profiles = namesUnder("profiles");
   if (profiles.length) sections.push(`Profiles: ${profiles.map((name) => safeName(name) ?? "(unnamed)").join(", ")}`);
 
   const labeled = unique(tables.map((table) => TABLE_LABELS[table[0]]).filter(Boolean));

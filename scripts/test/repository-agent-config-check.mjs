@@ -14,7 +14,8 @@ import {
   loadRepositoryAgentConfig, loadRepositoryAgentConfigSource, selectPrimaryCheckout, INVENTORY_LIMITS,
 } from "../cli/repository-agent-config.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
-import { defineHarnessProvider, validateCapabilityAdapters } from "../harnesses/contract.mjs";
+import { validateCapabilityAdapters } from "../harnesses/contract.mjs";
+import { describeCodexProjectFile } from "../harnesses/codex/project-inventory.mjs";
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "repository-agent-config-")));
 const marker = path.join(tmp, "process-ran");
@@ -312,10 +313,52 @@ try {
   assert.deepEqual(emptyInventory.entries, []);
   assert.deepEqual(emptyInventory.truncated, [], "an empty scan is not a truncated one");
 
+  // Symlinked native folders are references, not an empty scan, and count toward the file limit.
+  const sharedClaude = path.join(tmp, "shared-claude");
+  write(sharedClaude, "settings.json", "{}");
+  write(path.join(tmp, "shared-agent-skills"), "s/SKILL.md", "---\nname: s\n---\n");
+  const LINKED_REMOTE = "https://github.com/acme/linked-config.git";
+  const linkedConfig = makeRepo("linked-config", { "README.md": "# r\n" }, { remote: LINKED_REMOTE });
+  fs.symlinkSync(sharedClaude, path.join(linkedConfig, ".claude"));
+  fs.mkdirSync(path.join(linkedConfig, ".agents"));
+  fs.symlinkSync(path.join(tmp, "shared-agent-skills"), path.join(linkedConfig, ".agents", "skills"));
+  const linkedRegistry = registryWith(normalizeGitRemote(LINKED_REMOTE), [{ path: linkedConfig, kind: "primary" }]);
+  const linkedInventory = await loadRepositoryAgentConfig({ registry: linkedRegistry, repositoryId: normalizeGitRemote(LINKED_REMOTE), runtime });
+  const linkedEntries = Object.fromEntries(linkedInventory.entries.map((entry) => [`${entry.harness}:${entry.path}`, entry]));
+  assert.equal(linkedEntries["claude:.claude"].kind, "linked-folder");
+  assert.equal(linkedEntries["claude:.claude"].symlink, true);
+  assert.equal(linkedEntries["codex:.agents/skills"].area, "skills");
+  assert.equal(JSON.stringify(linkedInventory).includes("name: s"), false, "files behind a linked folder are not read");
+  const linkedCapped = await loadRepositoryAgentConfig({
+    registry: linkedRegistry, repositoryId: normalizeGitRemote(LINKED_REMOTE), runtime, limits: { ...INVENTORY_LIMITS, maxFiles: 1 },
+  });
+  assert.equal(linkedCapped.entries.length, 1);
+  assert.ok(linkedCapped.truncated.includes("files"), "symlink references count toward the file limit");
+
+  // A reftable repo's HEAD file is a placeholder; the branch comes from Git.
+  const REFTABLE_REMOTE = "https://github.com/acme/reftable.git";
+  const reftable = path.join(tmp, "reftable");
+  fs.mkdirSync(reftable);
+  git(reftable, "init", "-q", "--ref-format=reftable", "-b", "trunk");
+  git(reftable, "remote", "add", "origin", REFTABLE_REMOTE);
+  git(reftable, "commit", "-q", "--allow-empty", "-m", "init");
+  assert.equal(fs.readFileSync(path.join(reftable, ".git", "HEAD"), "utf8").trim(), "ref: refs/heads/.invalid");
+  const reftableHead = selectPrimaryCheckout(registryWith(normalizeGitRemote(REFTABLE_REMOTE), [{ path: reftable, kind: "primary" }]), normalizeGitRemote(REFTABLE_REMOTE));
+  assert.deepEqual(reftableHead.head, { kind: "branch", name: "trunk" });
+
+  // Codex config spelled with inline tables and dotted keys summarizes the same way, without values.
+  const inline = (text) => describeCodexProjectFile({ kind: "config" }, text).sections;
+  assert.deepEqual(inline('[hooks]\nPreToolUse = [{ command = "x" }]\n'), ["Hooks: PreToolUse"]);
+  assert.deepEqual(inline('mcp_servers.inline.command = "x"\n'), ["MCP servers: inline"]);
+  assert.deepEqual(inline(`mcp_servers = { other = { url = "${SECRETS[1]}" }, "quoted-name" = { command = "x" } }\n`), ["MCP servers: other, quoted-name"]);
+  assert.deepEqual(inline('[mcp_servers]\ndocs = { url = "x" }\n'), ["MCP servers: docs"]);
+
   // ------------------------------------------------------------------ provider contract
   assert.throws(() => validateCapabilityAdapters([], { projectInventory: { classify() {} } }), /projectInventory\.describe/);
-  validateCapabilityAdapters([], {});
-  assert.equal(typeof defineHarnessProvider, "function");
+  validateCapabilityAdapters([], { projectInventory: { classify() {}, describe() {} } });
+  for (const provider of listHarnessProviders()) {
+    validateCapabilityAdapters(provider.manifest.capabilities, provider.adapters);
+  }
 
   console.log("repository agent config checks passed");
 } finally {

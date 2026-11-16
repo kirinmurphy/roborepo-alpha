@@ -18,7 +18,7 @@ import {
   canonicalRepositoryId, resolveProjectIdentity, resolveGitDir, mainCheckoutPath, realpathOf,
 } from "../../modules/repositories/identity.mjs";
 import { resolveRegistryAlias } from "../../modules/repositories/schema.mjs";
-import { defaultRunGit } from "../../modules/repositories/git-exec.mjs";
+import { defaultRunGit, defaultRunGitSync } from "../../modules/repositories/git-exec.mjs";
 import { createHarnessRuntime } from "../harnesses/harness-runtime.mjs";
 import { estimateTokens, classifyStartupLevel, classifyOnDemandLevel } from "./context-cost.mjs";
 
@@ -113,8 +113,9 @@ function checkoutFamily(checkoutPath, { fsApi }) {
   return main ? realpathOf(main, fsApi) : null;
 }
 
-// Branch or detached HEAD from the checkout's own HEAD file. No subprocess.
-export function readHead(checkoutPath, { fsApi = fs } = {}) {
+// Branch or detached HEAD from the checkout's own HEAD file. A reftable repo keeps a placeholder
+// there (`ref: refs/heads/.invalid`), so HEAD is asked of Git's read-only allowlist instead.
+export function readHead(checkoutPath, { fsApi = fs, runGitSync = defaultRunGitSync } = {}) {
   const resolved = resolveGitDir(checkoutPath, { fsApi });
   if (!resolved) return { kind: "unknown" };
   let raw = "";
@@ -123,10 +124,19 @@ export function readHead(checkoutPath, { fsApi = fs } = {}) {
   } catch {
     return { kind: "unknown" };
   }
+  if (raw === "ref: refs/heads/.invalid") return readHeadFromGit(checkoutPath, runGitSync);
   const ref = /^ref:\s*refs\/heads\/(.+)$/.exec(raw);
   if (ref) return { kind: "branch", name: ref[1] };
   if (/^[0-9a-f]{40}([0-9a-f]{24})?$/.test(raw)) return { kind: "detached", sha: raw.slice(0, 12) };
   return { kind: "unknown" };
+}
+
+function readHeadFromGit(checkoutPath, runGitSync) {
+  const branch = runGitSync(checkoutPath, ["symbolic-ref", "--short", "-q", "HEAD"]);
+  if (branch.ok && branch.stdout.trim()) return { kind: "branch", name: branch.stdout.trim() };
+  const commit = runGitSync(checkoutPath, ["rev-parse", "--verify", "-q", "HEAD"]);
+  const sha = commit.ok ? commit.stdout.trim() : "";
+  return /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(sha) ? { kind: "detached", sha: sha.slice(0, 12) } : { kind: "unknown" };
 }
 
 // --------------------------------------------------------------------------- providers
@@ -181,9 +191,14 @@ function walkCheckout(root, providers, limits) {
         return { candidates, truncated: [...truncated] };
       }
       const childRel = rel ? `${rel}/${dirent.name}` : dirent.name;
-      if (dirent.isSymbolicLink()) {
-        for (const found of classifyWith(providers, childRel, { symlink: true })) {
-          candidates.push({ rel: childRel, symlink: true, ...found });
+      if (dirent.isSymbolicLink() || dirent.isFile()) {
+        const symlink = dirent.isSymbolicLink();
+        for (const found of classifyWith(providers, childRel, { symlink })) {
+          if (candidates.length >= limits.maxFiles) {
+            truncated.add("files");
+            return { candidates, truncated: [...truncated] };
+          }
+          candidates.push({ rel: childRel, symlink, ...found });
         }
         continue;
       }
@@ -195,15 +210,6 @@ function walkCheckout(root, providers, limits) {
         }
         if (fs.existsSync(path.join(root, childRel, ".git"))) continue;
         queue.push({ rel: childRel, depth: depth + 1 });
-        continue;
-      }
-      if (!dirent.isFile()) continue;
-      for (const found of classifyWith(providers, childRel, { symlink: false })) {
-        if (candidates.length >= limits.maxFiles) {
-          truncated.add("files");
-          return { candidates, truncated: [...truncated] };
-        }
-        candidates.push({ rel: childRel, symlink: false, ...found });
       }
     }
   }
@@ -419,7 +425,6 @@ export async function loadRepositoryAgentConfig({
       size: null,
     };
     if (symlink) return entry;
-    // A skill's own file is its SKILL.md; the folder is the skill.
     const read = readOnce(rel);
     if (!read.ok) return { ...entry, diagnostic: read.diagnostic };
     entry.size = read.size;

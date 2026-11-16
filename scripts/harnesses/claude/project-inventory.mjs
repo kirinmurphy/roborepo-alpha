@@ -9,7 +9,7 @@
 // potentially conditional, alongside its Codex entry.
 
 import {
-  LOADING, segmentsOf, isRootLevel, matchSkillPath, describeMarkdown, parseJsonObject, safeName, countLabel,
+  LOADING, segmentsOf, isRootLevel, matchSkillPath, matchLinkedFolder, describeMarkdown, parseJsonObject, safeName, countLabel,
   hookSections, mcpServerSummary, namedList,
 } from "../project-inventory.mjs";
 
@@ -39,7 +39,14 @@ const HANDLED_SETTINGS = new Set([
   "disabledMcpjsonServers", "$schema", ...Object.keys(SETTING_LABELS),
 ]);
 
+const LINKED_FOLDERS = {
+  ".claude/skills": { area: "skills", label: "Skills folder" },
+  ".claude": { area: "config", label: "Claude Code folder" },
+};
+
 export function classifyClaudeProjectPath(relPath, { symlink = false } = {}) {
+  const folder = matchLinkedFolder(relPath, LINKED_FOLDERS, { symlink });
+  if (folder) return folder;
   const skill = matchSkillPath(relPath, ".claude", { symlink });
   if (skill) {
     return { area: "skills", kind: "skill", label: "Skill", loading: LOADING.onDemand, format: "text", name: skill.name };
