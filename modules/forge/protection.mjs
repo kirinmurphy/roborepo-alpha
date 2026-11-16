@@ -69,22 +69,31 @@ function resolveTarget({ repositoryId, cwd = process.cwd(), timeoutMs } = {}) {
 }
 
 async function readSnapshot({ client, context, repo }) {
-  const [repository, login] = await Promise.all([client.repository(context, repo), client.login(context)]);
+  const [repository, login] = await settleAll([client.repository(context, repo), client.login(context)]);
   const defaultBranch = repository.default_branch;
-  const [plansRules, mainRules, listed, run] = await Promise.all([
+  const [plansRules, mainRules, listed, run] = await settleAll([
     client.branchRules(context, repo, PLANS_BRANCH),
     client.branchRules(context, repo, defaultBranch),
     client.rulesets(context, repo),
     latestRunJobs(client, context, repo, defaultBranch),
   ]);
   // Only repository rulesets are read in full; one set by an organization is reported by name.
-  const rulesets = await Promise.all(listed.map((entry) => (
+  const rulesets = await settleAll(listed.map((entry) => (
     entry.source_type === "Repository" ? client.ruleset(context, repo, entry.id) : entry
   )));
   return {
     repo, defaultBranch, login, admin: repository.permissions?.admin === true,
     plansRules, mainRules, rulesets, requiredChecks: run?.jobs ?? [],
   };
+}
+
+// Like Promise.all, but waits for every request before rejecting with the first failure. A read
+// that gave up early would leave its sibling `gh` processes running after the report is returned.
+async function settleAll(promises) {
+  const results = await Promise.allSettled(promises);
+  const failed = results.find((result) => result.status === "rejected");
+  if (failed) throw failed.reason;
+  return results.map((result) => result.value);
 }
 
 // A repository with Actions off answers the runs endpoint with an HTTP error; that is the same
