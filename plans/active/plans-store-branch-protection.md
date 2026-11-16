@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Decide whether a quiet workflow's required checks are kept (open question; recommended: keep current behavior), then rerun /plan-execute to submit for review
+next_action: Run /plan-review; before /plan-close the owner runs the live GitHub checks under Not tested, starting with roborepo protect --check in this repo
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -484,28 +484,17 @@ Manual, on a scratch GitHub repo where the user is admin:
   they were kept (`checksSource: "kept"`). Alternatives were refusing the update, which would block
   other repairs, and removing the checks, which would let a quiet repo lose its CI gate.
 
+- 2026-11-16, user: when one workflow has no recent successful pull-request run while others do,
+  its checks are not kept; `roborepo protect` reads the state as `drifted` and would drop them.
+  Existing checks are kept only when no workflow has a run. The report names each check that would
+  be dropped, and `protect` lists its changes before writing. The alternative, keeping every
+  existing check whenever any workflow is quiet, would stop a renamed job in another workflow from
+  ever being updated, because GitHub does not record which workflow a check came from.
+
 ## Open questions
 
-The two questions raised during the first validation loop were answered by the user on
-2026-11-16; see the Decision Log.
-
-### Should a quiet workflow's checks be kept too?
-
-Raised by the validator after the answers were applied. Existing checks are kept only when no
-workflow at all has a successful pull-request run, as the decision says. If `roborepo-main-merge`
-requires checks from workflows A and B and only B has no recent successful pull-request run, the
-state reads `drifted` with only A's checks, and `roborepo protect` removes B's checks. GitHub does
-not record which workflow a required check came from, so a partial keep cannot be traced.
-
-| Option | For | Against |
-| --- | --- | --- |
-| A. Keep current behavior | Matches the decision's wording; the report names each check that would be dropped ("no longer a CI job"), and `protect` lists its changes before writing | A quiet workflow's checks drop on the next `protect` |
-| B. Keep all existing checks whenever any active workflow has no run | A quiet workflow never loses its checks | All-or-nothing: while B stays quiet, a job renamed in A is never updated, so the old name keeps blocking pull requests |
-
-Recommendation: A. Blocked rather than decided because each option weakens a different guarantee
-the user cares about.
-
-Blocks: submitting the plan for review.
+None. The three questions raised during validation were answered by the user on 2026-11-16; see
+the Decision Log.
 
 ## Review
 
@@ -554,8 +543,8 @@ Blocks: submitting the plan for review.
 - [x] The panel's no-checks text differed from the CLI's, contrary to both comments — fixed
       (174d925c)
 - [x] Two Not tested entries named the endpoints and fields the code no longer uses — fixed
-- [ ] A quiet workflow's required checks are removed while other workflows still report — escalated,
-      see Open questions
+- [x] A quiet workflow's required checks are removed while other workflows still report — escalated;
+      user chose to keep this behavior, no change
 
 ### Verification
 
