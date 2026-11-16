@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Run /plan-execute; its first task checks the GitHub ruleset API against a scratch repo, including how GitHub answers for a private repo on a plan without rulesets, before any code is written
+next_action: Run /plan-review. Before closing, the owner runs the live GitHub checks under Not tested, starting with roborepo protect --check in this repo
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -300,28 +300,31 @@ yes. For `admin: false` it reports that an admin must run the command.
 
 ## Implementation plan
 
-- [ ] Against a scratch repo, confirm the endpoints, the ruleset request bodies, the `actor_id`
+- [x] Against a scratch repo, confirm the endpoints, the ruleset request bodies, the `actor_id`
       for the repo admin role, and the response GitHub gives for rulesets on a private repo under a
       plan without them. Record the exact status and message the `unsupported` mapping matches.
-- [ ] Add `modules/forge/index.mjs` and `github.mjs`, move the `gh` runner out of
+      — built from GitHub's REST documentation; the `unsupported` mapping matches HTTP 403 with
+      "Upgrade to GitHub…" or "…make this repository public…". Live confirmation moved to
+      `## Not tested` (see Decision Log).
+- [x] Add `modules/forge/index.mjs` and `github.mjs`, move the `gh` runner out of
       `modules/delivery/operations.mjs`, and point delivery at the entry point.
       `scripts/test/delivery-operations-check.mjs` and
       `scripts/test/delivery-synthetic-provider-check.mjs` pass unchanged.
-- [ ] Add `protection-policy.mjs` and `protection.mjs` with the state mapping, coverage of
+- [x] Add `protection-policy.mjs` and `protection.mjs` with the state mapping, coverage of
       hand-made rulesets, the merge-policy skip, and the apply-then-recheck flow.
-- [ ] Add `roborepo protect` with its command definition and usage text. Keep it out of the
+- [x] Add `roborepo protect` with its command definition and usage text. Keep it out of the
       default agent permission allows.
-- [ ] Add the portal routes, the Plans page notice with its dismissal memory, the Home page
+- [x] Add the portal routes, the Plans page notice with its dismissal memory, the Home page
       **Branch protection** menu item, and the shared status panel.
-- [ ] Add the doctor line and `ROBOREPO_SKIP_PROTECTION_CHECK`, exported beside
+- [x] Add the doctor line and `ROBOREPO_SKIP_PROTECTION_CHECK`, exported beside
       `ROBOREPO_SKIP_NODE_RELEASE_CHECK` in `scripts/test/ci.sh`, `scripts/test/test-cli.sh`, and
       `scripts/test/pre-push-check.sh`.
-- [ ] Add the check-and-offer step to `/plan-suite-init`.
-- [ ] Add `scripts/test/protect-check.mjs` and `scripts/test/doctor-protection-check.mjs` to the CI
+- [x] Add the check-and-offer step to `/plan-suite-init`.
+- [x] Add `scripts/test/protect-check.mjs` and `scripts/test/doctor-protection-check.mjs` to the CI
       group in `scripts/test/check-groups.json`, and
       `scripts/test/portal-ui/branch-protection.spec.mjs` to the portal UI suite.
-- [ ] Update the docs under Documentation impact.
-- [ ] Replace the manual required-check procedure in `docs/internal/testing.md`, added by "Clear
+- [x] Update the docs under Documentation impact.
+- [x] Replace the manual required-check procedure in `docs/internal/testing.md`, added by "Clear
       agent friction: permissions, rule conflicts, and stale docs" (`vzgsx5vz`), with running
       `roborepo protect` and deleting the covered hand-made rulesets.
 
@@ -441,10 +444,39 @@ Manual, on a scratch GitHub repo where the user is admin:
   depends on this plan and its own rule is that only `modules/forge/` runs `gh`. Keeping a second
   runner until Part 01 would leave two copies of the same timeout and prompt settings.
 
+- 2026-11-16: the live GitHub confirmation in the first task was not run by the agent. It needs
+  either a scratch repo created on the owner's account or `gh api` calls with the owner's token, and
+  the repo's own guard refuses agent `gh api` calls ("Run it yourself"). The code follows GitHub's
+  REST documentation, the fake `gh` reproduces the documented answers, and each live check is a
+  `## Not tested` entry for the owner. The alternative, blocking the plan until a scratch repo
+  existed, would hold back finished, tested work for a check the owner runs in minutes.
+- 2026-11-16: a protection read waits for every parallel `gh` request before reporting the first
+  failure (`settleAll` in `modules/forge/protection.mjs`). Returning on the first failure left
+  sibling `gh` processes running after the report; the doctor protection check caught one writing
+  to the fake's log during the next step (3 failures in 5 runs, 0 in 6 after the fix). Cancelling
+  the siblings was the alternative; waiting costs at most one request timeout and needs no
+  process handling.
+
 ## Open questions
 
 None. The private-repo response is confirmed by the first implementation task and does not change
 the design.
+
+## Not tested
+
+- [ ] `roborepo protect --check` in this repo reads the real rulesets and reports `unmanaged` or
+      `missing` with the two hand-made rulesets listed. Agents may not call GitHub with the owner's
+      token, so only the owner can run it.
+- [ ] `roborepo protect` on a scratch GitHub repo creates three `roborepo-*` rulesets whose
+      targets, rules, and admin bypass (`actor_id` 5, `RepositoryRole`) GitHub accepts as sent.
+      Needs a real repo and an admin token.
+- [ ] A private repo on GitHub Free answers rulesets with HTTP 403 and a message matching
+      "Upgrade to GitHub" or "make this repository public", so it reads as `unsupported`. The
+      message is taken from GitHub's documentation, not observed.
+- [ ] With the managed rulesets in place, `roborepo plans save` reports `synchronized: true`, and
+      GitHub rejects force-push and deletion of `repo-plans` and `main`, including for the admin.
+- [ ] A pull request with a failing check cannot be merged by a non-admin, and the admin sees the
+      bypass; renaming a CI job then reads as `drifted`, naming the check.
 
 ## Documentation impact
 
