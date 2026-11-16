@@ -435,12 +435,20 @@ None.
       — fixed (0a565aa7)
 - [x] The plan's `next_action` still tells a reader to start building — fixed in the plan record
 - [x] `### Verification` does not record the checks rerun after the pass 1 fixes — recorded below
+- [ ] An open entry ending in a bare `Needs a person:` or `Blocked:` with no reason passes the
+      check, and so does the marker inside another word (`unblocked:`)
+- [ ] `plan-execute/SKILL.md` and `feature-verification/SKILL.md` state as fact a Claude sandbox
+      exclusion for `roborepo` that this branch does not ship
+- [ ] The plan's `## Not tested` entry gives no steps the user can follow before approval, and
+      leans on "behavior evals do not exist yet", which the new schema lists as a non-reason
 
 ### Verification
 
 - Validation pass 1 at 6eec1dc4 (fresh-context subagent): four `fix` findings, no `escalate`, no
   `base`
 - Validation pass 2 at 38596676 (fresh-context subagent): five `fix` findings, no `escalate`, no
+  `base`
+- Validation pass 3 at 0a565aa7 (fresh-context subagent): three `fix` findings, no `escalate`, no
   `base`
 - New test cases shown to fail before the change: the new `plan-lifecycle-transitions-check.mjs`
   run against an untouched copy of `main` at 26dad21f failed on the freshness case ("a check
@@ -462,7 +470,8 @@ None.
   "doctor passed (98 checks)"
 - The suites that build Git fixtures ran outside the shell sandbox, which refuses creating
   `.git/worktrees` in a temporary repository
-- Behavior shown through the real CLI in a fixture repository at 38596676: with the entry
+- Behavior shown through the real CLI in a fixture repository, on the code committed as 6eec1dc4:
+  with the entry
   `- [ ] The portal lists plans in a browser.`, `roborepo plans preflight` exited 1 naming the
   entry and what it must end with, and `roborepo plans submit` refused; after adding
   `Needs a person: judging the layout is a human call.`, submit moved the plan to review
