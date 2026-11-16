@@ -588,6 +588,12 @@ Acceptance criteria:
 - [x] No test chained a verified push with a main delete — fixed (73e9683e)
 - [x] A verification line still said the final gate waited on the `delete-files` answer — fixed in
       the plan record
+- [x] A substitution inside double quotes (`git commit -m "$(cat x)" && rm a.txt`) hid every later
+      delete — fixed (20c594e9)
+- [x] `cd - >/dev/null` was not followed — fixed (20c594e9)
+- [x] A `popd` inside a subshell crashed the hook on a later `popd` — fixed (20c594e9)
+- [x] A `cd` or `pushd` to an unknown folder left `cd -` and `popd` landing in the wrong place —
+      fixed (20c594e9)
 
 ### Verification
 
@@ -640,6 +646,7 @@ Acceptance criteria:
   fixed in e085f4ed and the plan record; `bash scripts/doctor.sh --quiet` passed (97 checks) after it
 - Validation pass 15 at e085f4ed (fresh-context subagent, about 110 probe commands): 4 `fix`
   findings, fixed in 73e9683e and the plan record
+- Validation pass 16 at 73e9683e (fresh-context subagent): 4 `fix` findings, fixed in 20c594e9
 - Full local gate (`npm run check`, run unsandboxed) at 4f4a15b4: 78 of 79 suites passed.
   `codex-command-permission-check.mjs` failed because it used `rm` as its ask-bucket example and
   `delete-files` now allows it; fixed in afd22abd (uses `git pull`) and the suite passes there
