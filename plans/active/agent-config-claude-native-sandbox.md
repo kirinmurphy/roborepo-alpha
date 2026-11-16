@@ -666,6 +666,10 @@ Acceptance criteria:
 - [x] `--track origin/main` and `@{-N}` were under-asked, and a later `--no-ff` did not cancel
       `--ff-only` — escalated by the Validator, decided in the Decision Log (2026-11-16) and fixed
       (88ecb126)
+- [x] Chained `cd`s or a `pushd` to missing folders, and `pushd`/`popd` after one, dropped the
+      folder the shell may still be in — fixed (37ce7430): every possible folder is kept
+- [x] `--upload-pack` became a value option, so an ff-only pull could fetch from another repository
+      — fixed (37ce7430): it, and `git -c`, rule out the fast-forward exception
 
 ### Verification
 
@@ -739,6 +743,9 @@ Acceptance criteria:
 - Validation pass 20 at ede8eaa4 (fresh-context subagent, about 3,500 probe commands): 4 `fix`,
   2 `escalate`, and 3 `base` findings; fixes and both escalations in 88ecb126. The `base` items
   (`env -C`, Codex escalations, `--no-verify` commits) predate this branch's changes
+- Validation pass 21 at 88ecb126 (fresh-context subagent): 2 `fix` findings and 4 `base` items,
+  fixed in 37ce7430 along with the attached `-cmain`/`--create=main` forms from the `base` list; the
+  remaining `base` items (a glob inside a folder name, deleting `/`) predate this branch
 - Full local gate at 8ea28b21: one `test-cli.sh` MCP case failed (`claude mcp add` found no validated
   Claude executable). It ran while a Validator ran thousands of probe commands, and its fake
   `claude` must answer `--version` within 2 seconds; the hook change does not reach it, and the
