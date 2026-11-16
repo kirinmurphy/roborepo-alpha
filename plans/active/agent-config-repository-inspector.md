@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: []
 related: ["permva27"]
 reviewed_commit: 26dad21f5948daee39c16d66299941b57d36d411
-worktree:
+worktree: agent-config-repository-inspector
 ---
 
 # Inspect Repository Agent Configuration in the Portal
