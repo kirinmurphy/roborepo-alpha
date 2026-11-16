@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Run /plan-review. Before closing, the owner runs the live GitHub checks under Not tested, starting with roborepo protect --check in this repo
+next_action: Answer the open question on which workflows supply the required CI checks (recommended: combine each workflow's newest successful pull-request run), then rerun /plan-execute to apply it and submit
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -457,10 +457,64 @@ Manual, on a scratch GitHub repo where the user is admin:
   the siblings was the alternative; waiting costs at most one request timeout and needs no
   process handling.
 
+- 2026-11-16, validator pass 1: a managed ruleset that was disabled or lost a rule reads as
+  `missing`, not only `drifted`, as the state table already says (`missing` is "a policy rule is
+  absent from its branch's effective rules" and wins over `drifted`). The earlier implementation
+  reported `drifted`, which shows the notice only to admins. A rule that still applies with
+  different parameters, such as a renamed CI check, stays `drifted`.
+- 2026-11-16, validator pass 1: only a 404 from the Actions runs endpoint means "no successful
+  run". Any other HTTP error makes the read `unavailable`. Reading a rate limit or server error as
+  "no run" made the policy drop `required_status_checks`, and a `protect` run would then have
+  loosened `roborepo-main-merge`.
+
 ## Open questions
 
-None. The private-repo response is confirmed by the first implementation task and does not change
-the design.
+### Which workflows supply the required CI checks?
+
+Raised by the validator, pass 1. The required checks are the jobs of the newest successful run on
+the default branch, from any workflow (`latestSuccessfulRunJobs` in `modules/forge/github.mjs`).
+The design says "the latest successful CI run". In a repo with more than one workflow on the
+default branch, such as release or docs, the newest run can come from a workflow that never runs on
+pull requests. The required checks then switch to that workflow's jobs, the state reads `drifted`,
+and `roborepo protect` would require checks that never report on a pull request, blocking every
+merge for non-admins. This repo has only `ci.yml`, so it is not affected today.
+
+| Option | For | Against |
+| --- | --- | --- |
+| A. Combine the newest successful pull-request run of each workflow (`event=pull_request`) | No configuration; requires exactly the checks that report on pull requests; works in any repo | More API calls per read; a job skipped by a path filter is still required (the existing risk) |
+| B. Name the workflow, with a flag such as `--workflow ci.yml` | Explicit and predictable | Each clone must pass the same flag, or the choice must be stored somewhere every clone reads, which the design avoided |
+| C. Keep the current rule and document the limit | No change | Wrong checks in any multi-workflow repo |
+
+Recommendation: A. Blocked rather than decided because each option changes what the command
+requires on GitHub in other repos, and B adds a public flag the plan did not specify.
+
+Blocks: submitting the plan for review (the escalated finding under `## Review`). No
+implementation task depends on it.
+
+## Review
+
+### Findings
+
+- [x] A rate-limit or server error from the Actions runs endpoint read as "no successful run",
+      so `protect` could drop the required checks — fixed (ee8c010c)
+- [x] A managed ruleset that was disabled or lost a rule read as `drifted` instead of `missing`,
+      contrary to the state table — fixed (ee8c010c)
+- [x] `roborepo-cli.md` described `missing` as "applies to neither branch" — fixed (ee8c010c)
+- [x] A failed **Protect** from the Plans notice left the button disabled, and the panel did not
+      say why — fixed with a browser test (ee8c010c)
+- [x] A comment in `scripts/cli/repository-protection.mjs` said GitHub failures reject — fixed
+      (ee8c010c)
+- [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
+      Open questions
+
+### Verification
+
+- Validation pass 1 (fresh-context subagent) at bb4ce734: 4 fix, 1 escalate (plus one fix split
+  across code and docs).
+- `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
+  to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
+- Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
+  ee8c010c, and its new failed-Protect test fails with the fix removed.
 
 ## Not tested
 
