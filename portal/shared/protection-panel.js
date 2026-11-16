@@ -26,7 +26,8 @@ const BUSY_LABELS = { protect: "Protecting…", skip: "Turning off…", unskip: 
 
 let sharedPanel = null;
 
-// `onChange(repositoryId, report)` runs after every action that wrote to GitHub.
+// `onChange(repositoryId, report)` runs after every action the portal answered, with the state read
+// afterwards, including actions that wrote nothing (a refusal or nothing to change).
 export function createProtectionPanel({ onChange = () => {} } = {}) {
   sharedPanel ??= buildProtectionPanel();
   sharedPanel.subscribers.push(onChange);
