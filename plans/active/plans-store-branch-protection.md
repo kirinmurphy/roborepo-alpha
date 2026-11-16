@@ -231,7 +231,7 @@ Managed and hand-made rulesets stack, so creating the managed ones never loosens
 | Piece | Location | Owns |
 | --- | --- | --- |
 | Host entry point | `modules/forge/index.mjs` | Takes a host name and returns its client; a non-GitHub host resolves to `unsupported` here |
-| GitHub calls | `modules/forge/github.mjs` | The one `gh` runner, moved from `modules/delivery/operations.mjs`, and the protection calls on it: effective branch rules, ruleset list and detail, repo permissions, login, the latest successful default-branch run's job names, and creating or updating a ruleset |
+| GitHub calls | `modules/forge/github.mjs` | The one `gh` runner, moved from `modules/delivery/operations.mjs`, and the protection calls on it: effective branch rules, ruleset list and detail, repo permissions, login, the job names from each active workflow's newest successful pull-request run, and creating or updating a ruleset |
 | Delivery | `modules/delivery/operations.mjs` | Unchanged behavior; calls the runner through the entry point instead of its own `gh` function |
 | Policy and state | `modules/forge/protection-policy.mjs`, `modules/forge/protection.mjs` | The managed ruleset definitions, mapping GitHub's answers to a state, coverage of hand-made rulesets, the merge-policy skip, and the apply-then-recheck flow |
 | CLI | `scripts/cli/protect.mjs`, `manifests/platform/cli/command-definitions/root/protect.command.json` | Parsing, printing, exit codes |
@@ -343,8 +343,10 @@ records each request.
     target, rules, and bypass, then sends nothing on a second run;
   - `drifted` with admin sends one update to the drifted managed ruleset and none to hand-made ones;
   - `unmanaged` with admin creates the managed rulesets and leaves the hand-made ones untouched;
-  - required checks come from the fake's latest successful default-branch run, a newer cancelled
-    run is passed over, and a repo with no successful run omits the status-check rule;
+  - required checks combine each active workflow's newest successful pull-request run from the
+    fake; cancelled and failed runs, push-only and disabled workflows, and a busy workflow's newer
+    runs are passed over; a repo with no such run omits the status-check rule, and an existing
+    `roborepo-main-merge` keeps its checks instead;
   - no request ever edits or deletes a ruleset not named `roborepo-*`;
   - `admin: false` sends no write and names the account;
   - a hand-made ruleset is listed as covered only when target, rules, enforcement, and bypass
@@ -389,8 +391,8 @@ Manual, on a scratch GitHub repo where the user is admin:
 | --- | --- |
 | The command runs `gh` with the owner's admin token, so an agent that runs it acts as the owner | It writes only `roborepo-*` rulesets, prints changes first, and stays out of the default agent allows |
 | An agent calls `POST /api/repositories/:id/protection` on the local portal instead of the command | The route sits behind the portal's existing origin and `x-cli-portal-token` guard for writes, like every other portal write. An agent that can read that token can still call it; Part 01's bot identity, without admin rights, closes that path |
-| A required check never reports, such as a job skipped by a path filter, and blocks every merge | Checks come from jobs in the default branch's latest successful run; the admin bypass remains |
-| A pull request that renames a CI job is blocked by the old required name | The admin merges it with the bypass and reruns `roborepo protect`, which reads the new name from the next successful run |
+| A required check never reports, such as a job in a path-filtered pull-request workflow, and blocks every pull request the filter skips | Only jobs that passed in a pull-request run are required, but a path-filtered workflow's jobs still are. The admin bypass remains; the owner can exclude such a workflow by turning it off or removing its path filter |
+| A pull request that renames a CI job is blocked by the old required name, and its successful run makes the state read `drifted` before it merges | The admin merges it with the bypass and only then reruns `roborepo protect`, which reads the new name from that workflow's newest successful pull-request run |
 | Several `gh api` calls per repo on every Plans page load and **Refresh** slow the page or approach GitHub's rate limit | Status loads apart from the plan list, each call has a bounded timeout, and a failure reads as `unavailable` |
 | Under Part 01's bot identity, the bot has no admin rights | It reads as `admin: false`; the check needs only read access |
 | The effective-rules endpoint omits legacy branch protection | A legacy rule alone reads as `missing`; the managed ruleset then duplicates it, which is harmless |
@@ -526,6 +528,11 @@ the Decision Log.
       `roborepo-main-merge` — escalated; user chose to keep them, fixed (a96508c4)
 - [x] Required checks can come from a workflow that does not run on pull requests — escalated; user
       chose to combine each workflow's newest pull-request run, fixed (a96508c4)
+- [x] Runs were read from one page across all workflows, so a quiet workflow could drop out —
+      fixed by asking each workflow for its own newest run (770ce9b1)
+- [x] A newest run whose jobs were all skipped counted as finding no checks and would remove the
+      existing ones — fixed (770ce9b1)
+- [x] The plan's code table, Validation, and Risks still described the default-branch rule — fixed
 
 ### Verification
 
@@ -541,6 +548,7 @@ the Decision Log.
 - Validation pass 8 (fresh-context subagent) at d7fe4655: 1 fix, 0 escalate. The loop stopped at
   the eight-pass cap; pass 8's comment fix (6eeba909) was not revalidated. `protect-check.mjs`
   passes at 6eeba909.
+- Validation after the user's answers (fresh-context subagent) at a96508c4: 3 fix, 0 escalate.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
