@@ -13,7 +13,7 @@ export async function loadRepositoryProtection({ repositoryId, stateRoot }) {
 }
 
 // `action` is `protect`, `skip`, or `unskip`. Answers with the state after the action, the managed
-// rulesets it wrote, and `refusal` when it wrote none.
+// rulesets it wrote, and `refusal` saying why it stopped early or wrote none.
 export async function applyRepositoryProtection({ repositoryId, action, stateRoot }) {
   const { report, changes, refusal } = await applyProtection(protectionTarget({ repositoryId, stateRoot }), { action });
   return { ...report, changes: changes.map(({ action: kind, name, enforcement }) => ({ action: kind, name, enforcement })), refusal };

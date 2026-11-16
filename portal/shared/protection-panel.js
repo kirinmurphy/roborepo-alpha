@@ -10,7 +10,7 @@ export function loadProtection(repositoryId) {
 }
 
 // `action` is "protect", "skip", or "unskip". Resolves to the state after the action, with
-// `refusal` set when nothing was written.
+// `refusal` set when the action stopped early or wrote nothing.
 export function applyProtection(repositoryId, action) {
   return portalPostJson(protectionUrl(repositoryId), { action });
 }
@@ -128,7 +128,7 @@ function buildProtectionPanel() {
         const current = report || await loadProtection(opening.repositoryId);
         if (!isCurrent(opening)) return;
         render(current);
-        // A report from an action elsewhere (the Plans notice) carries `refusal` when it wrote nothing.
+        // A report from an action elsewhere (the Plans notice) carries `refusal` when it stopped early.
         const message = actionError || (current.refusal ? sentence(current.refusal) : null);
         if (message) showError(message);
       } catch (error) {

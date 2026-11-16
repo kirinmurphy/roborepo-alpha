@@ -36,7 +36,8 @@ export async function readProtection(target) {
 }
 
 // Runs one action (`protect`, `skip`, or `unskip`) and reads the state again afterwards. The
-// result carries the changes it made, or `refusal` saying why it made none. `onPlanned` receives
+// result lists the changes that went through, and `refusal` says why the action stopped early or
+// made none; a refusal partway keeps the earlier changes. `onPlanned` receives
 // the changes before the first write, so a caller can show them first.
 export async function applyProtection(target, { action = "protect", onPlanned = () => {} } = {}) {
   const resolved = resolveTarget(target);
