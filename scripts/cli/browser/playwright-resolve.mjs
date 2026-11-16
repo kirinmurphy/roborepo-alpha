@@ -14,12 +14,14 @@ export function toolsDir(stateRoot) {
   return path.join(stateRoot, "browser", "tools");
 }
 
-// Resolution order: the project's own Playwright (resolved from the scenario's directory, so a
-// monorepo package finds its own), then the RoboRepo-managed tool directory. Returns null when
-// neither has one; the caller reports that as `blocked` with installCommand().
-export function resolvePlaywright({ fromDir, stateRoot }) {
+// Resolution order: the project's own Playwright, resolved from each of `fromDirs` in turn, then
+// the RoboRepo-managed tool directory. A run passes the scenario's directory first, so a monorepo
+// package finds its own, then the directory the command ran from, so a scenario kept in a scratch
+// folder outside the project still uses the checkout's Playwright. Returns null when none has one;
+// the caller reports that as `blocked` with installCommand().
+export function resolvePlaywright({ fromDirs, stateRoot }) {
   const candidates = [
-    { source: "project", base: fromDir },
+    ...fromDirs.map((base) => ({ source: "project", base })),
     { source: "roborepo", base: toolsDir(stateRoot) },
   ];
   for (const { source, base } of candidates) {

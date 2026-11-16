@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// The Playwright provider against real Chromium: where it finds Playwright (project first, then
-// RoboRepo's tool directory, otherwise blocked with the install command), project test files run by
-// the project's own runner without touching its manifest or lockfile, timeouts that stop the
+// The Playwright provider against real Chromium: where it finds Playwright (the scenario's project,
+// then the working directory's, then RoboRepo's tool directory, otherwise blocked with the install
+// command), project test files run by the project's own runner without touching its manifest or lockfile, timeouts that stop the
 // runner's webServer, and recording. Partial browser caches are browser-playwright-cache-check.mjs.
 //
 // Skips with a visible `skip:` line when Chromium is not installed, matching
@@ -69,6 +69,12 @@ try {
     "});",
     "",
   ].join("\n"));
+  // ---- A scenario outside any project uses the Playwright of the directory the command ran from ----
+  // Agents keep throwaway scenarios in scratch folders; the checkout they run from has Playwright.
+  const fromWorkingDir = await run({ scenarioPath: loose, stateRoot: bareState, cwd: project });
+  assert.equal(fromWorkingDir.status, STATUS.UNVERIFIED, "the working directory's Playwright runs a loose scenario");
+  assert.ok(!fs.existsSync(toolsDir(bareState)), "finding the working directory's Playwright installs nothing");
+
   const before = snapshot(project, ["package.json", "package-lock.json"]);
   const spec = await run({ scenarioPath: path.join(project, "tests", "page.spec.mjs"), capture: ["screenshot", "video"], stateRoot: toolState });
   assert.equal(spec.status, STATUS.FAILED, "one failing test fails the run");
@@ -149,9 +155,9 @@ try {
   fs.rmSync(tempRoot, { recursive: true, force: true });
 }
 
-async function run({ scenarioPath, capture = [], stateRoot, timeoutMs = 60_000 }) {
+async function run({ scenarioPath, capture = [], stateRoot, cwd, timeoutMs = 60_000 }) {
   const evidence = createEvidenceRun(stateRoot);
-  const result = await playwrightProvider.run({ scenarioPath, capture, url: app.url, evidence, stateRoot, timeoutMs });
+  const result = await playwrightProvider.run({ scenarioPath, capture, url: app.url, evidence, stateRoot, cwd, timeoutMs });
   return validateRunResult(result);
 }
 

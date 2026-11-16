@@ -78,7 +78,7 @@ export async function browserRun(args = []) {
     service = await ensureLocalService({ url: options["--url"], serve: options["--serve"], timeoutMs });
     result = service.blocked
       ? blockedResult([service.blocked])
-      : await provider.run({ scenarioPath, capture: capture.types, url: options["--url"], evidence, stateRoot: STATE_ROOT, timeoutMs });
+      : await provider.run({ scenarioPath, capture: capture.types, url: options["--url"], evidence, stateRoot: STATE_ROOT, cwd: process.cwd(), timeoutMs });
   } catch (error) {
     // A scenario that does not load, a browser that will not launch, a capture that fails to
     // write: the run could not execute, which the contract reports as `blocked`, not a stack trace.
