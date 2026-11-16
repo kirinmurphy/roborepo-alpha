@@ -60,9 +60,12 @@ export function createProtectionNotices({ container, panel }) {
         const result = await applyProtection(repositoryId, "protect");
         update(repositoryId, result);
         panel.open(repository, { report: result });
-      } catch {
-        // The panel reads the state itself and shows why the action failed to apply.
-        panel.open(repository);
+      } catch (error) {
+        // The line stays, so its button must work again; the panel shows the current state and why
+        // the action failed.
+        protect.disabled = false;
+        protect.textContent = "Protect";
+        panel.open(repository, { error: `Protect failed: ${error.message}` });
       }
     });
     node.querySelector("[data-slot=details]").addEventListener("click", () => panel.open(repository, { report }));

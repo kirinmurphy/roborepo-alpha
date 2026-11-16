@@ -6,7 +6,8 @@ import { loadRepositoryPayload } from "./repositories.mjs";
 // Per GitHub call. A read that takes longer reports `unavailable` instead of holding the page.
 const PORTAL_TIMEOUT_MS = 8000;
 
-// Async so an unknown repo rejects, like every other failure of the read, instead of throwing.
+// Async so an unknown repo rejects instead of throwing synchronously. A GitHub failure does not
+// reject: it resolves to an `unavailable` or `unsupported` report.
 export async function loadRepositoryProtection({ repositoryId, stateRoot }) {
   return readProtection(protectionTarget({ repositoryId, stateRoot }));
 }

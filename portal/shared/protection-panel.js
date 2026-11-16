@@ -117,15 +117,17 @@ function buildProtectionPanel() {
 
   const controller = {
     // `repository` needs `repositoryId` and `displayName`. Pass `report` to show a state that was
-    // just read instead of reading it again.
-    async open(repository, { report = null } = {}) {
+    // just read instead of reading it again, and `error` to show why an action from elsewhere failed.
+    async open(repository, { report = null, error: actionError = null } = {}) {
       const opening = { repositoryId: repository.repositoryId };
       target = opening;
       showLoading(repository.displayName || repository.repositoryId);
       if (!dialog.open) dialog.showModal();
       try {
         const current = report || await loadProtection(opening.repositoryId);
-        if (isCurrent(opening)) render(current);
+        if (!isCurrent(opening)) return;
+        render(current);
+        if (actionError) showError(actionError);
       } catch (error) {
         if (!isCurrent(opening)) return;
         fill(dialog, { state: "unavailable", headline: "The status could not be loaded." });

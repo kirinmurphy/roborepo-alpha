@@ -62,7 +62,7 @@ try {
   expectLine(0, /matches the RoboRepo policy for example\/project; merge rules are skipped for this repo/);
 
   const drifted = structuredClone(managed);
-  drifted.find((entry) => entry.name === "roborepo-plans").rules.pop();
+  drifted.find((entry) => entry.name === "roborepo-main-merge").rules[1].parameters.required_status_checks.push({ context: "retired-job" });
   start({ rulesets: drifted });
   expectLine(1, /has drifted from the RoboRepo policy for example\/project — run: roborepo protect/);
   start({ rulesets: drifted, admin: false, login: "octo-reader" });

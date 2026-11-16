@@ -96,13 +96,15 @@ async function settleAll(promises) {
   return results.map((result) => result.value);
 }
 
-// A repository with Actions off answers the runs endpoint with an HTTP error; that is the same
-// as having no successful run to read job names from.
+// A repository with Actions off answers the runs endpoint with 404; that is the same as having no
+// successful run to read job names from. Any other HTTP error (rate limit, 5xx) makes the whole
+// read `unavailable`: reading it as "no run" would drop the required checks, and a `protect` run
+// would then loosen the merge ruleset.
 async function latestRunJobs(client, context, repo, branch) {
   try {
     return await client.latestSuccessfulRunJobs(context, repo, branch);
   } catch (error) {
-    if (error instanceof GitHubError && error.kind === "http") return null;
+    if (error instanceof GitHubError && error.kind === "http" && error.status === 404) return null;
     throw error;
   }
 }
@@ -126,12 +128,16 @@ export function assessProtection(snapshot) {
     if (policy.key === MERGE_POLICY_KEY && ruleset?.enforcement === "disabled") {
       return describedPolicy({ ...base, status: "skipped", missingRules: [], drift: [] });
     }
+    const effective = policy.branch === "plans" ? plansRules : mainRules;
     if (ruleset) {
       const drift = rulesetDrift(ruleset, policy, { defaultBranch, bypassVisible });
-      return describedPolicy({ ...base, status: drift.length ? "drifted" : "ok", missingRules: [], drift });
+      // A managed ruleset that was disabled or lost a rule leaves that rule off its branch, which
+      // is `missing` (shown to everyone), not only drift. A rule that still applies with other
+      // parameters, such as a renamed CI check, is drift alone.
+      const missingRules = policy.rules.filter((wanted) => !effective.some((rule) => rule.type === wanted.type)).map((rule) => rule.type);
+      return describedPolicy({ ...base, status: drift.length ? "drifted" : "ok", missingRules, drift });
     }
     // With no managed ruleset, a policy rule is missing unless some other ruleset applies it.
-    const effective = policy.branch === "plans" ? plansRules : mainRules;
     const missingRules = policy.rules.filter((wanted) => !effective.some((rule) => ruleAtLeastAsStrict(rule, wanted))).map((rule) => rule.type);
     return describedPolicy({ ...base, status: "absent", missingRules, drift: [] });
   });

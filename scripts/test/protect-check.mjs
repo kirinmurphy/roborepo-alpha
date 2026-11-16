@@ -150,14 +150,19 @@ try {
   assert.deepEqual(writes().map((call) => [call.method, call.endpoint]), [["PUT", `repos/example/project/rulesets/${mergeId}`]], "only the drifted managed ruleset is updated");
   assert.deepEqual(writes()[0].body.rules[1], statusChecks(["check (ubuntu-latest)", "verify (macos-latest)"]));
   assert.deepEqual(gh.readState().rulesets.find((ruleset) => ruleset.id === 11), protectMain, "the hand-made ruleset is untouched");
-  // A managed ruleset someone disabled or loosened is drift too, even though its rules went missing.
+  // A managed ruleset someone disabled leaves its rules off the branch: that is missing, which
+  // outranks drifted, and the drift detail still names why.
   const loosened = gh.readState();
   loosened.rulesets.find((ruleset) => ruleset.name === "roborepo-main-integrity").enforcement = "disabled";
   start({ ...loosened, rulesets: loosened.rulesets.filter((ruleset) => ruleset.id !== 11) });
   result = run(["--check", "--json"]);
-  assert.equal(result.json.state, "drifted");
+  assert.equal(result.json.state, "missing");
   assert.deepEqual(policy(result.json, "main-integrity").drift, ["enforcement is disabled"]);
-  console.log("✓ A renamed CI job reads as drifted, and protect updates only the managed ruleset.");
+  assert.deepEqual(policy(result.json, "main-integrity").missingRules, ["deletion", "non_fast_forward"]);
+  result = run([]);
+  assert.equal(result.status, 0, result.stdout);
+  assert.equal(writes().length, 1, "protect re-enables the disabled managed ruleset with one update");
+  console.log("✓ A renamed CI job reads as drifted, a disabled managed ruleset as missing, and protect updates only the managed ruleset.");
 
   // unmanaged: hand-made rulesets apply every policy rule.
   start({ rulesets: structuredClone(fullyHandMade) });
@@ -214,7 +219,17 @@ try {
   assert.equal(result.status, 0);
   assert.deepEqual(writes()[2].body.rules.map((rule) => rule.type), ["pull_request"], "no successful run leaves the status-check rule out");
   assert.match(result.stdout, /Required CI checks: none\. main has no successful CI run/);
-  console.log("✓ Required checks come from the newest successful default-branch run.");
+  start({ failure: "actions-off" });
+  result = run(["--check", "--json"]);
+  assert.deepEqual([result.json.state, result.json.requiredChecks], ["missing", []], "Actions turned off (404) reads as no successful run");
+  // Any other runs error must not be read as "no run": protect would drop the required checks.
+  const withChecks = gh.readState();
+  start({ ...withChecks, failure: "runs-error" });
+  result = run([]);
+  assert.equal(result.status, 1);
+  assert.equal(run(["--check", "--json"]).json.state, "unavailable");
+  assert.deepEqual(writes(), [], "a failed runs read writes nothing");
+  console.log("✓ Required checks come from the newest successful default-branch run, and a failed runs read is unavailable.");
 
   // Not an admin: every state is reported, nothing is written, and the account is named.
   start({ admin: false, login: "octo-reader" });

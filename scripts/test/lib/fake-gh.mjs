@@ -4,6 +4,7 @@
 //
 // State file fields (see `fakeGitHubState` for defaults):
 //   failure   null | "not-signed-in" | "unreachable" | "hang" | "rulesets-refused"
+//             | "actions-off" (runs endpoint answers 404) | "runs-error" (runs endpoint answers 502)
 //   login, admin, defaultBranch
 //   rulesets  full ruleset objects; `source_type` other than "Repository" marks an inherited one
 //   runs      workflow runs on the default branch, newest first: { id, conclusion, jobs: [{ name, conclusion }] }
@@ -131,6 +132,8 @@ if (one) {
   }
 }
 
+if (route === "actions/runs" && state.failure === "actions-off") httpError(404, "Not Found");
+if (route === "actions/runs" && state.failure === "runs-error") httpError(502, "Server Error");
 if (route === "actions/runs") {
   const wanted = params.get("status");
   const runs = state.runs.filter((run) => !wanted || run.conclusion === wanted);

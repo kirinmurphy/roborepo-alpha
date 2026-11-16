@@ -97,6 +97,22 @@ test.describe("Branch protection", () => {
     ]);
   });
 
+  test("a failed Protect says why and leaves the button ready to retry", async ({ page }) => {
+    start();
+    await page.route("**/protection", (route) => (route.request().method() === "POST"
+      ? route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ ok: false, error: { code: "INTERNAL", message: "portal fell over" } }) })
+      : route.continue()));
+    await openPlans(page);
+    await notices(page).getByRole("button", { name: "Protect" }).click();
+    await expect(panel(page)).toBeVisible();
+    await expect(panel(page).locator("[data-slot=state]")).toHaveText("missing");
+    await expect(panel(page)).toContainText("Protect failed:");
+    await panel(page).getByRole("button", { name: "Close" }).click();
+    const retry = notices(page).getByRole("button", { name: "Protect" });
+    await expect(retry).toBeEnabled();
+    expect(writes()).toEqual([]);
+  });
+
   test("the Branch protection menu item opens the panel in every state", async ({ page }) => {
     const conflicting = { id: 31, name: "everything-needs-review", target: "branch", source_type: "Repository", source: REPO, enforcement: "active", bypass_actors: [], conditions: { ref_name: { include: ["~ALL"], exclude: [] } }, rules: [{ type: "required_signatures" }] };
     const handMade = { id: 11, name: "protect-main", target: "branch", source_type: "Repository", source: REPO, enforcement: "active", bypass_actors: [], conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } }, rules: [{ type: "deletion" }, { type: "non_fast_forward" }] };
@@ -120,10 +136,10 @@ test.describe("Branch protection", () => {
     await expect(state).toHaveText("protected");
     await expect(dialog).toContainText("protect-main: covered by the managed rulesets; safe to delete");
 
-    const drifted = structuredClone(managed);
-    drifted.find((ruleset) => ruleset.name === "roborepo-plans").rules.pop();
-    await reopen({ rulesets: drifted });
-    await expect(state).toHaveText("drifted");
+    const loosened = structuredClone(managed);
+    loosened.find((ruleset) => ruleset.name === "roborepo-plans").rules.pop();
+    await reopen({ rulesets: loosened });
+    await expect(state).toHaveText("missing");
     await expect(dialog).toContainText("roborepo-plans (repo-plans): differs from the policy: rule required_linear_history is missing");
 
     await reopen({ rulesets: managed.map((ruleset) => ({ ...ruleset, id: ruleset.id - 8000, name: ruleset.name.replace("roborepo-", "hand-") })) });
