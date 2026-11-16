@@ -293,40 +293,40 @@ The plan-document check cannot tell whether a reason is true. Judging that stays
 
 ## Implementation plan
 
-- [ ] Rewrite `plan-write/references/plan-schema.md` "Not tested" with the entry format, the
+- [x] Rewrite `plan-write/references/plan-schema.md` "Not tested" with the entry format, the
       accepted reasons, the safety rules, and an example entry that carries a reason, and correct
       its lifecycle paragraph: moves into `review/` tolerate open entries only when each carries a
       reason.
-- [ ] Update `plan-execute/SKILL.md` "Not Tested" (including its example entry) and its
+- [x] Update `plan-execute/SKILL.md` "Not Tested" (including its example entry) and its
       Implementation Completion lines on
       "unconfirmed Not tested entries" and "Genuinely unverified manual checks … resolved before
       `/plan-close`", so they say open entries must carry a reason and are settled in review;
       update `references/validation-loop.md` item 4 and `references/final-report.md`.
-- [ ] Update `plan-review/SKILL.md` steps 3, 5, 6, and 6a.
-- [ ] Reduce `plan-close/SKILL.md` step 5 and `references/verdict.md` to a confirmation. Align
+- [x] Update `plan-review/SKILL.md` steps 3, 5, 6, and 6a.
+- [x] Reduce `plan-close/SKILL.md` step 5 and `references/verdict.md` to a confirmation. Align
       its refusal report (which quotes each open entry "so the user can confirm") and its
       Boundaries line on manual-only entries with the entry format: the refusal sends the user to
       `/plan-review`, and only person-only entries need the user.
-- [ ] Add `NOT_TESTED_UNEXPLAINED`, and that submit refuses it, to the finding list in
+- [x] Add `NOT_TESTED_UNEXPLAINED`, and that submit refuses it, to the finding list in
       `plan-write/references/workflow-validate.md`.
-- [ ] In `globals/packages/feature-verification/skills/feature-verification/SKILL.md`, say that
+- [x] In `globals/packages/feature-verification/skills/feature-verification/SKILL.md`, say that
       `roborepo browser run --serve` must be a bare call: a pipe or chained command keeps it in the
       Claude sandbox, where the dev server cannot open its port.
-- [ ] Update the "Sync" row in `plan-write/SKILL.md` and the Not tested line in `session-close`.
-- [ ] Parse wrapped entry lines in `modules/plan-suite/index.mjs`; add `NOT_TESTED_UNEXPLAINED` to
+- [x] Update the "Sync" row in `plan-write/SKILL.md` and the Not tested line in `session-close`.
+- [x] Parse wrapped entry lines in `modules/plan-suite/index.mjs`; add `NOT_TESTED_UNEXPLAINED` to
       `findings.mjs` and `lifecycle-policy.mjs`; tolerate it for the `active` destination in
       `transition.mjs`; leave it out of the tolerated sets for preflight in `review-gates.mjs` and
       the `review` destination; mark freshness incomplete in `review-freshness.mjs`. The finding's message quotes each offending entry, and the
       preflight's validator check in `review-gates.mjs` prints that message, not only the code.
-- [ ] Rewrite the resolution text of `UNCONFIRMED_NOT_TESTED` in `findings.mjs` ("Confirm each
+- [x] Rewrite the resolution text of `UNCONFIRMED_NOT_TESTED` in `findings.mjs` ("Confirm each
       entry by hand and check it off") and the comment above `notTestedFindings` in
       `lifecycle-policy.mjs` ("until someone confirms it by hand") to match: run the check and
       record its evidence, or give the reason an agent cannot. In `review-gates.mjs`, rewrite the
       comment above the tolerated set ("/plan-close resolves it") and the preflight message "no
       findings apart from Not tested entries" to name the new rule.
-- [ ] Update the pinned phrases in `scripts/test/plan-suite-skills-check.mjs` ("Never check an
+- [x] Update the pinned phrases in `scripts/test/plan-suite-skills-check.mjs` ("Never check an
       entry off yourself", "manual-only `## Not tested` entries") and pin the new ones.
-- [ ] Update the docs under Documentation impact.
+- [x] Update the docs under Documentation impact.
 
 ## Validation
 
@@ -389,6 +389,28 @@ Behavior that must not change, each case passing before and after:
 | An agent clears an entry on weak evidence | Evidence must name the command or method and its result, at a commit; review's Validator checks it |
 | Plans already in active or review gain the finding | As of 2026-11-16 only `9njvfh5z` is affected: it is active with four open desktop-app prompt checks written without a marker, so its next submit would be refused. The refusal names each entry, and the fix is a `Needs a person:` marker on each. Its `next_action` also plans to confirm them after merge, which today's review freshness already rules out; that lifecycle drift is its own cleanup, not this plan's |
 | Codex agents cannot run UI checks | On Claude, a bare `roborepo browser run --serve` call runs outside the sandbox and works (see the tooling table). Codex was not tested; its `network.allow_local_binding` setting was not checked. A Codex agent that cannot start a dev server writes a `Blocked:` entry, which is the intended behavior, so this costs the user a permission, not a check |
+
+## Decision Log
+
+Decisions `/plan-execute` made on its own while implementing, 2026-11-16:
+
+- **The reason markers match in any letter case.** The check accepts `needs a person:` and
+  `blocked:` as well as the capitalized forms. Alternative: exact case, as the skills write them.
+  Why: the refusal exists to make an agent state a reason, not to police capitalization, and a
+  lowercase marker would otherwise cost a refused submit for no gain.
+- **The submit refusal also says how to fix an entry.** The plan asked only that the preflight's
+  validator check print the finding's message. Its `fix` line, and so the submit refusal, now
+  carries each remaining finding's resolution: what an entry must end with. Alternative: keep the
+  generic "resolve the listed findings". Why: an agent reading the refusal can act without opening
+  the schema, which is the point of the gate.
+- **Only `## Not tested` entries join their wrapped lines.** Other task checkboxes keep their
+  first line as text. Alternative: join wrapped lines for every task. Why: task text is printed by
+  the preflight, merge readiness, and review findings; changing it there is outside this plan.
+- **`docs/internal/plans-portal-internals.md` updated too.** It is not under Documentation impact,
+  but it states which findings each destination tolerates, which this plan changed.
+- **The cleared-entry check needs a space before the dash and text after it.** `- [x] Done —` with
+  nothing after the dash still yields the finding. Alternative: accept any dash. Why: a bare dash
+  records no evidence.
 
 ## Open Questions
 
