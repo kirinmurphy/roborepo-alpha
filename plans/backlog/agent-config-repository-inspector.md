@@ -1,10 +1,10 @@
 ---
 id: nrvwti51
-next_action: Inspect the current /agents repository-filter placeholder, reusable global components, and Claude/Codex provider contracts; confirm no active plan duplicates this scope.
+next_action: Run /plan-execute on this plan and start by connecting the Agents repo selector to a read-only inventory of the primary checkout.
 blocked_by: []
 depends_on: []
 related: ["permva27"]
-reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
+reviewed_commit: 26dad21f5948daee39c16d66299941b57d36d411
 worktree:
 ---
 
@@ -12,238 +12,109 @@ worktree:
 
 ## Summary
 
-Replace the repository-filtered `/agents` placeholder with a **read-only inspector** of native agent configuration in a repository's primary checkout. Reuse the global Agents page's harness detection and UI patterns, while showing repository instructions, skills, and other configuration without requiring RoboRepo-specific packages.
-
-**V1 supports Claude Code and Codex repository discovery.** It inventories files and explains basic scope and loading hints; it does **not** reproduce either harness's full configuration resolution engine. Other harnesses keep their existing machine-wide representation and may show “Repository inspection not yet supported.”
-
-The initial snapshot is the **primary checkout**, not necessarily the `main` branch: use the main worktree associated with the canonical repository, its current checked-out branch, and its local filesystem. Do not inspect linked worktrees or `origin/main`. No configuration is edited, applied, or executed.
-
-## Context
-
-- `/agents` already has a repository filter; the repository view is presently a placeholder. The global page includes installed harnesses, rules, hooks, skills/packages, permissions, and context estimates.
-- Harness installations and RoboRepo-managed machine packages are **machine-wide**, independent of the selected repository.
-- Repositories can commit agent instructions and skills for developers who do not use RoboRepo. Native files remain authoritative; repository resources must not implicitly become packages.
-- Nested instructions may apply conditionally. Discovery is useful even without predicting their exact runtime loading sequence.
-- RoboRepo has a rudimentary global permissions editor whose accuracy against modern native permission profiles is uncertain. Its review belongs in a **separate backlog plan** (`permva27`); this feature must not depend on that audit.
-- Native discovery belongs in harness providers. Shared adapters and the portal should not hard-code Claude/Codex configuration paths or semantics.
-
-References: `docs/user/reference/config-control-panel.md`, `docs/internal/harness-anatomy.md`, `docs/internal/harnesses-explained.md`, `docs/user/reference/architecture.md`.
+Selecting a repo on the Agents page currently shows a placeholder. Replace it with a read-only view of the Claude Code and Codex files in that repo's primary local checkout. Developers can find instructions, skills, and configuration, including files that exist only on their machine.
 
 ## Goals
 
-1. Make repository-filtered `/agents` immediately useful as a **configuration inspector, not an interpreter**.
-2. Keep installed harness presentation and controls consistent with global `/agents`, clearly labeled machine-wide.
-3. Discover root and nested Claude/Codex instruction files in an organized, navigable hierarchy with safe previews.
-4. Give repository skills a useful native inventory and preview, separate from RoboRepo package ownership.
-5. Expose settings, hooks, MCP, commands, custom agents, and permission configuration through lightweight source-oriented summaries and previews.
-6. Display estimated individual instruction/skill costs using existing helpers, without implying that all discovered files always load.
-7. Distinguish **Git-tracked**, **untracked**, and **ignored** local files so users can understand what is shared by the repository versus present only in the checkout.
-8. Keep provider-specific discovery logic inside existing provider boundaries and keep the UI agnostic.
+- Show the checkout path and current branch or detached HEAD alongside a Git status for each source.
+- Make root and nested instructions and native skills easy to browse, with previews and individual token estimates.
+- Locate project settings, hooks, MCP servers, custom agents, commands where supported, and permission sources. Use source summaries for configuration that can hold sensitive values.
+- Reuse the global page's machine-wide harness status and controls in a labeled section. Show native repo files even when their harness is missing or disabled.
+- Keep the inspector read-only and describe file presence and possible applicability. Effective runtime policy, precedence, import expansion, package management for repo skills, and other harness providers are outside this release.
 
-## Non-goals
+## Current state
 
-- Editing, creating, enabling/disabling, synchronizing, or installing repository configuration.
-- Turning repository skills into RoboRepo packages or introducing repository-level package management.
-- Auditing, fixing, replacing, or expanding RoboRepo's global permissions editor. See related plan `permva27`.
-- Repo-scoped permission controls, cross-harness policies, or claims about **effective** runtime permissions.
-- Computing an authoritative merged/effective instruction context, full import graph, exact precedence, or subdirectory-by-subdirectory loading simulation.
-- Full semantic interpretation of settings, hooks, MCP registrations, profiles, or permission rules.
-- Exact token accounting, automatic expansion of all imports, or aggregate totals for all conditional resources.
-- Initial repository discovery for Gemini or other harnesses beyond Claude Code and Codex.
-- Scanning linked worktrees, alternate branches, remote Git hosts, or arbitrary files outside the checkout.
-- Executing hooks or commands, launching harnesses, or changing Git state.
-
-## Proposed design
-
-### 1. Page scope and UI conventions
-
-| Surface | Global `/agents` | Repository-filtered `/agents` |
-| --- | --- | --- |
-| Installed harnesses | Existing machine-wide list and controls | **Same list and controls**, labeled machine-wide |
-| Instructions / Active Harnesses | Global rules/config entry per harness | Root and nested instruction-file explorer |
-| Skills | Machine-native and RoboRepo-managed resources | Repository-native skills with previews; no package toggles |
-| Settings, hooks, MCP, agents, commands | Existing global/config views | Source-file summaries and safe read-only previews |
-| Permissions | Existing global editor | Native configuration sources only; no editor or effective-policy claim |
-| Usage | Existing machine context estimates | Per-file estimates and optional trustworthy root-only estimate |
-
-Keep the familiar Agents header, repository filter, cards, and dialogs. Replace the splash with **Instructions**, **Skills**, and a compact **Other configuration** area grouping **Settings & Hooks**, **MCP & Agents/Commands**, and **Permissions**. Do not require elaborate specialized screens for every resource type in v1.
-
-Show canonical repo, primary checkout path, checked-out branch (or detached HEAD), and read-only status. If the primary checkout is unavailable, report the issue rather than silently falling back to another checkout. Switching filters must not show stale results from another repo.
-
-Installed harnesses represent the machine, **not** whether the selected repository contains configuration. Show repository resources for Claude/Codex even when their corresponding harness is not installed, with a clear installation-status label. For other harnesses, distinguish **not inspected** from **nothing found**.
-
-### 2. Instructions explorer
-
-One summary entry per harness can open a folder-grouped explorer: an indexed file list/tree and a read-only preview pane. Reuse the global rules-preview UI where practical. Root files appear first; nested directories follow in path order. A shared file may be shown once with multiple harness badges if the provider results support this without confusing ownership.
-
-Keep metadata deliberately small:
-
-| Field | V1 expectation |
+| Area | Behavior on the reviewed checkout |
 | --- | --- |
-| Source | Repository-relative path and native file type |
-| Harness | Claude Code, Codex, or both when supported |
-| Location | Root, nested, or native rules directory |
-| Loading hint | **Root-level**, **potentially conditional**, or **unknown**; add a known override/precedence hint only when cheap and reliable |
-| Git status | Tracked, untracked, ignored, or unavailable; flag local modifications where practical |
-| Estimated tokens | Individual file estimate, explicitly not a guaranteed loaded amount |
-| Preview/diagnostic | Safe content preview, or explanation of unreadable/unsupported files |
-
-Discovery targets provider-supported native patterns, including Claude instruction/rules locations and Codex `AGENTS.md`/override locations. Providers may surface recognizable frontmatter or native override relationships, but **must not build a general import resolver, expanded effective-context graph, or version-by-version precedence engine** for v1. If a file's loading behavior depends on settings, path or runtime state, mark it conditional/unknown rather than asserting it loads.
-
-File presence, loading applicability, and Git status are separate concepts. For example, an ignored `.claude` file may be loaded locally but absent from another developer's checkout.
-
-### 3. Skills and other configuration
-
-**Skills:** show a repository-owned inventory with name, description (where available), source directory, associated harness, Git status, and safe metadata/body preview. Skills are **not** packages and get no RoboRepo install, enable, or sync controls. Nested native skill locations are in scope only where supported by provider discovery.
-
-**Other configuration:** offer a compact grouped file/source list with a safe preview. The file path and scope are the primary facts; minimal optional metadata may improve scanning when inexpensive and reliable:
-
-| Type | Minimal v1 summary |
-| --- | --- |
-| Settings | File path and native scope (shared project vs local/personal where known) |
-| Hooks | Definition source; event name if readily parseable; never execute commands |
-| MCP | Configuration source and server names if safe to extract; never expose secrets |
-| Custom agents / commands | Native definition paths and names where supported |
-| Permissions | Source file and native section/mode labels when clearly available; no “effective permission” conclusion |
-
-Do not implement generalized settings merging, hook activation analysis, MCP registry reconciliation, native permission-profile translation, or comprehensive config validation just to populate this page. A source-file viewer is sufficient when richer structured inspection is costly.
-
-Machine-wide and project-local sources must be clearly separated. For inherited/global context, prefer a small link or compact reference to existing global `/agents` rather than duplicating its configuration UI.
-
-### 4. Usage / token estimates
-
-- Reuse existing per-file token-estimation utilities for instruction and skill previews.
-- Show the existing machine baseline as **inherited** if it is already displayed by the global page; do not silently add it to project estimates.
-- Label root instruction files separately from nested or otherwise conditional files. **Do not** sum every discovered file into “startup usage.”
-- Show a root startup estimate **only if the current estimator can justify it reliably without building an effective-context resolver**; otherwise omit the aggregate or label it unavailable.
-- Skills can show an individual estimated body size, explicitly **on demand**, not as mandatory startup cost.
-- Do not estimate the token cost of raw hook scripts, MCP credentials, or other config files merely because they exist.
-
-No additional import expansion, duplicate-content graph, directory-specific context simulation, or exact runtime token accounting is required for v1.
-
-### 5. Permissions boundary
-
-The repository Permissions area is an **inspector only**: show native permission-related configuration sources, optionally the mode or setting names when trivially identifiable, and explain that active behavior depends on the harness, session and machine policy. Avoid generic Allow/Ask/Deny toggles and avoid claiming a static file preview is the effective security policy.
-
-Management remains with Claude Code and Codex native tooling. The existing global RoboRepo controls are unchanged by this plan; their correctness, continued value, and possible replacement/removal are explicitly investigated under **`permva27`**, a separate, non-blocking plan. This project must neither expand those controls into repository scope nor undertake their audit.
-
-### 6. Provider architecture
-
-```mermaid
-flowchart LR
-  Filter[Repository filter] -->|resolves| Checkout[Primary checkout]
-  Checkout -->|selects| Adapter[Existing shared adapter]
-  Adapter -->|delegates discovery to| Claude[Claude provider]
-  Adapter -->|delegates discovery to| Codex[Codex provider]
-  Claude -->|returns| Inventory[Read-only inventory]
-  Codex -->|returns| Inventory
-  Inventory -->|presents| Portal[Agents portal]
-```
-
-First inspect existing provider and portal interfaces and **reuse them where possible**. If needed, add one small read-only discovery capability; do not create a generalized configuration framework or a write/update/apply API.
-
-Providers own native directory/file patterns and lightweight metadata extraction. Shared infrastructure owns checkout selection, safe file access, Git status classification, aggregation and common estimate helpers. The portal renders the resulting file records and must not infer native semantics by switching on harness IDs.
-
-A minimal record needs only a harness identifier, resource type, source path, scope/location, optional name/description/loading hint/token estimate/Git status, and any preview error or diagnostic. Let provider-specific extras remain optional; avoid designing for speculative future editors or policy resolution. A failure in one resource or provider must not suppress all the others.
-
-### 7. Safe inspection boundaries
-
-- Restrict scanning to declared Claude/Codex project locations under the selected primary checkout. Avoid `.git`, vendored trees, dependencies, output directories, and arbitrary recursive scans; use bounded enumeration.
-- Handle symlinks and native imports as references. Never automatically preview content outside the checkout or follow external file paths without a separately established safe policy.
-- Redact known secret-bearing fields before sending preview data to the UI; never echo MCP credentials, tokens, environment values, authorization headers, or secret-bearing URLs in logs or responses.
-- Bound file sizes, file counts, and preview sizes. Treat malformed/unreadable files as individual diagnostics.
-- Determine Git status separately from harness applicability: tracked, untracked, and ignored files may all matter to the local checkout. Do not assume **tracked = committed**; a tracked file can contain uncommitted modifications.
-- Inspection must not mutate files, execute hooks, install packages, launch harnesses, or change Git metadata.
+| Page and filter | `/agents` is served from `portal/config/`. The scoped branch in `app.js` uses the shared selector and renders `repositorySplash` or the unavailable notice. The global page renders the harness warning, file grid, package sections, and permission controls from the global snapshot. |
+| Machine data | `portal/config/api.js` loads the global snapshot and catalog-based source preview from `scripts/cli/portal-routes-config.mjs`. It re-exports the shared setup API, which reads `/api/settings` from `scripts/cli/portal-routes-settings.mjs`. There is no repo inventory. |
+| Scope and checkout | `scripts/cli/portal-routes-scope.mjs` resolves the browser's `repo` key to a canonical repository ID. `modules/repositories/registry.mjs` owns registered local roots. `modules/repositories/identity.mjs` derives and verifies a main checkout from Git's common directory. The Plans checkout list does not populate the main checkout's branch. |
+| Providers | `scripts/harnesses/registry.mjs` binds trusted built-in providers. The Claude and Codex adapters under `scripts/harnesses/` expose machine-oriented operations; there is no project inventory operation. `harness-runtime.mjs` filters its capability query by machine enablement. |
+| Preview and estimates | `portal/config/panels.js` owns the source dialog and supports a plain-text branch. `scripts/cli/context-cost.mjs` exports `estimateTokens`, which can estimate a single file without using the global totals. |
 
 ## Happy path
 
-1. User selects a repository in `/agents`.
-2. Portal resolves the **primary checkout**, shows its current branch and the unchanged machine-wide harness list.
-3. Claude/Codex providers return inventories of supported native files and basic metadata.
-4. User browses nested instructions, inspects skills, and opens read-only previews.
-5. User sees tracked vs local-only files and individual estimated token counts, without misleading effective-context totals.
-6. User sees concise source-oriented summaries for settings, hooks, MCP, agents/commands, and permissions.
-7. User switches back to global scope; neither native files nor global settings have changed.
+1. Select a repo in the Agents **Viewing** menu and confirm the primary checkout and branch.
+2. Open Instructions or Skills, select a path, and see a text preview, Git status, and individual token estimate.
+3. Open Other configuration to see where settings, hooks, MCP servers, agents, commands, or permission settings are declared.
+4. Switch repos or return to **All repos** using the same selector.
+
+## Proposed design
+
+### Scope and ownership
+
+Resolve the scope on each inventory and preview request using the shared route helper. Read the primary designation from the registry record before resolving its local path. Resolve that checkout family through Git's common directory. For records without a primary designation, use a single verifiable family from the registered roots. If a designated primary checkout has no usable path, multiple roots are marked primary, or the family cannot be identified unambiguously, show a checkout-unavailable state. Avoid picking a secondary clone or linked worktree as a substitute. Read HEAD from the selected checkout and inspect its local files, including uncommitted changes. Keep absolute paths out of the selector, URL, and resource IDs. Show the selected checkout path in its scoped view.
+
+Place the orchestration behind read-only GET handlers in `scripts/cli/portal-routes-config.mjs`. Give the provider contract a narrow optional project discovery operation. The built-in adapters identify native patterns and extract display metadata. Shared server code selects the checkout, bounds and confines file access, classifies Git status, and estimates tokens. Query supported provider bindings independently of machine installation and enablement. The portal renders the returned records without inferring native configuration paths.
+
+### Inventory
+
+| Area | Claude Code | Codex |
+| --- | --- | --- |
+| Instructions | Discover `CLAUDE.md`, `CLAUDE.local.md`, and project `.claude/rules/` Markdown where documented. Include `AGENTS.md` as a conditional Claude source where supported by the documented project-instructions setting. | Discover root and nested `AGENTS.md` and `AGENTS.override.md`. Mark override candidates and scope without computing which files load. |
+| Skills | Discover `.claude/skills/<name>/SKILL.md` at the root and in supported nested locations. | Discover `.agents/skills/<name>/SKILL.md` at the root and in supported nested locations. Include `.codex/skills/<name>/SKILL.md` as a legacy location recognized by RoboRepo. Label its applicability unknown unless verified for the native version. |
+| Other configuration | Inventory project `.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`, and definitions under `.claude/agents/` and `.claude/commands/`. Identify hooks and permissions within their source settings. | Inventory project `.codex/config.toml`, `.codex/hooks.json`, and `.codex/agents/*.toml`. Identify supported inline hooks, MCP, and permission sections from their source. |
+
+Confirm the patterns against the versions supported at implementation time. Group instructions by folder with root entries first, and show each resource's harness, kind, relative path, and a loading hint such as **Root-level**, **Potentially conditional**, or **Unknown**. For skills, show the name, description when present, source directory, and on-demand estimated token cost. Omit a repo-wide token total.
+
+Use tracked, untracked, ignored, or unavailable for the file's Git status. Call out tracked local modifications when Git reports them. Provider support, installation, source applicability, and Git status are separate facts.
+
+### Preview and failure behavior
+
+- List and preview through the selected checkout only. Accept a server-validated inventory entry for preview, recheck it at read time, and exclude nested Git checkouts and out-of-scope paths. List discovered symlink sources as references without reading the targets. Leave imports as source text.
+- Set limits on traversal depth, entries visited, files returned, bytes read, and preview size. Skip Git internals, dependency trees, and build outputs. Mark truncated inventories and isolate unreadable files and provider failures.
+- Render instruction, skill, and Markdown agent or command bodies as text. Reuse the existing dialog shell and token chips, without rendering repo-supplied HTML or remote media.
+- Show structured configuration using allowlisted labels and section names. For example, show hook event names and, where safe, MCP server names. Keep raw settings, commands, environment values, credentials, headers, and URLs from structured config out of the response and logs. If parsing fails, return a path and diagnostic.
+- Show loading, empty, unsupported, checkout unavailable, and partial results distinctly. Close or clear the previous preview on a scope change and discard stale inventory and preview responses. Keep the existing unavailable-scope notice and the global editor in the global view.
+- Use the hardened Git execution helper for local classification and keep optional locks disabled. Use queries that cannot invoke repo-configured subprocesses, including Git filters. If local modifications cannot be determined under that constraint, omit the modification label. Inspection leaves the checkout, Git metadata, and machine configuration untouched.
+
+## Related plans
+
+| Plan | Relationship to this work |
+| --- | --- |
+| Shared Repository Filter Across Portal Pages | Landed dependency. Squash commit `d25b89f0` is on the reviewed branch. This plan replaces its Agents placeholder and preserves selector, navigation, and unavailable-scope behavior. |
+| Discoverable Harness Provider Architecture | Landed dependency. The trusted registry and adapter contract shipped in `42571fe3` and are present on the reviewed branch. Use their read-only extension point for native discovery. |
+| Audit Global Agent Permissions Management | Unlanded, non-blocking follow-up. Its backlog plan expressly keeps the inspector independent. This plan displays native permission sources. |
+| Permissions UI Revamp | Unlanded, adjacent global editor work that depends on the audit. The inspector shares the page but does not depend on the editor or its projection. |
+| Capability-Derived Resource Targeting | Unlanded, adjacent package delivery work. Its enabled-provider targeting rules apply to package writes. Repo discovery is read-only and independent of those rules. |
+| Cut Claude permission prompts by running shell commands in the native sandbox | In review. Its worktree tip `e5dcedd3` is outside the reviewed checkout. It changes machine-level projection and presentation, with no repository inventory or shared scope changes. |
 
 ## Implementation plan
 
-### A. Establish existing integration points
-
-- [ ] Inspect the `/agents` repository placeholder, existing global cards/previews/harness detection, and token-estimate utilities.
-- [ ] Inspect Claude/Codex providers and reuse existing discovery APIs; confirm primary-checkout resolution and any overlapping backlog plans.
-- [ ] Specify the **smallest** read-only file-inventory shape and unsupported/empty/error semantics; do not add future-management fields.
-
-### B. Implement Claude/Codex discovery
-
-- [ ] Enumerate supported root/nested instructions, skills, and native configuration file locations for Claude Code.
-- [ ] Enumerate supported root/nested instructions, skills, and native configuration file locations for Codex.
-- [ ] Return basic source/type/scope metadata and only readily detectable loading or override hints; mark runtime-dependent applicability unknown.
-- [ ] Implement safe bounded previews, redaction, partial failures, and tracked/untracked/ignored Git status indicators.
-- [ ] Reuse per-file token estimates where available; no effective-context engine or complex token aggregation.
-
-### C. Render the repository page
-
-- [ ] Replace the splash with primary-checkout identity and reused global machine-wide harness controls.
-- [ ] Add the folder-indexed Instructions explorer and a useful Skills inventory with previews.
-- [ ] Add lightweight file/source summaries for Settings, Hooks, MCP, Agents/Commands, and read-only Permissions.
-- [ ] Distinguish tracked and local-only resources, empty versus unsupported provider states, and root versus conditional estimates.
-- [ ] Ensure filtering between global and repositories clears stale data; do not show repo-level package/permission toggles.
-
-### D. Verify and document
-
-- [ ] Add provider fixtures for root/nested files, overrides where easily detectable, tracked/untracked/ignored files, malformed/unreadable files, and absent harness installations.
-- [ ] Test primary checkout versus linked worktrees, symlink escape, redaction, scan bounds, and partial provider failures.
-- [ ] Add portal tests for selection, preview navigation, read-only states, and switching back to global.
-- [ ] Confirm no inspection path mutates repo/global configuration or runs hooks.
-- [ ] Run relevant repo-native unit and portal tests, and update the existing documentation of record with the new read-only scope.
+- [ ] Add scoped inventory and preview reads. Reuse the shared scope resolver and registry checkout data. Cover a non-default branch, detached HEAD, an absent or pathless primary checkout, and a linked worktree or second clone with different files.
+- [ ] Add Claude and Codex native discovery through the provider boundary. Cover disabled or missing harnesses, supported nested locations, recognized overrides, and unsupported providers.
+- [ ] Add bounded file reads, source summaries, Git classification, and per-file estimates. Test outside-root references, symlinks, oversized files, malformed config, tracked modifications, ignored and untracked files, and a repo-configured process that must never run. Assert no file or Git metadata writes.
+- [ ] Replace the scoped splash in `portal/config/app.js` using existing HTML templates, shared harness controls, and the source dialog shell. Add the folder-grouped instructions, skills, and configuration sections with explicit loading, empty, unsupported, and partial states.
+- [ ] Extend the real-route coverage in `scripts/test/repository-scope-portal-check.mjs` and replace the splash expectation in `scripts/test/portal-ui/repository-scope.spec.mjs`. Cover switching repos while requests are pending, preview navigation, absence of package actions on repo skills and editing controls on repo permission sources, and return to global controls.
+- [ ] Update the docs of record and run the focused checks below.
 
 ## Validation
 
-- [ ] Repository-filtered `/agents` shows a useful read-only inventory from the **primary checkout** (not linked worktrees), including checkout branch/path.
-- [ ] The Installed Harnesses section remains identical to global scope and clearly machine-wide.
-- [ ] Claude and Codex root/nested instruction files are discoverable and navigable with safe previews and honest basic applicability labels.
-- [ ] Repository-native skills are visible independently of RoboRepo packages, with no install/sync/toggle side effects.
-- [ ] Settings, hooks, MCP, agents/commands, and native permissions have lightweight source-based summaries and safe previews; no universal effective-state interpretation is implied.
-- [ ] Every displayed repository resource shows Git tracked/untracked/ignored status when Git can determine it; tracked local changes are not represented as necessarily committed.
-- [ ] Per-file token estimates are identifiable as estimates; nested/conditional instructions and on-demand skills are not summed as mandatory startup costs.
-- [ ] Global permissions are not audited or modified, and repository permissions are not editable.
-- [ ] Providers own native discovery; the portal does not hard-code Claude/Codex file interpretation.
-- [ ] Unsupported providers and unreadable resources are distinguished from genuinely empty results; safety checks and relevant tests pass.
+- [ ] Selecting a repo shows files only from its primary checkout and labels the current branch or detached HEAD.
+- [ ] A missing or ambiguous primary checkout cannot fall back to files from another checkout.
+- [ ] Claude and Codex entries remain visible without an installed or enabled harness. Unsupported providers and failed or truncated scans are distinguishable from empty scans.
+- [ ] Instruction and skill previews show source, Git status, and estimated size. Nested resources and skills contribute no startup aggregate.
+- [ ] Other configuration shows source paths and safe metadata, with native permission sources described as declarations. Tests prove sensitive structured values never reach the browser.
+- [ ] Switching scope while an inventory or preview is pending displays only the current scope's data. Global navigation and machine-wide controls still work.
+- [ ] Scans and previews leave repo files, Git metadata, and machine config intact and execute no harness or hook.
 
-## Risks and tradeoffs
+Run the focused checks after implementation:
 
-| Risk | Mitigation |
-| --- | --- |
-| Native configuration evolves | Provider-owned discovery with tests and `unknown` labels rather than pretending to reproduce the harness |
-| Nested rules imply uncertain loading | Display file location and basic hints; do not claim exact effective instructions |
-| Permission sources imply guaranteed security | Source-only view; management and audit stay outside this plan |
-| Too many resource types create excess UI work | Rich instructions/skills; file-oriented summaries for all other types |
-| Git status is mistaken for sharing/commit state | Label tracked, untracked, ignored, and local modifications distinctly |
-| Monorepo inventories become large | Folder grouping, bounded scans, and on-demand previews |
-| Sensitive values or external symlinks escape | Safe path handling, redaction, bounded reads, isolated errors |
+```sh
+node scripts/test/run-checks.mjs --filter repository-scope
+npm run test:portal-ui -- repository-scope.spec.mjs
+```
 
-## Deferred follow-ups
-
-- **Separate plan `permva27`:** audit the existing global permissions editor against current Claude/Codex native controls; decide whether to keep, simplify, replace, or retire it. **Not a dependency** for this plan.
-- Optional directory-specific effective-instructions explorer and import/precedence interpretation, only if users later need them.
-- Repository configuration editing, skills enable/sync behavior, and any connection to RoboRepo package ownership.
-- Additional provider coverage (Gemini and others), guided by actual native behavior and demand.
-- Rich semantic inspection of settings, hooks, MCP, and permission configurations if source previews prove insufficient.
+Run the new provider and safety fixtures through `scripts/test/run-checks.mjs` as well. Capture the scoped Agents view with browser verification alongside the regression tests.
 
 ## Documentation impact
 
-- `docs/user/reference/config-control-panel.md`: explain global-managed versus repo-inspected resources, read-only permissions, and token-estimate limitations.
-- `docs/internal/harness-anatomy.md` and `docs/internal/harnesses-explained.md`: document provider-owned repository discovery if a capability is introduced.
-- `docs/user/reference/architecture.md`: update only if the shared adapter interface materially changes.
-- `docs/internal/docs-map.md`: update only if adding a new documentation-of-record file.
+- `docs/user/reference/config-control-panel.md` for the repo inspector, source previews, and token estimates.
+- `docs/internal/config-panel-internals.md` for the scoped endpoints, checkout selection, and preview constraints.
+- `docs/internal/portal-architecture.md` for the Agents data owner and shared scope routing.
+- `docs/internal/harness-provider-interface.md` for the discovery contract, with updates to `docs/internal/harness-anatomy.md` and `docs/internal/harnesses-explained.md` where they describe provider capabilities.
 
 ## Research references
 
-Native semantics should be checked against the supported harness versions when implementing; v1 does not attempt complete native precedence simulation.
-
-- [Claude Code — instructions](https://code.claude.com/docs/en/memory)
-- [Claude Code — settings](https://code.claude.com/docs/en/settings)
-- [Claude Code — skills](https://code.claude.com/docs/en/skills)
-- [Codex — AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
-- [Codex — configuration](https://developers.openai.com/codex/config-basic)
-- [RoboRepo — global config control panel](https://github.com/kirinmurphy/roborepo-alpha/blob/main/docs/user/reference/config-control-panel.md)
+- [Claude Code project instructions](https://code.claude.com/docs/en/memory), [settings](https://code.claude.com/docs/en/settings), and [skills](https://code.claude.com/docs/en/skills)
+- [Codex instructions](https://developers.openai.com/codex/guides/agents-md), [configuration](https://developers.openai.com/codex/config-basic), [skills](https://developers.openai.com/codex/skills), [hooks](https://developers.openai.com/codex/hooks), and [custom agents](https://developers.openai.com/codex/subagents)
