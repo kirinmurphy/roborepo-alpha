@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Finish the validation loop on the merge guards (pass 20), run the full gate, then submit for review and push.
+next_action: Run the last validation pass and the full gate on the final commit, then submit for review and push.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -262,6 +262,9 @@ so a repository's `.claude/settings.local.json` can still add entries.
       `cd`, `git -C`, wrapper, and substitution handling as the delete guard. `--ff-only` pulls and
       merges, and `--abort`/`--quit` forms, stay allowed. Back it with the agents' `pre-merge-commit`
       git hook refusing a merge commit on a protected branch, as it already does for `repo-plans`.
+- [x] Render no Claude rule for `push-code` at `ask` (`askDecidedByHook`), so the protected-branch
+      hook decides pushes; assert it in `claude-sandbox-projection-check.mjs` and document it
+      (user decision, 2026-11-16; done in the commit after c4a3329c).
 - [x] Extend `protected-branch-push-check.mjs`, the projection, defaults, and coverage checks, and
       update `docs/user/reference/claude-hooks.md`, `codex-hooks.md`, `config-control-panel.md`, and
       `docs/internal/config-panel-internals.md` for both guards.
@@ -311,6 +314,11 @@ Acceptance criteria:
       `git rebase`, and `git cherry-pick` are denied, including after `cd` or with `git -C`;
       `git pull --ff-only` and `git merge --ff-only origin/main` are not. In a feature-branch
       checkout none of them is denied by the hook.
+- [x] A verified feature-branch push runs without a Claude prompt, and a push to `main` is still
+      blocked. Headless Claude 2.1.309 in a throwaway repo: with the live settings the feature push
+      was refused in default and auto mode although the hook returned allow; with only the
+      `Bash(git push:*)` ask rule removed it ran in both modes, and `git push origin feature:main`
+      was blocked by the hook in both.
 - [ ] `npm run check` passes on the final commit.
 
 ## Risks
@@ -518,6 +526,14 @@ Acceptance criteria:
   went on. Alternative: tracking `&&` short-circuits (rejected for now: the command splitter drops
   the operator, and this over-asks only when the agent starts in a main checkout, which the user
   wants protected). The same command from a feature checkout or a temp folder does not ask.
+
+- **2026-11-16 — User decision: the hook decides Claude pushes.** Pushes kept prompting although the
+  protected-branch hook approved them. A headless test showed why: Claude applies the
+  `Bash(git push:*)` ask rule even when a PreToolUse hook allows the call. `push-code` now carries
+  `askDecidedByHook`, and at `ask` Claude renders no rule for it. Alternative: `allow` (rejected:
+  without the hook it would push anywhere but the force variants). Cost: if the hook is missing, an
+  unlisted `git push` prompts in default mode but is left to the auto-mode reviewer in auto mode.
+  Codex and Gemini are unchanged; a separate session is researching whether they need the same.
 
 ## Not tested
 
