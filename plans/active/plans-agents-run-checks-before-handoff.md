@@ -1,6 +1,6 @@
 ---
 id: 5xw1mmqy
-next_action: Built and validated; run /plan-review on this plan to review the work, confirm the one check only a person can make, and approve the exact commit.
+next_action: Built and committed, with fixes from three validation passes; the third pass's fixes are not yet revalidated. Run /plan-execute on this plan to run the next validation pass and submit it for review.
 blocked_by: []
 depends_on: []
 related: ["9671042v", "i5mnkm7z", "0jped168", "9njvfh5z", "vzgsx5vz"]
