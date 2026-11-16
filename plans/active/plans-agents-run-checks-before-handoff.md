@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: []
 related: ["9671042v", "i5mnkm7z", "0jped168", "9njvfh5z", "vzgsx5vz"]
 reviewed_commit: 26dad21f5948daee39c16d66299941b57d36d411
-worktree:
+worktree: plans-agents-run-checks-before-handoff
 ---
 
 # Agents run every check they can before asking the user to check by hand
