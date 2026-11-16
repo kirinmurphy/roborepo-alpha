@@ -106,7 +106,8 @@ unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answer
   resolve to a single Git family. The family's main checkout comes from Git's common directory
   (`mainCheckoutPath`), and its identity must still resolve to the requested `repositoryId`. Any
   other case (`no-path`, `missing`, `ambiguous`, `moved`) is checkout-unavailable; no other
-  checkout substitutes. HEAD is read from the checkout's `HEAD` file.
+  checkout substitutes. HEAD is read from the checkout's `HEAD` file; a reftable repo's placeholder
+  there is resolved with `git symbolic-ref` and `git rev-parse` instead.
 - **Discovery.** A breadth-first walk bounded by `INVENTORY_LIMITS` (depth, entries visited, files
   returned, bytes per file and in total). It skips `.git`, dependency trees, and build outputs, skips
   any subfolder with its own `.git`, and never follows symlinks: a symlink that names a native source

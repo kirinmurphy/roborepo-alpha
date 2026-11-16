@@ -140,15 +140,21 @@ export function parseJsonObject(text) {
 // declared key as a full path (table prefix + dotted key), plus the top-level names of a one-line
 // inline table (`mcp_servers = { docs = {...} }` gives ["mcp_servers", "docs"]). Enough to say which
 // sections a file declares however it spells them; a header with unbalanced brackets is reported,
-// not guessed at. Values are never returned.
+// not guessed at. Values are never returned, and lines inside a value that spans lines (a """ or '''
+// string, or an array or inline table left open) are never read as keys or headers.
 export function scanTomlStructure(text) {
   const rootKeys = [];
   const tables = [];
   const keys = [];
   let current = null;
   let diagnostic = null;
+  let openValue = null;
   const lines = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
   lines.forEach((raw, index) => {
+    if (openValue) {
+      openValue = continueValue(openValue, raw);
+      return;
+    }
     const line = raw.trim();
     if (!line || line.startsWith("#")) return;
     if (line.startsWith("[")) {
@@ -167,8 +173,42 @@ export function scanTomlStructure(text) {
     if (!current) rootKeys.push(splitTomlKey(key[1]));
     keys.push(keyPath);
     for (const name of inlineTableKeys(key[2])) keys.push([...keyPath, name]);
+    openValue = continueValue({ depth: 0, quote: null }, key[2]);
   });
   return { rootKeys, tables, keys, diagnostic };
+}
+
+// Scans one line of a value and returns what is still open after it ({ depth, quote }), or null when
+// the value is complete. `quote` is a multi-line string delimiter; `depth` counts open [ and {.
+function continueValue(state, line) {
+  let { depth, quote } = state;
+  for (let i = 0; i < line.length; i += 1) {
+    if (quote) {
+      if (line.startsWith(quote, i)) {
+        i += quote.length - 1;
+        quote = null;
+      } else if (line[i] === "\\" && quote === "\"\"\"") {
+        i += 1;
+      }
+      continue;
+    }
+    const char = line[i];
+    if (char === "#") break;
+    if (line.startsWith("\"\"\"", i) || line.startsWith("'''", i)) {
+      quote = line.slice(i, i + 3);
+      i += 2;
+      continue;
+    }
+    if (char === "\"" || char === "'") {
+      let end = i + 1;
+      while (end < line.length && line[end] !== char) end += char === "\"" && line[end] === "\\" ? 2 : 1;
+      i = end;
+      continue;
+    }
+    if (char === "[" || char === "{") depth += 1;
+    if (char === "]" || char === "}") depth -= 1;
+  }
+  return quote || depth > 0 ? { depth, quote } : null;
 }
 
 // Top-level key names of a one-line inline table value, skipping nested tables, arrays, and strings.

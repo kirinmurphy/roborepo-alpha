@@ -246,7 +246,8 @@ try {
   for (const id of [
     "claude:../outside.md", "claude:/etc/passwd", "claude:packages/api/CLAUDE.md", "claude:linked-dir/outside.md",
     "claude:vendored/CLAUDE.md", "claude:README.md", "gemini:GEMINI.md", "claude:", "nope",
-    "claude:node_modules/pkg/CLAUDE.md", "claude:.git/CLAUDE.md", "claude:.claude/skills/linked-file/SKILL.md",
+    "claude:node_modules/pkg/CLAUDE.md", "claude:Node_Modules/pkg/CLAUDE.md", "claude:.git/CLAUDE.md",
+    "claude:.claude/skills/linked-file/SKILL.md",
   ]) {
     const refused = await preview(id);
     assert.equal(refused.ok, false, `${id} is refused`);
@@ -292,6 +293,11 @@ try {
   const limited = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, limits: { ...INVENTORY_LIMITS, maxFiles: 3 } });
   assert.equal(limited.entries.length, 3);
   assert.ok(limited.truncated.includes("files"), "a truncated scan says so");
+  // A file cut short by the scan's byte budget marks the scan partial, even as the last file read.
+  const budget = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, limits: { ...INVENTORY_LIMITS, maxTotalBytes: 40 } });
+  assert.ok(budget.truncated.includes("bytes"));
+  assert.ok(budget.entries.some((entry) => /size budget/.test(entry.diagnostic || "")));
+  assert.equal(budget.entries.some((entry) => /Larger than/.test(entry.diagnostic || "") && entry.size < INVENTORY_LIMITS.maxFileBytes), false);
   const shallow = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, limits: { ...INVENTORY_LIMITS, maxDepth: 1 } });
   assert.ok(shallow.truncated.includes("depth"));
   const failing = {
@@ -352,6 +358,14 @@ try {
   assert.deepEqual(inline('mcp_servers.inline.command = "x"\n'), ["MCP servers: inline"]);
   assert.deepEqual(inline(`mcp_servers = { other = { url = "${SECRETS[1]}" }, "quoted-name" = { command = "x" } }\n`), ["MCP servers: other, quoted-name"]);
   assert.deepEqual(inline('[mcp_servers]\ndocs = { url = "x" }\n'), ["MCP servers: docs"]);
+  // Text inside a multi-line value is never read as a key or header.
+  const multiline = describeCodexProjectFile({ kind: "config" }, [
+    'notes = """', "mcp_servers.ghp_SECRETTOKEN123 = 1", "[Note] be nice", '"""',
+    "tags = [", '  "a",', "  [1, 2],", "]", 'model = "gpt-5"', "",
+  ].join("\n"));
+  assert.deepEqual(multiline, { sections: ["Declares: Model"] }, "no diagnostic, no key from inside a value");
+  const agent = describeCodexProjectFile({ kind: "agent" }, 'name = "a"\ndeveloper_instructions = \'\'\'\nmodel = "not real"\n[Note]\n\'\'\'\n');
+  assert.deepEqual(agent, { name: "a", sections: ["Declares developer instructions"] });
 
   // ------------------------------------------------------------------ provider contract
   assert.throws(() => validateCapabilityAdapters([], { projectInventory: { classify() {} } }), /projectInventory\.describe/);

@@ -39,6 +39,8 @@ const SKIPPED_DIRECTORIES = new Set([
   "__pycache__", ".terraform", "Pods", ".yarn", ".pnpm-store",
 ]);
 
+const SKIPPED_LOWERCASE = new Set([...SKIPPED_DIRECTORIES].map((name) => name.toLowerCase()));
+
 const GIT_TIMEOUT_MS = 5000;
 const GIT_BATCH = 200;
 const CONVERSION_ATTRIBUTES = ["filter", "text", "eol", "ident", "working-tree-encoding"];
@@ -203,7 +205,7 @@ function walkCheckout(root, providers, limits) {
         continue;
       }
       if (dirent.isDirectory()) {
-        if (SKIPPED_DIRECTORIES.has(dirent.name)) continue;
+        if (SKIPPED_LOWERCASE.has(dirent.name.toLowerCase())) continue;
         if (depth + 1 > limits.maxDepth) {
           truncated.add("depth");
           continue;
@@ -229,10 +231,11 @@ function cleanSegments(relPath) {
 
 // Whether the walk could have reached these segments: no skipped folder on the way and no deeper
 // than its depth limit. A preview names only what the inventory could list.
+// Compared case-insensitively: on a case-insensitive filesystem `Node_Modules` is `node_modules`.
 function withinWalk(parts, limits) {
   if (!parts) return false;
   const folders = parts.slice(0, -1);
-  return folders.length <= limits.maxDepth && !folders.some((folder) => SKIPPED_DIRECTORIES.has(folder));
+  return folders.length <= limits.maxDepth && !folders.some((folder) => SKIPPED_LOWERCASE.has(folder.toLowerCase()));
 }
 
 // Reads a regular file inside the checkout, rechecking at read time that every parent is a real
@@ -393,8 +396,14 @@ export async function loadRepositoryAgentConfig({
       read = { ok: false, diagnostic: "Not read: the scan reached its size budget." };
       truncated.push("bytes");
     } else {
-      read = readConfinedFile(root, rel, Math.min(limits.maxFileBytes, limits.maxTotalBytes - bytesRead));
+      const remaining = limits.maxTotalBytes - bytesRead;
+      read = readConfinedFile(root, rel, Math.min(limits.maxFileBytes, remaining));
       if (read.ok) bytesRead += read.buffer.length;
+      // Cut short by the scan's budget rather than the per-file limit: the scan is partial.
+      if (read.ok && !read.complete && remaining < limits.maxFileBytes && read.size > remaining) {
+        read = { ...read, budgetCut: true };
+        truncated.push("bytes");
+      }
     }
     reads.set(rel, read);
     return read;
@@ -430,7 +439,11 @@ export async function loadRepositoryAgentConfig({
     entry.size = read.size;
     const modified = localModification(git, read.buffer, read.complete, attributes.has(rel));
     if (modified !== null) entry.git.modified = modified;
-    if (!read.complete) return { ...entry, diagnostic: "Larger than the inspector reads; metadata is unavailable." };
+    if (!read.complete) {
+      return { ...entry, diagnostic: read.budgetCut
+        ? "Not fully read: the scan reached its size budget."
+        : "Larger than the inspector reads; metadata is unavailable." };
+    }
     const text = textOf(read.buffer);
     if (match.format === "text") entry.tokens = estimateTokens(text).tokens;
     const described = describeWith(provider, match, text);
