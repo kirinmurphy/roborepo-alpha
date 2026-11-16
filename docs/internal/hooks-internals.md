@@ -335,8 +335,8 @@ chain resolves the repository's own hooks directory from `core.hooksPath` in eve
 name, so the repository hook's exit status decides the operation.
 
 The checks: `pre-commit` and `pre-merge-commit` refuse a hand-made commit in the plans store
-(`plans-store.sh`); `pre-merge-commit` and `pre-rebase` refuse a merge commit on, or a rebase of, a
-protected branch (`protected-branch.sh`: main, master, each remote's recorded default branch, and
+(`plans-store.sh`); `pre-merge-commit`, `pre-commit` (while `MERGE_HEAD` exists), and `pre-rebase`
+refuse a merge commit on, finishing a merge on, or a rebase of, a protected branch (`protected-branch.sh`: main, master, each remote's recorded default branch, and
 `ROBOREPO_PROTECTED_BRANCHES`); and `pre-push` is described next.
 
 The agent `pre-push` refuses pushes to protected branches and force pushes, then pipes git's ref

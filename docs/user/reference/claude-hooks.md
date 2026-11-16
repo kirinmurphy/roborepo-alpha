@@ -64,21 +64,24 @@ a guard that does not depend on the local machine.
 ### Merges into a protected branch
 
 Agents never merge into a protected branch, locally or on GitHub. In a checkout that has one checked
-out, the hook denies `git merge`, `git pull`, `git rebase`, and `git cherry-pick` (Claude and Codex
-alike), following `cd`, `git -C`, subshells, and `sh -c` the same way as for deletes. Two forms stay
-allowed because they bring in no new commits:
+out, the hook denies `git merge`, `git pull`, `git rebase`, `git cherry-pick`, and `git am` (Claude
+and Codex alike), following `cd`, `git -C`, subshells, and `sh -c` the same way as for deletes. Two
+forms stay allowed because they bring in no new commits:
 
-- a fast-forward-only update from the branch's own upstream: `git pull --ff-only`,
-  `git pull --ff-only origin main`, `git merge --ff-only origin/main`;
+- a fast-forward-only update from the branch's own upstream, meaning its configured remote (`origin`
+  when none is set) and its own name: `git pull --ff-only`, `git pull --ff-only origin main`,
+  `git merge --ff-only origin/main`, `git merge --ff-only @{u}`;
 - stopping one in progress: `--abort` or `--quit`.
 
-`git merge --ff-only feature` on `main` is denied: it would land the feature branch. To bring `main`
-into a feature branch, run `roborepo plans sync-base` from that branch's worktree.
+A fast-forward from anything else is denied: `git merge --ff-only feature` would land the feature
+branch, and `git pull --ff-only <path or URL>` another repository's history. To bring `main` into a
+feature branch, run `roborepo plans sync-base` from that branch's worktree.
 
-The agents' `pre-merge-commit` and `pre-rebase` git hooks back this up. They refuse a merge commit on
-a protected branch and a rebase of one, however the command reached git, such as through an alias.
-A fast-forward makes no merge commit, so only the shell hook sees it. Your own terminal is
-unaffected.
+The agents' git hooks back this up, however the command reached git, such as through an alias:
+`pre-merge-commit` refuses a merge commit on a protected branch, `pre-commit` refuses finishing one
+(after a conflict or `--no-commit`), and `pre-rebase` refuses rebasing one. A fast-forward,
+`cherry-pick`, `am`, and `merge --squash` make ordinary commits, so only the shell hook sees those.
+Your own terminal is unaffected.
 
 ### Deletes on a protected branch
 

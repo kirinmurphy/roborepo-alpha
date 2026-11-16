@@ -334,6 +334,13 @@ assert.notEqual(r.status, 0, "rebasing master should be refused");
 assert.match(r.stderr, /a rebase into protected branch "master"/);
 r = git(work, ["rebase", "-q", "feature", "master"], agentEnv);
 assert.notEqual(r.status, 0, "rebasing master by name should be refused");
+// A merge that stops (--no-commit, or a conflict) and is finished by `git commit` is refused too.
+r = git(work, ["merge", "-q", "--no-ff", "--no-commit", "feature"]);
+assert.equal(r.status, 0, `a human --no-commit merge starts: ${r.stderr}`);
+r = git(work, ["commit", "-q", "--no-edit"], agentEnv);
+assert.notEqual(r.status, 0, "finishing a merge on master with git commit should be refused");
+assert.match(r.stderr, /finishing a merge into protected branch "master"/);
+gitOk(work, "merge", "--abort");
 gitOk(work, "switch", "-q", "-c", "side", "HEAD~1");
 assert.equal(git(work, ["merge", "-q", "--no-ff", "--no-edit", "feature"], agentEnv).status, 0, "a feature branch takes merges");
 gitOk(work, "switch", "-q", "master");
@@ -575,6 +582,18 @@ const mergeCases = [
   [onMain, "git pull --ff-only origin main", "defer"],
   [onMain, "git merge --ff-only origin/main", "defer"],
   [onMain, "git merge --ff-only @{u}", "defer"],
+  [onMain, "git merge --ff-only main@{u}", "defer"],
+  [onMain, "git merge --ff-only -m msg origin/main", "defer"],
+  [onMain, "git pull --ff-only -X ours origin main", "defer"],
+  [onMain, "git pull --ff-only origin refs/heads/main", "defer"],
+  // A fast-forward from anything but the branch's own upstream would land other history.
+  [onMain, "git merge --ff-only x/main", "deny"],
+  [onMain, "git merge --ff-only refs/heads/x/main", "deny"],
+  [onMain, `git pull --ff-only ${onFeature}`, "deny"],
+  [onMain, "git pull --ff-only ../otherclone main", "deny"],
+  [onMain, "git pull --ff-only https://example.com/other.git main", "deny"],
+  [onMain, "git am patch.mbox", "deny"],
+  [onMain, "git am --abort", "defer"],
   [onMain, "git merge --abort", "defer"],
   [onMain, "git rebase --abort", "defer"],
   [onMain, "git cherry-pick --quit", "defer"],

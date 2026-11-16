@@ -26,8 +26,8 @@ import { fileURLToPath } from 'node:url'
 // merging a pull request) in the forms the permission prefix rules miss: global flags before the
 // subcommand, as in `gh -R owner/repo pr merge …`. Those never reach either protected-branch guard.
 //
-// In a checkout that has a protected branch checked out, it denies git merge, pull, rebase, and
-// cherry-pick, so agents never merge into it. A fast-forward-only pull or merge of the branch's own
+// In a checkout that has a protected branch checked out, it denies git merge, pull, rebase,
+// cherry-pick, and am, so agents never merge into it. A fast-forward-only pull or merge of the branch's own
 // upstream, and stopping one in progress, stay allowed.
 //
 // It also guards a checkout that has a protected branch checked out against deletes. Claude's shell
@@ -59,8 +59,8 @@ const SKIPS_BACKSTOP = new Set(['--no-verify'])
 const PLANS_STORE_BRANCH = 'repo-plans'
 
 const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
-// Mirrors the change-github-directly behavior in agent-permissions.json; a test keeps them equal.
-// `gh pr merge` is absent: merge-pull-requests asks, so the permission rules decide it.
+// Covers the change-github-directly and merge-pull-requests behaviors in agent-permissions.json; a
+// test keeps the first equal to this list.
 const GH_DENIED = [
   ['api'], ['auth', 'token'], ['pr', 'merge'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
   ['secret'], ['variable'], ['release'], ['workflow', 'run'],
@@ -478,17 +478,28 @@ function gitDeletes(subcommand, args) {
   return null
 }
 
-// The git subcommands that bring other commits into the checked-out branch: `merge`, `pull`,
-// `rebase`, and `cherry-pick`. Stopping one in progress (`--abort`, `--quit`) brings nothing in. A
-// fast-forward-only pull or merge of the branch's own upstream adds no new commits, so it stays
-// allowed; a fast-forward to any other branch would land that branch, so it does not.
-function gitIntegrates(subcommand, args, branch) {
-  if (!['merge', 'pull', 'rebase', 'cherry-pick'].includes(subcommand)) return null
+// The git subcommands that bring other commits into the checked-out branch.
+const INTEGRATING_SUBCOMMANDS = ['merge', 'pull', 'rebase', 'cherry-pick', 'am']
+// merge and pull options that take the next word as their value.
+const INTEGRATE_VALUE_OPTIONS = new Set(['-m', '-F', '-s', '-X', '--strategy', '--strategy-option', '--file', '--message'])
+
+// Stopping one in progress (`--abort`, `--quit`) brings nothing in. A fast-forward-only pull or
+// merge from the branch's own upstream adds no new commits, so it stays allowed: the remote must be
+// the branch's configured remote (origin when none is set), and the branch its own. A fast-forward
+// to anything else would land that other history, so it does not.
+function gitIntegrates(dir, subcommand, args, branch) {
+  if (!INTEGRATING_SUBCOMMANDS.includes(subcommand)) return null
   if (args.some((arg) => arg === '--abort' || arg === '--quit')) return null
-  const operands = args.filter((arg) => !arg.startsWith('-'))
+  const operands = []
+  for (let k = 0; k < args.length; k += 1) {
+    if (INTEGRATE_VALUE_OPTIONS.has(args[k])) k += 1
+    else if (!args[k].startsWith('-')) operands.push(args[k])
+  }
   if (args.includes('--ff-only')) {
-    if (subcommand === 'pull' && (operands.length <= 1 || (operands.length === 2 && operands[1] === branch))) return null
-    if (subcommand === 'merge' && operands.length === 1 && (/^@\{u(pstream)?\}$/.test(operands[0]) || operands[0].endsWith(`/${branch}`))) return null
+    const remote = git(dir, ['config', `branch.${branch}.remote`]) || 'origin'
+    const ownBranch = (ref) => ref === branch || ref === `refs/heads/${branch}`
+    if (subcommand === 'pull' && (operands.length === 0 || (operands[0] === remote && (operands.length === 1 || (operands.length === 2 && ownBranch(operands[1])))))) return null
+    if (subcommand === 'merge' && operands.length === 1 && [`@{u}`, `@{upstream}`, `${branch}@{u}`, `${branch}@{upstream}`, `${remote}/${branch}`, `refs/remotes/${remote}/${branch}`].includes(operands[0])) return null
   }
   return `git ${subcommand}`
 }
@@ -702,8 +713,8 @@ function classifyDeletes(text, startCwd) {
       if (['switch', 'checkout'].includes(args[j])) recordBranchChange(gitCwd, args[j], args.slice(j + 1))
       const deletes = args[j] && gitDeletes(args[j], args.slice(j + 1))
       if (deletes) result = stricter(result, classifyDelete(gitCwd, deletes, []))
-      const checkout = args[j] && ['merge', 'pull', 'rebase', 'cherry-pick'].includes(args[j]) && checkoutAt(gitCwd)
-      const integrates = checkout && gitIntegrates(args[j], args.slice(j + 1), checkout.branch)
+      const checkout = args[j] && INTEGRATING_SUBCOMMANDS.includes(args[j]) && checkoutAt(gitCwd)
+      const integrates = checkout && gitIntegrates(gitCwd, args[j], args.slice(j + 1), checkout.branch)
       if (integrates) result = stricter(result, denyIntegrate(integrates, checkout))
     }
   }
@@ -811,7 +822,7 @@ const toolName = input.tool_name || input.toolName || ''
 const toolInput = input.tool_input || input.toolInput || {}
 const rawCommand = toolInput.command ?? toolInput.cmd
 const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).replaceAll("'", "'\\''")}'`).join(' ') : rawCommand
-if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick)\b/.test(command)) process.exit(0)
+if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/.test(command)) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
