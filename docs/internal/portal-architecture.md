@@ -99,6 +99,7 @@ telemetry attributed to no listed repository). Runtime, Settings, and Home stay 
 | URL state | `portal/shared/repository-scope.js` | Parsing, composing, and clearing only the `repo` parameter; `history.pushState` on change and a change event (also fired on back/forward); nav hrefs via `scopedPagePath` |
 | Selector | `portal/shared/repository-scope-selector.js`, `repository-scope-choices.js` | An `<option-dropdown>` in its own full-width sub-header row at the bottom of the sticky `.portal-header` (`tpl-repository-scope-bar`, appended by `theme.js` on scope-aware pages only, so the two pin together), labeled **Viewing** and right-aligned: All repos, each visible repo from `GET /api/repositories` (same display name told apart by provider owner, then `urlKey`), Activity outside listed repos where offered, and a **Manage Repos** action row; resolves the current key for every page, and Agents uses that resolution to choose between the global page and its repo inspector. The last repo list is cached in `sessionStorage` so a page load names the current repo on first paint; only a list fetched by the page itself may call a key unavailable |
 | Route resolution | `scripts/cli/portal-routes-scope.mjs`, `modules/repositories/scope.mjs` | Each scoped data route (`/api/plans`, `/api/plans/refresh`, `/api/data`, `/api/config/repository`, `/api/config/repository/source`) resolves the key once and hands domain code the canonical `repositoryId` |
+| Repo list change | `portal/shared/repository-list-change.js` | The one "repos changed" signal and the visible repo list it carries (`GET /api/repositories`, plus the `sessionStorage` copy the selector paints from) |
 
 Rules:
 
@@ -115,6 +116,35 @@ Rules:
 - Plans filters its one cached snapshot per request; Tokens' analysis cache keys on the resolved
   `repositoryId`, and on the registry signature for `_other`, whose membership changes when a
   repository is found or ignored.
+
+### When the repo list changes
+
+The **Manage Repos** dialog and Settings' inline repo list share one surface
+(`portal/shared/repository-sources-dialog.js`). After every change it saves (add, remove, enable or
+disable a source, refresh, ignore, restore, clear all, turning on auto-discovery) it calls
+`notifyRepositoriesChanged()`, which:
+
+1. Reads the visible repo list once.
+2. Clears `?repo=` through `clearRepositoryScope()` when it names a repo that is no longer listed,
+   exactly as **Show all repos** does: other parameters stay, Plans drops its repo-bound
+   `namespace`, and a page holding unsaved work asks first. `_other` is never cleared.
+3. Calls every `onRepositoriesChanged(listener)` subscriber with `{ repositories }` and waits for
+   the promises they return, so the dialog's error line and sync status cover the page reload.
+
+Subscribers, one line each, re-read their own data:
+
+| Page part | On a change |
+| --- | --- |
+| Header selector | Shows the new list and re-resolves the scope |
+| Home | Forced overview refresh |
+| Plans | Rebuilt snapshot (`/api/plans/refresh`) in the page's load sequence, so it supersedes the load a cleared scope started |
+| Tokens | Forgets the report version and refetches; again when the dialog closes, since the report does not repaint under an open dialog |
+| Runtime | Forced load |
+| Settings | Setup re-read (its inline list re-renders itself) |
+
+Agents loads no repo data; it follows the selector's resolution. A new page part that shows repos
+or repo-scoped data subscribes with `onRepositoriesChanged` instead of passing a callback to the
+dialog. Browser coverage: `scripts/test/portal-ui/repository-list-change.spec.mjs`.
 
 ## Shared Browser API (`portal/shared/api.js`)
 

@@ -224,8 +224,8 @@ protects is the human's decision, and escalated findings still go to them.
 For each finding fixed here:
 
 1. Make the fix in the worktree, then run the checks it affects. A code or test change needs the
-   full gate on the fixed commit: CI's result once the branch is pushed, which this skill never
-   does itself, or the canonical completion gate locally, once, when no CI result can exist.
+   full gate on the fixed commit: CI's result once the branch is pushed (step 6 pushes it), or the
+   canonical completion gate locally, once, when no CI result can exist.
 2. Commit the fix on its own, separate from the plan record, so the human can read exactly what the
    review changed.
 3. Check the finding off with its commit: `- [x] Missing retry test — fixed in review (<short commit>)`.
@@ -241,7 +241,9 @@ the updated plan in the worktree.
 Resolve the feature branch's current tip as a full commit id: that is the implementation the human
 is asked to approve. Record `### Result` with `Status: complete`, that full reviewed implementation
 commit, and the full base commit synchronized in step 2. Commit this evidence before asking the
-human. Plan-only evidence commits do not change the reviewed implementation. If findings or
+human, then push the feature branch (see Push the feature branch) so the commits this review made,
+including the base merge and its fixes, reach the remote and CI runs on the reviewed commit. Plan-only
+evidence commits do not change the reviewed implementation. If findings or
 required manual checks remain, keep Result pending and present those outstanding decisions instead
 of asking for approval. Say plainly that approval was not requested, and list each open finding and
 unconfirmed manual check that blocks it. Then ask the concrete question that unblocks the next
@@ -327,6 +329,24 @@ On agreement:
 2. Run `roborepo plans reopen <plan> --json`. It marks any approval `invalidated` and commits and
    pushes the move back to `active/`. The plan keeps its worktree and branch, and never returns to
    `ready/`.
+3. Push the feature branch (see Push the feature branch) when this review committed to it.
+
+### Push the feature branch
+
+Every review run that commits to the feature branch (the base merge, fixes, or review evidence)
+ends by pushing it, so the work never lives only on this machine. Push after the run's last
+feature-branch commit; a run that committed nothing there and whose branch already matches its
+remote has nothing to push.
+
+1. Re-read the worktree's branch and Git status. Push only the plan's feature branch, never the base
+   branch or any other protected branch. Lifecycle commits are already on the plans branch.
+2. From the worktree, run `git push -u <remote> <branch>`, where `<remote>` is the branch's upstream
+   remote, or the repository's only remote when none is set. Never force-push.
+3. With no remote, or when the push is refused (a permission prompt declined, a hook, a rejected
+   non-fast-forward), do not retry, rebase, or work around it. The review stands; report the exact
+   command under Needs you and whether the session's permissions or the remote refused it.
+
+The push is a fixed step of this skill; it does not open a pull request or ask for approval.
 
 ## Final Report
 
@@ -340,6 +360,7 @@ forward. A pending, stale, or missing review ends with the next actionable quest
 **Continue until a human decision**, unless the human chose to stop or defer. A complete review awaiting approval must include
 step 6's exact-commit approval question. After explicit approval,
 record it through step 6a before ending. Describe reused evidence as historical when it matters.
+Say whether the feature branch was pushed, or give the push command that did not run and why.
 
 ## Boundaries
 
@@ -348,7 +369,8 @@ Do not:
 - fix a finding that chooses between real alternatives, changes requirements, or changes a contract
   the plan did not specify, without the human's decision;
 - infer, assume, or record approval without the human's explicit answer;
-- merge the feature branch into the base branch, push code, open or merge pull requests;
+- merge the feature branch into the base branch, push anything but the plan's feature branch, open
+  or merge pull requests;
 - change lifecycle state except the submit transition from `active/` and the reopen transition
   after an agreed scope change;
 - move a plan back to `ready/`;

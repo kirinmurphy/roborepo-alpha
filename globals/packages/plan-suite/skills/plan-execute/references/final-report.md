@@ -59,7 +59,7 @@ in plain words; the reader has not seen the plan's wording.
 
 | Decision | Why | Instead of |
 | --- | --- | --- |
-| plan-review never pushes | Keeps the skill's no-push rule | Pushing after each fix, as the plan said |
+| Retry once on a timeout | A second failure is reported, not hidden | Retrying until success, as the plan said |
 
 ## Exceptions
 
