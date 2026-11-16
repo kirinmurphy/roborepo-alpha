@@ -230,7 +230,7 @@ Section headings are matched by label against a synonym list, so several common 
 
 Completed plans additionally need a `Verification` section with real content under it — evidence the work was checked, or an explicit statement of what was not verified. A bare heading does not satisfy it. Record evidence itself, never a path under `/tmp` or another temporary folder: the OS deletes those within days and the plan outlives them.
 
-Validation reports each problem as a finding with a stable code, a plain-language message, and a resolution. In place, findings do not move or hide a plan: it can sit in any folder with findings, and the portal reports them. Blocking ones, naming findings among them, make `roborepo plans validate` exit 1, and `promote` and `start` also refuse a naming finding or an unreadable `plans-config.json`. A lifecycle transition is stricter: moving a plan into a folder whose requirements it does not meet is refused with `LIFECYCLE_REQUIREMENTS`, listing every problem at once along with a generated repair prompt, and nothing moves. Moves into `ready/` and `completed/` require no findings at all; moves into `active/` and `review/` tolerate unconfirmed `## Not tested` entries; a move into `archived/` checks only the archived rules.
+Validation reports each problem as a finding with a stable code, a plain-language message, and a resolution. In place, findings do not move or hide a plan: it can sit in any folder with findings, and the portal reports them. Blocking ones, naming findings among them, make `roborepo plans validate` exit 1, and `promote` and `start` also refuse a naming finding or an unreadable `plans-config.json`. A lifecycle transition is stricter: moving a plan into a folder whose requirements it does not meet is refused with `LIFECYCLE_REQUIREMENTS`, listing every problem at once along with a generated repair prompt, and nothing moves. Moves into `ready/` and `completed/` require no findings at all; moves into `active/` tolerate open `## Not tested` entries, and moves into `review/` tolerate them only when each gives the reason an agent cannot clear it (see Not tested); a move into `archived/` checks only the archived rules.
 
 Use Markdown checkboxes for executable work:
 
@@ -246,17 +246,62 @@ An optional section of checkboxes for work that exists but that no test covers:
 ```markdown
 ## Not tested
 
-- [ ] The report line renders a per-skill reference tally. Requires a live session; no test can assert what an agent writes.
+- [ ] The dark theme reads well on the Plans page. Needs a person: judging contrast and look is a
+      human judgment.
+- [ ] The portal starts and lists plans in a browser. Blocked: `roborepo browser run --serve "npm run
+      portal"` failed with "listen EPERM 127.0.0.1:4310"; allow it to run outside the sandbox.
+- [x] `roborepo plans submit` refuses an entry with no reason. — Verified by agent 2026-11-20 at
+      a1b2c3d: `node scripts/test/plan-lifecycle-transitions-check.mjs` → passed.
+- [x] The approval question names the commit. — Confirmed by the user 2026-11-21: "saw the full
+      commit id in the question".
 ```
 
-- Write an entry the moment a gap is known: a check skipped, an assumption not exercised, a claim
-  resting on indirect evidence. `/plan-execute` writes them during its run; a sync adds them.
-- Each entry states what to check and why a test cannot.
-- Only the user clears an entry: by confirming it by hand and checking it off, or by deleting it
-  with the reason recorded in the plan's `## Decision Log`.
+Write an entry the moment a gap is known: a check skipped, an assumption not exercised, a claim
+resting on indirect evidence. `/plan-execute` writes them during its run; a sync adds them. Each
+entry states what to check.
+
+An agent runs every check it can before leaving an entry for the user. An open entry ends with the
+reason an agent cannot clear it. A cleared entry ends with its evidence after a ` — ` dash, the
+entry's resolution, as `## Review` findings do.
+
+| Entry state | Must end with | Who may write it |
+| --- | --- | --- |
+| Open, person-only | `Needs a person: <why an agent cannot>` | Any agent |
+| Open, blocked by a tool | `Blocked: <exact command> failed with <error>`, and what would unblock it | Any agent, after retrying through the harness's normal route |
+| Cleared by an agent | `— Verified by agent <date> at <commit>: <command or method> → <result>` | An agent, only after the check passed |
+| Cleared by the user | `— Confirmed by the user <date>: <what they reported>` | The user confirms; an agent only records it, quoting the user's explicit answer |
+| Removed | Deleted, with the reason in `## Decision Log` | Only on the user's decision |
+
+Accepted reasons for `Needs a person:`:
+
+- human judgment of look, feel, or wording;
+- an account, credential, or payment an agent must not use;
+- a physical device;
+- a third-party system the agent cannot reach;
+- an action the user's rules reserve to the user.
+
+"No time" and "no test exists" are not reasons: an agent writes the test or runs the check. A check
+that runs and fails is a defect to fix, never an entry.
+
+Safety rules, for every agent and every plan command:
+
+- An agent never checks off a person-only entry on its own judgment.
+- An agent never clears an entry without a resolution that names the passing evidence.
+- An agent records a user's confirmation only from the user's explicit answer, and never records
+  human approval.
+
+How validation treats entries:
+
 - Unchecked entries on an active, review, or completed plan are a finding (`UNCONFIRMED_NOT_TESTED`).
-  They never block implementation completion, and `/plan-close` refuses to close a plan while any
-  remain.
+  An open entry that gives its reason does not block implementation completion; the user settles it
+  in `/plan-review`, and `/plan-close` refuses to close a plan while any remain.
+- On an active or review plan, an unchecked entry with neither `Needs a person:` nor `Blocked:`, and
+  a checked entry with no text after a ` — ` dash, are a second finding (`NOT_TESTED_UNEXPLAINED`),
+  which quotes each entry. `roborepo plans validate`, `plans save`, and moves into `active/` report
+  it without refusing. `roborepo plans preflight` and the move into `review/` refuse it, and a
+  review Result is incomplete while a checked entry has no evidence.
+- The check confirms a reason or evidence exists, not that it is true. The Validator in
+  `/plan-execute` and `/plan-review` judges that.
 - The heading must be exactly `## Not tested`. Headings and checkboxes inside fenced code blocks,
   like the example above, are never plan structure.
 

@@ -86,12 +86,22 @@ flake that now passes repeatedly.
 
 ## Needs you
 
-Unconfirmed `## Not tested` entries appear here as manual checks. Open Questions appear here too,
-each with its options, what each leads to, and a recommendation; this is the run's only question
-batch. The last row is the next command: `/plan-execute` again to resume, or `/plan-review`.
+Only open `## Not tested` entries appear here, in two groups; an entry an agent cleared is in the
+plan with its evidence and is not repeated.
+
+- **Checks only you can make:** each person-only entry with its steps, the expected result, and
+  its `Needs a person:` reason.
+- **Commands to allow:** each `Blocked:` entry as the exact command a tool refused, the error, and
+  what allowing it lets the agent check.
+
+Open Questions appear here too, each with its options, what each leads to, and a recommendation;
+this is the run's only question batch. The last row is the next command: `/plan-execute` again to
+resume, or `/plan-review`.
 
 | Do | Why | How |
 | --- | --- | --- |
+| Check the dark theme on the Plans page | Judging contrast needs a person | Open `/plans`, switch theme; text stays readable |
+| Allow the portal browser check | The sandbox refused the dev server's port | `roborepo browser run --serve "npm run portal"` |
 | Push the branch | The automatic push was refused; CI has not run | `git push -u origin <branch>` |
 | Run `/plan-review` | A person reviews and approves the work | `/plan-review` |
 

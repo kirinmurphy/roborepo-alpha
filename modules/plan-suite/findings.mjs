@@ -177,7 +177,16 @@ const DEFS = {
     kind: "lifecycle",
     severity: "advisory",
     message: ({ count }) => `${count} unconfirmed Not tested entr${count === 1 ? "y" : "ies"}.`,
-    resolution: "Confirm each entry by hand and check it off, or delete it with the reason recorded in the plan's `## Decision Log`.",
+    resolution: "Run the check each entry describes and check it off with the evidence after ` — `. Leave open only an entry an agent cannot clear, ending it with `Needs a person: <why>` or `Blocked: <command> failed with <error>`; the user confirms those. Delete an entry only on the user's decision, with the reason recorded in the plan's `## Decision Log`.",
+  },
+  // Emitted for active and review plans only. `plans validate` and `plans save` report it; the move
+  // into Review and the completion preflight refuse it, so a plan reaches review with every open
+  // check explained and every cleared one evidenced.
+  NOT_TESTED_UNEXPLAINED: {
+    kind: "lifecycle",
+    severity: "advisory",
+    message: ({ count, meta }) => `${count} Not tested entr${count === 1 ? "y has" : "ies have"} no reason or evidence: ${meta.entries.map((entry) => `"${excerptOf(entry.text)}"`).join("; ")}.`,
+    resolution: "Run the check each open entry describes and check it off with its evidence after ` — `, or end the entry with `Needs a person: <why an agent cannot>` or `Blocked: <command> failed with <error>`. Give each checked entry the evidence that cleared it after ` — `.",
   },
   MISSING_VERIFICATION: {
     kind: "lifecycle",
@@ -304,6 +313,11 @@ export function finding(code, { count, meta } = {}) {
   if (count !== undefined) resolved.count = count;
   if (meta !== undefined) resolved.meta = meta;
   return resolved;
+}
+
+// The start of an entry, enough for a reader to find it in the plan without repeating all of it.
+function excerptOf(text, limit = 60) {
+  return text.length > limit ? `${text.slice(0, limit).trimEnd()}…` : text;
 }
 
 // The display-string projection of a finding list. plan.validation keeps this alongside the

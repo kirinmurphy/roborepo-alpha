@@ -26,7 +26,12 @@ It reports, in the shape
 - Lifecycle: a ready, active, or review plan has a next action, design, and criteria; a completed
   plan has no unchecked tasks, next action, or blockers, and has a Verification section; an archived
   plan has no next action; unclassified root docs are flagged.
-- Not tested: unchecked `## Not tested` entries on an active, review, or completed plan.
+- Not tested: unchecked `## Not tested` entries on an active, review, or completed plan
+  (`UNCONFIRMED_NOT_TESTED`). On an active or review plan, also each unchecked entry that gives no
+  `Needs a person:` or `Blocked:` reason and each checked entry with no evidence after a ` — ` dash
+  (`NOT_TESTED_UNEXPLAINED`, which quotes the entries). Both are advisory here, but
+  `roborepo plans submit` and `plans preflight` refuse the second: run the check and record its
+  evidence, or give the reason an agent cannot.
 - Relationships: duplicate ids, and `depends_on`, `related`, and `blocked_by` entries that resolve
   to no plan.
 - Repository: problems with `plans/plans-config.json` and `plans/plans-order.json`, which

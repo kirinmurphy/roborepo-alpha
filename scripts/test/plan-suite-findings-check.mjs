@@ -61,6 +61,9 @@ testNamingFindingsCarryTheirFilename();
 testRepositoryPlansProduceNoNamingFindings();
 testCopyFindingsAreGone();
 testReadyAndReviewDestinationRules();
+testNotTestedEntriesNeedAReasonOrEvidence();
+testNotTestedEntryTextIncludesWrappedLines();
+testCompletedPlansSkipTheNotTestedReasonCheck();
 testReviewRecordParsing();
 console.log("ok: plan docs findings and lifecycle policy checks passed");
 
@@ -569,10 +572,88 @@ function testReadyAndReviewDestinationRules() {
     }
   }
   const withNotTested = parsePlanMarkdown(
-    "---\nid: abc123\nnext_action: Go.\n---\n\n# P\n\n## Summary\n\nx\n\n## Goals\n\nx\n\n## Context\n\nx\n\n## Proposed design\n\nx\n\n## Validation\n\nx\n\n## Not tested\n\n- [ ] A manual check.\n", {});
+    "---\nid: abc123\nnext_action: Go.\n---\n\n# P\n\n## Summary\n\nx\n\n## Goals\n\nx\n\n## Context\n\nx\n\n## Proposed design\n\nx\n\n## Validation\n\nx\n\n## Not tested\n\n- [ ] A manual check. Needs a person: judging look is a human call.\n", {});
   assert.deepEqual(codesFor(withNotTested, "ready"), [], "Ready has nothing built yet, so Not tested entries are not its concern");
   assert.deepEqual(codesFor(withNotTested, "review"), ["UNCONFIRMED_NOT_TESTED"]);
   assert.deepEqual(codesFor(withNotTested, "review"), codesFor(withNotTested, "active"), "Review applies the Active rules");
+}
+
+// A plan in Active or Review with a `## Not tested` section holding `entries`.
+function notTestedPlan(entries) {
+  return doc({ frontmatter: "id: sample-plan\nnext_action: Go.\n", extra: `\n## Not tested\n\n${entries.join("\n")}\n` });
+}
+
+function unexplainedIn(parsed, lifecycle) {
+  return validate(parsed, lifecycle).findings.find((item) => item.code === "NOT_TESTED_UNEXPLAINED");
+}
+
+// An open entry must say why an agent cannot clear it, and a cleared entry must carry evidence, so a
+// reader of the plan can tell a check nobody tried from one only a person can make.
+function testNotTestedEntriesNeedAReasonOrEvidence() {
+  const unexplained = notTestedPlan([
+    "- [ ] The portal lists plans in a browser.",
+    "- [x] The approval question names the commit.",
+  ]);
+  for (const lifecycle of ["active", "review"]) {
+    const found = unexplainedIn(unexplained, lifecycle);
+    assert.equal(found?.count, 2, `${lifecycle}: an open entry with no reason and a checked entry with no evidence are both reported`);
+    assert.equal(found.severity, "advisory", "`plans validate` and `plans save` do not refuse it");
+    assert.match(found.message, /"The portal lists plans in a browser\."/, "the message quotes the open entry");
+    assert.match(found.message, /"The approval question names the commit\."/, "and the checked one");
+    assert.deepEqual(found.meta.entries.map((entry) => entry.done), [false, true]);
+  }
+
+  const long = unexplainedIn(notTestedPlan([`- [ ] ${"A very long entry that goes on. ".repeat(10)}`]), "active");
+  assert.ok(long.message.length < 200, "a long entry is quoted from its start, not in full");
+  assert.match(long.message, /^1 Not tested entry /, "one entry reads in the singular");
+
+  const explained = notTestedPlan([
+    "- [ ] The dark theme reads well. Needs a person: judging contrast is a human judgment.",
+    "- [ ] The portal starts in a browser. Blocked: `roborepo browser run` failed with \"listen EPERM\"; allow it outside the sandbox.",
+    "- [x] Submit refuses an entry with no reason. — Verified by agent 2026-11-20 at a1b2c3d: `node check.mjs` → passed.",
+    "- [x] The approval question names the commit. — Confirmed by the user 2026-11-21: \"saw the full commit id\".",
+    "- [x] The sandbox setting applies without a restart. — Done 2026-11-13; ran it from the worktree.",
+  ]);
+  for (const lifecycle of ["active", "review"]) {
+    assert.equal(unexplainedIn(explained, lifecycle), undefined, `${lifecycle}: reasons and any resolution after the dash are accepted`);
+  }
+  assert.deepEqual(codesFor(explained, "active"), ["UNCONFIRMED_NOT_TESTED"], "open entries with a reason are still reported as open");
+
+  const emptyResolution = notTestedPlan(["- [x] The approval question names the commit. —"]);
+  assert.equal(unexplainedIn(emptyResolution, "active")?.count, 1, "a dash with nothing after it is not evidence");
+
+  const resolution = finding("UNCONFIRMED_NOT_TESTED", { count: 1 }).resolution;
+  assert.doesNotMatch(resolution, /by hand/, "an open entry is no longer always the user's to confirm by hand");
+  assert.match(resolution, /Run the check/, "the agent runs what it can first");
+}
+
+// The reason or evidence usually sits on a wrapped line, so an entry's text is the whole entry.
+function testNotTestedEntryTextIncludesWrappedLines() {
+  const parsed = notTestedPlan([
+    "- [ ] The dark theme reads well on the Plans page. Needs a",
+    "      person: judging contrast and look is a human judgment.",
+    "- [x] Submit refuses an entry with no reason.",
+    "      — Verified by agent 2026-11-20 at a1b2c3d: the lifecycle check passed.",
+    "",
+    "A paragraph after the list is not part of the last entry.",
+  ]);
+  assert.deepEqual(parsed.notTested.entries.map((entry) => entry.text), [
+    "The dark theme reads well on the Plans page. Needs a person: judging contrast and look is a human judgment.",
+    "Submit refuses an entry with no reason. — Verified by agent 2026-11-20 at a1b2c3d: the lifecycle check passed.",
+  ]);
+  assert.equal(unexplainedIn(parsed, "active"), undefined, "a reason or resolution on a wrapped line counts");
+}
+
+// Completed plans predate the entry format; close already refuses any open entry.
+function testCompletedPlansSkipTheNotTestedReasonCheck() {
+  const cleared = notTestedPlan(["- [x] Confirmed by hand."]);
+  assert.ok(!codesFor(cleared, "completed").includes("NOT_TESTED_UNEXPLAINED"), "a checked entry with no dash stays valid on a completed plan");
+  const open = notTestedPlan(["- [ ] Nobody looked."]);
+  const codes = codesFor(open, "completed");
+  assert.ok(codes.includes("UNCONFIRMED_NOT_TESTED") && !codes.includes("NOT_TESTED_UNEXPLAINED"), "an open entry on a completed plan is reported as open only");
+  for (const lifecycle of ["backlog", "ready", "archived"]) {
+    assert.ok(!codesFor(open, lifecycle).includes("NOT_TESTED_UNEXPLAINED"), `${lifecycle} has no built work to explain`);
+  }
 }
 
 // The review record: findings are the checkboxes under `### Findings` only, and the approval is read

@@ -194,7 +194,8 @@ then the run proceeds without questions.
     shareable URL or link when the environment exposes one. If the repository cannot expose a
     link, record what was started and why no link is available.
 12. Run completion-level verification, including manual verification against the started
-    environment when applicable. Apply the behavioral evidence handoff below before committing.
+    environment when applicable, and attempt every `## Not tested` entry (see Not Tested). Apply
+    the behavioral evidence handoff below before committing.
 13. Re-read Git status and the implementation diff in the target worktree, then commit the
     completed implementation changes there with a descriptive message, saving the run's plan
     updates with `roborepo plans save`. Do not leave completed code
@@ -249,7 +250,8 @@ human accepted it.
 2. Run the repository's canonical completion preflight command for `<plan>`. It checks that no
    task outside `## Not tested` is unchecked, `blocked_by` is empty, the worktree has no
    uncommitted changes, the feature branch has a commit of its own, and the plan passes the review
-   validator apart from unconfirmed Not tested entries.
+   validator. That validator tolerates an open Not tested entry only when it gives the reason an
+   agent cannot clear it, and refuses a cleared entry with no evidence, naming each entry to fix.
 3. **Incomplete, blocked, or not yet validated:** the plan stays in `active/`. This includes a
    Validation Loop that left `escalate` findings open; their unchecked findings fail the preflight.
    Record the remaining tasks, findings, or blockers, set an actionable `next_action` written for a
@@ -258,8 +260,8 @@ human accepted it.
    pushes the move from `active/` to `review/` on the plans branch. Then push the feature branch (below)
    and report that the plan awaits `/plan-review`.
 
-Genuinely unverified manual checks stay under `## Not tested`; they do not block completion, and
-they are resolved before `/plan-close`.
+A check only a person can make, or one a tool blocked, stays open under `## Not tested` with its
+reason. It does not block completion; the user settles it in `/plan-review`, before approval.
 
 ### Push the feature branch
 
@@ -299,18 +301,49 @@ A plan in `review/` returns here only to fix what review recorded.
 
 Built work that no test covers goes in the plan's `## Not tested` section the moment the
 gap is known: a check that was skipped, an assumption never exercised, a claim resting on indirect
-evidence. Each entry is an unchecked checkbox stating what to check and why a test cannot:
+evidence. Each entry is a checkbox stating what to check.
+
+Run every check an agent can run before submitting; the user is asked only for what an agent
+cannot do. Attempt each entry, using `feature-verification` for UI, server, API, CLI, or
+performance behavior, and write the missing test when a test can cover it. Then leave the entry in
+one of the states `/plan-write`'s `references/plan-schema.md` defines:
+
+| Outcome | Entry |
+| --- | --- |
+| The check passed | Checked, ending `— Verified by agent <date> at <commit>: <command or method> → <result>` |
+| The check ran and failed | Not an entry: a defect. Fix it, as with any failing test |
+| A tool blocked the check | Open, ending `Blocked: <exact command> failed with <error>`, and what would unblock it |
+| Only a person can make it | Open, ending `Needs a person: <why an agent cannot>` |
 
 ```markdown
 ## Not tested
 
-- [ ] The user-facing setup action enables all required components. Needs a browser session against
-      the supported live environment.
+- [ ] The setup dialog's wording reads clearly to a new user. Needs a person: judging wording is a
+      human judgment.
+- [x] The setup action enables every required component. — Verified by agent 2026-11-20 at a1b2c3d:
+      `roborepo browser run --serve "npm run portal"` → all components shown enabled.
 ```
 
-Never check an entry off yourself; the user confirms it by hand. The plan validator reports
-unchecked entries, and `/plan-close` refuses to close a plan while any remain. List every entry in
-the final report, and say so explicitly when there are none.
+A blocked check is retried through the harness's normal route before it is written down:
+
+1. Run `roborepo browser run --serve` as a bare call, with no pipe, `cd`, or chained command, so
+   the harness's sandbox exclusion for `roborepo` applies.
+2. Use the app's preview tools where they exist.
+3. Otherwise rerun the command outside the sandbox, which goes through the permission prompt.
+
+Only then write the `Blocked:` reason, and add the command to the Open Questions queue so the final
+report asks the user to allow it.
+
+Accepted reasons for `Needs a person:` are human judgment of look, feel, or wording; an account,
+credential, or payment an agent must not use; a physical device; a third-party system the agent
+cannot reach; and an action the user's rules reserve to the user. "No time" and "no test exists"
+are not reasons.
+
+Never check off a person-only entry on your own judgment, never clear an entry without a
+resolution naming the passing evidence, and record a user's confirmation only from their explicit
+answer. `roborepo plans submit` refuses while an open entry gives no reason or a cleared one has
+no evidence, and `/plan-close` refuses to close a plan while any entry is open. List every open
+entry in the final report, and say so explicitly when there are none.
 
 ## Decision Policy
 
@@ -410,7 +443,7 @@ A run is complete when:
 - targeted verification has passed or failures are explained;
 - required broader verification has been run when practical;
 - autonomous decisions are in the Decision Log;
-- every known untested gap is a `## Not tested` entry;
+- every known untested gap is a `## Not tested` entry, cleared with evidence or open with its reason;
 - every blocked decision and external blocker is in Open Questions, with the tasks it blocks;
 - no unblocked task remains;
 - blockers and deferred scope are explicit;
