@@ -37,6 +37,7 @@ const TABLE_LABELS = {
 const LINKED_FOLDERS = {
   ".agents/skills": { area: "skills", label: "Skills folder" },
   ".codex/skills": { area: "skills", label: "Skills folder (legacy location)", legacy: true },
+  ".codex/agents": { area: "config", label: "Custom agents folder" },
   ".agents": { area: "skills", label: "Agents folder" },
   ".codex": { area: "config", label: "Codex folder" },
 };

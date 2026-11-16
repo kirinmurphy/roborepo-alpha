@@ -172,7 +172,13 @@ export function scanTomlStructure(text, { rootStrings = [] } = {}) {
     }
     const key = readTomlKey(line);
     const assignment = key && /^\s*=\s*(.*)$/.exec(key.rest);
-    if (!assignment) return report(index);
+    if (!assignment) {
+      report(index);
+      // An unparseable key may still open a multi-line value; its lines stay unread.
+      const equals = line.indexOf("=");
+      if (equals !== -1) openValue = continueValue({ depth: 0, quote: null }, line.slice(equals + 1));
+      return;
+    }
     const value = assignment[1];
     const keyPath = [...(current || []), ...key.parts];
     if (!current) {

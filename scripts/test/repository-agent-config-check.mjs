@@ -344,6 +344,26 @@ try {
   assert.equal(linkedEntries["claude:.claude"].symlink, true);
   assert.equal(linkedEntries["codex:.agents/skills"].area, "skills");
   assert.equal(JSON.stringify(linkedInventory).includes("name: s"), false, "files behind a linked folder are not read");
+  // Linked subfolders inside a real .claude or .codex folder are references too.
+  const LINKED_SUB_REMOTE = "https://github.com/acme/linked-subfolders.git";
+  const linkedSub = makeRepo("linked-subfolders", { "README.md": "# r\n" }, { remote: LINKED_SUB_REMOTE });
+  write(path.join(tmp, "shared-rules"), "always.md", "# shared rule\n");
+  for (const folder of [".claude/rules", ".claude/agents", ".claude/commands", ".codex/agents"]) {
+    fs.mkdirSync(path.join(linkedSub, path.dirname(folder)), { recursive: true });
+    fs.symlinkSync(path.join(tmp, "shared-rules"), path.join(linkedSub, folder));
+  }
+  const linkedSubInventory = await loadRepositoryAgentConfig({
+    registry: registryWith(normalizeGitRemote(LINKED_SUB_REMOTE), [{ path: linkedSub, kind: "primary" }]),
+    repositoryId: normalizeGitRemote(LINKED_SUB_REMOTE),
+    runtime,
+  });
+  assert.deepEqual(
+    linkedSubInventory.entries.map((entry) => `${entry.harness}:${entry.path}:${entry.area}:${entry.kind}`).sort(),
+    [
+      "claude:.claude/agents:config:linked-folder", "claude:.claude/commands:config:linked-folder",
+      "claude:.claude/rules:instructions:linked-folder", "codex:.codex/agents:config:linked-folder",
+    ],
+  );
   const linkedCapped = await loadRepositoryAgentConfig({
     registry: linkedRegistry, repositoryId: normalizeGitRemote(LINKED_REMOTE), runtime, limits: { ...INVENTORY_LIMITS, maxFiles: 1 },
   });
@@ -380,6 +400,8 @@ try {
   assert.deepEqual(inline('"mcp_servers" . docs . command = "x"\n'), ["MCP servers: docs"]);
   assert.deepEqual(inline("'notes' = '''\n[profiles.ghp_LEAKTOKEN]\n'''\n"), []);
   assert.deepEqual(inline('a."b" = """\n[mcp_servers.ghp_LEAK2]\n"""\n'), []);
+  const badKey = describeCodexProjectFile({ kind: "config" }, 'bad key = """\n[mcp_servers.ghp_LEAK3]\n"""\n');
+  assert.deepEqual(badKey, { sections: [], diagnostic: "Could not parse TOML on line 1." }, "a malformed key line still closes its value");
   const innerName = describeCodexProjectFile({ kind: "agent" }, 'developer_instructions = """\nname = "inner-value"\n"""\nname = "real"\n');
   assert.equal(innerName.name, "real", "an agent's name comes from its own key, not text inside another value");
 

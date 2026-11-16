@@ -41,6 +41,9 @@ const HANDLED_SETTINGS = new Set([
 
 const LINKED_FOLDERS = {
   ".claude/skills": { area: "skills", label: "Skills folder" },
+  ".claude/rules": { area: "instructions", label: "Rules folder" },
+  ".claude/agents": { area: "config", label: "Custom agents folder" },
+  ".claude/commands": { area: "config", label: "Commands folder" },
   ".claude": { area: "config", label: "Claude Code folder" },
 };
 
