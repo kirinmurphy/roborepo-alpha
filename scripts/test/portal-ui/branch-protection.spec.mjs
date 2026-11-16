@@ -113,6 +113,16 @@ test.describe("Branch protection", () => {
     expect(writes()).toEqual([]);
   });
 
+  test("a Protect GitHub refuses partway shows the refusal in the panel", async ({ page }) => {
+    start({ refuseCreate: "roborepo-main-integrity" });
+    await openPlans(page);
+    await notices(page).getByRole("button", { name: "Protect" }).click();
+    await expect(panel(page)).toBeVisible();
+    await expect(panel(page).locator("[data-slot=state]")).toHaveText("missing");
+    await expect(panel(page)).toContainText("GitHub refused to create roborepo-main-integrity: Validation Failed.");
+    expect(writes().map((call) => call.body.name)).toEqual(["roborepo-plans", "roborepo-main-integrity"]);
+  });
+
   test("the Branch protection menu item opens the panel in every state", async ({ page }) => {
     const conflicting = { id: 31, name: "everything-needs-review", target: "branch", source_type: "Repository", source: REPO, enforcement: "active", bypass_actors: [], conditions: { ref_name: { include: ["~ALL"], exclude: [] } }, rules: [{ type: "required_signatures" }] };
     const handMade = { id: 11, name: "protect-main", target: "branch", source_type: "Repository", source: REPO, enforcement: "active", bypass_actors: [], conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } }, rules: [{ type: "deletion" }, { type: "non_fast_forward" }] };

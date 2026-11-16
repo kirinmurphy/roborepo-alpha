@@ -128,7 +128,9 @@ function buildProtectionPanel() {
         const current = report || await loadProtection(opening.repositoryId);
         if (!isCurrent(opening)) return;
         render(current);
-        if (actionError) showError(actionError);
+        // A report from an action elsewhere (the Plans notice) carries `refusal` when it wrote nothing.
+        const message = actionError || (current.refusal ? sentence(current.refusal) : null);
+        if (message) showError(message);
       } catch (error) {
         if (!isCurrent(opening)) return;
         fill(dialog, { state: "unavailable", headline: "The status could not be loaded." });
