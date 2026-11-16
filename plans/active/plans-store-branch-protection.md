@@ -514,6 +514,10 @@ implementation task depends on it.
 - [x] The manual merge step in `plan-suite.md` left out approval of the last push, so a repo
       protected by hand from it reads `missing` — fixed (55f250c7)
 - [x] The Actions-off 404 assumption had no `## Not tested` entry — added
+- [x] The not-admin refusal began with the login, so capitalizing it printed `Octo-reader` —
+      fixed (cbffbbad)
+- [x] A comment in `protection-policy.mjs` said `risk` is shown wherever a missing ruleset is
+      reported; only the Plans notice shows it — fixed (cbffbbad)
 - [ ] Required checks can come from a workflow that does not run on pull requests — escalated, see
       Open questions
 
@@ -523,6 +527,7 @@ implementation task depends on it.
   across code and docs).
 - Validation pass 2 (fresh-context subagent) at ee8c010c: 3 fix, 0 escalate.
 - Validation pass 3 (fresh-context subagent) at ae8aa292: 3 fix, 0 escalate.
+- Validation pass 4 (fresh-context subagent) at 55f250c7: 2 fix, 0 escalate.
 - `delivery-operations-check.mjs` passes outside the session sandbox; inside it the sandbox refuses
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
