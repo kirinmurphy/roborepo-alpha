@@ -1,6 +1,6 @@
 ---
 id: 5xw1mmqy
-next_action: Ready to build; run /plan-execute on this plan to make agents run every check they can before asking the user, starting with the Not tested entry format in the plan schema.
+next_action: Built and validated; run /plan-review on this plan to review the work, confirm the one check only a person can make, and approve the exact commit.
 blocked_by: []
 depends_on: []
 related: ["9671042v", "i5mnkm7z", "0jped168", "9njvfh5z", "vzgsx5vz"]
@@ -427,13 +427,14 @@ None.
 - [x] Comment on `notTestedOpen` in `index.mjs` still says unchecked entries never block
       implementation completion — fixed (38596676)
 - [x] No test covers the reason markers matching in any letter case — fixed (38596676)
-- [ ] Comment above `NOT_TESTED_UNEXPLAINED` in `findings.mjs` says `plans save` reports the
-      finding; save accepts the plan without reporting it
-- [ ] `plan-schema.md` says `plans save` and moves into `active/` report the finding; both accept
-      the plan silently
-- [ ] `docs/user/reference/plans-portal.md` table row repeats that `plans save` reports the finding
-- [ ] The plan's `next_action` still tells a reader to start building
-- [ ] `### Verification` does not record the checks rerun after the pass 1 fixes
+- [x] Comment above `NOT_TESTED_UNEXPLAINED` in `findings.mjs` says `plans save` reports the
+      finding; save accepts the plan without reporting it — fixed (0a565aa7)
+- [x] `plan-schema.md` says `plans save` and moves into `active/` report the finding; both accept
+      the plan silently — fixed (0a565aa7)
+- [x] `docs/user/reference/plans-portal.md` table row repeats that `plans save` reports the finding
+      — fixed (0a565aa7)
+- [x] The plan's `next_action` still tells a reader to start building — fixed in the plan record
+- [x] `### Verification` does not record the checks rerun after the pass 1 fixes — recorded below
 
 ### Verification
 
@@ -441,3 +442,27 @@ None.
   `base`
 - Validation pass 2 at 38596676 (fresh-context subagent): five `fix` findings, no `escalate`, no
   `base`
+- New test cases shown to fail before the change: the new `plan-lifecycle-transitions-check.mjs`
+  run against an untouched copy of `main` at 26dad21f failed on the freshness case ("a check
+  nobody recorded evidence for cannot sit under a complete review": `fresh`, expected
+  `incomplete`) and, with that case removed, on the submit case ("only the validator check fails":
+  `[]`, expected `[6]`); the new `plan-suite-findings-check.mjs` failed on "an open entry with no
+  reason and a checked entry with no evidence are both reported" before the validator change
+- At 38596676, after the pass 1 fixes: `plan-suite-findings-check.mjs`,
+  `plan-lifecycle-transitions-check.mjs`, `plan-suite-commands-check.mjs`,
+  `plan-suite-skills-check.mjs`, `plan-citation-comments-check.mjs`, and
+  `skill-structure-check.mjs` passed
+- At 0a565aa7, after the pass 2 fixes (one comment, one skill reference, one doc):
+  `plan-suite-findings-check.mjs`, `plan-suite-skills-check.mjs`, `docs-reference-check.mjs`,
+  `plan-citation-comments-check.mjs`, and `skill-structure-check.mjs` passed; `git diff --check`
+  clean
+- At 6eec1dc4, unchanged by later commits' scope: `plan-suite-check.mjs`,
+  `plan-suite-repair-check.mjs`, `plan-store-check.mjs`, `plans-portal-state-check.mjs`,
+  `plan-lifecycle-manifest-check.mjs` passed, and `bash scripts/doctor.sh --quiet` reported
+  "doctor passed (98 checks)"
+- The suites that build Git fixtures ran outside the shell sandbox, which refuses creating
+  `.git/worktrees` in a temporary repository
+- Behavior shown through the real CLI in a fixture repository at 38596676: with the entry
+  `- [ ] The portal lists plans in a browser.`, `roborepo plans preflight` exited 1 naming the
+  entry and what it must end with, and `roborepo plans submit` refused; after adding
+  `Needs a person: judging the layout is a human call.`, submit moved the plan to review
