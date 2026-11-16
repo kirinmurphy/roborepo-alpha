@@ -359,8 +359,15 @@ Behavior that must not change, each case passing before and after:
 
 - [ ] On a real plan run, `/plan-execute` runs its runnable checks and the review asks the user
       only for person-only checks. Needs a person: only the user can judge whether the request
-      they receive contains nothing an agent could have done; text pins cannot show an agent
-      follows the procedure, and behavior evals (`0jped168`) do not exist yet.
+      they receive contains nothing an agent could have done, and installing skills and running
+      another plan command are the user's actions. Steps: the installed plan skills still carry
+      the old text until this branch's skills are installed, so with them installed, run
+      `/plan-execute` on a real plan, then `/plan-review`. Expected: every `## Not tested` entry
+      the run leaves open ends with `Needs a person:` or `Blocked:` and a reason, checks an agent
+      could run are checked off with evidence, and the review asks only for person-only checks and
+      blocked commands. The check must be settled before approval; if installing the branch's
+      skills before merge is not wanted, the alternative is the user's decision to move this check
+      to another plan, recorded in the Decision Log.
 
 ## Documentation impact
 
@@ -435,12 +442,14 @@ None.
       — fixed (0a565aa7)
 - [x] The plan's `next_action` still tells a reader to start building — fixed in the plan record
 - [x] `### Verification` does not record the checks rerun after the pass 1 fixes — recorded below
-- [ ] An open entry ending in a bare `Needs a person:` or `Blocked:` with no reason passes the
-      check, and so does the marker inside another word (`unblocked:`)
-- [ ] `plan-execute/SKILL.md` and `feature-verification/SKILL.md` state as fact a Claude sandbox
-      exclusion for `roborepo` that this branch does not ship
-- [ ] The plan's `## Not tested` entry gives no steps the user can follow before approval, and
-      leans on "behavior evals do not exist yet", which the new schema lists as a non-reason
+- [x] An open entry ending in a bare `Needs a person:` or `Blocked:` with no reason passes the
+      check, and so does the marker inside another word (`unblocked:`) — fixed (6cb5f0a4)
+- [x] `plan-execute/SKILL.md` and `feature-verification/SKILL.md` state as fact a Claude sandbox
+      exclusion for `roborepo` that this branch does not ship — fixed (6cb5f0a4): the guidance now
+      applies where the harness is set up that way
+- [x] The plan's `## Not tested` entry gives no steps the user can follow before approval, and
+      leans on "behavior evals do not exist yet", which the new schema lists as a non-reason —
+      entry rewritten with steps, the expected result, and the alternative
 
 ### Verification
 
@@ -464,6 +473,10 @@ None.
   `plan-suite-findings-check.mjs`, `plan-suite-skills-check.mjs`, `docs-reference-check.mjs`,
   `plan-citation-comments-check.mjs`, and `skill-structure-check.mjs` passed; `git diff --check`
   clean
+- At 6cb5f0a4, after the pass 3 fixes: the new bare-marker case failed before the fix
+  (`undefined !== 3`) and `plan-suite-findings-check.mjs` passed after it;
+  `plan-suite-skills-check.mjs`, `skill-structure-check.mjs`, and
+  `plan-citation-comments-check.mjs` passed
 - At 6eec1dc4, unchanged by later commits' scope: `plan-suite-check.mjs`,
   `plan-suite-repair-check.mjs`, `plan-store-check.mjs`, `plans-portal-state-check.mjs`,
   `plan-lifecycle-manifest-check.mjs` passed, and `bash scripts/doctor.sh --quiet` reported
