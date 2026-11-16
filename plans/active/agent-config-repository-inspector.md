@@ -1,6 +1,6 @@
 ---
 id: nrvwti51
-next_action: Run /plan-execute on this plan and start by connecting the Agents repo selector to a read-only inventory of the primary checkout.
+next_action: Run validation pass 8 (the last under the eight-pass cap) on the agent-config-repository-inspector worktree at 4c11db18, fix its findings, then run the completion preflight, submit to review, and push the feature branch.
 blocked_by: []
 depends_on: []
 related: ["permva27"]
@@ -81,22 +81,22 @@ Use tracked, untracked, ignored, or unavailable for the file's Git status. Call 
 
 ## Implementation plan
 
-- [ ] Add scoped inventory and preview reads. Reuse the shared scope resolver and registry checkout data. Cover a non-default branch, detached HEAD, an absent or pathless primary checkout, and a linked worktree or second clone with different files.
-- [ ] Add Claude and Codex native discovery through the provider boundary. Cover disabled or missing harnesses, supported nested locations, recognized overrides, and unsupported providers.
-- [ ] Add bounded file reads, source summaries, Git classification, and per-file estimates. Test outside-root references, symlinks, oversized files, malformed config, tracked modifications, ignored and untracked files, and a repo-configured process that must never run. Assert no file or Git metadata writes.
-- [ ] Replace the scoped splash in `portal/config/app.js` using existing HTML templates, shared harness controls, and the source dialog shell. Add the folder-grouped instructions, skills, and configuration sections with explicit loading, empty, unsupported, and partial states.
-- [ ] Extend the real-route coverage in `scripts/test/repository-scope-portal-check.mjs` and replace the splash expectation in `scripts/test/portal-ui/repository-scope.spec.mjs`. Cover switching repos while requests are pending, preview navigation, absence of package actions on repo skills and editing controls on repo permission sources, and return to global controls.
-- [ ] Update the docs of record and run the focused checks below.
+- [x] Add scoped inventory and preview reads. Reuse the shared scope resolver and registry checkout data. Cover a non-default branch, detached HEAD, an absent or pathless primary checkout, and a linked worktree or second clone with different files.
+- [x] Add Claude and Codex native discovery through the provider boundary. Cover disabled or missing harnesses, supported nested locations, recognized overrides, and unsupported providers.
+- [x] Add bounded file reads, source summaries, Git classification, and per-file estimates. Test outside-root references, symlinks, oversized files, malformed config, tracked modifications, ignored and untracked files, and a repo-configured process that must never run. Assert no file or Git metadata writes.
+- [x] Replace the scoped splash in `portal/config/app.js` using existing HTML templates, shared harness controls, and the source dialog shell. Add the folder-grouped instructions, skills, and configuration sections with explicit loading, empty, unsupported, and partial states.
+- [x] Extend the real-route coverage in `scripts/test/repository-scope-portal-check.mjs` and replace the splash expectation in `scripts/test/portal-ui/repository-scope.spec.mjs`. Cover switching repos while requests are pending, preview navigation, absence of package actions on repo skills and editing controls on repo permission sources, and return to global controls.
+- [x] Update the docs of record and run the focused checks below.
 
 ## Validation
 
-- [ ] Selecting a repo shows files only from its primary checkout and labels the current branch or detached HEAD.
-- [ ] A missing or ambiguous primary checkout cannot fall back to files from another checkout.
-- [ ] Claude and Codex entries remain visible without an installed or enabled harness. Unsupported providers and failed or truncated scans are distinguishable from empty scans.
-- [ ] Instruction and skill previews show source, Git status, and estimated size. Nested resources and skills contribute no startup aggregate.
-- [ ] Other configuration shows source paths and safe metadata, with native permission sources described as declarations. Tests prove sensitive structured values never reach the browser.
-- [ ] Switching scope while an inventory or preview is pending displays only the current scope's data. Global navigation and machine-wide controls still work.
-- [ ] Scans and previews leave repo files, Git metadata, and machine config intact and execute no harness or hook.
+- [x] Selecting a repo shows files only from its primary checkout and labels the current branch or detached HEAD.
+- [x] A missing or ambiguous primary checkout cannot fall back to files from another checkout.
+- [x] Claude and Codex entries remain visible without an installed or enabled harness. Unsupported providers and failed or truncated scans are distinguishable from empty scans.
+- [x] Instruction and skill previews show source, Git status, and estimated size. Nested resources and skills contribute no startup aggregate.
+- [x] Other configuration shows source paths and safe metadata, with native permission sources described as declarations. Tests prove sensitive structured values never reach the browser.
+- [x] Switching scope while an inventory or preview is pending displays only the current scope's data. Global navigation and machine-wide controls still work.
+- [x] Scans and previews leave repo files, Git metadata, and machine config intact and execute no harness or hook.
 
 Run the focused checks after implementation:
 
@@ -118,3 +118,60 @@ Run the new provider and safety fixtures through `scripts/test/run-checks.mjs` a
 
 - [Claude Code project instructions](https://code.claude.com/docs/en/memory), [settings](https://code.claude.com/docs/en/settings), and [skills](https://code.claude.com/docs/en/skills)
 - [Codex instructions](https://developers.openai.com/codex/guides/agents-md), [configuration](https://developers.openai.com/codex/config-basic), [skills](https://developers.openai.com/codex/skills), [hooks](https://developers.openai.com/codex/hooks), and [custom agents](https://developers.openai.com/codex/subagents)
+
+## Decision Log
+
+- **Discovery is an optional adapter group, not a new capability.** Chose `projectInventory` in `OPTIONAL_ADAPTER_GROUPS` (validated when present) over adding a `project-inventory` capability. A capability would gate the feature on machine enablement through `providersFor`, which the plan forbids, and would force a stub on Gemini. `createHarnessRuntime().projectInventoryProviders()` returns every provider with its enablement instead.
+- **Providers classify paths and describe text; shared code owns the disk.** Chose `classify(relPath)` plus `describe(entry, text)` over giving providers a file reader. Confinement, bounds, and symlink rules then live in one place.
+- **Git status from `ls-files` and `check-attr`, modification from an in-process blob hash.** Rejected `git status` because it can run clean filters and an fsmonitor configured by the repo; rejected `git hash-object` because it applies filters too. When a conversion attribute is set or the file holds CR bytes, the modification label is omitted, as the plan allows. `ls-files` and `check-attr` were added to the hardened helper's read-only allowlist.
+- **Branch from the `HEAD` file, with Git as a fallback for reftable.** The file read needs no subprocess; a reftable repo's placeholder (`refs/heads/.invalid`) falls back to `symbolic-ref` and `rev-parse` on the allowlist.
+- **Non-Git checkouts are checkout-unavailable.** The plan resolves a checkout family through Git's common directory and repo identity requires Git, so a folder with no Git directory is not inspected.
+- **Claude `AGENTS.md` is a potentially conditional entry.** Claude Code's memory docs say it reads `AGENTS.md` where no `CLAUDE.md`, `.claude/CLAUDE.md`, or `CLAUDE.local.md` is in the working directory or above it, and a "Project instructions" setting changes that. That meets the plan's condition, so `AGENTS.md` is listed for both harnesses. (First implemented as Codex-only; corrected after validation pass 1.)
+- **Token level per file.** Root-level files use the startup thresholds, everything else the on-demand thresholds (`classifyStartupLevel` / `classifyOnDemandLevel`); there is no aggregate.
+- **JSON parse errors report no location.** V8's message quotes source text, which can be a secret; this Node version's messages carry no numeric position either, so the diagnostic is just "Could not parse JSON."
+- **Browser verification ran against an isolated state root with a copy of the repo list,** started from the shell because the preview launcher reads only the primary checkout's `.claude/launch.json`, which this worktree session may not edit.
+
+## Not tested
+
+- [ ] The repo inspector against a real Codex installation's reading of `.codex/skills/`. The view labels that location's loading as unknown; confirming it needs a Codex session in a repo that uses it.
+
+## Review
+
+### Findings
+
+- [x] JSON parse diagnostics could quote a secret from a malformed settings file — fixed (ec24ffe4)
+- [x] Previews accepted ids the walk excludes (`node_modules`, `.git` internals) — fixed (ec24ffe4)
+- [x] A symlinked `SKILL.md` file was not listed as a reference — fixed (ec24ffe4)
+- [x] The clean-filter trap targeted no discovered file, and the omitted-modification branch was untested — fixed (ec24ffe4)
+- [x] `AGENTS.md` was missing as a conditional Claude source the plan requires — fixed (ec24ffe4)
+- [x] Codex inline-table and dotted-key hooks and MCP servers were misreported — fixed (371e7e94)
+- [x] Symlinked native folders vanished without a reference entry — fixed (371e7e94)
+- [x] Symlink entries bypassed the file limit — fixed (371e7e94)
+- [x] A reftable repo's branch read as ".invalid" — fixed (371e7e94)
+- [x] A stale comment in the inventory loop and a misplaced template comment — fixed (371e7e94)
+- [x] A vacuous contract assertion in the check — fixed (371e7e94)
+- [x] No browser capture of the scoped Agents view in the evidence — captured (see Verification)
+- [x] Text inside multi-line TOML values was read as keys, so a value could become a reported MCP server name — fixed (5b7519b0)
+- [x] A case-variant preview id (`Node_Modules/...`) read a skipped folder on a case-insensitive filesystem — fixed (5b7519b0)
+- [x] A file cut short by the byte budget was mislabeled and did not mark the scan partial — fixed (5b7519b0)
+- [x] Quoted, literal, and spaced dotted TOML keys were not parsed, reopening the multi-line value leak — fixed (168e567f)
+- [x] A Codex agent's name could come from text inside another value — fixed (168e567f)
+- [x] An oversized structured config preview reported no sections instead of its size — fixed (168e567f)
+- [x] The text preview limit counted characters, not bytes — fixed (168e567f)
+- [x] The safe-name comment claimed secrets could not pass; it only keeps non-identifier text out — fixed (e5233532)
+- [x] No browser test covered the checkout-unavailable splash and its way back — fixed (e5233532)
+- [x] Symlinked `.claude/rules`, `.claude/agents`, `.claude/commands`, and `.codex/agents` folders produced no entry — fixed (692d3683)
+- [x] A TOML line with an unparseable key skipped value tracking, so a following multi-line string was read as keys — fixed (692d3683)
+- [x] An escaped quote in an inline-table string let value text surface as an MCP server name — fixed (4c11db18)
+- [x] A TOML value never closed gave no diagnostic — fixed (4c11db18)
+- [x] Symlinked subfolders inside rules, agents, and commands folders produced no entry — fixed (4c11db18)
+
+### Verification
+
+- `node scripts/test/repository-agent-config-check.mjs` passed: checkout selection, Claude and Codex discovery, confinement, symlinks, limits, provider isolation, secrets, and a repo-configured clean filter, fsmonitor, and hook that never run, with the checkout and `.git` unchanged.
+- `node scripts/test/repository-scope-portal-check.mjs` passed, including the new `/api/config/repository` routes.
+- `npm run test:portal-ui -- repository-scope.spec.mjs`: 17 passed; `portal-ui.spec.mjs`: 99 passed.
+- `node scripts/test/run-checks.mjs --filter harness`: 14/14 passed; `docs-reference-check.mjs` passed; `bash scripts/doctor.sh --quiet` passed (99 checks).
+- `bash scripts/test/test-cli.sh --quiet`: 426 passed, 0 failed (at e5233532). An earlier run at the first commit reported 1 failure whose line was not captured; both later runs were clean.
+- Validation loop: passes 1–7 ran as fresh-context subagents; each reported `fix` findings, all fixed above. Pass 8 (the last under the cap) has not run yet, at 4c11db18.
+- Browser (observed, not asserted): the scoped Agents view against this branch showed checkout path, branch, the three sections, the machine-wide grid, plain-text previews with config values withheld, no horizontal scroll at 375px, and the checkout-unavailable state. `roborepo browser run` was blocked: Playwright is not installed in RoboRepo's tool directory.
