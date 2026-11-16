@@ -292,7 +292,7 @@ Acceptance criteria:
       Rendered rules asserted for Claude, and the Codex and Gemini outputs changed to `prompt` /
       `ask_user`; `agent-run-coverage-check.mjs` asserts the ask, and `protected-branch-push-check.mjs`
       asserts the hook defers on `gh pr merge` (bare and flag-first) and still denies `gh -R … api`.
-- [ ] `npm run check` passes on the final commit.
+- [x] `npm run check` passes on the final commit. Passed at e5dcedd3 ("CI checks passed").
 
 ## Risks
 
@@ -467,6 +467,12 @@ Acceptance criteria:
   skipping `.git` and `node_modules` and at most 200 folders per level. Alternative: listing the
   repo's worktrees (rejected: it finds only worktrees of one repo, not separate clones).
 
+- **2026-11-16 — A `cd` whose words are all redirects stays put.** The hook sees words with their
+  quotes already removed, so `cd >/dev/null` (which goes home) and `cd ">x"` (which enters a folder
+  inside the checkout) look the same. The guard treats both as a move it cannot follow and keeps the
+  folder before it. Alternative: going home (rejected: `cd ">x" && rm a.txt` on main would then
+  defer). Keeping the folder can only over-ask, and only when home is not a protected checkout.
+
 ## Not tested
 
 - [ ] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
@@ -594,6 +600,16 @@ Acceptance criteria:
 - [x] A `popd` inside a subshell crashed the hook on a later `popd` — fixed (20c594e9)
 - [x] A `cd` or `pushd` to an unknown folder left `cd -` and `popd` landing in the wrong place —
       fixed (20c594e9)
+- [x] `cd $(…)` and `` cd `…` `` were read as a bare `cd` home, so a later main delete deferred —
+      fixed (8ea28b21)
+- [x] No test covered bare `cd`, the bare `pushd` swap, or redirects around a `cd` target — fixed
+      (8ea28b21)
+- [x] `cd ">x"` lost its quotes and was dropped as a redirect — fixed (8ea28b21)
+- [x] Bare `pushd >/dev/null` no longer swapped, so a main delete after it deferred — fixed
+      (e5dcedd3)
+- [x] Words after a substitution became a separate command, so `git -C $(pwd) clean -f` and
+      `find $(pwd) -delete` deferred on main — fixed (e5dcedd3)
+- [x] The docs did not say a `cd` to `$(…)` is not followed — fixed (e5dcedd3)
 
 ### Verification
 
@@ -647,6 +663,19 @@ Acceptance criteria:
 - Validation pass 15 at e085f4ed (fresh-context subagent, about 110 probe commands): 4 `fix`
   findings, fixed in 73e9683e and the plan record
 - Validation pass 16 at 73e9683e (fresh-context subagent): 4 `fix` findings, fixed in 20c594e9
+- Full local gate (`npm run check`, run unsandboxed) passed at 20c594e9 ("CI checks passed")
+- Validation pass 17 at 20c594e9 (fresh-context subagent, 3,000 fuzzed and about 230 written probe
+  commands): 3 `fix` findings, fixed in 8ea28b21
+- Validation pass 18 at 8ea28b21 (fresh-context subagent): 2 `fix` findings, 1 `escalate` decided in
+  the Decision Log (2026-11-16), and 1 `base` item, a by-product of the same splitting fixed in
+  e5dcedd3. The eight-pass cap for this run is reached, so the e5dcedd3 fixes were not revalidated
+  by a fresh Validator. They are covered by `protected-branch-push-check.mjs` and a probe comparison
+  against 8ea28b21 (7 case files and 3,000 fuzzed commands, no crashes, every changed decision an
+  intended fix)
+- Full local gate at 8ea28b21: one `test-cli.sh` MCP case failed (`claude mcp add` found no validated
+  Claude executable). It ran while a Validator ran thousands of probe commands, and its fake
+  `claude` must answer `--version` within 2 seconds; the hook change does not reach it, and the
+  gate was rerun on e5dcedd3 alone
 - Full local gate (`npm run check`, run unsandboxed) at 4f4a15b4: 78 of 79 suites passed.
   `codex-command-permission-check.mjs` failed because it used `rm` as its ask-bucket example and
   `delete-files` now allows it; fixed in afd22abd (uses `git pull`) and the suite passes there
