@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Confirm the full gate (npm run check) on c90c5e7d, check off its acceptance criterion, then submit for review and push.
+next_action: Review the finished work with /plan-review; one open question (the hook asking on commands that only name a push) waits for your decision.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -322,7 +322,8 @@ Acceptance criteria:
       was refused in default and auto mode although the hook returned allow; with only the
       `Bash(git push:*)` ask rule removed it ran in both modes, and `git push origin feature:main`
       was blocked by the hook in both.
-- [ ] `npm run check` passes on the final commit.
+- [x] `npm run check` passes on the final commit. Passed at c90c5e7d ("CI checks passed"), run
+      unsandboxed.
 
 ## Risks
 
@@ -859,6 +860,7 @@ Acceptance criteria:
   references check (passed), byte-identical hook copies, and a probe comparison against 09bc6110
   over every earlier case file plus the 1,500 fuzzed commands: only intended decisions changed and
   nothing crashed
+- Full local gate (`npm run check`, run unsandboxed) passed at c90c5e7d ("CI checks passed")
 - Full local gate at d30dbb92: 425 of 426 passed; `shared-target-rows-check` failed on an empty,
   untracked `.claude/.cc-writes` folder that Claude Code's write tracking left in
   `globals/system/git-hooks/` while this session's shell sat there. Removed; the check passes
