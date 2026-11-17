@@ -45,6 +45,20 @@ export const repositoriesRoutes = defineRoutes([
   postRoute("/api/repositories/:id/worktrees/stop-servers", (handlers, body, params) => handlers.stopRepositoryWorktreeServers({ repositoryId: params.id, branch: body.branch })),
   postRoute("/api/repositories/:id/worktree-cleanup/enable", (handlers, body, params) => handlers.enableWorktreeCleanup({ repositoryId: params.id, folder: body.folder })),
   postRoute("/api/repositories/:id/worktree-cleanup/dismiss", (handlers, body, params) => handlers.dismissWorktreeCleanupNotice({ repositoryId: params.id })),
+  // Branch protection reads GitHub, so both routes answer asynchronously. The POST runs one action
+  // (protect, skip, or unskip) and writes only RoboRepo-managed rulesets.
+  {
+    method: "GET",
+    path: "/api/repositories/:id/protection",
+    handler: (req, res, { params, handlers }) => {
+      handlers.loadRepositoryProtection({ repositoryId: params.id }).then(
+        (result) => send(res, 200, "application/json", JSON.stringify(result)),
+        (err) => sendError(res, err),
+      );
+      return true;
+    },
+  },
+  postRoute("/api/repositories/:id/protection", (handlers, body, params) => handlers.applyRepositoryProtection({ repositoryId: params.id, action: body.action })),
   {
     method: "GET",
     path: "/api/repositories",
@@ -86,9 +100,13 @@ function writeResult(res, fn) {
   try {
     send(res, 200, "application/json", JSON.stringify(fn()));
   } catch (err) {
-    const status = err?.code === "NOT_FOUND" ? 404 : 400;
-    send(res, status, "application/json", JSON.stringify({ error: String(err?.message || err) }));
+    sendError(res, err);
   }
+}
+
+function sendError(res, err) {
+  const status = err?.code === "NOT_FOUND" ? 404 : 400;
+  send(res, status, "application/json", JSON.stringify({ error: String(err?.message || err) }));
 }
 
 // Source mutations answer with the structured { error: { code, message } } shape portalPostJson

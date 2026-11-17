@@ -19,6 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createFakeGh, fakeGitHubState } from "../lib/fake-gh.mjs";
 import { guardPortal } from "../lib/portal-cleanup.mjs";
 import { hostHarnessIsolationEnv } from "./host-harness-isolation.mjs";
 import {
@@ -70,6 +71,13 @@ recordDiscovery(registry, "git:github.com/example/roborepo", {
   now: seededAt,
 });
 writeRegistry({ stateRoot: stateDir, registry });
+// The server reads branch protection through `gh`. A fake first on its PATH keeps every spec off
+// GitHub; it starts unreachable, so only branch-protection.spec.mjs, which sets its state, sees a
+// protection status. The fake is a POSIX executable, so Windows runs without it.
+const fakeGh = process.platform === "win32" ? null : createFakeGh(tmp);
+fakeGh?.setState(fakeGitHubState({ failure: "unreachable" }));
+const isolation = hostHarnessIsolationEnv(tmp);
+const fakeGhEnv = fakeGh ? { ...fakeGh.env, PATH: `${fakeGh.dir}${path.delimiter}${isolation.PATH}` } : {};
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
 const server = spawn(
   process.execPath,
@@ -78,7 +86,7 @@ const server = spawn(
     cwd: repoRoot,
     env: {
       ...process.env,
-      ...hostHarnessIsolationEnv(tmp),
+      ...isolation,
       HOME: tmp,
       // Plan saves commit to the plans store from this server. The temp HOME has no Git identity, and
       // on a CI runner Git cannot derive one from the hostname, so every save would fail there.
@@ -88,6 +96,7 @@ const server = spawn(
       GIT_COMMITTER_EMAIL: "portal-ui@example.invalid",
       ROBOREPO_STATE_ROOT: stateDir,
       PORTAL_READY_FILE: readyFile,
+      ...fakeGhEnv,
     },
     stdio: ["ignore", "inherit", "inherit"],
   },
@@ -146,7 +155,7 @@ async function main() {
     [pwCli, "test", "--config", config, ...process.argv.slice(2)],
     {
       cwd: repoRoot,
-      env: { ...process.env, PORTAL_BASE_URL: baseURL },
+      env: { ...process.env, PORTAL_BASE_URL: baseURL, ...(fakeGh?.env ?? {}) },
       stdio: "inherit",
     },
   );

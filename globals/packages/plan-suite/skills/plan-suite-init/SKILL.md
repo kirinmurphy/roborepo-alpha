@@ -53,8 +53,8 @@ the store render from the repository the update runs in, so saves fail until the
 ### 3. Namespaces
 
 Read `plans/plans-config.json` from the worktree the command reported. A `namespaces` key means this
-step is done, even when empty: that records that the user chose no project namespaces. Skip to the
-report.
+step is done, even when empty: that records that the user chose no project namespaces. Continue at
+step 4.
 
 A plan filename is `<namespace>-<slug>.md`. The universal namespaces (`cli`, `git`, `infra`, `os`,
 `testing`, `docs`, `security`, `perf`) need no declaration; the config holds only the project's own
@@ -86,6 +86,30 @@ roborepo plans config namespaces <file.json> --json
 
 Keep the file to values. The naming rules live in `/plan-write`, not in per-repository config.
 
+### 4. Offer branch protection
+
+`repo-plans` holds the only copy of the repository's plans, so check that the Git host protects it,
+along with the default branch:
+
+```bash
+roborepo protect --check --json
+```
+
+Act on `state` and `admin` in the result. `--check` only reads; nothing changes without the user's
+yes.
+
+| Result | Do |
+| --- | --- |
+| `missing`, `admin: true` | Tell the user what is unprotected, from the `policies` entries that list `missingRules`, and ask whether to protect the repository now. On a yes, run `roborepo protect` and report its final state. On a no, report that `roborepo protect` does it later. |
+| `missing` or `drifted`, `admin: false` | Report that the account in `login` is not an admin, and that a repository admin must run `roborepo protect`. |
+| `drifted`, `admin: true` | Report which managed ruleset differs and that `roborepo protect` updates it. |
+| `conflicting` | Report each entry under `conflicts` with its `detail`, which names what will refuse plan saves and where to turn it off: a ruleset to exclude the plans branch from, or a branch protection setting. |
+| `unsupported` | Report `reason` and the `manualSteps` for protecting the branches by hand. |
+| `unavailable` | Report `reason` and that protection was not checked. Setup is still complete. |
+| `protected`, `unmanaged` | Report the state in one line. |
+
+Never run `roborepo protect --skip` here; turning the merge rules off is the owner's own choice.
+
 ## Report
 
 Say what this run created or reconnected, where the worktree is, and whether the result reached the
@@ -94,7 +118,16 @@ remote:
 ```text
 Created: origin/repo-plans, worktree at ~/.worktrees/acme/repo_plans, 3 namespaces (synchronized)
 Added: README.md on repo-plans (synchronized)
+Branch protection: protected (3 managed rulesets created)
 ```
 
-When nothing was missing, report "Plan suite already initialized; no changes." When `/plan-write`
-invoked this workflow, return to it.
+The branch protection line is always present and names the state step 4 ended in:
+
+```text
+Branch protection: missing; you chose not to protect it now (run: roborepo protect)
+Branch protection: missing; octo-reader is not an admin, so a repository admin must run roborepo protect
+Branch protection: not checked (the GitHub CLI is not signed in)
+```
+
+When nothing was missing, report "Plan suite already initialized; no changes." with the branch
+protection line. When `/plan-write` invoked this workflow, return to it.

@@ -5,6 +5,7 @@ import { mountRepositoryShortcuts } from "./repository-shortcuts.js";
 import { worktreeCleanupNotice } from "./worktree-dialogs.js";
 import { worktreeDetailsButton } from "./worktree-details.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
+import { supportsProtectionPanel } from "/portal/shared/protection-panel.js";
 
 const MOCK_NAMES = {
   "git:github.com/example/shared-stack-fixture": "Mock: Shared Compose stack",
@@ -154,6 +155,7 @@ function homeMenuItems(repository) {
   // The page links (Plans, Agents, Tokens) sit beside this menu as icons; see repository-shortcuts.js.
   return [
     { key: "pin", label: repository.pinned ? "Unpin" : "Pin", icon: "pin" },
+    ...(supportsProtectionPanel(repository) ? [{ key: "protection", label: "Branch protection", icon: "git-branch" }] : []),
     knownCheckout
       ? { key: "hide", label: "Ignore Repo", icon: "eye-off" }
       : { key: "forget", label: "Forget This Repo", icon: "trash" },

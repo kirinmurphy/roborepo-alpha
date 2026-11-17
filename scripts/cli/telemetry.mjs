@@ -55,6 +55,7 @@ import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview } from "./mock-home.mjs"
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { previewRepositoryWorktree, removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
+import { applyRepositoryProtection, loadRepositoryProtection } from "./repository-protection.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
@@ -870,6 +871,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     stopRepositoryWorktreeServers: (params) => afterWorktreeChange(stopRepositoryWorktreeServers(params)),
     enableWorktreeCleanup: (params) => afterWorktreeChange(enableWorktreeCleanup(params)),
     dismissWorktreeCleanupNotice: (params) => afterWorktreeChange(dismissWorktreeCleanupNotice(params)),
+    loadRepositoryProtection: (params) => loadRepositoryProtection(params),
+    applyRepositoryProtection: (params) => applyRepositoryProtection(params),
     // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after
     // each one; enabling auto-discovery starts the first process scan immediately.
     loadRepositorySources: () => loadRepositorySources(),

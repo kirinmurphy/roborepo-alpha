@@ -11,6 +11,7 @@ import { mountHomeLinks } from "./links.js";
 import { repositoryDirectory, unresolvedActivity } from "./templates.js";
 import { createWorktreeCleanupDialog, createWorktreeRemoveDialog } from "./worktree-dialogs.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
+import { createProtectionPanel } from "/portal/shared/protection-panel.js";
 import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
@@ -67,6 +68,7 @@ const afterWorktreeChange = () => {
 };
 const removeDialog = createWorktreeRemoveDialog({ onRemoved: afterWorktreeChange });
 const cleanupDialog = createWorktreeCleanupDialog({ onChanged: afterWorktreeChange });
+const protectionPanel = createProtectionPanel();
 
 const menuActions = {
   onMountLinks: (slot, entrypoint) => mountHomeLinks(slot, entrypoint, { onStale: refresh }),
@@ -272,6 +274,10 @@ async function selectRepositoryAction(key, repository, item, event) {
     return;
   }
   closeActionMenus();
+  if (key === "protection") {
+    void protectionPanel.open(repository);
+    return;
+  }
   try {
     if (key === "pin") await api.setRepositoryPinned({ repositoryId: repository.repositoryId, pinned: !repository.pinned });
     else if (key === "hide") await api.setRepositoryVisibility({ repositoryId: repository.repositoryId, hidden: true });

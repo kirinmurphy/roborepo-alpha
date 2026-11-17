@@ -82,6 +82,8 @@
     "browser-playwright-cache-check.mjs",
     "browser-playwright-cli-check.mjs",
     "browser-playwright-resolve-check.mjs",
-    "delivery-operations-check.mjs"
+    "delivery-operations-check.mjs",
+    "protect-check.mjs",
+    "doctor-protection-check.mjs"
   ]
 }

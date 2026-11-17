@@ -56,7 +56,7 @@ run `roborepo harness refresh`.
 | `roborepo version` | Prints the package version and the directories RoboRepo runs from. |
 | `roborepo config status` | Shows enabled behaviors and packages. |
 | `roborepo config root inspect` | Read-only report of each harness root config (`~/.claude/settings.json`, `~/.codex/config.toml`): baseline vs. active file and its drift state — `in sync`, `has local changes` (changed since RoboRepo's last write; the next update keeps them and adds RoboRepo's entries), or untracked — plus the last logged RoboRepo write to each file and what triggered it (`~/.roborepo/logs/config-writes.jsonl`). |
-| `roborepo doctor [--verbose]` | Runs harness health checks for config files, links, helper commands, dependencies, and generated outputs. Also warns, without failing, when the running Node.js line has reached end of life or is behind that line's latest security release (needs nodejs.org; set `ROBOREPO_SKIP_NODE_RELEASE_CHECK=1` to skip). |
+| `roborepo doctor [--verbose]` | Runs harness health checks for config files, links, helper commands, dependencies, and generated outputs. Also warns, without failing, when the running Node.js line has reached end of life or is behind that line's latest security release (needs nodejs.org; set `ROBOREPO_SKIP_NODE_RELEASE_CHECK=1` to skip). Run inside a repo whose `origin` is on GitHub, it adds one line on that repo's [branch protection](#branch-protection), also without failing (needs `gh`; set `ROBOREPO_SKIP_PROTECTION_CHECK=1` to skip). |
 | `roborepo doctor --installed [--verbose]` | Verifies that installed harness paths resolve correctly; also fails when a local store is over its size cap. |
 | `roborepo maintenance repair [--dry-run] [--on-conflict ...]` | Repairs a moved or renamed checkout by relinking stale symlinks against the current path; it leaves copied config content alone. |
 | `roborepo maintenance repair local-config [--dry-run or --apply]` | Recovers safe local Claude/Codex settings from recent backups when `update` or `doctor --installed` reports local config repair candidates. |
@@ -270,6 +270,83 @@ Stop writers before removal. Discard previews exit 0 only with a receipt; apply 
 reports a guarded retry command. The removed `archive-remove` command has no alias.
 Merge readiness is read-only: exit 0 means ready, 1 means refused, and 2 means usage error.
 It identifies assessed branch/base tips without authorizing a merge or checking remote protection.
+
+## Branch protection
+
+A RoboRepo repo depends on two branches that GitHub should guard. `repo-plans` holds the only copy
+of the repo's plans, and the default branch should change only through a reviewed pull request that
+passed CI. `roborepo protect` checks both against one policy and, when you ask, applies it.
+
+```text
+roborepo protect [--check] [--json] [--skip main-merge | --unskip main-merge]
+```
+
+Run it inside the repo. It reads the repo's `origin` remote and calls GitHub through the GitHub CLI
+(`gh`), using the account `gh` is signed in to.
+
+| Form | What it does |
+| --- | --- |
+| `roborepo protect --check` | Reports the state and changes nothing. |
+| `roborepo protect` | Prints the changes it will make, creates each missing RoboRepo ruleset and updates each one that differs from the policy, then reads the state again and reports it. Needs repo admin rights; without them it names the signed-in account and changes nothing. |
+| `roborepo protect --skip main-merge` | Turns the merge rules off for this repo. Every clone and the portal read that choice from GitHub. |
+| `roborepo protect --unskip main-merge` | Turns the merge rules back on. |
+
+Add `--json` to any form for the full report as JSON.
+
+### The policy
+
+The policy is three GitHub rulesets. They are separate because a ruleset's bypass list applies to
+every rule in it:
+
+| Ruleset | Branch | Rules | Who can bypass | What it stops |
+| --- | --- | --- | --- | --- |
+| `roborepo-plans` | `repo-plans` | Block deletion, block force pushes, require linear history | No one | Deleting or rewriting plan history |
+| `roborepo-main-integrity` | Default branch | Block deletion, block force pushes | No one | Deleting or rewriting the default branch, even by an admin |
+| `roborepo-main-merge` | Default branch | Require a pull request with 1 approval, including approval of the last push; require the CI checks to pass | Repo admins | Direct pushes, unapproved merges, and merges while a check is failing or pending |
+
+The required CI checks are the checks that report on pull requests: for each active workflow, the
+jobs that passed in its newest successful pull-request run, combined. They are read each time the
+command runs. A workflow that never runs on pull requests, such as a release or docs workflow, adds
+no check.
+
+When no workflow has a successful pull-request run (old runs expired, or Actions is turned off), an
+existing `roborepo-main-merge` keeps the checks it already requires, and the report says they were
+kept. A repo with no such ruleset gets the merge ruleset without required checks, and the report
+says so.
+
+After a CI job is renamed, the state reads `drifted` as soon as a pull request with the new name has
+a successful run, even before it merges. Running `roborepo protect` then requires the new name on
+every pull request, so wait until the rename has merged.
+
+The command writes only rulesets named `roborepo-*`. It never edits or deletes a ruleset you made by
+hand. Managed and hand-made rulesets stack, so adding the managed ones never loosens protection.
+The report lists each hand-made ruleset and marks it **covered** when the managed rulesets apply
+every one of its rules at least as strictly, on the same branches, with no wider bypass. A covered
+ruleset is safe to delete in GitHub; the command leaves that to you. GitHub shows bypass lists only
+to accounts that can manage rulesets, so for anyone else no ruleset is marked covered, and a
+hand-made rule counts toward the policy without its bypass list being compared.
+
+Only the merge rules can be skipped. The plans and integrity rulesets have no opt-out.
+
+### States and exit codes
+
+| State | Meaning | Exit code |
+| --- | --- | --- |
+| `protected` | Every RoboRepo ruleset exists and matches the policy, or is skipped | 0 |
+| `unmanaged` | Every policy rule applies, but through hand-made rulesets that let no more people bypass it than the policy does; `roborepo protect` adds the managed ones beside them | 0 |
+| `missing` | A policy rule is absent from its branch: no ruleset applies it, only a hand-made ruleset with a wider bypass list does (such as an integrity rule admins can bypass), or the RoboRepo ruleset that should was disabled or lost it | 1 |
+| `drifted` | A RoboRepo ruleset exists but differs from the policy | 1 |
+| `conflicting` | Something on `repo-plans` will refuse plan saves: a ruleset rule other than the three on `roborepo-plans` (the report names the rule and its ruleset; exclude `repo-plans` from that ruleset), or a classic branch protection setting that requires a pull request, status checks, or signed commits, restricts who can push, or locks the branch (turn it off in the repo's branch protection settings). GitHub shows classic branch protection only to repo admins | 1 |
+| `unavailable` | `gh` is not installed or not signed in, GitHub did not answer, or GitHub answered with an error such as a rate limit; the report gives the reason | 1 |
+| `unsupported` | The remote is not GitHub, or GitHub does not offer rulesets for this repo. The report lists the steps to protect the branches by hand | 1 |
+
+The exit code follows the final state for every form, except that a write GitHub refused exits 1
+even when the final state is `protected` or `unmanaged`. A usage error exits 2. In `conflicting`,
+`unavailable`, and `unsupported`, no form writes anything.
+
+The portal shows the same status: a one-time notice on the
+[Plans page](plans-portal.md#branch-protection-notice) and a **Branch protection** panel on each
+[Home repo card](repositories.md#branch-protection).
 
 ## Guarded feature delivery
 
