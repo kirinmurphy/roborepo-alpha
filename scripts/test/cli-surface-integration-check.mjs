@@ -17,7 +17,7 @@ isolateGitConfig(workDir);
 const generatedPermissionFiles = [
   path.join(repoRoot, "generated", "claude", "settings.json"),
   path.join(repoRoot, "generated", "codex", "config.toml"),
-  path.join(repoRoot, "generated", "codex", "rules", "default.rules"),
+  path.join(repoRoot, "generated", "codex", "rules", "roborepo.rules"),
   path.join(repoRoot, "generated", "gemini", "policies", "generated-permissions.toml"),
 ];
 const generatedBaseline = gitGeneratedStatus();
