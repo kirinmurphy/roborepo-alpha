@@ -5,6 +5,8 @@
 // State file fields (see `fakeGitHubState` for defaults):
 //   failure   null | "not-signed-in" | "unreachable" | "hang" | "rulesets-refused"
 //             | "actions-off" (runs endpoint answers 404) | "runs-error" (runs endpoint answers 502)
+//             | "classic-refused" (classic protection answers 403 with the upgrade message)
+//             | "classic-rate-limited" (classic protection answers 403 for a rate limit)
 //   login, admin, defaultBranch
 //   refuseCreate  a ruleset name whose create answers 422, to fail an apply partway
 //   refuseUpdate  a ruleset name whose update answers 422
@@ -152,6 +154,8 @@ if (one) {
 const classic = route.match(/^branches\\/([^/]+)\\/protection$/);
 if (classic) {
   const settings = (state.classicProtection || {})[decodeURIComponent(classic[1])];
+  if (state.failure === "classic-refused") httpError(403, REFUSED);
+  if (state.failure === "classic-rate-limited") httpError(403, "API rate limit exceeded for user ID 1.");
   if (!state.admin || !settings) httpError(404, "Branch not protected");
   reply(settings);
 }

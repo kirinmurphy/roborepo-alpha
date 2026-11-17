@@ -370,6 +370,14 @@ try {
   // A non-admin cannot read classic protection; the state comes from the rulesets alone.
   start({ admin: false, login: "octo-reader", rulesets: structuredClone(managedOnly), classicProtection: classicReviews });
   assert.equal(run(["--check", "--json"]).json.state, "protected");
+  // A plan without branch protection answers 403 with the upgrade message: nothing to report.
+  start({ rulesets: structuredClone(managedOnly), classicProtection: classicReviews, failure: "classic-refused" });
+  assert.equal(run(["--check", "--json"]).json.state, "protected");
+  // A rate limit is also a 403, but it hides the settings, so the read cannot claim no conflict.
+  start({ rulesets: structuredClone(managedOnly), classicProtection: classicReviews, failure: "classic-rate-limited" });
+  result = run(["--check", "--json"]);
+  assert.equal(result.json.state, "unavailable");
+  assert.match(result.json.reason, /rate limit/);
   console.log("✓ Classic branch protection that refuses a push on the plans branch reads as conflicting.");
 
   // A hand-made ruleset that admins can bypass does not supply a no-bypass policy rule.

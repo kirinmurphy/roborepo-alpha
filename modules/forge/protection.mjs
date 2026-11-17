@@ -91,13 +91,16 @@ async function readSnapshot({ client, context, repo }) {
 
 // Classic branch protection lives outside rulesets, so the effective-rules read never shows it.
 // 404 means the branch has none, or the account cannot administer the repo and so cannot see it;
-// 403 is a plan that offers no branch protection. Either way there is nothing readable to report.
-// Any other error makes the whole read `unavailable`, as for the Actions reads.
+// a 403 with the upgrade message is a plan that offers no branch protection. Either way there is
+// nothing readable to report. GitHub also answers rate limits with 403, so any other error, that
+// one included, makes the whole read `unavailable` rather than hiding a conflict.
 async function classicProtection(client, context, repo, branch) {
   try {
     return await client.branchProtection(context, repo, branch);
   } catch (error) {
-    if (error instanceof GitHubError && error.kind === "http" && [403, 404].includes(error.status)) return null;
+    if (!(error instanceof GitHubError) || error.kind !== "http") throw error;
+    if (error.status === 404) return null;
+    if (error.status === RULESETS_REFUSED.status && RULESETS_REFUSED.message.test(error.message)) return null;
     throw error;
   }
 }
