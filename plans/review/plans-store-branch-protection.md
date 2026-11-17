@@ -611,7 +611,7 @@ the Decision Log.
 - [x] A private repo on GitHub Free answers rulesets with HTTP 403 and a message matching
       "Upgrade to GitHub" or "make this repository public", so it reads as `unsupported`. Confirmed
       2026-11-16: "Upgrade to GitHub Pro or make this repository public to enable this feature."
-- [ ] Deferred by the owner on 2026-11-17, not required for approval. A repo whose Actions are
+- Deferred by the owner on 2026-11-17, not required for approval. A repo whose Actions are
       disabled by its organization or enterprise answers
       `GET /repos/{owner}/{repo}/actions/workflows` with HTTP 404, so existing checks are kept rather
       than the read becoming `unavailable`. The 404 is taken from GitHub's documentation. Observed
@@ -625,7 +625,7 @@ the Decision Log.
       GitHub rejects force-push and deletion of `repo-plans` and `main`, including for the admin.
       Confirmed 2026-11-16 on scratch repos: GH013 refused force-push to both branches and deletion
       of `repo-plans`; GitHub's own default-branch rule refused deleting `main`.
-- [ ] Deferred by the owner on 2026-11-17, not required for approval. A pull request with a
+- Deferred by the owner on 2026-11-17, not required for approval. A pull request with a
       failing check cannot be merged by a non-admin. Observed 2026-11-16 on a scratch repo: the
       admin's merge without `--admin` was refused with "the base branch policy prohibits the merge"
       and `gh` offered `--admin`; renaming a CI job read as `drifted`, naming both checks. Only the
