@@ -1160,22 +1160,37 @@ function changesGitConfig(subcommand, args) {
   return false
 }
 
+// Programs that never run their arguments, and git subcommands that run nothing a command line
+// names. `sed` and `awk` can run commands, so they are not listed.
+const INERT_PROGRAMS = new Set(['echo', 'printf', 'cat', 'grep', 'egrep', 'fgrep', 'rg', 'ag', 'head', 'tail', 'wc', 'less', 'more', 'sort', 'uniq', 'cut', 'tr', 'jq', 'true', 'false', ':'])
+const INERT_GIT_SUBCOMMANDS = new Set([
+  'log', 'show', 'diff', 'grep', 'status', 'blame', 'shortlog', 'describe', 'rev-parse', 'rev-list',
+  'ls-files', 'ls-tree', 'cat-file', 'reflog', 'branch', 'tag', 'commit', 'add', 'mv', 'rm', 'restore', 'notes',
+])
+
 // Whether one simple command may run `git push` in a form the walk cannot read: a git word followed
 // by a `push` word, a `git -c alias.*` that could define one, a brace word that expands to push
 // (`git {push,}`), a subcommand the shell fills in (`git $CMD`, `git $(…)`), `xargs git` with its
 // subcommand on stdin, or a program the shell fills in followed by a push word (`$GIT push`).
-function mayPush(words) {
+//
+// With `mentionsOnly` (nothing in the command could run text as a script), a command that cannot
+// push only mentions one, and does not count: an inert program (`echo git push`, `grep "git push"`)
+// or a git subcommand that runs nothing (`git log --grep push`, `git commit -m "… push"`).
+function mayPush(words, mentionsOnly = false) {
+  const p = programIndex(words)
+  if (mentionsOnly && INERT_PROGRAMS.has(path.basename(words[p] ?? ''))) return false
   const g = words.findIndex((word) => path.basename(word) === 'git')
   if (g !== -1) {
     const after = words.slice(g + 1)
-    if (after.includes('push') || words.some((word) => word.startsWith('alias.'))) return true
-    if (after.some((word) => !word.startsWith('-') && word.includes('{') && word.replace(/[{},]/g, '').includes('push'))) return true
+    if (words.some((word) => word.startsWith('alias.'))) return true
     let j = g + 1
     while (j < words.length && words[j].startsWith('-')) j += GIT_VALUE_OPTIONS.has(words[j]) ? 2 : 1
+    if (mentionsOnly && g === p && INERT_GIT_SUBCOMMANDS.has(words[j])) return false
+    if (after.includes('push')) return true
+    if (after.some((word) => !word.startsWith('-') && word.includes('{') && word.replace(/[{},]/g, '').includes('push'))) return true
     if (/[$`]/.test(words[j] ?? '') || words[j + 1]?.startsWith(JOINED_SUBSTITUTION_PLACEHOLDER)) return true
     if (words.slice(0, g).some((word) => path.basename(word) === 'xargs') && !/^[a-z][a-z0-9-]*$/.test(words[j] ?? '')) return true
   }
-  const p = programIndex(words)
   return /[$`]/.test(words[p] ?? '') && words.slice(p + 1).includes('push')
 }
 
@@ -1209,8 +1224,11 @@ function nestedScripts(words) {
 // in a script handed to a shell), counted by `mayPush`, and whether any command there changes what
 // a push reads. Compared with `pushesRead`, the count finds pushes the walk could not read.
 function scanPushes(text, found = { pushes: 0, environmentChanged: false }) {
+  // A command that only mentions a push counts unless nothing here could run text as a script
+  // (`echo git push | sh` counts; `echo git push` does not).
+  const mentionsOnly = !mayRunScripts(withoutHeredocBodies(text, true))
   for (const words of splitCommands(exposeNestedCommands(withoutHeredocBodies(text)))) {
-    if (mayPush(words)) found.pushes += 1
+    if (mayPush(words, mentionsOnly)) found.pushes += 1
     const p = programIndex(words)
     if (ENVIRONMENT_BUILTINS.has(words[p]) || (p === words.length && words.some((word) => PUSH_ENVIRONMENT.test(word)))) found.environmentChanged = true
     const g = words.findIndex((word) => path.basename(word) === 'git')
@@ -1219,7 +1237,13 @@ function scanPushes(text, found = { pushes: 0, environmentChanged: false }) {
       while (j < words.length && words[j].startsWith('-')) j += GIT_VALUE_OPTIONS.has(words[j]) ? 2 : 1
       if (changesGitConfig(words[j], words.slice(j + 1))) found.environmentChanged = true
     }
-    for (const script of nestedScripts(words)) scanPushes(script, found)
+    const scripts = nestedScripts(words)
+    for (const script of scripts) scanPushes(script, found)
+    // Where something can run text as a script, a quoted word may be that text
+    // (`echo 'git push origin main' | bash`).
+    if (!mentionsOnly) {
+      for (const word of words) if (/\s/.test(word) && !scripts.includes(word)) scanPushes(word, found)
+    }
   }
   return found
 }

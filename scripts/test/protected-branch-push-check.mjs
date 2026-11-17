@@ -89,8 +89,18 @@ const cases = [
   ["git push origin feat 2>&1", "allow"],
   [`cd ${work} && git push origin feat`, "allow"],
   // Anything beyond pushes is left to the sandbox and permission rules, so the allow never covers it.
-  // A command that only names a push (`echo git push`) asks, since the hook cannot tell it apart.
-  ["git status && echo git push origin main", "ask"],
+  // A command that only mentions a push asks nothing, unless something in the command could run
+  // that text as a script.
+  ["git status && echo git push origin main", "defer"],
+  ["git log --grep push", "defer"],
+  ["git show HEAD -- push", "defer"],
+  ["bash -c 'echo git push'", "defer"],
+  ["echo git push origin main | sh", "ask"],
+  ["echo 'git push origin main' | bash", "ask"],
+  ["printf 'git push origin main' | xargs -I{} sh -c {}", "ask"],
+  ["echo git push origin main > x.sh; bash x.sh", "ask"],
+  ["git log --grep push && eval \"$X\"", "ask"],
+  ["xargs git log push", "ask"],
   ["git push origin feat && rm -rf build", "defer"],
   ["git push origin feat > push.log", "defer"],
   ["bash -lc 'git push origin feat'", "defer"],

@@ -57,8 +57,9 @@ a subshell or `$(…)`, through `xargs`, or through an alias. So does a push in 
 shell (`bash -c`, `eval`, `watch`, `env -S`, a `bash <<EOF` heredoc or `<<<` here-string), a push
 whose words the shell builds (`git $CMD`, `$GIT push`, `git {push,}`), and a push after a command
 that changes what it reads (`export`, `unset`, a `GIT_*` or `PATH` assignment, `git config`,
-`git remote set-url`, `source`). So does a command that only names a push, such as `echo git push`
-or `git log --grep push`.
+`git remote set-url`, `source`). A command that only mentions a push, such as `echo git push`,
+`grep "git push"`, or `git log --grep push`, asks nothing, unless something in the same command could
+run that text as a script (`echo git push origin main | sh`, a shell reading a file it wrote).
 
 A heredoc body is skipped only when it is plainly data: `cat`, `tee`, `gh`, or a `git commit -F -`
 reads it, nothing pipes that command on, no part of the command could run it as a script (a shell,
