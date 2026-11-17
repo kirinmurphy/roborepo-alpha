@@ -569,24 +569,28 @@ the Decision Log.
 
 ## Not tested
 
-- [ ] `roborepo protect --check` in this repo reads the real rulesets and reports `unmanaged` or
-      `missing` with the two hand-made rulesets listed. Agents may not call GitHub with the owner's
-      token, so only the owner can run it.
-- [ ] `roborepo protect` on a scratch GitHub repo creates three `roborepo-*` rulesets whose
+- [x] `roborepo protect --check` in this repo reads the real rulesets and reports `unmanaged` or
+      `missing` with the two hand-made rulesets listed. Confirmed 2026-11-16: `missing`, both
+      rulesets listed, `admin: true`.
+- [x] `roborepo protect` on a scratch GitHub repo creates three `roborepo-*` rulesets whose
       targets, rules, and admin bypass (`actor_id` 5, `RepositoryRole`) GitHub accepts as sent.
-      Needs a real repo and an admin token.
-- [ ] A private repo on GitHub Free answers rulesets with HTTP 403 and a message matching
-      "Upgrade to GitHub" or "make this repository public", so it reads as `unsupported`. The
-      message is taken from GitHub's documentation, not observed.
-- [ ] A repo with GitHub Actions turned off answers `GET /repos/{owner}/{repo}/actions/workflows`
-      with HTTP 404, so existing checks are kept rather than the read becoming `unavailable`. The
-      404 is taken from GitHub's documentation; confirming it needs a real repo with Actions off.
-- [ ] In this repo, `roborepo protect --check` lists the required checks from real pull-request
-      runs: `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`. The per-workflow
-      runs endpoint (`/actions/workflows/{id}/runs?event=pull_request&status=success`) and the
-      workflow `state` field are from GitHub's documentation.
-- [ ] With the managed rulesets in place, `roborepo plans save` reports `synchronized: true`, and
+      Confirmed 2026-11-16 on a public scratch repo: the recheck reads `protected`.
+- [x] A private repo on GitHub Free answers rulesets with HTTP 403 and a message matching
+      "Upgrade to GitHub" or "make this repository public", so it reads as `unsupported`. Confirmed
+      2026-11-16: "Upgrade to GitHub Pro or make this repository public to enable this feature."
+- [ ] A repo whose Actions are disabled by its organization or enterprise answers
+      `GET /repos/{owner}/{repo}/actions/workflows` with HTTP 404, so existing checks are kept rather
+      than the read becoming `unavailable`. The 404 is taken from GitHub's documentation. Observed
+      2026-11-16: a repo-level "Disable actions" setting returns no 404; GitHub still lists the
+      workflow as `active` and returns earlier runs, so `protect` reads the checks from past
+      pull-request runs (`checksSource: "pull-requests"`).
+- [x] In this repo, `roborepo protect --check` lists the required checks from real pull-request
+      runs: `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`. Confirmed
+      2026-11-16 with `checksSource: "pull-requests"`.
+- [x] With the managed rulesets in place, `roborepo plans save` reports `synchronized: true`, and
       GitHub rejects force-push and deletion of `repo-plans` and `main`, including for the admin.
+      Confirmed 2026-11-16 on scratch repos: GH013 refused force-push to both branches and deletion
+      of `repo-plans`; GitHub's own default-branch rule refused deleting `main`.
 - [ ] A pull request with a failing check cannot be merged by a non-admin, and the admin sees the
       bypass; renaming a CI job then reads as `drifted`, naming the check.
 
