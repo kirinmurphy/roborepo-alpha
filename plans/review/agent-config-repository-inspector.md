@@ -1,6 +1,6 @@
 ---
 id: nrvwti51
-next_action: "Codex 0.166.0 reads .codex/skills; the human decides whether Repo Usage counts it, then approves the reviewed commit in /plan-review."
+next_action: "Review of 4e15c8aa done locally; CI on 4e15c8aa must pass, then the human approves that commit in /plan-review, merges PR #69, and runs /plan-close."
 blocked_by: []
 depends_on: []
 related: ["permva27"]
@@ -141,7 +141,7 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - **Config popups show keys and safe values, here and on the global page.** Chosen by the user over keys only or full values. This replaces the earlier promise that no structured value reaches the browser: safe values do, and the hidden categories never do.
 - **Generated files follow `linguist-generated`.** Chosen by the user over a RoboRepo-only special case: any repo can mark committed tool output, GitHub already honors the attribute, and RoboRepo's `.gitattributes` now marks `generated/**`. After the second review the user chose to hide those files completely rather than collapse them.
 - **In-checkout symlinks are read through their targets.** A repo that links one skill folder into `.claude/skills` and `.codex/skills` would otherwise show no skill body at all. The target must resolve inside the checkout to a path the walk could list, so confinement is unchanged.
-- **Repo Usage counts skill and command descriptions.** The global Usage counts them, so leaving them out would undercount what a session starts with. Legacy `.codex/skills` entries are left out because whether Codex reads them is unverified.
+- **Repo Usage counts skill and command descriptions.** The global Usage counts them, so leaving them out would undercount what a session starts with. Legacy `.codex/skills` entries count too: in human review, codex-cli 0.166.0 was shown to read that folder, and the user chose to count it. A skill name in both `.agents/skills` and `.codex/skills` counts once.
 - **Browser verification ran against an isolated state root with a copy of the repo list,** started from the shell because the preview launcher reads only the primary checkout's `.claude/launch.json`, which this worktree session may not edit.
 
 ## Not tested
@@ -189,7 +189,12 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - [x] Human review, Validator pass 2: the source loader's return comment still promised raw `content` for every kind — fixed in review (4bbc494c)
 - [x] Human review, Validator pass 2: no test checked that repo previews carry no absolute path — fixed in review (4bbc494c)
 - [x] Human review, Validator pass 3: no test covered the hooks popup source dropping raw hooks text — fixed in review (fe1adf61)
-- [ ] Human review: Codex 0.166.0 reads `.codex/skills/`, but the view still labels it unknown and leaves it out of Repo Usage — escalated to the human (count it, or keep it unknown)
+- [x] Human review: Codex 0.166.0 reads `.codex/skills/`, but the view still labeled it unknown and left it out of Repo Usage — the user chose to count it; fixed in review (f1145912)
+- [x] Human review, Validator pass 5: the Codex inventory file header still called `.codex/skills` unverified — fixed in review (d1c327c4)
+- [x] Human review, Validator pass 5: the duplicate-name rule also collapsed same-name skills inside one folder — fixed in review (d1c327c4)
+- [x] Human review, Validator pass 5: no test covered nested skill folders or a linked `.codex/skills` skill at startup — fixed in review (d1c327c4)
+- [x] Human review, Validator pass 6: the legacy skill note told people to move skills to `.agents/skills`, against RoboRepo's own skill linking — fixed in review (4e15c8aa)
+- [x] Human review, Validator pass 6: the internal startup-totals doc did not describe Codex's two skill folders — fixed in review (4e15c8aa)
 
 ### Verification
 
@@ -207,9 +212,11 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - Human review Validator loop: four fresh-context passes; pass 4 reported no fix findings.
 - Browser (observed, not asserted), after the rework, against the branch portal on an isolated state root: Token Use table with only Total Usage colored, Agent Config with Rules (Repo Root, Conditional), Config and hooks grouped by harness, and Skills. The live `/api/config/source` settings and hooks responses had no `content`, and the inventory had no home path. The primary checkout is main, which lacks this branch's `.gitattributes` line, so `generated/` rules still appear until merge.
 - Manual, run in human review with the user's go-ahead: in a fresh git repo holding `.codex/skills/legacy-probe-q7/SKILL.md` and a control `.agents/skills/control-probe-k3/SKILL.md`, `codex exec -s read-only` (codex-cli 0.166.0) listed both skills among those available. Codex reads `.codex/skills/` in that version.
+- Counting `.codex/skills` (f1145912, d1c327c4, 4e15c8aa): `repository-agent-config-check.mjs` passed; its new startup assertion fails when `.codex/skills` is left out, when duplicate names are not dropped, when same-name skills in one folder collapse, and when nested skills count. `repository-scope-portal-check.mjs`, `repository-scope.spec.mjs` (20 passed), `run-checks.mjs --filter harness` (14/14), `docs-reference-check.mjs`, and `git diff --check` passed.
+- Validator passes 5–7 on the `.codex/skills` change: passes 5 and 6 reported fix findings, all fixed above; pass 7 reported no fix findings.
 
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: fe1adf61f84d8bf2f83c45384209c4769e4ecdf0
+- Reviewed implementation commit: 4e15c8aa8515720a38f8a6aab186ce1a2b03417b
 - Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
