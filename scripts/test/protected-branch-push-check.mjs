@@ -93,7 +93,7 @@ const cases = [
   ["git push origin feat && rm -rf build", "defer"],
   ["git push origin feat > push.log", "defer"],
   ["bash -lc 'git push origin feat'", "defer"],
-  ["git push origin --delete feat", "defer"],
+  ["git push origin --delete feat", "ask"],
   // Ways to point git away from the pre-push backstop are never approved silently.
   ["GIT_CONFIG_COUNT=0 git push origin feat", "defer"],
   ["git -c core.hooksPath=/dev/null push origin feat", "defer"],
@@ -129,6 +129,14 @@ const cases = [
   ["git push origin +feat", "deny"],
   ["git push origin +:", "deny"],
   ["git push -o ci.skip origin feat", "allow"],
+  // A redirect does not hide where a push lands, and a remote branch delete always asks: Claude
+  // renders no ask rule for git push, so the hook is what asks.
+  ["git push origin main 2>/dev/null", "deny"],
+  ["git push origin HEAD:main > out.log", "deny"],
+  ["npm test && git push origin HEAD:main 2>/dev/null", "deny"],
+  ["git push origin feat 2>/dev/null", "allow"],
+  ["git push origin :other", "ask"],
+  ["git push --delete origin", "ask"],
 ];
 // gh commands that skip git: denied in any flag position, since the prefix rules only see the
 // leading words. Other gh commands are left to the permission rules.
@@ -543,6 +551,9 @@ const deleteCases = [
   // A failed cd or pushd leaves `cd -` and `popd` pointing where they did before it.
   [onMain, `cd ${scratch}; cd ${scratch}/n1; cd -; rm -rf a.txt`, "ask"],
   [onMain, `pushd ${scratch}; pushd ${scratch}/n1; popd; rm -rf a.txt`, "ask"],
+  [onMain, `pushd ${scratch}; pushd ${scratch}/n1; pushd; rm -rf a.txt`, "ask"],
+  // Past the folder cap, a relative cd back out of a collapsed folder still counts the start.
+  [onMain, `mkdir -p n1/n2; cd n1/n2; ${Array.from({ length: 18 }, (_, k) => `cd ${scratch}/z${k}`).join("; ")}; cd ../..; rm -rf a.txt`, "ask"],
   // Attached create options name the new branch too.
   [onFeature, "git switch -cmain && rm a.txt", "ask"],
   [onFeature, "git switch --create=main && rm a.txt", "ask"],

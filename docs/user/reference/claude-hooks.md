@@ -46,7 +46,7 @@ Two checks enforce this, for Claude and Codex alike:
 
 | Check | When it runs | What it does |
 | --- | --- | --- |
-| Protected-branch push hook | Before the shell command runs | Allows a push it verified lands on non-protected branches, when the whole command is pushes and the `pre-push` hook is installed. Denies protected destinations and every force spelling (`--force` anywhere, `--force-with-lease=<ref>`, `-uf`, a `+` refspec). Asks when it cannot tell: `--all`, `:`, a `$VARIABLE`, `--no-verify`, an unrecorded remote default branch, or a source-only refspec under `remote.<name>.push` |
+| Protected-branch push hook | Before the shell command runs | Allows a push it verified lands on non-protected branches, when the whole command is pushes and the `pre-push` hook is installed. Denies protected destinations and every force spelling (`--force` anywhere, `--force-with-lease=<ref>`, `-uf`, a `+` refspec). Asks when it cannot tell: `--all`, `:`, a `$VARIABLE`, `--no-verify`, an unrecorded remote default branch, or a source-only refspec under `remote.<name>.push`. Asks before deleting any remote branch (`--delete`, `:branch`). A redirect into a file keeps the push from being approved silently; `2>/dev/null` does not |
 | Git `pre-push` hook | When git pushes | Checks the exact refs git sends, including through aliases and scripts. Refuses protected destinations and any update that is not a fast-forward. Looks up the remote's default branch from the remote when it is not recorded locally, and refuses when it cannot |
 
 Anything else in the same command (`git push origin feat && npm publish`) leaves the whole command to

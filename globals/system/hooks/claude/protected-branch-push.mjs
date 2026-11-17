@@ -4,8 +4,9 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-// Decides agent `git push` commands, which the permission rules leave at "ask". A permission
-// prefix rule cannot tell them apart: `git push` on main, `git push origin HEAD:main`, and
+// Decides agent `git push` commands. Codex and Gemini keep `git push` at "ask"; Claude renders no
+// rule for it, because an ask rule would outrank this hook's allow, so here this hook alone asks
+// about a push it cannot verify. A permission prefix rule cannot tell pushes apart: `git push` on main, `git push origin HEAD:main`, and
 // `git push origin :main` all start with the same words as a feature-branch push.
 //
 // Protected: main, master, the remote's default branch (refs/remotes/<remote>/HEAD), any names in
@@ -214,7 +215,13 @@ function classifyPush(cwd, args) {
     }
     if (UNCLASSIFIABLE_OPTIONS.has(arg)) return ask(`\`git push ${arg}\` can include a protected branch`)
     if (SKIPS_BACKSTOP.has(arg)) return ask(`\`${arg}\` skips the pre-push check`)
-    if (/[<>]/.test(arg)) return null
+    // A redirect (`2>/dev/null`, `> out.log`) changes nothing about where the push lands.
+    const redirect = /^(\d*|&)(>>?|<)(.*)$/.exec(arg)
+    if (redirect) {
+      if (redirect[3] === '') i += 1
+      continue
+    }
+    if (/[<>]/.test(arg)) return ask(`cannot tell where this push lands: \`${arg}\``)
     if (arg === '--delete' || arg === '-d') deleteFlag = true
     else if (arg.startsWith('--repo=')) remote = arg.slice('--repo='.length)
     else if (VALUE_OPTIONS.has(arg)) {
@@ -232,8 +239,7 @@ function classifyPush(cwd, args) {
   const mapped = Boolean(git(cwd, ['config', '--get-all', `remote.${remote}.push`]))
 
   if (words.length === 0) {
-    // A delete of a non-protected branch is left to the permission prompt.
-    if (deleteFlag) return null
+    if (deleteFlag) return ask('`git push --delete` with no branch named')
     if (git(cwd, ['config', 'push.default']) === 'matching') return ask('push.default is "matching", which can include a protected branch')
     if (mapped) return ask(`remote.${remote}.push is configured; cannot tell where this push lands`)
     const target = implicitDestination(cwd)
@@ -241,6 +247,7 @@ function classifyPush(cwd, args) {
     return defaultKnown ? VERIFIED : unknownDefault(remote)
   }
 
+  const deleted = []
   for (const refspec of words) {
     if (refspec.includes('*')) return ask(`refspec \`${refspec}\` is a pattern and can include a protected branch`)
     if (refspec === ':') return ask('refspec `:` pushes every branch that also exists on the remote')
@@ -250,8 +257,10 @@ function classifyPush(cwd, args) {
       const verb = destination.deleting ? 'deletes' : 'writes to'
       return deny(destination.branch, `\`${refspec}\` ${verb} ${remote}/${destination.branch}`)
     }
+    if (destination?.deleting) deleted.push(destination.branch)
   }
-  if (deleteFlag) return null
+  // Deleting a remote branch is never approved silently, even one that is not protected.
+  if (deleted.length) return ask(`this push deletes ${deleted.join(', ')} from ${remote}`)
   return defaultKnown ? VERIFIED : unknownDefault(remote)
 }
 
@@ -680,10 +689,17 @@ function classifyDeletes(text, startCwd) {
     while (!fs.existsSync(folder) && path.dirname(folder) !== folder) folder = path.dirname(folder)
     return folder
   }
+  // Collapsing loses where a later relative `cd ..` would lead, so once the cap is passed the walk
+  // also judges every later command in the starting folder.
+  let capped = false
   const keepOthers = (folders) => {
-    let kept = [...new Set(folders)].filter((folder) => folder !== cwd)
-    if (kept.length > 16) kept = [...new Set([startCwd, ...kept.map(nearestExisting)])].filter((folder) => folder !== cwd)
-    others = kept
+    let kept = [...new Set(folders)]
+    if (kept.length > 17) {
+      capped = true
+      kept = kept.map(nearestExisting)
+    }
+    if (capped) kept.push(startCwd)
+    others = [...new Set(kept)].filter((folder) => folder !== cwd)
   }
   const dirStack = []
   const scopes = []
@@ -746,9 +762,10 @@ function classifyDeletes(text, startCwd) {
       // Bare `pushd` swaps the current folder with the top of the stack.
       if (dirStack.length) {
         const top = dirStack.pop()
+        const beneath = top.maybe && dirStack.length ? dirStack.at(-1) : []
         dirStack.push(before)
         moveTo(top[0])
-        keepOthers(top)
+        keepOthers([...top, ...beneath])
       }
     } else if (program === 'popd') {
       if (dirStack.length) {
@@ -856,6 +873,15 @@ function classifyCommand(text, startCwd) {
       continue
     }
     onlyVerifiedPushes &&= program === 'git'
+    // A redirect into a file writes it, which the push approval does not cover; discarding output
+    // (`2>/dev/null`, `2>&1`) does not.
+    const writesFile = words.some((word, k) => {
+      const redirect = /^(\d*|&)(>>?)(.*)$/.exec(word)
+      if (!redirect) return false
+      const target = redirect[3] || words[k + 1] || ''
+      return target !== '/dev/null' && !/^&\d$/.test(target)
+    })
+    if (writesFile) onlyVerifiedPushes = false
     if (program === 'gh') {
       result = stricter(result, classifyGh(words.slice(i + 1)))
       continue
