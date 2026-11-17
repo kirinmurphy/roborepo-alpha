@@ -791,7 +791,8 @@ function generatedSidecarHooksPath(harness) {
 // Read the full source that DEFINES a tool, for the /agents click-to-inspect popup. Strictly
 // whitelisted: kind+id are resolved against the catalogs/known dirs, never used to build a path
 // directly, so an attacker can't request arbitrary files (no traversal — ids are matched against
-// catalog entries and basenames only). Returns { ok, title, path, content } or { ok:false, error }.
+// catalog entries and basenames only). Returns { ok, title, path, content, html? } or
+// { ok:false, error }; the config-file and harness-hooks kinds return html only, never the raw text.
 const HARNESS_SCOPED_KINDS = new Set(["command", "command-skill", "globals-rules", "harness-hooks", "live-rules"]);
 
 export function loadConfigSource({ kind, id, harness = "claude" }) {

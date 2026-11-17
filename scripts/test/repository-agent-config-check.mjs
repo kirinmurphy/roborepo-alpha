@@ -305,6 +305,10 @@ try {
   assert.equal(skillPreview.linkTarget, "local/skills/inrepo/SKILL.md");
   assert.match(skillPreview.html, /skill-source-view/);
   assert.ok(skillPreview.html.includes("references/guide.md") && skillPreview.html.includes("Read me."));
+  // Previews name files by their place in the repo, never by an absolute path.
+  for (const id of ["claude:.claude/skills/inrepo", "claude:.claude/settings.json", "claude:CLAUDE.md"]) {
+    assert.equal(JSON.stringify(await preview(id)).includes(tmp), false, `${id} preview carries no absolute path`);
+  }
   assert.ok(skillPreview.discoveryTokens > 0);
   for (const id of [
     "claude:../outside.md", "claude:/etc/passwd", "claude:packages/api/CLAUDE.md", "claude:linked-dir/outside.md",
