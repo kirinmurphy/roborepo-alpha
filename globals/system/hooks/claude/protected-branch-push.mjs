@@ -980,17 +980,44 @@ function classifyCommand(text, startCwd) {
 // Programs that run text they are given, or a file written earlier in the command.
 const SCRIPT_RUNNERS = new Set(['source', '.', 'eval', 'exec', 'xargs', 'timeout', 'watch', 'parallel', 'script'])
 
+// The simple commands of `text`, each as its words with quotes and backslashes removed. It splits
+// at operators and at subshell and substitution edges, cuts a redirect glued to the program
+// (`bash>log`, `sh<&0`), and drops redirects in front of it, so `(sh)` and `bash<x` still name `sh`
+// and `bash`.
+function simpleCommands(text) {
+  return text.split(/[;&|()`\n]|\$\(/).map((part) => {
+    const words = []
+    const raw = part.trim().split(/\s+/).filter(Boolean)
+    for (let i = 0; i < raw.length; i += 1) {
+      const word = raw[i].replace(/['"\\]/g, '')
+      if (!words.length && /^\d*[<>]/.test(word)) {
+        if (/^\d*[<>]+&?$/.test(word)) i += 1 // a bare operator: its target is the next word
+        continue
+      }
+      words.push(words.length ? word : word.replace(/\d*[<>].*$/, ''))
+    }
+    return words
+  })
+}
+
+// A command whose program the shell fills in from a substitution (`$(which sh) x`), behind any
+// assignments, wrappers, or keywords.
+const SUBSTITUTED_PROGRAM = /(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)\s+(?:-\S+\s+)*)*(?:\$\(|`)/
+
 // Whether some line of `text` starts a program that could run a heredoc's body or a file it wrote:
-// a shell, a script runner, a program the shell fills in (`$SHELL`), a path (`./x.sh`), or a process
-// substitution. It reads the command with heredoc bodies taken out, so a body's prose does not
-// count, and it errs toward keeping a body.
+// a shell, a script runner, a program the shell fills in (`$SHELL`, `$(which sh)`), a path
+// (`./x.sh`), `env -S`, or a process substitution. It reads the command with heredoc bodies taken
+// out, so a body's prose does not count, and it errs toward keeping a body.
 function mayRunScripts(text) {
-  if (/[<>]\(/.test(text)) return true
-  return text.split(/[;&|(`\n]|\$\(/).some((part) => {
-    const words = part.trim().split(/\s+/).map((word) => word.replace(/['"\\]/g, ''))
-    const program = words[programIndex(words)]
+  if (/[<>]\(/.test(text) || SUBSTITUTED_PROGRAM.test(text)) return true
+  return simpleCommands(text).some((words) => {
+    const p = programIndex(words)
+    const program = words[p]
+    const before = words.slice(0, p)
+    const splitString = before.some((word) => /^(-[A-Za-z]*S|--split-string)/.test(word))
+    if (before.includes('env') && splitString) return true
     return Boolean(program) && (SHELLS.has(path.basename(program)) || SCRIPT_RUNNERS.has(program)
-      || /^[$`]/.test(program) || program.includes('/'))
+      || program.startsWith('$') || program.includes('/'))
   })
 }
 
@@ -1095,7 +1122,7 @@ function withoutHeredocBodies(text, skeleton = false) {
         else delimiter += c
       }
       if (delimiter && !quote) {
-        const ownCommand = out.split(/[;&|(`\n]|\$\(/).at(-1).trim().split(/\s+/).map((word) => word.replace(/['"\\]/g, ''))
+        const ownCommand = simpleCommands(out).at(-1)
         const lineEnd = text.indexOf('\n', k)
         const pipedOn = text.slice(k, lineEnd === -1 ? text.length : lineEnd).includes('|')
         pending.push({ delimiter, stripTabs, literal, kept: !skeleton && (runsScripts || pipedOn || !readsHeredocAsData(ownCommand)) })

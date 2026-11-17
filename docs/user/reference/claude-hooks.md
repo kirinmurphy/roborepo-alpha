@@ -61,9 +61,11 @@ that changes what it reads (`export`, `unset`, a `GIT_*` or `PATH` assignment, `
 `grep "git push"`, or `git log --grep push`, asks nothing, unless something in the same command could
 run that text as a script (`echo git push origin main | sh`, a shell reading a file it wrote).
 
-A heredoc body is skipped only when it is plainly data: `cat`, `tee`, `gh`, or a `git commit -F -`
-reads it, nothing pipes that command on, no part of the command could run it as a script (a shell,
-`source`, `eval`, `xargs`, a path such as `./x.sh`, a program from a variable), and the shell expands
+A heredoc body is skipped only when it is plainly data: `cat`, `tee`, `gh`, or a `git commit`,
+`git tag`, or `git notes` message read from stdin reads it, nothing pipes that command on, no part
+of the command could run it as a script (a shell, even one glued to a bracket or redirect such as
+`(sh)` or `bash<x`, `source`, `eval`, `xargs`, `env -S`, a path such as `./x.sh`, a program from a
+variable or a substitution such as `$(which sh)`), and the shell expands
 nothing in it (a quoted delimiter such as `<<'EOF'`, or no `$(…)` or backticks in the body). So a
 commit message, pull request body, or written file that mentions `git push` asks nothing, and every
 other body is read like the rest of the command.
