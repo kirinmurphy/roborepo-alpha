@@ -200,8 +200,10 @@ function describedPolicy(policy) {
 }
 
 // Each ruleset RoboRepo does not manage, and whether the active managed rulesets make it
-// redundant: same branches, every one of its rules applied at least as strictly, and no one able
-// to bypass the managed rule who could not bypass this one. Only then is deleting it safe.
+// redundant: exactly the same branches (includes and excludes on both sides), every one of its
+// rules applied at least as strictly, and no one able to bypass the managed rule who could not
+// bypass this one. Only then is deleting it safe. GitHub hides bypass lists from accounts that
+// cannot manage rulesets, and a hidden list proves nothing, so no ruleset is called covered then.
 function handMadeRulesets(rulesets, { defaultBranch, bypassVisible }) {
   const activeManaged = rulesets.filter((ruleset) => isManaged(ruleset) && ruleset.enforcement === "active");
   return rulesets.filter((ruleset) => !isManaged(ruleset)).map((ruleset) => {
@@ -209,11 +211,15 @@ function handMadeRulesets(rulesets, { defaultBranch, bypassVisible }) {
     if (ruleset.source_type !== "Repository") return { ...base, source: "organization", covered: false, note: "set by the organization" };
     if (ruleset.enforcement !== "active") return { ...base, source: "repository", covered: false, note: `not enforced (${ruleset.enforcement})` };
     const peers = activeManaged.filter((peer) => sameTarget(ruleset, peer.conditions?.ref_name?.include, defaultBranch)
+      && sameTarget(peer, ruleset.conditions?.ref_name?.include, defaultBranch)
       && (!bypassVisible || bypassNoWider(peer.bypass_actors, ruleset.bypass_actors)));
     const uncovered = (ruleset.rules || []).filter((rule) => !peers.some((peer) => (peer.rules || []).some((managedRule) => ruleAtLeastAsStrict(managedRule, rule))));
-    return uncovered.length === 0
+    if (uncovered.length > 0) {
+      return { ...base, source: "repository", covered: false, note: `still needed for: ${[...new Set(uncovered.map((rule) => rule.type))].join(", ")}` };
+    }
+    return bypassVisible
       ? { ...base, source: "repository", covered: true, note: "covered by the managed rulesets; safe to delete" }
-      : { ...base, source: "repository", covered: false, note: `still needed for: ${[...new Set(uncovered.map((rule) => rule.type))].join(", ")}` };
+      : { ...base, source: "repository", covered: false, note: "its rules are covered, but this account cannot see who may bypass them; a repo admin can confirm it is safe to delete" };
   });
 }
 

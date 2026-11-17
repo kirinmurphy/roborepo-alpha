@@ -34,7 +34,9 @@ export async function protectCommand(argv) {
     console.log(formatReport(result.report));
     if (result.refusal) console.log(`\n${capitalize(result.refusal)}.`);
   }
-  process.exitCode = PROTECTED_STATES.has(result.report.state) ? 0 : 1;
+  // A refused write fails the run even when the state read afterwards is protected, such as an
+  // --unskip GitHub refused, which leaves the merge rules skipped.
+  process.exitCode = !result.refusal && PROTECTED_STATES.has(result.report.state) ? 0 : 1;
 }
 
 // The panel in portal/shared/protection-panel.js shows the same wording.

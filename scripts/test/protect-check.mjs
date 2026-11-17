@@ -203,6 +203,16 @@ try {
   assert.deepEqual([disabled.covered, disabled.note], [false, "not enforced (disabled)"]);
   const organization = coverage({ id: 27, name: "org-baseline", target: "branch", source_type: "Organization", source: "example", enforcement: "active" });
   assert.deepEqual([organization.covered, organization.note], [false, "set by the organization"]);
+  // A managed ruleset that excludes the branch it should protect covers nothing there.
+  const narrowed = structuredClone(managedOnly);
+  narrowed.find((ruleset) => ruleset.name === "roborepo-main-integrity").conditions.ref_name.exclude = ["refs/heads/main"];
+  start({ rulesets: [...narrowed, protectMain] });
+  assert.equal(run(["--check", "--json"]).json.handMade.find((entry) => entry.id === protectMain.id).covered, false, "an excluded branch on the managed side is not covered");
+  // Hidden bypass lists prove nothing, so a non-admin never sees a ruleset called safe to delete.
+  start({ admin: false, login: "octo-reader", rulesets: [...structuredClone(managedOnly), protectMain] });
+  const hidden = run(["--check", "--json"]).json.handMade.find((entry) => entry.id === protectMain.id);
+  assert.equal(hidden.covered, false);
+  assert.match(hidden.note, /cannot see who may bypass them/);
   console.log("✓ A hand-made ruleset is covered only when target, rules, enforcement, and bypass all match.");
 
   // Required checks combine the newest successful pull-request run of each active workflow.
@@ -233,6 +243,12 @@ try {
   const busy = Array.from({ length: 150 }, (_, index) => ({ id: 2000 - index, conclusion: "success", workflow: 1, jobs: [{ name: "build", conclusion: "success" }] }));
   start({ runs: [...busy, { id: 800, conclusion: "success", workflow: 2, jobs: [{ name: "nightly-lint", conclusion: "success" }] }] });
   assert.deepEqual(run(["--check", "--json"]).json.requiredChecks, ["build", "nightly-lint"]);
+
+  // A run with more jobs than one page holds (a large matrix) contributes every job.
+  const shards = Array.from({ length: 130 }, (_, index) => ({ name: `shard ${String(index).padStart(3, "0")}`, conclusion: "success" }));
+  start({ runs: [{ id: 950, conclusion: "success", jobs: shards }] });
+  assert.deepEqual(run(["--check", "--json"]).json.requiredChecks, shards.map((job) => job.name));
+  assert.ok(gh.calls().every((call) => call.hostname === "github.com"), "every call names github.com, whatever GH_HOST says");
 
   // No successful pull-request run and no managed merge ruleset: the status-check rule is left out.
   start({ runs: [{ id: 611, conclusion: "failure", jobs: [{ name: "broken", conclusion: "failure" }] }] });
@@ -311,6 +327,14 @@ try {
   result = run(["--skip", "main-merge"]);
   assert.deepEqual(writes().map((call) => [call.method, call.body.name, call.body.enforcement]), [["POST", "roborepo-main-merge", "disabled"]], "skipping before protecting creates only the disabled merge ruleset");
   assert.equal(result.status, 1, "the plans and integrity rules are still missing");
+  // A refused --unskip leaves the state protected (merge rules still skipped) but fails the run.
+  const skippedRulesets = structuredClone(managedOnly);
+  skippedRulesets.find((ruleset) => ruleset.name === "roborepo-main-merge").enforcement = "disabled";
+  start({ rulesets: skippedRulesets, refuseUpdate: "roborepo-main-merge" });
+  result = run(["--unskip", "main-merge", "--json"]);
+  assert.equal(result.json.state, "protected");
+  assert.equal(result.json.refusal, "GitHub refused to update roborepo-main-merge: Validation Failed");
+  assert.equal(result.status, 1, "a refused write exits 1 even when the state reads protected");
   console.log("✓ --skip main-merge disables the managed merge ruleset for every clone, and --unskip restores it.");
 
   // conflicting: a rule that can refuse a plan save reaches the plans branch.

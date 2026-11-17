@@ -322,7 +322,8 @@ The command writes only rulesets named `roborepo-*`. It never edits or deletes a
 hand. Managed and hand-made rulesets stack, so adding the managed ones never loosens protection.
 The report lists each hand-made ruleset and marks it **covered** when the managed rulesets apply
 every one of its rules at least as strictly, on the same branches, with no wider bypass. A covered
-ruleset is safe to delete in GitHub; the command leaves that to you.
+ruleset is safe to delete in GitHub; the command leaves that to you. GitHub shows bypass lists only
+to accounts that can manage rulesets, so for anyone else no ruleset is marked covered.
 
 Only the merge rules can be skipped. The plans and integrity rulesets have no opt-out.
 
@@ -338,7 +339,8 @@ Only the merge rules can be skipped. The plans and integrity rulesets have no op
 | `unavailable` | `gh` is not installed or not signed in, GitHub did not answer, or GitHub answered with an error such as a rate limit; the report gives the reason | 1 |
 | `unsupported` | The remote is not GitHub, or GitHub does not offer rulesets for this repo. The report lists the steps to protect the branches by hand | 1 |
 
-The exit code follows the final state for every form. A usage error exits 2. In `conflicting`,
+The exit code follows the final state for every form, except that a write GitHub refused exits 1
+even when the final state is `protected` or `unmanaged`. A usage error exits 2. In `conflicting`,
 `unavailable`, and `unsupported`, no form writes anything.
 
 The portal shows the same status: a one-time notice on the
