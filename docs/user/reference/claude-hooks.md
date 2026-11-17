@@ -49,8 +49,12 @@ Two checks enforce this, for Claude and Codex alike:
 | Protected-branch push hook | Before the shell command runs | Allows a push it verified lands on non-protected branches, when the whole command is pushes and the `pre-push` hook is installed. Denies protected destinations and every force spelling (`--force` anywhere, `--force-with-lease=<ref>`, `-uf`, a `+` refspec). Asks when it cannot tell: `--all`, `:`, a `$VARIABLE`, `--no-verify`, an unrecorded remote default branch, or a source-only refspec under `remote.<name>.push`. Asks before deleting any remote branch (`--delete`, `:branch`). A redirect into a file keeps the push from being approved silently; `2>/dev/null` does not |
 | Git `pre-push` hook | When git pushes | Checks the exact refs git sends, including through aliases and scripts. Refuses protected destinations and any update that is not a fast-forward. Looks up the remote's default branch from the remote when it is not recorded locally, and refuses when it cannot |
 
-Anything else in the same command (`git push origin feat && npm publish`) leaves the whole command to
-the permission prompt, so the hook's approval never covers it.
+Anything else in the same command (`git push origin feat && npm publish`) keeps the hook from
+approving it, so the other commands are left to the sandbox and the permission rules; a verified
+feature push in such a chain still lands only where the hook checked. A push the hook cannot read
+asks instead: one with a `git -c` or environment prefix, one behind a wrapper (`env`, `command`), in
+a subshell or `$(…)`, through `xargs`, or through an alias. So does a command that only names a
+push, such as `echo git push`.
 
 On Codex, every push the hook would ask about is denied instead, with a message to run it yourself.
 Codex has been seen running commands whose hook result was ask without prompting, and a push with

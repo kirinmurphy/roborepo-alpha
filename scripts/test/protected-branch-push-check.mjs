@@ -88,15 +88,30 @@ const cases = [
   ["git push origin v1.0", "allow"],
   ["git push origin feat 2>&1", "allow"],
   [`cd ${work} && git push origin feat`, "allow"],
-  // Anything beyond pushes stays with the permission prompt, so the allow never covers it.
-  ["git status && echo git push origin main", "defer"],
+  // Anything beyond pushes is left to the sandbox and permission rules, so the allow never covers it.
+  // A command that only names a push (`echo git push`) asks, since the hook cannot tell it apart.
+  ["git status && echo git push origin main", "ask"],
   ["git push origin feat && rm -rf build", "defer"],
   ["git push origin feat > push.log", "defer"],
   ["bash -lc 'git push origin feat'", "defer"],
   ["git push origin --delete feat", "ask"],
-  // Ways to point git away from the pre-push backstop are never approved silently.
-  ["GIT_CONFIG_COUNT=0 git push origin feat", "defer"],
-  ["git -c core.hooksPath=/dev/null push origin feat", "defer"],
+  // Ways to point git away from the pre-push backstop, or to another destination, ask: Claude has no
+  // push ask rule to fall back on.
+  ["GIT_CONFIG_COUNT=0 git push origin feat", "ask"],
+  ["git -c core.hooksPath=/dev/null push origin feat", "ask"],
+  ["git -c remote.origin.push=+refs/heads/main:refs/heads/main push origin", "ask"],
+  ["npm test && git -c core.hooksPath=/dev/null push origin feat", "ask"],
+  // A push the hook cannot read (behind a wrapper, nested, or aliased) asks.
+  ["env git push origin feat", "ask"],
+  ["command git push origin feat", "ask"],
+  ["(git push origin feat)", "ask"],
+  ["{ git push origin feat; }", "ask"],
+  ["echo $(git push origin feat)", "ask"],
+  ["printf x | xargs git push origin", "ask"],
+  ["git --git-dir .git push origin feat", "ask"],
+  ["git -c alias.p=push p origin main", "ask"],
+  ["env git -c core.hooksPath=/dev/null push origin main", "ask"],
+  ["git commit -m 'fix the git push docs'", "defer"],
   ["git push --no-verify origin feat", "ask"],
   ["git push origin main", "deny"],
   ["git push origin HEAD:main", "deny"],

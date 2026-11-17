@@ -854,11 +854,15 @@ function ask(detail) {
   return { decision: 'ask', reason: `roborepo: ${detail}. Confirm this push does not reach main.` }
 }
 
+// How many `git push` commands classifyCommand read, at any depth. A push it never reached (behind a
+// wrapper, in a subshell or substitution, through an alias) is caught by `unreadPushes`.
+let pushesRead = 0
+
 // Walks every simple command, following `cd` so a later `git push` is resolved in the right
-// directory, and descending into `sh -c '...'` strings. A deny or ask from any push wins. The result
-// is VERIFIED only when every simple command is a `cd` or a verified push run plainly: no leading
-// environment assignment and no `git -c` (either could point git away from the backstop), and not
-// inside a shell wrapper.
+// directory, and descending into `sh -c '...'` strings. A deny or ask from any push wins. A push with
+// a leading environment assignment or `git -c` asks: either can point git at another destination or
+// away from the backstop, and Claude has no push ask rule to fall back on. The result is VERIFIED only
+// when every simple command is a `cd` or a verified push run plainly.
 function classifyCommand(text, startCwd) {
   let cwd = startCwd
   let result = null
@@ -909,12 +913,35 @@ function classifyCommand(text, startCwd) {
       onlyVerifiedPushes = false
       continue
     }
+    pushesRead += 1
     const pushResult = classifyPush(gitCwd, words.slice(j + 1))
     if (pushResult !== VERIFIED || !plain || configured) onlyVerifiedPushes = false
     result = stricter(result, withoutAllow(pushResult))
+    if ((!plain || configured) && pushResult === VERIFIED) {
+      result = stricter(result, ask('`git -c` or an environment prefix can change where this push lands or skip the pre-push check'))
+    }
   }
   if (result) return result
   return onlyVerifiedPushes && backstopInstalled() ? VERIFIED : null
+}
+
+// The `git push` commands in `text`, wherever they sit: as a git word followed by a `push` word in
+// any simple command (after a wrapper, inside `( … )` or `$(…)`), a `git -c alias.*` that could
+// define one, and inside `sh -c` strings. Compared with `pushesRead`, it finds pushes the walk could
+// not read.
+function unreadPushes(text) {
+  let found = 0
+  for (const words of splitCommands(exposeNestedCommands(text))) {
+    const g = words.findIndex((word) => path.basename(word) === 'git')
+    if (g !== -1 && (words.slice(g + 1).includes('push') || words.some((word) => word.startsWith('alias.')))) found += 1
+    words.forEach((word, k) => {
+      if (SHELLS.has(path.basename(word))) {
+        const flag = words.findIndex((w, m) => m > k && /^-[a-z]*c[a-z]*$/.test(w))
+        if (flag !== -1 && words[flag + 1]) found += unreadPushes(words[flag + 1])
+      }
+    })
+  }
+  return found
 }
 
 function withoutAllow(result) {
@@ -938,7 +965,11 @@ if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh|rm
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
-const result = stricter(classifyCommand(command, cwd), classifyDeletes(command, cwd))
+let result = stricter(classifyCommand(command, cwd), classifyDeletes(command, cwd))
+// A push the walk could not read (wrapped, nested, or aliased) asks: no permission rule would.
+if (unreadPushes(command) > pushesRead) {
+  result = stricter(result, ask('cannot check this `git push`: it runs behind a wrapper, in a subshell or substitution, or through an alias'))
+}
 if (!result) process.exit(0)
 
 process.stdout.write(JSON.stringify({
