@@ -569,13 +569,14 @@ the Decision Log.
       `protect.mjs --doctor` — fixed in the plan
 - [x] Review: an import failure in `protect.mjs` still exits 1 and reads as a hint — no change; a
       broken install fails every `roborepo` command, not only this line
-- [ ] Re-review (pull request fixes 73f7643d..376c4f83): any 403 on the classic-protection read,
+- [x] Re-review (pull request fixes 73f7643d..376c4f83): any 403 on the classic-protection read,
       including a rate limit, reads as "no classic protection" and can hide a conflict —
-      `modules/forge/protection.mjs` `classicProtection`
-- [ ] Re-review: `plan-suite-init` SKILL.md step 4 `conflicting` row names only the ruleset remedy;
-      classic conflicts are fixed in branch protection settings
-- [ ] Re-review: the Plans notice's pending-Protect and stale-read guards have no browser test —
-      `portal/plans/protection-notice.js`
+      `modules/forge/protection.mjs` `classicProtection` — fixed with a test that fails without
+      it (6b14a89d)
+- [x] Re-review: `plan-suite-init` SKILL.md step 4 `conflicting` row names only the ruleset remedy;
+      classic conflicts are fixed in branch protection settings — fixed (c386dcdc)
+- [x] Re-review: the Plans notice's pending-Protect and stale-read guards have no browser test —
+      `portal/plans/protection-notice.js` — added; each fails with its guard removed (52db71b5)
 - [x] Re-review: the plan's status sources, state table, exit code, and Risks predated the pull
       request fixes — fixed in the plan
 - [ ] Re-review: a refused write now exits 1 even when the final state is `protected` or
@@ -626,6 +627,8 @@ the Decision Log.
 - Re-review at 376c4f83: live `roborepo protect --check --json` in this repo reads `missing`,
   finds the three required checks from pull-request runs, and reports no classic conflict.
 - Re-review Validator pass (fresh-context subagent) at 376c4f83: 4 fix, 2 escalate.
+- Review fixes at 52db71b5: `protect-check.mjs` passes; branch-protection browser spec, 10
+  passed. Pushed to the pull request for CI.
 
 ### Result
 - Status: pending
