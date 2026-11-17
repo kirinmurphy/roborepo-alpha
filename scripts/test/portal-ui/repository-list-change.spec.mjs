@@ -113,7 +113,7 @@ test("a repo added in Manage Repos shows in the selector and on the board withou
 test("ignoring the selected repo on Agents returns it to All repos", async ({ page }) => {
   await page.goto(`/agents?repo=${names.alpha}`);
   await expect(selector(page)).toHaveAccessibleName(`Repo: ${names.alpha}`);
-  await expect(page.getByRole("heading", { name: `Default Token Use for ${names.alpha}` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Token Use for ${names.alpha}` })).toBeVisible();
 
   await openManageRepos(page);
   await ignoreInDialog(page, names.alpha);
@@ -121,13 +121,13 @@ test("ignoring the selected repo on Agents returns it to All repos", async ({ pa
   await page.keyboard.press("Escape");
   await expect(selector(page)).toHaveAccessibleName("Repo: All repos");
   await expect(page.getByRole("button", { name: "Show all repos" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: /^Default Token Use for / })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^Token Use for / })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
 });
 
 test("ignoring another repo keeps Agents on the selected repo and re-reads its config", async ({ page }) => {
   await page.goto(`/agents?repo=${names.alpha}`);
-  await expect(page.getByRole("heading", { name: `Default Token Use for ${names.alpha}` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Token Use for ${names.alpha}` })).toBeVisible();
 
   await openManageRepos(page);
   const reread = page.waitForRequest((request) => {
@@ -138,7 +138,7 @@ test("ignoring another repo keeps Agents on the selected repo and re-reads its c
   await reread;
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL(new RegExp(`/agents\\?repo=${names.alpha}$`));
-  await expect(page.getByRole("heading", { name: `Default Token Use for ${names.alpha}` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `Token Use for ${names.alpha}` })).toBeVisible();
 });
 
 // Ignoring a repo can move its sessions out of the report without changing the report's version, so

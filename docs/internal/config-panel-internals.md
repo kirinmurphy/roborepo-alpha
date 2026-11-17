@@ -151,7 +151,9 @@ unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answer
   renderer never puts a hidden value in its HTML. Nothing writes to the checkout, its Git
   directory, or machine config.
 
-The page groups entries into rows (one per file path, one per skill name), discards an inventory or
+The page drops `generated` entries, groups the rest into rows (one per file path, one per skill
+name), and files rows under Rules (Repo Root when any harness reads the file at root level,
+otherwise Conditional), Config and hooks (by harness), and Skills. It discards an inventory or
 preview response for a scope that is no longer current, and closes the preview dialog on a scope
 change. `scripts/test/repository-agent-config-check.mjs` covers selection, discovery, confinement,
 startup totals, preview rendering, and the no-process/no-write guarantees against real Git fixtures;

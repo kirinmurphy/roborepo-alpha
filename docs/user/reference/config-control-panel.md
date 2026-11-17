@@ -17,33 +17,31 @@ computer, including uncommitted and Git-ignored files that exist only there.
 If the primary checkout cannot be found, or more than one checkout could be it, the page says so
 and shows no files: it never reads another clone or worktree in its place.
 
-- **Default Token Use.** A table, titled with the repo's name, with one row per active harness. **Repo Usage** is
-  what this repo adds to every session started at its root: root-level instructions and rules in
-  full, plus each root skill's and command's name and description. **Total Usage** adds this
-  machine's global startup context (the global page's Usage) and is colored on the same
+- **Token Use.** A table, titled with the repo's name, with one row per active harness. **Repo
+  Usage** is what this repo adds to every session started at its root: root-level instructions and
+  rules in full, plus each root skill's and command's name and description. **Total Usage** adds
+  this machine's global startup context (the global page's Usage) and is colored on the same
   low/medium/high scale; Repo Usage is a plain number. An active harness whose repo files RoboRepo
-  cannot read yet (Gemini CLI today) is named below the table.
-- **Instructions.** `CLAUDE.md`, `CLAUDE.local.md`, `.claude/rules/`, `AGENTS.md`, and
-  `AGENTS.override.md`, grouped by folder with the repo root first. **Conditional** marks a
-  subfolder file or a rule scoped to paths, which may apply only to work there. A file several
-  harnesses read, such as `AGENTS.md`, is one row with a chip per harness; the info icon beside it
-  explains harness-specific rules, like Claude Code reading `AGENTS.md` only where there is no
-  `CLAUDE.md`.
-- **Skills.** `.claude/skills/<name>/SKILL.md` and `.agents/skills/<name>/SKILL.md`, at the root and
-  in subfolders, with each skill's name and description. A skill several harnesses carry is one
-  row. `.codex/skills/` is marked **Legacy location**: RoboRepo links skills there, but whether a
-  given Codex version reads it is not verified, so it does not count toward Repo Usage.
+  cannot read yet (Gemini CLI today) is named below the table. **View Global Config**, at the right
+  of the title, clears the repo filter, the same as choosing **All repos**.
+- **Agent Config.** Below the table, three sections list the repo's own files, in this order.
+- **Rules.** `CLAUDE.md`, `CLAUDE.local.md`, `.claude/rules/`, `AGENTS.md`, and `AGENTS.override.md`,
+  each named by its path in the repo. **Repo Root** holds what a session started at the root reads;
+  **Conditional** holds files in subfolders and rules scoped to paths, which apply only to work
+  there. A file several harnesses read, such as `AGENTS.md`, is one row.
 - **Config and hooks.** `.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`,
   `.claude/agents/`, `.claude/commands/`, `.codex/config.toml`, `.codex/hooks.json`, and
-  `.codex/agents/`, each with a one-line summary of what it declares. Permission entries here are
-  declarations, not the effective policy.
+  `.codex/agents/`, grouped under each harness's name and named by path, each with a one-line
+  summary of what it declares. Permission entries here are declarations, not the effective policy.
+- **Skills.** `.claude/skills/<name>/SKILL.md` and `.agents/skills/<name>/SKILL.md`, at the root and
+  in subfolders, with each skill's name and description. A skill several harnesses carry is one
+  row. Skills in `.codex/skills/` do not count toward Repo Usage: RoboRepo links skills there, but
+  whether a given Codex version reads that location is not verified.
+- **No tags.** Rows carry no tags. The few facts that tell a file apart (a legacy location, an
+  override, a symbolic link out of the repo, copies that differ between harnesses) sit in the info
+  icon beside the row; Git status is in the popup.
 - **Generated files.** Files the repo's `.gitattributes` marks `linguist-generated` (tool output
-  rendered from other sources) are collapsed into their own section and never counted in Repo
-  Usage.
-- **Chips.** Only what tells files apart: **Local only** (ignored by Git), **Untracked**,
-  **Modified**, **Conditional**, **Override**, **Legacy location**, **Link** (a symbolic link out
-  of the repo, not opened), and **Copies differ** when harnesses carry different versions of one
-  skill.
+  rendered from other sources) are left off the page and never counted.
 - **Popups.** Select a row to open it as on the global page: the file's location (every location,
   for a row several harnesses share), its Git status, and estimated sizes. Markdown renders as
   formatted text, with images left out so a repo file cannot make the page fetch a URL; imports

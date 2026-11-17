@@ -105,6 +105,7 @@ function show(el) {
     tip.classList.toggle("portal-tooltip--lines", text.includes("\n"));
   }
   tip.classList.toggle("portal-tooltip--comfortable", el.getAttribute("data-tip-size") === "comfortable");
+  tip.classList.toggle("portal-tooltip--roomy", el.getAttribute("data-tip-size") === "roomy");
   const panel = el.getAttribute("data-tip-placement") === "panel";
   // Wide wherever it shows; docked only where the screen has room for a side panel.
   tip.classList.toggle("portal-tooltip--wide", panel);

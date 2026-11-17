@@ -94,24 +94,27 @@
         </span>
       </label>
     </template>
-    <!-- Repo inspector (a repo selected in Viewing): the repo's default token use per active harness,
-         then read-only lists of its own agent files from its primary checkout. templates.js's
+    <!-- Repo inspector (a repo selected in Viewing): the repo's token use per active harness, then
+         read-only lists of its own agent files from its primary checkout. templates.js's
          repositoryInspector fills these; nothing here offers a toggle or an edit, because the files
-         belong to the repo. -->
+         belong to the repo. Its info tips use the roomier tooltip. -->
     <template id="tpl-repo-usage">
       <div class="config-files-section repo-usage">
-        <h2 class="config-files-title" data-slot="title"></h2>
+        <div class="repo-usage-head">
+          <h2 class="config-files-title" data-slot="title"></h2>
+          <button type="button" class="text-link repo-view-global" data-slot="view-global">View Global Config</button>
+        </div>
         <section class="panel wide">
-          <div class="config-grid repo-usage-grid" role="table" aria-label="Default token use">
+          <div class="config-grid repo-usage-grid" role="table" aria-label="Token use">
             <div class="config-grid-head" role="row">
               <div role="columnheader">Harness</div>
               <div role="columnheader">
                 Repo Usage
-                <portal-info-icon data-tip="Read from this repo at the start of every session: root-level instructions and rules in full, plus each skill's and command's name and description." aria-label="Repo Usage: read from this repo at the start of every session."></portal-info-icon>
+                <portal-info-icon data-tip-size="roomy" data-tip="Read from this repo at the start of every session: root-level instructions and rules in full, plus each skill's and command's name and description." aria-label="Repo Usage: read from this repo at the start of every session."></portal-info-icon>
               </div>
               <div role="columnheader">
                 Total Usage
-                <portal-info-icon data-tip="Repo Usage plus this machine's global startup context: what every new session in this repo starts with." aria-label="Total Usage: repo usage plus global startup context."></portal-info-icon>
+                <portal-info-icon data-tip-size="roomy" data-tip="Repo Usage plus this machine's global startup context: what every new session in this repo starts with." aria-label="Total Usage: repo usage plus global startup context."></portal-info-icon>
               </div>
             </div>
           </div>
@@ -130,6 +133,9 @@
         </div>
       </div>
     </template>
+    <template id="tpl-repo-agent-config-head">
+      <h2 class="config-files-title repo-agent-config-title">Agent Config</h2>
+    </template>
     <template id="tpl-repo-inspector-notice">
       <p class="repo-inspector-notice" role="status" data-slot="text"></p>
     </template>
@@ -140,37 +146,28 @@
       <section class="panel wide repo-inspector-section">
         <div class="panel-head">
           <h2 data-slot="heading"></h2>
-          <portal-info-icon data-slot="tip"></portal-info-icon>
+          <portal-info-icon data-slot="tip" data-tip-size="roomy"></portal-info-icon>
         </div>
         <div data-slot="items"></div>
         <p class="repo-inspector-empty" data-slot="empty" hidden></p>
       </section>
     </template>
-    <!-- Files Git marks linguist-generated: rendered from elsewhere, so collapsed and never counted. -->
-    <template id="tpl-repo-inspector-generated">
-      <details class="panel wide repo-inspector-section repo-inspector-generated">
-        <summary class="panel-head">
-          <h2>Generated files</h2>
-          <portal-info-icon data-tip="Marked linguist-generated in .gitattributes: tool output rendered from other sources. Not counted in Repo Usage." aria-label="Generated files: marked linguist-generated, not counted in Repo Usage."></portal-info-icon>
-        </summary>
-        <div data-slot="items"></div>
-      </details>
-    </template>
-    <template id="tpl-repo-inspector-folder">
-      <div class="repo-inspector-folder">
-        <h3 class="repo-inspector-folder-name" data-slot="name"></h3>
+    <!-- A small heading inside a section: Repo Root or Conditional under Rules, a harness under
+         Config and hooks. -->
+    <template id="tpl-repo-inspector-group">
+      <div class="repo-inspector-group">
+        <h3 class="repo-inspector-group-name" data-slot="name"></h3>
         <div data-slot="entries"></div>
       </div>
     </template>
-    <!-- One row per file, or per skill when several harnesses carry the same one. The path lives in
-         the popup, like the global page's rows. -->
+    <!-- One row per file, or per skill when several harnesses carry the same one. Rows carry no tags;
+         what tells a file apart sits in its info tip, and its locations in the popup. -->
     <template id="tpl-repo-inspector-entry">
       <div class="item repo-inspector-entry">
         <div class="item-body">
           <div class="item-row">
             <button type="button" class="item-label clickable repo-inspector-open" data-slot="open"></button>
-            <span class="repo-inspector-badges" data-slot="badges"></span>
-            <portal-info-icon data-slot="tip" hidden></portal-info-icon>
+            <portal-info-icon data-slot="tip" data-tip-size="roomy" hidden></portal-info-icon>
             <token-chip data-slot="chip" hidden></token-chip>
           </div>
           <div class="item-desc" data-slot="description" hidden></div>

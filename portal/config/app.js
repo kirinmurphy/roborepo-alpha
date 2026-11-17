@@ -216,6 +216,7 @@ function renderScoped() {
     // Total Usage adds the global startup estimate, so the inspector redraws when a snapshot lands.
     main.replaceChildren(...tmpl.repositoryInspector(inventory.data, {
       onOpen: openRepositoryEntry,
+      onViewGlobal: clearRepositoryScope,
       contextCost: lastSnapshot?.contextCost || null,
     }));
   }
