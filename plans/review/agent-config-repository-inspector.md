@@ -1,6 +1,6 @@
 ---
 id: nrvwti51
-next_action: Review complete at fe1adf61; awaiting the human's approval of that commit in /plan-review, then the user merges PR #69 and runs /plan-close.
+next_action: "Codex 0.166.0 reads .codex/skills; the human decides whether Repo Usage counts it, then approves the reviewed commit in /plan-review."
 blocked_by: []
 depends_on: []
 related: ["permva27"]
@@ -146,7 +146,7 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 
 ## Not tested
 
-- [ ] The repo inspector against a real Codex installation's reading of `.codex/skills/`. The view labels that location's loading as unknown; confirming it needs a Codex session in a repo that uses it.
+- [x] The repo inspector against a real Codex installation's reading of `.codex/skills/`. Run in human review: Codex 0.166.0 reads it (see Verification).
 
 ## Review
 
@@ -189,6 +189,7 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - [x] Human review, Validator pass 2: the source loader's return comment still promised raw `content` for every kind — fixed in review (4bbc494c)
 - [x] Human review, Validator pass 2: no test checked that repo previews carry no absolute path — fixed in review (4bbc494c)
 - [x] Human review, Validator pass 3: no test covered the hooks popup source dropping raw hooks text — fixed in review (fe1adf61)
+- [ ] Human review: Codex 0.166.0 reads `.codex/skills/`, but the view still labels it unknown and leaves it out of Repo Usage — escalated to the human (count it, or keep it unknown)
 
 ### Verification
 
@@ -205,9 +206,10 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - Human review fixes: the three secret and path checks fail with each fix reverted and pass with it; the root `AGENTS.md` browser test failed on the old grouping ("medium") and passes now; `repository-scope.spec.mjs` + `repository-list-change.spec.mjs` 26 passed; `config-source-harness-check.mjs` passed.
 - Human review Validator loop: four fresh-context passes; pass 4 reported no fix findings.
 - Browser (observed, not asserted), after the rework, against the branch portal on an isolated state root: Token Use table with only Total Usage colored, Agent Config with Rules (Repo Root, Conditional), Config and hooks grouped by harness, and Skills. The live `/api/config/source` settings and hooks responses had no `content`, and the inventory had no home path. The primary checkout is main, which lacks this branch's `.gitattributes` line, so `generated/` rules still appear until merge.
+- Manual, run in human review with the user's go-ahead: in a fresh git repo holding `.codex/skills/legacy-probe-q7/SKILL.md` and a control `.agents/skills/control-probe-k3/SKILL.md`, `codex exec -s read-only` (codex-cli 0.166.0) listed both skills among those available. Codex reads `.codex/skills/` in that version.
 
 ### Result
 
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: fe1adf61f84d8bf2f83c45384209c4769e4ecdf0
 - Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
