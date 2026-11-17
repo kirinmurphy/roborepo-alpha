@@ -333,8 +333,8 @@ The schema lists the accepted `Needs a person:` reasons and shows an example ent
 
 A blocked check is retried through the harness's normal route before it is written down:
 
-1. Check against the environment step 11 left running, through the harness's preview tools or
-   `roborepo browser run --url`, rather than starting a second server on the same port.
+1. Check against the environment step 11 left running, through the harness's preview tools or a
+   bare `roborepo browser run --url` call, rather than starting a second server on the same port.
 2. With nothing running, run `roborepo browser run --serve` as a bare call, with no pipe, `cd`, or
    chained command. Where the harness sandboxes shell commands but excludes `roborepo`, only a bare
    call is excluded.
