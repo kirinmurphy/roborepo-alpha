@@ -1,6 +1,6 @@
 ---
 id: nrvwti51
-next_action: Implementation is finished and validated; run /plan-review on this plan for the human review.
+next_action: Review complete at fe1adf61; awaiting the human's approval of that commit in /plan-review, then the user merges PR #69 and runs /plan-close.
 blocked_by: []
 depends_on: []
 related: ["permva27"]
@@ -19,7 +19,7 @@ Selecting a repo on the Agents page currently shows a placeholder. Replace it wi
 - Lead with the repo's default token use per active harness: what the repo adds to every session, and that plus the global startup context.
 - Make root and nested instructions and native skills easy to browse, with previews and individual token estimates, and one row per file or skill however many harnesses carry it.
 - Locate project settings, hooks, MCP servers, custom agents, commands where supported, and permission sources. Show configuration as a readable key list with only safe values.
-- Popups match the global page: rendered Markdown, the global skill view, and the file path in the popup rather than the list. Show native repo files even when their harness is missing or disabled.
+- Popups match the global page: rendered Markdown, the global skill view, and every location of the file with its Git status. Rule and config rows are named by their path in the repo. Show native repo files even when their harness is missing or disabled.
 - Keep the inspector read-only and describe file presence and possible applicability. Effective runtime policy, precedence, import expansion, package management for repo skills, and other harness providers are outside this release.
 
 ## Current state
@@ -135,7 +135,7 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - **Branch from the `HEAD` file, with Git as a fallback for reftable.** The file read needs no subprocess; a reftable repo's placeholder (`refs/heads/.invalid`) falls back to `symbolic-ref` and `rev-parse` on the allowlist.
 - **Non-Git checkouts are checkout-unavailable.** The plan resolves a checkout family through Git's common directory and repo identity requires Git, so a folder with no Git directory is not inspected.
 - **Claude `AGENTS.md` is a potentially conditional entry.** Claude Code's memory docs say it reads `AGENTS.md` where no `CLAUDE.md`, `.claude/CLAUDE.md`, or `CLAUDE.local.md` is in the working directory or above it, and a "Project instructions" setting changes that. That meets the plan's condition, so `AGENTS.md` is listed for both harnesses. (First implemented as Codex-only; corrected after validation pass 1.)
-- **Token level per file.** Root-level files use the startup thresholds, everything else the on-demand thresholds (`classifyStartupLevel` / `classifyOnDemandLevel`); there is no aggregate.
+- **Token level per file.** Root-level files use the startup thresholds, everything else the on-demand thresholds (`classifyStartupLevel` / `classifyOnDemandLevel`). A row shared by several harnesses takes its level from a root-level copy when one exists, so a root `AGENTS.md` that Claude reads only conditionally still shows as startup context. The per-harness aggregate is the token table's Repo Usage and Total Usage, added in the first browser review.
 - **JSON parse errors report no location.** V8's message quotes source text, which can be a secret; this Node version's messages carry no numeric position either, so the diagnostic is just "Could not parse JSON."
 - **Total Usage is the only colored column.** Chosen by the user: Total Usage keeps the startup thresholds (low under 8k, high over 20k) because it is the same per-session quantity as the global Usage; Repo Usage is a plain number. Separate repo bands were rejected.
 - **Config popups show keys and safe values, here and on the global page.** Chosen by the user over keys only or full values. This replaces the earlier promise that no structured value reaches the browser: safe values do, and the hidden categories never do.
@@ -180,6 +180,15 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - [x] Symlinked subfolders inside rules, agents, and commands folders produced no entry — fixed (4c11db18)
 - [x] Skills and commands named like build outputs (`build`, `vendor`, `out`) inside `.claude`, `.agents`, or `.codex` were silently skipped — fixed (641e32f9)
 - [x] Two scope-selector comments still said Agents loads no repo data — fixed (641e32f9)
+- [x] Human review, Validator pass 1: the scoped inventory response carried the checkout's absolute path, which the page no longer shows — fixed in review (86cde8af)
+- [x] Human review, Validator pass 1: the global settings and hooks popup responses still carried the raw file, secrets included, beside the safe key list — fixed in review (58b7cb63)
+- [x] Human review, Validator pass 1: a root `AGENTS.md` row took its color and "When loaded" label from Claude's conditional copy — fixed in review (6fccd9b9)
+- [x] Human review, Validator pass 1: no test covered a generated root-level file or a nested skill in Repo Usage, or that only Total Usage is colored — fixed in review (dc152b74)
+- [x] Human review, Validator pass 1: comments and docs still said generated files are listed apart, and omitted long strings from the hidden values — fixed in review (bfabb823)
+- [x] Human review, Validator pass 1: plan prose (Goals, token-level decision, browser verification) described the pre-rework view — fixed in review (plan record)
+- [x] Human review, Validator pass 2: the source loader's return comment still promised raw `content` for every kind — fixed in review (4bbc494c)
+- [x] Human review, Validator pass 2: no test checked that repo previews carry no absolute path — fixed in review (4bbc494c)
+- [x] Human review, Validator pass 3: no test covered the hooks popup source dropping raw hooks text — fixed in review (fe1adf61)
 
 ### Verification
 
@@ -190,4 +199,15 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - `bash scripts/test/test-cli.sh --quiet`: 426 passed, 0 failed (at e5233532). An earlier run at the first commit reported 1 failure whose line was not captured; both later runs were clean.
 - Validation loop: reached the eight-pass cap. Passes 1–8 ran as fresh-context subagents; each reported `fix` findings, all fixed above. Pass 8's fixes (641e32f9: build-named folders inside harness folders, two comments) were not revalidated by a further pass; they are covered by a new assertion in `repository-agent-config-check.mjs`.
 - After pass 8 at 641e32f9: `repository-agent-config-check.mjs`, `repository-scope-portal-check.mjs`, `repository-scope.spec.mjs` (18 passed), `run-checks.mjs --filter harness` (14/14), `docs-reference-check.mjs`, `doctor.sh --quiet`, and `git diff --check` all passed.
-- Browser (observed, not asserted): the scoped Agents view against this branch showed checkout path, branch, the three sections, the machine-wide grid, plain-text previews with config values withheld, no horizontal scroll at 375px, and the checkout-unavailable state. `roborepo browser run` was blocked: Playwright is not installed in RoboRepo's tool directory.
+- Browser, historical (before the UI rework; observed, not asserted): the scoped Agents view against this branch showed checkout path, branch, the three sections, the machine-wide grid, plain-text previews with config values withheld, no horizontal scroll at 375px, and the checkout-unavailable state. `roborepo browser run` was blocked: Playwright is not installed in RoboRepo's tool directory.
+- Human review: `roborepo plans sync-base` merged main 97f65fa4 cleanly (3122994d). CI `npm run check` passed on 3122994d and again on fe1adf61 (macOS, Ubuntu, Windows installer).
+- Human review at 3122994d: `repository-agent-config-check.mjs`, `config-tree-render-check.mjs`, `repository-scope-portal-check.mjs`, `run-checks.mjs --filter repository-scope` (2/2), `run-checks.mjs --filter harness` (14/14), `test:portal-ui` `repository-scope.spec.mjs` + `repository-list-change.spec.mjs` (24 passed), `docs-reference-check.mjs`, `doctor.sh --quiet` (98 checks), and `git diff --check` all passed.
+- Human review fixes: the three secret and path checks fail with each fix reverted and pass with it; the root `AGENTS.md` browser test failed on the old grouping ("medium") and passes now; `repository-scope.spec.mjs` + `repository-list-change.spec.mjs` 26 passed; `config-source-harness-check.mjs` passed.
+- Human review Validator loop: four fresh-context passes; pass 4 reported no fix findings.
+- Browser (observed, not asserted), after the rework, against the branch portal on an isolated state root: Token Use table with only Total Usage colored, Agent Config with Rules (Repo Root, Conditional), Config and hooks grouped by harness, and Skills. The live `/api/config/source` settings and hooks responses had no `content`, and the inventory had no home path. The primary checkout is main, which lacks this branch's `.gitattributes` line, so `generated/` rules still appear until merge.
+
+### Result
+
+- Status: complete
+- Reviewed implementation commit: fe1adf61f84d8bf2f83c45384209c4769e4ecdf0
+- Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
