@@ -190,9 +190,19 @@ then the run proceeds without questions.
 11. Set up and start the repository-appropriate test/development environment or build that
     exercises the delivered behavior. Determine how to do this from the repository's own
     instructions, scripts, configuration, and conventions; do not assume a universal framework,
-    command, or launch rule. Keep it available for manual verification and capture the resulting
-    shareable URL or link when the environment exposes one. If the repository cannot expose a
-    link, record what was started and why no link is available.
+    command, or launch rule. Start it where the user's own tooling can find it:
+    - Make the target worktree the process's working directory; a script path into the worktree
+      run from another folder is not enough. Tools that map a running server to a checkout read
+      the process's working directory, so that server is filed under the other folder's branch.
+      A harness launch configuration that starts the server must also change into the worktree.
+    - Use the user's normal local state and configuration by default. Isolate them (a scratch data
+      directory or state root) only when exercising the change would write state the user would
+      not want touched, such as a migration, a first-run flow, or a destructive action. Isolated
+      servers may be hidden from the user's tooling, so the handoff says it is isolated and why.
+    - Leave it running for manual verification, and open its URL in the harness's browser pane
+      when one exists (in the Claude desktop app, `preview_start` with the URL).
+    Report the URL in the handoff. If the repository cannot expose a link, record what was started
+    and why no link is available.
 12. Run completion-level verification, including manual verification against the started
     environment when applicable. Apply the behavioral evidence handoff below before committing.
 13. Re-read Git status and the implementation diff in the target worktree, then commit the
