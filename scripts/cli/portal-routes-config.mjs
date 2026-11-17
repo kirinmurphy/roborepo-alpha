@@ -3,6 +3,18 @@
 // mutateCommand come from telemetry.mjs's wiring).
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
+import { readRepositoryScope } from "./portal-routes-scope.mjs";
+
+// A repo scope is required; All repos answers 400 instead of an empty inventory.
+function readRepoScopeOnly(params, res, handlers) {
+  const scope = readRepositoryScope(params, res, handlers);
+  if (!scope) return null;
+  if (scope.kind !== "repository") {
+    send(res, 400, "application/json", JSON.stringify({ error: "expected ?repo=<repo key>" }));
+    return null;
+  }
+  return scope;
+}
 
 // Mutations are POST-only, origin-checked, token-checked, and JSON-bodied (route() already ran
 // the origin+token guard). Each writes config then returns the fresh snapshot so the client
@@ -171,6 +183,41 @@ export const configRoutes = defineRoutes([
           .catch((error) => send(res, /unsupported harness/.test(String(error?.message)) ? 404 : 500,
             "application/json", JSON.stringify({ ok: false, error: String(error?.message || error) })));
       });
+      return true;
+    },
+  },
+  {
+    // Read-only inventory of the selected repo's own Claude Code and Codex files, from its primary
+    // checkout. Requires a repo scope: the global page has its own snapshot at /api/config.
+    path: "/api/config/repository",
+    handler: (req, res, { qs, handlers }) => {
+      const scope = readRepoScopeOnly(new URLSearchParams(qs), res, handlers);
+      if (!scope) return true;
+      Promise.resolve()
+        .then(() => handlers.loadRepositoryAgentConfig({ repositoryId: scope.repositoryId }))
+        .then((result) => send(res, 200, "application/json", JSON.stringify(result)))
+        // The exception text can carry local paths or a parser excerpt; it stays in the server log.
+        .catch((error) => {
+          console.error("repo agent config inventory failed:", error);
+          send(res, 500, "application/json", JSON.stringify({ error: "The repo's agent config could not be read." }));
+        });
+      return true;
+    },
+  },
+  {
+    // One inventory entry's preview, by the entry id the inventory returned.
+    path: "/api/config/repository/source",
+    handler: (req, res, { qs, handlers }) => {
+      const params = new URLSearchParams(qs);
+      const scope = readRepoScopeOnly(params, res, handlers);
+      if (!scope) return true;
+      Promise.resolve()
+        .then(() => handlers.loadRepositoryAgentConfigSource({ repositoryId: scope.repositoryId, id: params.get("id") }))
+        .then((result) => send(res, result.ok ? 200 : result.status || 400, "application/json", JSON.stringify(result)))
+        .catch((error) => {
+          console.error("repo agent config preview failed:", error);
+          send(res, 500, "application/json", JSON.stringify({ ok: false, error: "This file's preview could not be read." }));
+        });
       return true;
     },
   },

@@ -23,6 +23,7 @@ import { readAppendedLines } from "./jsonl-tail.mjs";
 import { startPortalServer } from "./portal-server.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
+import { loadRepositoryAgentConfig, loadRepositoryAgentConfigSource } from "./repository-agent-config.mjs";
 import { hookHarnessesForPackages, invalidateHookReadiness, reportPackageHookChange } from "./hook-readiness-status.mjs";
 import { launchHookReview, loadHookReviewStatus } from "./hook-review-launch.mjs";
 import { installCoreHooks } from "./hook-core-install.mjs";
@@ -839,6 +840,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       try { return setHarnessEnabled(id, enabled); } finally { invalidateHookReadiness(); }
     },
     loadConfigSource: (params) => loadConfigSource(params),
+    loadRepositoryAgentConfig: ({ repositoryId }) => loadRepositoryAgentConfig({ registry: loadRegistry({ stateRoot }), repositoryId }),
+    loadRepositoryAgentConfigSource: ({ repositoryId, id }) => loadRepositoryAgentConfigSource({ registry: loadRegistry({ stateRoot }), repositoryId, id }),
     loadPlans: (params) => loadPlansSnapshot(params),
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),

@@ -11,12 +11,23 @@ export function createHarnessRuntime({ state = readHarnessState() } = {}) {
     return listHarnessProviders().filter((provider) => isProviderEnabled(state, provider.id));
   }
 
+  // Repo inspection reads files a repo carries whether or not this machine runs that harness, so it
+  // asks every supported provider, never only the enabled ones.
+  function projectInventoryProviders() {
+    return listHarnessProviders().map((provider) => ({
+      provider,
+      enabled: isProviderEnabled(state, provider.id),
+      inventory: provider.adapters.projectInventory ?? null,
+    }));
+  }
+
   function providersFor(capability) {
     return enabledProviders().filter((provider) => provider.manifest.capabilities.includes(capability));
   }
 
   return Object.freeze({
     enabledProviders,
+    projectInventoryProviders,
     providersFor,
     get: getHarnessProvider,
   });

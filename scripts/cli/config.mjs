@@ -54,6 +54,7 @@ import {
   readSkillSource,
 } from "./config-source-lookup.mjs";
 import { renderCommandSourceHtml } from "./config-source-render.mjs";
+import { renderConfigFileHtml } from "./config-tree-render.mjs";
 import { buildContextCost } from "./context-cost.mjs";
 import { hasHarnessProvider, listHarnessProviders, getHarnessProvider } from "../harnesses/registry.mjs";
 import { confidenceMeetsMinimum, discoverHarnessProviders } from "../harnesses/discovery.mjs";
@@ -790,7 +791,8 @@ function generatedSidecarHooksPath(harness) {
 // Read the full source that DEFINES a tool, for the /agents click-to-inspect popup. Strictly
 // whitelisted: kind+id are resolved against the catalogs/known dirs, never used to build a path
 // directly, so an attacker can't request arbitrary files (no traversal — ids are matched against
-// catalog entries and basenames only). Returns { ok, title, path, content } or { ok:false, error }.
+// catalog entries and basenames only). Returns { ok, title, path, content, html? } or
+// { ok:false, error }; the config-file and harness-hooks kinds return html only, never the raw text.
 const HARNESS_SCOPED_KINDS = new Set(["command", "command-skill", "globals-rules", "harness-hooks", "live-rules"]);
 
 export function loadConfigSource({ kind, id, harness = "claude" }) {
@@ -864,21 +866,16 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
     if (hooksStorageOf(harnessSafe) === "dedicated-json-sidecar") {
       const abs = generatedSidecarHooksPath(harnessSafe);
       const source = readSourceFile(abs, `${displayName} hooks`);
-      if (!source.ok) return source;
-      return { ...source, html: renderMarkdown("```json\n" + source.content.trimEnd() + "\n```") };
+      return withConfigTreeHtml(source, "json");
     }
 
     const abs = rootConfigBaseline[harnessSafe];
     const source = readSourceFile(abs, `${displayName} hooks`);
     if (!source.ok) return source;
-    const settings = readJson(abs, {});
-    const content = JSON.stringify(settings.hooks || {}, null, 2) + "\n";
     return {
-      ok: true,
+      ...withConfigTreeHtml(source, "json", (parsed) => parsed?.hooks ?? {}),
       title: `${displayName} hooks`,
       path: `${source.path}#hooks`,
-      content,
-      html: renderMarkdown("```json\n" + content + "```"),
     };
   }
 
@@ -887,11 +884,13 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
       if (id === `${provider.id}-settings`) {
         const displayName = provider.manifest.displayName;
         const language = provider.manifest.extensions?.app?.rootConfigFormat || "json";
-        return readExternalSourceFile(rootConfigActive[provider.id], `${displayName} settings`, provider.manifest.paths.rootConfig.path, language);
+        const source = readExternalSourceFile(rootConfigActive[provider.id], `${displayName} settings`, provider.manifest.paths.rootConfig.path, language);
+        return withConfigTreeHtml(source, language);
       }
       if (id === `${provider.id}-hooks` && hooksStorageOf(provider.id) === "dedicated-json-sidecar") {
         const displayName = provider.manifest.displayName;
-        return readExternalSourceFile(resolveHarnessPath(provider.manifest, "hooks"), `${displayName} hooks`, provider.manifest.paths.hooks.path, "json");
+        const source = readExternalSourceFile(resolveHarnessPath(provider.manifest, "hooks"), `${displayName} hooks`, provider.manifest.paths.hooks.path, "json");
+        return withConfigTreeHtml(source, "json");
       }
     }
     return fail(`unknown config file: ${id}`);
@@ -916,6 +915,14 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
   }
 
   return fail(`unknown kind: ${kind}`);
+}
+
+// Live config files hold secrets beside ordinary settings, so the popup shows a key tree with only
+// safe values, and the raw text is dropped from the response rather than merely left unrendered.
+function withConfigTreeHtml(source, format, pick) {
+  if (!source.ok) return source;
+  const { content, ...rest } = source;
+  return { ...rest, html: renderConfigFileHtml(content, { format, ...(pick ? { pick } : {}) }) };
 }
 
 export function configCommand(args) {
