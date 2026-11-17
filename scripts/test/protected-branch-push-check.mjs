@@ -110,6 +110,17 @@ const cases = [
   ["echo git push origin main > x; $(command -v sh) x", "ask"],
   ["echo git push origin main | env -S sh", "ask"],
   ["echo git push origin main | env -Ssh", "ask"],
+  ["echo git push origin main | \"$(which sh)\"", "ask"],
+  ["echo git push origin main >x\n>|y sh x", "ask"],
+  ["echo git push origin main | {fd}>x sh", "ask"],
+  // Arithmetic and array substitutions are not a program.
+  ["echo $(( $(nproc) + 1 )) && git log --grep push", "defer"],
+  ["files=( $(git ls-files) ); git log --grep push", "defer"],
+  // Interpreters other than shells can run the text too.
+  ["echo git push --no-verify origin HEAD:main | python3 -c 'import os,sys;os.system(sys.stdin.read())'", "ask"],
+  ["echo git push origin main | perl -e 'system(<STDIN>)'", "ask"],
+  ["python3 -c 'import os; os.system(\"git push origin main\")'", "ask"],
+  ["echo 'all: ; git push origin main' > Makefile; make", "ask"],
   ["git log --grep push && eval \"$X\"", "ask"],
   ["xargs git log push", "ask"],
   ["git push origin feat && rm -rf build", "defer"],
@@ -144,6 +155,8 @@ const cases = [
   ["cat > x <<'EOF'\ngit push origin main\nEOF\nenv -S bash x", "deny"],
   ["tee x <<'EOF'\ngit push --no-verify origin HEAD:main\nEOF\nsh<x", "ask"],
   ["git tag -a v1 -F - <<'EOF'\nnotes about git push\nEOF", "defer"],
+  ["cat > x <<'EOF'\ngit push origin main\nEOF\n\"$(which sh)\" x", "deny"],
+  ["2>/dev/null cat > notes.md <<'EOF'\nthen git push origin feat\nEOF", "defer"],
   ["bash <<'EOF'\n(git push origin feat)\nEOF", "ask"],
   ["cat <<'EOF' | sh\necho $(git push origin feat)\nEOF", "ask"],
   ["echo '<<EOF'\n(git push origin feat)\nEOF", "ask"],
@@ -265,6 +278,12 @@ for (const command of manifest.behaviors.find((b) => b.id === "change-github-dir
 }
 for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
+}
+// Each command start scans only its own command, so a long chain stays fast.
+{
+  const started = Date.now();
+  decide("; a=b".repeat(20000));
+  assert.ok(Date.now() - started < 5000, "a long chain of assignments took over 5 seconds");
 }
 // Codex runs a command whose hook result is "ask" without prompting, so its copy turns every ask
 // into a deny. It knows it is Codex's from its directory, in this repo and where it is installed.

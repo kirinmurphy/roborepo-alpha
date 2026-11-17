@@ -59,13 +59,14 @@ whose words the shell builds (`git $CMD`, `$GIT push`, `git {push,}`), and a pus
 that changes what it reads (`export`, `unset`, a `GIT_*` or `PATH` assignment, `git config`,
 `git remote set-url`, `source`). A command that only mentions a push, such as `echo git push`,
 `grep "git push"`, or `git log --grep push`, asks nothing, unless something in the same command could
-run that text as a script (`echo git push origin main | sh`, a shell reading a file it wrote).
+run that text as a script (`echo git push origin main | sh`, a shell reading a file it wrote, or an
+interpreter such as `python3`, `perl`, `ruby`, `node`, or `make` anywhere in the command).
 
 A heredoc body is skipped only when it is plainly data: `cat`, `tee`, `gh`, or a `git commit`,
 `git tag`, or `git notes` message read from stdin reads it, nothing pipes that command on, no part
 of the command could run it as a script (a shell, even one glued to a bracket or redirect such as
-`(sh)` or `bash<x`, `source`, `eval`, `xargs`, `env -S`, a path such as `./x.sh`, a program from a
-variable or a substitution such as `$(which sh)`), and the shell expands
+`(sh)` or `bash<x`, `source`, `eval`, `xargs`, `env -S`, one of those interpreters, a path such as
+`./x.sh`, a program from a variable or a substitution such as `$(which sh)`), and the shell expands
 nothing in it (a quoted delimiter such as `<<'EOF'`, or no `$(…)` or backticks in the body). So a
 commit message, pull request body, or written file that mentions `git push` asks nothing, and every
 other body is read like the rest of the command.
@@ -73,7 +74,8 @@ other body is read like the rest of the command.
 Some pushes the hook cannot see at all, so it neither asks nor allows them, and the decision falls
 to the permission rules and the `pre-push` hook below:
 
-- a push started by another program, such as `python -c`, `node -e`, `make`, or an npm script;
+- a push started by another program from text the command never shows, such as an existing
+  script, Makefile, or npm script;
 - a push on another machine through `ssh`;
 - a shell function or alias defined in an earlier command;
 - a subcommand that comes from a variable or file the command never spells out, such as

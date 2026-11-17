@@ -979,19 +979,24 @@ function classifyCommand(text, startCwd) {
 
 // Programs that run text they are given, or a file written earlier in the command.
 const SCRIPT_RUNNERS = new Set(['source', '.', 'eval', 'exec', 'xargs', 'timeout', 'watch', 'parallel', 'script'])
+// Interpreters that can run text they read (`python3 -c 'os.system(…)'`, a Makefile written
+// earlier). Any `python` version counts too.
+const INTERPRETERS = new Set(['perl', 'ruby', 'node', 'dash', 'ksh', 'fish', 'pwsh', 'busybox', 'make', 'gmake'])
 
 // The simple commands of `text`, each as its words with quotes and backslashes removed. It splits
 // at operators and at subshell and substitution edges, cuts a redirect glued to the program
 // (`bash>log`, `sh<&0`), and drops redirects in front of it, so `(sh)` and `bash<x` still name `sh`
 // and `bash`.
 function simpleCommands(text) {
-  return text.split(/[;&|()`\n]|\$\(/).map((part) => {
+  // `>|` is a redirect, not a pipe.
+  return text.replace(/>\|/g, '>').split(/[;&|()`\n]|\$\(/).map((part) => {
     const words = []
     const raw = part.trim().split(/\s+/).filter(Boolean)
     for (let i = 0; i < raw.length; i += 1) {
       const word = raw[i].replace(/['"\\]/g, '')
-      if (!words.length && /^\d*[<>]/.test(word)) {
-        if (/^\d*[<>]+&?$/.test(word)) i += 1 // a bare operator: its target is the next word
+      if (!words.length && /^(\d*|\{\w+\})[<>]/.test(word)) {
+        // A bare operator: its target is the next word.
+        if (/^(\d*|\{\w+\})[<>]+&?$/.test(word)) i += 1
         continue
       }
       words.push(words.length ? word : word.replace(/\d*[<>].*$/, ''))
@@ -1000,14 +1005,15 @@ function simpleCommands(text) {
   })
 }
 
-// A command whose program the shell fills in from a substitution (`$(which sh) x`), behind any
-// assignments, wrappers, or keywords.
-const SUBSTITUTED_PROGRAM = /(?:^|[;&|(\n])\s*(?:[A-Za-z_]\w*=\S*\s+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)\s+(?:-\S+\s+)*)*(?:\$\(|`)/
+// A command whose program the shell fills in from a substitution (`$(which sh) x`, quoted or not),
+// behind any assignments, wrappers, or keywords. `((`, `$((`, and `=(` open arithmetic or an array,
+// not a command. Words stop at an operator, so each command start scans only its own command.
+const SUBSTITUTED_PROGRAM = /(?:^|[;&|\n]|(?<![(=$])\((?!\()|\$\((?!\())\s*(?:[A-Za-z_]\w*=[^\s;&|()]*\s+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)\s+(?:-[^\s;&|()]+\s+)*)*"?(?:\$\(|`)/
 
 // Whether some line of `text` starts a program that could run a heredoc's body or a file it wrote:
-// a shell, a script runner, a program the shell fills in (`$SHELL`, `$(which sh)`), a path
-// (`./x.sh`), `env -S`, or a process substitution. It reads the command with heredoc bodies taken
-// out, so a body's prose does not count, and it errs toward keeping a body.
+// a shell, a script runner or interpreter, a program the shell fills in (`$SHELL`, `$(which sh)`),
+// a path (`./x.sh`), `env -S`, or a process substitution. It reads the command with heredoc bodies
+// taken out, so a body's prose does not count, and it errs toward keeping a body.
 function mayRunScripts(text) {
   if (/[<>]\(/.test(text) || SUBSTITUTED_PROGRAM.test(text)) return true
   return simpleCommands(text).some((words) => {
@@ -1016,8 +1022,9 @@ function mayRunScripts(text) {
     const before = words.slice(0, p)
     const splitString = before.some((word) => /^(-[A-Za-z]*S|--split-string)/.test(word))
     if (before.includes('env') && splitString) return true
-    return Boolean(program) && (SHELLS.has(path.basename(program)) || SCRIPT_RUNNERS.has(program)
-      || program.startsWith('$') || program.includes('/'))
+    const name = path.basename(program ?? '')
+    return Boolean(program) && (SHELLS.has(name) || SCRIPT_RUNNERS.has(program) || INTERPRETERS.has(name)
+      || /^python[\d.]*$/.test(name) || program.startsWith('$') || program.includes('/'))
   })
 }
 
@@ -1267,9 +1274,11 @@ function scanPushes(text, found = { pushes: 0, environmentChanged: false }) {
     const scripts = nestedScripts(words)
     for (const script of scripts) scanPushes(script, found)
     // Where something can run text as a script, a quoted word may be that text
-    // (`echo 'git push origin main' | bash`).
+    // (`echo 'git push origin main' | bash`), or code that builds it (`os.system("git push …")`).
     if (!mentionsOnly) {
-      for (const word of words) if (/\s/.test(word) && !scripts.includes(word)) scanPushes(word, found)
+      for (const word of words) {
+        if (/\s/.test(word) && !scripts.includes(word)) scanPushes(word.replace(/[(){}\[\],"'`]/g, ' '), found)
+      }
     }
   }
   return found
