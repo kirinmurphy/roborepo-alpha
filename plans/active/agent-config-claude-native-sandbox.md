@@ -699,6 +699,11 @@ Acceptance criteria:
       create options — fixed (c4a3329c)
 - [x] `cd -` after a failed `cd`, and `popd` after a failed `pushd`, could land on main unasked
       (`base`, cheap in the same code) — fixed (c4a3329c)
+- [x] With no Claude ask rule for `git push`, pushes the hook deferred on (a redirect such as
+      `2>/dev/null`, a remote branch delete) got no prompt at all — fixed (d296cdf4): redirects are
+      skipped when reading refspecs, remote deletes ask
+- [x] Past the folder cap, a relative `cd ..` out of a collapsed folder could miss main, and bare
+      `pushd` ignored a `pushd` that may have failed (`base`) — fixed (d296cdf4)
 
 ### Verification
 
@@ -778,6 +783,12 @@ Acceptance criteria:
 - Validation pass 22 at 37ce7430 (fresh-context subagent, 3,686 earlier cases plus 49 new): 1 `fix`
   finding with a doc gap, 2 `base` items fixed alongside in c4a3329c, and 1 `escalate` decided in
   the Decision Log (2026-11-16, temp work started from a main checkout)
+- Validation pass 23 at d30dbb92 (fresh-context subagent): 1 `fix` finding and 2 `base` items,
+  fixed in d296cdf4. It confirmed that `roborepo update` clears an old `Bash(git push:*)` ask from
+  live settings, and that `agent-run` and the config rows still show `push-code` as `ask`
+- Full local gate at d30dbb92: 425 of 426 passed; `shared-target-rows-check` failed on an empty,
+  untracked `.claude/.cc-writes` folder that Claude Code's write tracking left in
+  `globals/system/git-hooks/` while this session's shell sat there. Removed; the check passes
 - Full local gate at 8ea28b21: one `test-cli.sh` MCP case failed (`claude mcp add` found no validated
   Claude executable). It ran while a Validator ran thousands of probe commands, and its fake
   `claude` must answer `--version` within 2 seconds; the hook change does not reach it, and the
