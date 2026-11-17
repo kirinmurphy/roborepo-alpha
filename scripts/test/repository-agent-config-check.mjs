@@ -82,7 +82,7 @@ try {
     ".claude/rules/always.md": "# Always\n",
     ".claude/rules/scoped.md": "---\npaths:\n  - src/**\n---\n# Scoped\n",
     ".claude/skills/review/SKILL.md": "---\nname: review\ndescription: Reviews a diff.\n---\nBody\n",
-    "packages/web/.claude/skills/nested-skill/SKILL.md": "---\nname: nested-skill\n---\n",
+    "packages/web/.claude/skills/nested-skill/SKILL.md": "---\nname: nested-skill\ndescription: Only for the web package.\n---\n",
     ".agents/skills/codex-skill/SKILL.md": "---\nname: codex-skill\ndescription: A Codex skill.\n---\n",
     ".codex/skills/legacy-skill/SKILL.md": "---\nname: legacy-skill\n---\n",
     ".claude/settings.json": JSON.stringify({
@@ -100,8 +100,11 @@ try {
     // A skill kept elsewhere in the repo and linked into both harnesses' folders.
     "local/skills/inrepo/SKILL.md": "---\nname: inrepo\ndescription: Lives in the repo.\n---\n# In repo\nBody\n",
     "local/skills/inrepo/references/guide.md": "# Guide\nRead me.\n",
-    // Rendered output marked linguist-generated: listed apart and never counted.
+    // Rendered output marked linguist-generated: flagged, left off the page, and never counted, even
+    // where an ordinary file in the same place would load at startup.
     "generated/claude/CLAUDE.md": "# Generated\n",
+    ".claude/rules/rendered.md": "# Rendered rule\n",
+    ".claude/skills/rendered/SKILL.md": "---\nname: rendered\ndescription: Rendered elsewhere.\n---\n",
     ".claude/commands/ship.md": "Ship it\n",
     ".codex/config.toml": [
       'model = "gpt-5"', 'approval_policy = "on-request"', `api_key = "${SECRETS[0]}"`, "",
@@ -112,7 +115,7 @@ try {
     ".codex/agents/helper.toml": 'name = "helper"\ndescription = "Helps"\n',
     ".gitignore": "CLAUDE.local.md\n",
     // A discovered file under a repo-configured filter: hashing it cannot decide modification.
-    ".gitattributes": ".claude/rules/always.md filter=evil\n.claude/agents/filtered.md filter=evil\ngenerated/** linguist-generated=true\n",
+    ".gitattributes": ".claude/rules/always.md filter=evil\n.claude/agents/filtered.md filter=evil\ngenerated/** linguist-generated=true\n.claude/rules/rendered.md linguist-generated=true\n.claude/skills/rendered/** linguist-generated=true\n",
     // Filtered and unchanged: matching the index blob proves nothing when a clean filter applies.
     ".claude/agents/filtered.md": "---\nname: filtered\n---\nUnchanged\n",
     "node_modules/pkg/CLAUDE.md": "# never listed\n",
@@ -237,12 +240,23 @@ try {
 
   // Generated files are flagged and left out of the startup totals.
   assert.equal(byPath("generated/claude/CLAUDE.md").generated, true);
+  assert.equal(byPath(".claude/rules/rendered.md").generated, true);
+  assert.equal(byPath(".claude/rules/rendered.md").loading, "root-level", "generated, yet where a rule loads at startup");
   assert.equal(byPath("CLAUDE.md").generated, undefined);
   const startup = Object.fromEntries(inventory.startup.map((item) => [item.harness, item]));
   assert.deepEqual(Object.keys(startup), ["claude", "codex"], "one total per supported harness");
   assert.deepEqual(startup.claude.files.sort(), [".claude/rules/always.md", "CLAUDE.local.md", "CLAUDE.md"].sort(),
     "root-level instructions count; scoped rules, nested and generated files do not");
-  assert.ok(startup.claude.breakdown.skillDiscovery > 0, "skill names and descriptions count at startup");
+  // Skill discovery counts root skills only: not a nested package's skill, and not a generated one.
+  const claudeSkills = inventory.entries.filter((entry) => entry.harness === "claude" && entry.kind === "skill");
+  const nestedSkill = byPath("packages/web/.claude/skills/nested-skill/SKILL.md");
+  const generatedSkill = byPath(".claude/skills/rendered/SKILL.md");
+  assert.ok(nestedSkill.discoveryTokens > 0 && generatedSkill.discoveryTokens > 0 && generatedSkill.generated);
+  const rootSkillTokens = claudeSkills
+    .filter((entry) => entry !== nestedSkill && entry !== generatedSkill && entry.discoveryTokens != null)
+    .reduce((sum, entry) => sum + entry.discoveryTokens, 0);
+  assert.ok(rootSkillTokens > 0, "skill names and descriptions count at startup");
+  assert.equal(startup.claude.breakdown.skillDiscovery, rootSkillTokens, "nested and generated skills add nothing");
   assert.equal(startup.claude.tokens, startup.claude.breakdown.instructions + startup.claude.breakdown.skillDiscovery + startup.claude.breakdown.commandDiscovery);
   assert.deepEqual(startup.codex.files, ["AGENTS.md"]);
 

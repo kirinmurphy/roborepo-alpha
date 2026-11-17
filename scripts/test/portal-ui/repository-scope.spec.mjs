@@ -323,6 +323,26 @@ test("scoped Agents shows the repo's token use and its own files read-only, with
   await expect(page.getByRole("heading", { name: /^Token Use for / })).toHaveCount(0);
 });
 
+test("scoped Agents colors only Total Usage for each active harness", async ({ page }) => {
+  // No harness is enabled on the test machine, so the real inventory is marked active in transit.
+  await page.route((url) => url.pathname === "/api/config/repository", async (route) => {
+    const json = await (await route.fetch()).json();
+    json.providers = json.providers.map((provider) => ({ ...provider, enabled: provider.supported }));
+    await route.fulfill({ json });
+  });
+  await page.goto(`/agents?repo=${ALPHA}`);
+  const usageRows = page.locator(".repo-usage-grid .config-grid-row[data-harness]");
+  await expect(usageRows).toHaveCount(2);
+  const usageLevels = await usageRows.evaluateAll((rows) => rows.map((row) => [
+    row.querySelector('[data-slot="repo"]').level ?? null, row.querySelector('[data-slot="total"]').level ?? null,
+  ]));
+  for (const [repoLevel, totalLevel] of usageLevels) {
+    expect(repoLevel).toBeNull();
+    expect(["low", "medium", "high"]).toContain(totalLevel);
+  }
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
 test("scoped Agents sizes a root AGENTS.md as startup context, though Claude reads it only conditionally", async ({ page }) => {
   await page.goto(`/agents?repo=${BETA}`);
   const rootGroup = inspectorSection(page, "Rules").locator(".repo-inspector-group").first();
