@@ -318,40 +318,65 @@ test("scoped Agents says when the scan is partial or a harness is unsupported, a
   await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
 });
 
+// Holds matching requests until `release()`: `reached` settles when one is held, `continued` once
+// it has been let through (or dropped, when its route was removed meanwhile).
+async function holdRequests(page, matches) {
+  let release;
+  let reached;
+  let continued;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const reachedPromise = new Promise((resolve) => { reached = resolve; });
+  const continuedPromise = new Promise((resolve) => { continued = resolve; });
+  await page.route(matches, async (route) => {
+    reached();
+    await gate;
+    try {
+      await route.continue();
+    } catch {
+      // The route was removed while held; the request never reaches the page.
+    }
+    continued();
+  });
+  return { release, reached: reachedPromise, continued: continuedPromise };
+}
+
+// One full task turn in the page, so a response that just arrived has been handled.
+function settle(page) {
+  return page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))));
+}
+
 test("switching repos while an inventory or preview is pending shows only the current repo", async ({ page }) => {
   // Hold Alpha's responses until after the switch, so they arrive late.
-  let release;
-  const held = new Promise((resolve) => { release = resolve; });
-  await page.route((url) => url.pathname.startsWith("/api/config/repository") && url.searchParams.get("repo") === ALPHA && url.searchParams.has("id"), async (route) => {
-    await held;
-    await route.continue();
-  });
+  const preview = await holdRequests(page, (url) => url.pathname.startsWith("/api/config/repository") && url.searchParams.get("repo") === ALPHA && url.searchParams.has("id"));
   // The open preview covers the selector, so this switch comes from browser history.
   await page.goto(`/agents?repo=${BETA}`);
   await expect(inspectorSection(page, "Instructions")).toContainText("AGENTS.md");
   await chooseScope(page, ALPHA);
   await inspectorSection(page, "Instructions").getByRole("button", { name: "CLAUDE.md: CLAUDE.md" }).click();
   await expect(page.locator("dialog#config-modal")).toBeVisible();
+  await preview.reached;
   await page.goBack();
   await expect(selector(page)).toHaveAccessibleName(`Repo: ${BETA}`);
   await expect(page.locator("dialog#config-modal")).toBeHidden();
   await expect(inspectorSection(page, "Instructions")).toContainText("AGENTS.md");
 
   await page.unrouteAll({ behavior: "ignoreErrors" });
-  let releaseInventory;
-  const heldInventory = new Promise((resolve) => { releaseInventory = resolve; });
-  await page.route((url) => url.pathname === "/api/config/repository" && url.searchParams.get("repo") === ALPHA, async (route) => {
-    await heldInventory;
-    await route.continue();
-  });
+  const inventory = await holdRequests(page, (url) => url.pathname === "/api/config/repository" && url.searchParams.get("repo") === ALPHA);
   await chooseScope(page, ALPHA);
   await expect(page.getByText("Reading this repo's agent files…")).toBeVisible();
+  await inventory.reached;
   await chooseScope(page, BETA);
   await expect(inspectorSection(page, "Instructions")).toContainText("AGENTS.md");
-  release();
-  releaseInventory();
+  const lateInventory = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/config/repository" && url.searchParams.get("repo") === ALPHA;
+  });
+  preview.release();
+  inventory.release();
   // Alpha's late answers land after Beta's view; neither may replace it.
-  await page.waitForTimeout(500);
+  await Promise.all([preview.continued, inventory.continued]);
+  await (await lateInventory).finished();
+  await settle(page);
   await expect(page.locator("main")).not.toContainText("Alpha instructions");
   await expect(page.locator("main")).not.toContainText("alpha-skill");
   await expect(page.locator("dialog#config-modal")).toBeHidden();
