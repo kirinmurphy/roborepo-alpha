@@ -12,6 +12,7 @@ import { repositoryDirectory, unresolvedActivity } from "./templates.js";
 import { createWorktreeCleanupDialog, createWorktreeRemoveDialog } from "./worktree-dialogs.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createProtectionPanel } from "/portal/shared/protection-panel.js";
+import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
 
@@ -49,8 +50,8 @@ const planDrawer = createPlanDrawer({
 // Any source change can add or remove repositories, so Home re-reads its overview right away.
 const sourcesDialog = createRepositorySourcesDialog({
   onPending: (isPending) => { if (isPending) { homeAutoDiscoveryEnabled = true; setHomeSyncStatus("syncing"); } },
-  onChange: () => refresh({ force: true }),
 });
+onRepositoriesChanged(() => refresh({ force: true }));
   manageRepositories.addEventListener("click", (event) => {
     event.preventDefault();
     sourcesDialog.open();

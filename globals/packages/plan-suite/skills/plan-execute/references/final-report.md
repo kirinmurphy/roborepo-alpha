@@ -59,7 +59,7 @@ in plain words; the reader has not seen the plan's wording.
 
 | Decision | Why | Instead of |
 | --- | --- | --- |
-| plan-review never pushes | Keeps the skill's no-push rule | Pushing after each fix, as the plan said |
+| Retry once on a timeout | A second failure is reported, not hidden | Retrying until success, as the plan said |
 
 ## Exceptions
 
@@ -109,7 +109,8 @@ Implementation result
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)
 - Details: Decision Log, findings, and Not tested entries are in the plan document; ask here for any detail
+- Server: <URL> running from the worktree | isolated state at <URL> (<why>) | none (<why>)
 ```
 
-Add a line only for a non-default fact: a shareable link, a server left running, docs that needed
-no update and why, or uncommitted work left in the worktree.
+Add a line only for a non-default fact: docs that needed no update and why, or uncommitted work
+left in the worktree.

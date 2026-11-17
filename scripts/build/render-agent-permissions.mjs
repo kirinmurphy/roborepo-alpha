@@ -15,7 +15,7 @@ import { GENERATED_POLICY_FILENAME } from "../harnesses/gemini/policy-toml.mjs";
 // doctor --check run this script. The generated candidate never carries personal overrides — it
 // always renders the manifest's own default buckets, unmodified.
 //
-// Codex additionally renders a `rules/default.rules` prefix-rule sidecar with no analog in Claude's
+// Codex additionally renders a `rules/roborepo.rules` prefix-rule sidecar with no analog in Claude's
 // settings.json — Codex's approval model needs an extra file the shared `permissions.render`
 // capability doesn't cover, so that one output stays an explicit codex-only step below rather than
 // forcing every provider's render into one shape.
@@ -89,8 +89,8 @@ try {
   codexHooks.hooks = Object.fromEntries(Object.entries(codexHooks.hooks).filter(([event]) => !event.startsWith("_")));
   ok = checkOrWrite(codexHooksPath, `${JSON.stringify(codexHooks, null, 2)}\n`, "Codex core hooks") && ok;
 
-  const codexRulesPath = path.join(repoRoot, "generated", "codex", "rules", "default.rules");
-  ok = checkOrWrite(codexRulesPath, renderCodexRules(manifest), "generated/codex/rules/default.rules") && ok;
+  const codexRulesPath = path.join(repoRoot, "generated", "codex", "rules", "roborepo.rules");
+  ok = checkOrWrite(codexRulesPath, renderCodexRules(manifest), "generated/codex/rules/roborepo.rules") && ok;
 } catch (error) {
   console.error(error?.message || String(error));
   process.exit(1);

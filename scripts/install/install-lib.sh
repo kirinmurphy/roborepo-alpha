@@ -470,15 +470,54 @@ shared_target_row() {
   node "${repo_root}/scripts/cli/shared-target-rows.mjs" "${args[@]}"
 }
 
+# Older installs linked a whole parent dir (~/.codex/rules) into the checkout. Writing or deleting an
+# owned file through that link would change the repo's own file, so remove the link instead.
+# Returns 0 when the parent was such a link (removed unless --dry-run), 1 otherwise.
+unlink_parent_repo_link() {
+  local parent; parent="$(dirname "$1")"
+  [[ -L "${parent}" ]] || return 1
+  local parent_real repo_real
+  parent_real="$(cd "${parent}" 2>/dev/null && pwd -P)" || parent_real=""
+  repo_real="$(cd "${repo_root}" && pwd -P)"
+  # A dangling link is RoboRepo's too: the old target was a checkout path that has since moved.
+  if [[ -n "${parent_real}" && "${parent_real}" != "${repo_real}" && "${parent_real}" != "${repo_real}/"* ]]; then
+    return 1
+  fi
+  [[ "${dry_run}" -eq 1 ]] || rm "${parent}"
+  echo "unlink: ${parent} (old link into the checkout)"
+  return 0
+}
+
 install_copy_item() {
   local repo_rel="$1"
   local home_path="$2"
   local harness="${3:-}"
+  local flags="${4:-}"
   local src="${repo_root}/${repo_rel}"
 
   if [[ ! -e "${src}" ]]; then
     echo "missing source: ${src}" >&2
     return 1
+  fi
+
+  # An `owned` row is a file only RoboRepo writes (Codex's rules/roborepo.rules): any difference is
+  # a stale copy, not a user edit, so it is rewritten in place with no prompt, staging, or backup.
+  if [[ ",${flags}," == *",owned,"* ]]; then
+    # Writing through an old parent link would write into the repo: replace it with a real dir.
+    if unlink_parent_repo_link "${home_path}" && [[ "${dry_run}" -eq 0 ]]; then
+      mkdir -p "$(dirname "${home_path}")"
+    fi
+    if [[ -e "${home_path}" && ! -L "${home_path}" ]] && paths_equivalent_for_copy "${src}" "${home_path}"; then
+      say ok "${home_path}"
+    else
+      if [[ "${dry_run}" -eq 0 ]]; then
+        rm -rf "${home_path}"
+        copy_tree "${src}" "${home_path}"
+      fi
+      say copy "${home_path} <- ${src}"
+    fi
+    CONFIG_COLLISION_ACTION="wrote"
+    return 0
   fi
 
   save_pre_install_backup "${home_path}" "${harness}" "${src}"

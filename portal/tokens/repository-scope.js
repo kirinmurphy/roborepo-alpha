@@ -8,17 +8,31 @@ import {
   withRepositoryScope,
 } from "/portal/shared/repository-scope.js";
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
+import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 
 export { isRepositoryScopeUnavailable };
 
 // `onChange` runs after the scope changes (selector, Clear, back/forward), so the page can drop its
-// remembered report version — two empty scopes can share a version — and refetch.
+// remembered report version — two empty scopes can share a version — and refetch. It also runs
+// after a change in the Manage Repos dialog, which can move sessions between repos without
+// changing the report version. The report does not repaint under an open dialog, so that refetch
+// runs again once the dialog closes.
 // `onResolved` runs when the selector learns what the scope names, so copy that depends on it
 // (the empty-repository splash) can follow.
 export function createTokensRepositoryScope({ onChange, onResolved }) {
   const unavailableHost = document.getElementById("tokens-scope-unavailable");
   const mockScopeNote = document.getElementById("mock-scope-note");
   onRepositoryScopeChange(onChange);
+  let repositoriesChanged = false;
+  onRepositoriesChanged(() => {
+    repositoriesChanged = true;
+    onChange();
+  });
+  document.getElementById("repository-sources-dialog")?.addEventListener("close", () => {
+    if (!repositoriesChanged) return;
+    repositoriesChanged = false;
+    onChange();
+  });
   // The demo report has no route to refuse a key, so for it the selector's own resolution decides.
   let selectorStatus = null;
   let selectedRepository = null;

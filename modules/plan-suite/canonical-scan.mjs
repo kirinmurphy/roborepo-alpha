@@ -35,7 +35,7 @@ export function buildPlanSnapshot({ stateRoot, packageState = null, registry = n
       continue;
     }
     try {
-      const repository = { ...repositoryRecord(store.root, identity), codeRoot: store.primary };
+      const repository = repositoryRecord(store.root, identity);
       const repositoryPlans = discoverPlansInRepository(repository);
       repositories.push(repository);
       plans.push(...repositoryPlans);

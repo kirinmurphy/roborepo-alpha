@@ -20,7 +20,7 @@ import { plannableRepositories } from "../../modules/plan-suite/canonical-scan.m
 import { repositoryCheckouts } from "../../modules/plan-suite/checkouts.mjs";
 import { pathFreeFileError } from "../../modules/plan-suite/naming.mjs";
 import { PLANS_ORDER_RELATIVE_PATH, locateStore, refreshStore } from "../../modules/plan-suite/plan-store.mjs";
-import { git, repositoryBaseBranch } from "../../modules/plan-suite/plan-git.mjs";
+import { git } from "../../modules/plan-suite/plan-git.mjs";
 import { SHORT_ID_PATTERN } from "../../modules/plan-suite/plan-id.mjs";
 import { planSaveChange, savePlan } from "../../modules/plan-suite/plan-writes.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
@@ -139,7 +139,7 @@ export async function archiveBacklogPlan({ repositoryId, id, reason }) {
   const unprioritized = new Set(entry.namespaces.flatMap((view) => view.needsPrioritization.flatMap((block) => block.ids)));
   if (!unprioritized.has(id)) throw domainError("INVALID_CHANGE", `Only unprioritized Backlog plans can be archived here: ${id}.`);
   try {
-    const result = await transitionPlan({ cwd: repository.root, transition: "archive", selector: id, reason, base: repositoryBaseBranch(repository.root) || "main" });
+    const result = await transitionPlan({ cwd: repository.root, transition: "archive", selector: id, reason });
     if (result.verdict !== "APPROVED") throw domainError("INVALID_CHANGE", `${id} moved, but its post-commit checks failed.`);
     return { archived: id, references: result.references, synchronized: result.synchronized };
   } catch (err) {

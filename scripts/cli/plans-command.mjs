@@ -18,7 +18,7 @@ import { repairPlansMissingFrontmatter } from "../../modules/plan-suite/repair.m
 
 const PLANS_USAGE = [
   "usage: roborepo plans init [--worktree-root <path>] [--repo-name <name>] [--json]",
-  "       roborepo plans show <plan> [--json]",
+  "       roborepo plans show <plan> [--local] [--json]",
   "       roborepo plans save <file.md> [--json]",
   "       roborepo plans approve <plan> --commit <sha> --confirmed-by <who> [--json]",
   "       roborepo plans config namespaces <file.json> [--json]",
@@ -300,7 +300,6 @@ async function plansInitCommand(args) {
   else console.log(`plans ${result.state}: ${result.path} on ${result.branch}, synchronized`);
 }
 
-// Refreshes first, but still shows the plan when the remote cannot be reached or needs a person.
 async function plansShowCommand(args) {
   const { flags, positional } = parseArgs(args);
   if (!positional[0]) {
@@ -309,17 +308,19 @@ async function plansShowCommand(args) {
   }
   try {
     const store = requireStore();
-    const sync = await refreshStore(store).catch((err) => {
-      if (!err?.code) throw err;
-      return { synchronized: false, reason: err.message };
-    });
+    const sync = flags.local
+      ? { synchronized: false, reason: "remote synchronization skipped (--local)" }
+      : await refreshStore(store).catch((err) => {
+        if (!err?.code) throw err;
+        return { synchronized: false, reason: err.message };
+      });
     const record = selectRepositoryPlan(buildRepositoryPlanSnapshot({ cwd: store.root }), positional[0], { cwd: process.cwd() });
     const markdown = fs.readFileSync(record.absolutePath, "utf8");
     if (flags.json) {
       console.log(JSON.stringify({ ok: true, id: record.plan.id, path: record.plan.relativePath, lifecycle: record.plan.lifecycle, synchronized: sync.synchronized, reason: sync.reason, markdown }, null, 2));
       return;
     }
-    if (!sync.synchronized) console.error(`not synchronized: ${sync.reason}`);
+    if (!flags.local && !sync.synchronized) console.error(`not synchronized: ${sync.reason}`);
     process.stdout.write(markdown);
   } catch (err) {
     return failDomain(err, flags.json);

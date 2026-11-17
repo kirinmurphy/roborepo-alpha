@@ -35,6 +35,19 @@ try {
   fs.writeFileSync(path.join(project, "package.json"), '{ "name": "fixture", "private": true, "type": "module" }\n');
   fs.writeFileSync(path.join(project, "playwright.config.mjs"), 'export default { testDir: "./tests" };\n');
 
+  // ---- A scenario kept outside the project runs with the Playwright of the directory the command ran from ----
+  const scratch = path.join(cli.home, "scratch");
+  fs.mkdirSync(scratch);
+  const outside = path.join(scratch, "outside.mjs");
+  fs.writeFileSync(outside, 'export default async ({ page, url, check }) => { await page.goto(url); await check("loaded", async () => {}); };\n');
+  const fromProject = await cli.start(
+    ["browser", "run", "--scenario", outside, "--url", app.url, "--json"],
+    { TMPDIR: tmpDir("outside"), PLAYWRIGHT_BROWSERS_PATH: browsersPath },
+    { cwd: project },
+  ).done;
+  const outsideResult = JSON.parse(fromProject.stdout);
+  assert.equal(outsideResult.status, "passed", `a scenario outside the project finds the project's Playwright: ${outsideResult.limitations}`);
+
   // ---- A timed-out script scenario ends the command, despite its own pending timer ----
   const lingering = path.join(project, "lingering.mjs");
   fs.writeFileSync(lingering, "export default async function () { await new Promise((r) => setTimeout(r, 30_000)); }\n");

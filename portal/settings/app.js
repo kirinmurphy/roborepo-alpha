@@ -3,6 +3,7 @@ import { renderHookReadiness } from "/portal/shared/hook-readiness.js";
 import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import { runHarnessCheck } from "/portal/shared/harness-warning.js";
 import { createRepositorySourcesInline } from "/portal/shared/repository-sources-dialog.js";
+import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import * as api from "./api.js";
 import { harnessEmptyState, harnessRow } from "./templates.js";
 
@@ -24,10 +25,10 @@ let repositorySyncPending = false;
 
 let repositorySurface;
 repositorySurface = createRepositorySourcesInline({
-  onChange: refresh,
   onPending: setRepositorySyncPending,
   onAutoDiscoveryEnabled: refreshRepositoriesAfterRuntimeScan,
 });
+onRepositoriesChanged(() => refresh());
 checkHarnesses.addEventListener("click", refreshHarnesses);
 telemetryToggle.addEventListener("click", toggleTelemetry);
 

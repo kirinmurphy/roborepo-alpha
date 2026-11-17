@@ -96,7 +96,8 @@ agent names the checked-out branch so the user can return to the base before pla
 transitions.
 
 An active skill's own delivery procedure takes precedence over this default. For example,
-`/plan-execute` uses its feature-branch push procedure, and `/session-close` ends the chat without
+`/plan-execute` and `/plan-review` push the plan's feature branch at the end of each run that
+commits to it, and `/session-close` ends the chat without
 pushing. User instructions to keep work local also take precedence. Unfinished experiments and
 repositories without remotes skip delivery.
 
