@@ -1015,6 +1015,11 @@ dialog#config-modal::backdrop {
 .repo-view-global {
   font-family: inherit;
   font-size: var(--text-sm);
+  color: var(--ink);
+}
+/* Same as the row links: plain ink, accent on hover. */
+.repo-view-global:hover {
+  color: var(--accent);
 }
 .repo-agent-config-title {
   grid-column: 1/-1;
@@ -1062,8 +1067,11 @@ dialog#config-modal::backdrop {
   font-size: var(--text-xs);
   color: var(--desc-dim);
 }
+/* Rules divide subsections (Repo Root from Conditional), never rows inside one. */
 .repo-inspector-group + .repo-inspector-group {
   margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
 }
 .repo-inspector-group-name {
   margin: 0;
@@ -1073,7 +1081,7 @@ dialog#config-modal::backdrop {
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
-.repo-inspector-group .item:first-of-type {
+.repo-inspector-group .item {
   border-top: none;
 }
 /* The row's title is a button so it is keyboard-reachable; it keeps the global page's link look. */
