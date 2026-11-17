@@ -54,6 +54,7 @@ import {
   readSkillSource,
 } from "./config-source-lookup.mjs";
 import { renderCommandSourceHtml } from "./config-source-render.mjs";
+import { renderConfigFileHtml } from "./config-tree-render.mjs";
 import { buildContextCost } from "./context-cost.mjs";
 import { hasHarnessProvider, listHarnessProviders, getHarnessProvider } from "../harnesses/registry.mjs";
 import { confidenceMeetsMinimum, discoverHarnessProviders } from "../harnesses/discovery.mjs";
@@ -865,7 +866,7 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
       const abs = generatedSidecarHooksPath(harnessSafe);
       const source = readSourceFile(abs, `${displayName} hooks`);
       if (!source.ok) return source;
-      return { ...source, html: renderMarkdown("```json\n" + source.content.trimEnd() + "\n```") };
+      return { ...source, html: renderConfigFileHtml(source.content, { format: "json" }) };
     }
 
     const abs = rootConfigBaseline[harnessSafe];
@@ -878,7 +879,7 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
       title: `${displayName} hooks`,
       path: `${source.path}#hooks`,
       content,
-      html: renderMarkdown("```json\n" + content + "```"),
+      html: renderConfigFileHtml(source.content, { format: "json", pick: (parsed) => parsed?.hooks ?? {} }),
     };
   }
 
@@ -887,11 +888,13 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
       if (id === `${provider.id}-settings`) {
         const displayName = provider.manifest.displayName;
         const language = provider.manifest.extensions?.app?.rootConfigFormat || "json";
-        return readExternalSourceFile(rootConfigActive[provider.id], `${displayName} settings`, provider.manifest.paths.rootConfig.path, language);
+        const source = readExternalSourceFile(rootConfigActive[provider.id], `${displayName} settings`, provider.manifest.paths.rootConfig.path, language);
+        return withConfigTreeHtml(source, language);
       }
       if (id === `${provider.id}-hooks` && hooksStorageOf(provider.id) === "dedicated-json-sidecar") {
         const displayName = provider.manifest.displayName;
-        return readExternalSourceFile(resolveHarnessPath(provider.manifest, "hooks"), `${displayName} hooks`, provider.manifest.paths.hooks.path, "json");
+        const source = readExternalSourceFile(resolveHarnessPath(provider.manifest, "hooks"), `${displayName} hooks`, provider.manifest.paths.hooks.path, "json");
+        return withConfigTreeHtml(source, "json");
       }
     }
     return fail(`unknown config file: ${id}`);
@@ -916,6 +919,12 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
   }
 
   return fail(`unknown kind: ${kind}`);
+}
+
+// Live config files hold secrets beside ordinary settings, so the popup shows a key tree with only
+// safe values in place of the raw-text code block readExternalSourceFile renders.
+function withConfigTreeHtml(source, format) {
+  return source.ok ? { ...source, html: renderConfigFileHtml(source.content, { format }) } : source;
 }
 
 export function configCommand(args) {

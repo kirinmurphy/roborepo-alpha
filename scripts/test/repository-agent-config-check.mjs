@@ -96,7 +96,12 @@ try {
       local: { command: "node", args: ["server.js"], env: { TOKEN: SECRETS[0] } },
       "bad name with spaces": { command: "x" },
     } }),
-    ".claude/agents/reviewer.md": "---\nname: reviewer\ndescription: Reviews.\n---\nPrompt\n",
+    ".claude/agents/reviewer.md": "---\nname: reviewer\ndescription: Reviews.\n---\nPrompt\n![pixel](https://evil.invalid/pixel.png)\n",
+    // A skill kept elsewhere in the repo and linked into both harnesses' folders.
+    "local/skills/inrepo/SKILL.md": "---\nname: inrepo\ndescription: Lives in the repo.\n---\n# In repo\nBody\n",
+    "local/skills/inrepo/references/guide.md": "# Guide\nRead me.\n",
+    // Rendered output marked linguist-generated: listed apart and never counted.
+    "generated/claude/CLAUDE.md": "# Generated\n",
     ".claude/commands/ship.md": "Ship it\n",
     ".codex/config.toml": [
       'model = "gpt-5"', 'approval_policy = "on-request"', `api_key = "${SECRETS[0]}"`, "",
@@ -107,7 +112,7 @@ try {
     ".codex/agents/helper.toml": 'name = "helper"\ndescription = "Helps"\n',
     ".gitignore": "CLAUDE.local.md\n",
     // A discovered file under a repo-configured filter: hashing it cannot decide modification.
-    ".gitattributes": ".claude/rules/always.md filter=evil\n",
+    ".gitattributes": ".claude/rules/always.md filter=evil\ngenerated/** linguist-generated=true\n",
     "node_modules/pkg/CLAUDE.md": "# never listed\n",
   }, { remote: REMOTE });
   // Local-only and changed files.
@@ -126,6 +131,9 @@ try {
   fs.mkdirSync(path.join(main, ".claude/skills/linked-file"));
   fs.symlinkSync(path.join(tmp, "shared-skill", "SKILL.md"), path.join(main, ".claude/skills/linked-file/SKILL.md"));
   fs.symlinkSync(tmp, path.join(main, "linked-dir"));
+  fs.symlinkSync("../../local/skills/inrepo", path.join(main, ".claude/skills/inrepo"));
+  fs.mkdirSync(path.join(main, ".agents/skills"), { recursive: true });
+  fs.symlinkSync("../../local/skills/inrepo", path.join(main, ".agents/skills/inrepo"));
   // A nested checkout is someone else's repo.
   makeRepo("main-checkout/vendored", { "CLAUDE.md": "# vendored\n" });
   git(main, "checkout", "-q", "-b", "feature/inspect");
@@ -215,6 +223,24 @@ try {
   assert.equal(byPath(".claude/skills/shared").symlink, true);
   assert.equal(byPath(".claude/skills/linked-file/SKILL.md").symlink, true, "a symlinked SKILL.md is a reference too");
   assert.equal(json.includes("name: shared"), false, "a symlink target is not read");
+  // A symlink resolving inside the checkout is read through its target, once for both harnesses.
+  const inRepo = byPath(".claude/skills/inrepo");
+  assert.equal(inRepo.linkTarget, "local/skills/inrepo/SKILL.md");
+  assert.equal(inRepo.description, "Lives in the repo.");
+  assert.ok(inRepo.tokens > 0 && inRepo.discoveryTokens > 0);
+  assert.equal(byPath(".agents/skills/inrepo").contentHash, inRepo.contentHash, "copies of one skill share a content hash");
+  assert.equal(byPath(".claude/skills/shared").linkTarget, undefined, "a link out of the checkout has no target");
+
+  // Generated files are flagged and left out of the startup totals.
+  assert.equal(byPath("generated/claude/CLAUDE.md").generated, true);
+  assert.equal(byPath("CLAUDE.md").generated, undefined);
+  const startup = Object.fromEntries(inventory.startup.map((item) => [item.harness, item]));
+  assert.deepEqual(Object.keys(startup), ["claude", "codex"], "one total per supported harness");
+  assert.deepEqual(startup.claude.files.sort(), [".claude/rules/always.md", "CLAUDE.local.md", "CLAUDE.md"].sort(),
+    "root-level instructions count; scoped rules, nested and generated files do not");
+  assert.ok(startup.claude.breakdown.skillDiscovery > 0, "skill names and descriptions count at startup");
+  assert.equal(startup.claude.tokens, startup.claude.breakdown.instructions + startup.claude.breakdown.skillDiscovery + startup.claude.breakdown.commandDiscovery);
+  assert.deepEqual(startup.codex.files, ["AGENTS.md"]);
 
   // Other configuration: section labels only.
   const settings = byPath(".claude/settings.json");
@@ -244,10 +270,24 @@ try {
   const config = await preview("claude:.claude/settings.json");
   assert.equal(config.content, undefined, "structured config is never returned raw");
   assert.ok(config.sections.length > 0);
-  for (const id of ["codex:.codex/config.toml", "claude:.mcp.json", "claude:.claude/settings.local.json"]) {
+  for (const id of ["codex:.codex/config.toml", "claude:.mcp.json", "claude:.claude/settings.local.json", "claude:.claude/settings.json", "codex:.codex/hooks.json"]) {
     const summary = JSON.stringify(await preview(id));
     for (const secret of SECRETS) assert.equal(summary.includes(secret.slice(0, 8)), false, `${id} preview never carries ${secret}`);
   }
+  // Config previews are a readable list of keys with safe values.
+  assert.match(config.html, /config-tree/);
+  assert.ok(config.html.includes("Bash(ls:*)") && config.html.includes("acceptEdits"), "permission rules and modes are shown");
+  assert.ok((await preview("codex:.codex/config.toml")).html.includes("on-request"));
+  // Markdown renders, without images a repo could use to fetch a URL.
+  const agentPreview = await preview("claude:.claude/agents/reviewer.md");
+  assert.ok(agentPreview.html.includes("pixel") && !agentPreview.html.includes("<img") && !agentPreview.html.includes("evil.invalid"));
+  // A skill opens in the global page's skill view, with its bundled files, through an in-repo link.
+  const skillPreview = await preview("claude:.claude/skills/inrepo");
+  assert.equal(skillPreview.ok, true);
+  assert.equal(skillPreview.linkTarget, "local/skills/inrepo/SKILL.md");
+  assert.match(skillPreview.html, /skill-source-view/);
+  assert.ok(skillPreview.html.includes("references/guide.md") && skillPreview.html.includes("Read me."));
+  assert.ok(skillPreview.discoveryTokens > 0);
   for (const id of [
     "claude:../outside.md", "claude:/etc/passwd", "claude:packages/api/CLAUDE.md", "claude:linked-dir/outside.md",
     "claude:vendored/CLAUDE.md", "claude:README.md", "gemini:GEMINI.md", "claude:", "nope",

@@ -160,7 +160,24 @@ function describeMcpJson(text) {
   return { sections: [mcpServerSummary(names)] };
 }
 
+// What a session started at the repo root reads before its first message: root-level instructions
+// in full, and the name and description of each root skill and command. Claude Code falls back to a
+// root AGENTS.md only when no CLAUDE.md or CLAUDE.local.md is there.
+export function claudeStartupEntries(entries) {
+  const instructions = entries.filter((entry) => entry.area === "instructions" && entry.loading === LOADING.rootLevel);
+  const hasClaudeFile = instructions.some((entry) => entry.kind === "claude-md" || entry.kind === "claude-local-md");
+  const fallback = hasClaudeFile ? [] : entries.filter((entry) => entry.kind === "agents-md" && isRootLevel(entry.path));
+  return [
+    ...[...instructions, ...fallback].map((entry) => ({ entry, basis: "instructions" })),
+    ...entries.filter((entry) => entry.kind === "skill" && entry.path.startsWith(".claude/skills/"))
+      .map((entry) => ({ entry, basis: "skill-discovery" })),
+    ...entries.filter((entry) => entry.kind === "command" && entry.path.startsWith(".claude/commands/"))
+      .map((entry) => ({ entry, basis: "command-discovery" })),
+  ];
+}
+
 export const claudeProjectInventory = Object.freeze({
   classify: classifyClaudeProjectPath,
   describe: describeClaudeProjectFile,
+  startupEntries: claudeStartupEntries,
 });

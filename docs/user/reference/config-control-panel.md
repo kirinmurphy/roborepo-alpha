@@ -14,34 +14,47 @@ Choose a repo in the **Viewing** menu at the top of `/agents` to see the Claude 
 that repo carries. The view is read-only and reads only the repo's primary checkout on this
 computer, including uncommitted and Git-ignored files that exist only there.
 
-- **Checkout and branch.** The top of the view names the checkout folder and its branch, or the
-  commit when HEAD is detached. If the primary checkout cannot be found, or more than one checkout
-  could be it, the page says so and shows no files: it never reads another clone or worktree in its
-  place.
+If the primary checkout cannot be found, or more than one checkout could be it, the page says so
+and shows no files: it never reads another clone or worktree in its place.
+
+- **Default Token Use.** A table, titled with the repo's name, with one row per active harness. **Repo Usage** is
+  what this repo adds to every session started at its root: root-level instructions and rules in
+  full, plus each root skill's and command's name and description. **Total Usage** adds this
+  machine's global startup context (the global page's Usage) and is colored on the same
+  low/medium/high scale; Repo Usage is a plain number. An active harness whose repo files RoboRepo
+  cannot read yet (Gemini CLI today) is named below the table.
 - **Instructions.** `CLAUDE.md`, `CLAUDE.local.md`, `.claude/rules/`, `AGENTS.md`, and
-  `AGENTS.override.md`, grouped by folder with the repo root first. A **Root-level** file is where
-  the harness looks first; **Potentially conditional** means a subfolder file or a rule scoped to
-  paths, which may apply only to work there. `AGENTS.md` appears for Codex and again for Claude Code,
-  which reads it by default only where there is no `CLAUDE.md`. The view does not compute which
-  files a session loads.
+  `AGENTS.override.md`, grouped by folder with the repo root first. **Conditional** marks a
+  subfolder file or a rule scoped to paths, which may apply only to work there. A file several
+  harnesses read, such as `AGENTS.md`, is one row with a chip per harness; the info icon beside it
+  explains harness-specific rules, like Claude Code reading `AGENTS.md` only where there is no
+  `CLAUDE.md`.
 - **Skills.** `.claude/skills/<name>/SKILL.md` and `.agents/skills/<name>/SKILL.md`, at the root and
-  in subfolders, with each skill's name, description, and estimated size. `.codex/skills/` is listed
-  with an **Unknown** loading label, because RoboRepo links skills there but whether a given Codex
-  version reads it is not verified. There is no repo-wide token total: a skill is read only when
-  invoked.
-- **Other configuration.** `.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`,
+  in subfolders, with each skill's name and description. A skill several harnesses carry is one
+  row. `.codex/skills/` is marked **Legacy location**: RoboRepo links skills there, but whether a
+  given Codex version reads it is not verified, so it does not count toward Repo Usage.
+- **Config and hooks.** `.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`,
   `.claude/agents/`, `.claude/commands/`, `.codex/config.toml`, `.codex/hooks.json`, and
-  `.codex/agents/`. Settings files show which sections they declare (permission rule counts, hook
-  event names, MCP server names, and so on), never their values, commands, URLs, headers, or
-  environment values. Permission entries here are declarations, not the effective policy.
-- **Git status.** Each file is **Tracked**, **Untracked**, **Ignored (local only)**, or
-  **Git status unavailable**, and a tracked file with uncommitted edits is labeled **Locally
-  modified** when that can be decided without running anything the repo configures.
-- **Previews.** Select a file to read it as plain text, with its estimated size. Imports such as
-  `@AGENTS.md` stay as written. A symbolic link is listed but not opened.
-- **Machine-wide harnesses.** Below the repo's files, the same harness grid as the global page shows
-  what is installed on this computer. Repo files are listed whether or not their harness is
-  installed or enabled here. Gemini CLI repo files are not discovered yet, and the page says so.
+  `.codex/agents/`, each with a one-line summary of what it declares. Permission entries here are
+  declarations, not the effective policy.
+- **Generated files.** Files the repo's `.gitattributes` marks `linguist-generated` (tool output
+  rendered from other sources) are collapsed into their own section and never counted in Repo
+  Usage.
+- **Chips.** Only what tells files apart: **Local only** (ignored by Git), **Untracked**,
+  **Modified**, **Conditional**, **Override**, **Legacy location**, **Link** (a symbolic link out
+  of the repo, not opened), and **Copies differ** when harnesses carry different versions of one
+  skill.
+- **Popups.** Select a row to open it as on the global page: the file's location (every location,
+  for a row several harnesses share), its Git status, and estimated sizes. Markdown renders as
+  formatted text, with images left out so a repo file cannot make the page fetch a URL; imports
+  such as `@AGENTS.md` stay as written. A skill opens the same skill view as the global page. JSON
+  and TOML show every key with only safe values: booleans, numbers, names, modes, and permission
+  rules are shown; environment values, headers, commands, arguments, URLs, and anything that looks
+  like a credential are hidden. A symbolic link that points elsewhere in the repo opens its target;
+  one pointing outside the repo is listed but not opened.
+
+The global page's settings and hooks popups use the same readable key list with the same hidden
+values.
 
 Large repos are scanned within fixed limits; when a limit is reached the page says the results are
 partial. Choose **All repos** to return to the global page and its controls.

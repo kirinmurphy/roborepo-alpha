@@ -15,6 +15,10 @@
 // describe(entry, text) -> { name?, description?, loading?, sections?: string[], diagnostic? }
 //   `sections` are allowlisted labels only. Raw values (commands, URLs, env, headers, credentials)
 //   never leave describe.
+// startupEntries(entries) (optional) -> [{ entry, basis: "instructions" | "skill-discovery" |
+//   "command-discovery" }]: of this provider's listed entries, the ones a session started at the
+//   repo root reads before its first message, and whether it reads the whole file or only the name
+//   and description. Without it, root-level instructions count in full and nothing else does.
 
 export const LOADING = Object.freeze({
   rootLevel: "root-level",

@@ -55,7 +55,8 @@ export const CAPABILITY_REQUIRED_METHODS = Object.freeze({
 // Adapter groups no capability requires. A provider may omit one; one it supplies must be complete.
 //   projectInventory: read-only discovery of the provider's native files inside a repo checkout.
 //     classify(relPath, { symlink }) names a path; describe(entry, text) extracts safe display
-//     metadata from text the caller read. See project-inventory.mjs for the record shapes.
+//     metadata from text the caller read; the optional startupEntries(entries) says which listed
+//     files a session reads at start. See project-inventory.mjs for the record shapes.
 export const OPTIONAL_ADAPTER_GROUPS = Object.freeze({
   projectInventory: ["classify", "describe"],
 });

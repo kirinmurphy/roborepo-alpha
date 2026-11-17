@@ -138,7 +138,21 @@ function unique(values) {
   return [...new Set(values)];
 }
 
+// What a session started at the repo root reads before its first message: the root AGENTS.md (or
+// the AGENTS.override.md that takes its place) in full, and each root skill's name and description.
+// Skills in the legacy .codex/skills location are left out: whether Codex reads them is unverified.
+export function codexStartupEntries(entries) {
+  const instructions = entries.filter((entry) => entry.area === "instructions" && entry.loading === LOADING.rootLevel);
+  const override = instructions.find((entry) => entry.kind === "agents-override-md");
+  return [
+    ...(override ? [override] : instructions).map((entry) => ({ entry, basis: "instructions" })),
+    ...entries.filter((entry) => entry.kind === "skill" && entry.path.startsWith(".agents/skills/"))
+      .map((entry) => ({ entry, basis: "skill-discovery" })),
+  ];
+}
+
 export const codexProjectInventory = Object.freeze({
   classify: classifyCodexProjectPath,
   describe: describeCodexProjectFile,
+  startupEntries: codexStartupEntries,
 });

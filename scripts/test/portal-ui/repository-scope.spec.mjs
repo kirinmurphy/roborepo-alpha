@@ -25,8 +25,13 @@ test.beforeAll(() => {
     [ALPHA]: {
       "CLAUDE.md": "# Alpha instructions\n",
       "docs/AGENTS.md": "# Alpha docs\n",
-      ".claude/skills/alpha-skill/SKILL.md": "---\nname: alpha-skill\ndescription: Alpha's own skill.\n---\nBody\n",
+      ".claude/skills/alpha-skill/SKILL.md": "---\nname: alpha-skill\ndescription: Alpha's own skill.\n---\n# Alpha skill body\n",
+      // The same skill for Codex: one row, both harnesses.
+      ".agents/skills/alpha-skill/SKILL.md": "---\nname: alpha-skill\ndescription: Alpha's own skill.\n---\n# Alpha skill body\n",
       ".claude/settings.json": JSON.stringify({ permissions: { allow: ["Bash(ls:*)"] }, env: { TOKEN: "alpha-secret-value" } }),
+      ".codex/config.toml": 'model = "gpt-5"\n',
+      ".gitattributes": "gen/** linguist-generated=true\n",
+      "gen/CLAUDE.md": "# Rendered elsewhere\n",
     },
     [BETA]: { "AGENTS.md": "# Beta instructions\n" },
   };
@@ -248,60 +253,90 @@ test("Activity outside listed repos is a Tokens-only scope", async ({ page }) =>
 
 const inspectorSection = (page, heading) => page.locator(".repo-inspector-section").filter({ has: page.getByRole("heading", { name: heading }) });
 
-test("scoped Agents lists the repo's own files read-only, previews them as text, and returns to global controls", async ({ page }) => {
+test("scoped Agents shows the repo's token use and its own files read-only, with rendered previews", async ({ page }) => {
   await page.goto(`/agents?repo=${ALPHA}`);
-  await expect(page.getByRole("heading", { name: "Repo agent config" })).toBeVisible();
-  await expect(page.locator(".repo-inspector-checkout")).toContainText(ALPHA);
-  await expect(page.locator(".repo-inspector-checkout")).toContainText("main");
+  await expect(page.getByRole("heading", { name: `Default Token Use for ${ALPHA}` })).toBeVisible();
+  await expect(page.locator(".repo-usage-grid [role=columnheader]")).toContainText(["Harness", "Repo Usage", "Total Usage"]);
+  // The machine-wide grid, the checkout path, and the branch are gone.
+  await expect(page.getByRole("heading", { name: "Active Harnesses" })).toHaveCount(0);
+  await expect(page.locator("main")).not.toContainText(fx.tmp);
 
   const instructions = inspectorSection(page, "Instructions");
   await expect(instructions.locator(".repo-inspector-folder-name")).toHaveText(["Repo root", "docs"]);
-  await expect(instructions.getByRole("button", { name: "CLAUDE.md: CLAUDE.md" })).toBeVisible();
-  await expect(instructions.locator(".repo-inspector-entry").first()).toContainText("Root-level");
+  await expect(instructions.getByRole("button", { name: "CLAUDE.md", exact: true })).toBeVisible();
   await expect(instructions.locator(".repo-inspector-entry").first().locator("token-chip")).toBeVisible();
+  // One row for a file several harnesses read; no tag every row would carry.
+  await expect(instructions.getByRole("button", { name: "AGENTS.md", exact: true })).toHaveCount(1);
+  for (const redundant of ["Tracked", "Root-level", "Project instructions", "On demand"]) {
+    await expect(page.locator(".repo-inspector-section .badge", { hasText: redundant })).toHaveCount(0);
+  }
+  await expect(page.locator(".repo-inspector-section .badge").first()).toHaveClass(/badge-info/);
   const skills = inspectorSection(page, "Skills");
-  await expect(skills).toContainText("alpha-skill");
+  await expect(skills.getByRole("button", { name: "alpha-skill" })).toHaveCount(1);
   await expect(skills).toContainText("Alpha's own skill.");
-  const config = inspectorSection(page, "Other configuration");
+  await expect(skills.locator("li")).toHaveCount(0);
+  await expect(skills.locator(".badge")).toHaveText(["Claude Code", "Codex"]);
+  const config = inspectorSection(page, "Config and hooks");
   await expect(config).toContainText("Permissions: 1 allow rules");
+  await expect(config.getByRole("button", { name: "config.toml" })).toBeVisible();
+  // Generated files are collapsed apart, out of the instruction list.
+  await expect(instructions).not.toContainText("Rendered elsewhere");
+  await expect(page.locator(".repo-inspector-generated")).toContainText("gen/CLAUDE.md");
+  await expect(page.locator(".repo-inspector-generated")).not.toHaveAttribute("open", "");
   await expect(page.locator("main")).not.toContainText("alpha-secret-value");
   await expect(page.locator("main")).not.toContainText("Beta instructions");
   // Repo files are read-only: no package actions on repo skills, no editing on repo permissions.
   await expect(page.locator(".repo-inspector-section config-toggle")).toHaveCount(0);
   await expect(page.locator(".repo-inspector-section .bucket-btn")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Machine-wide harnesses" })).toBeVisible();
 
-  await instructions.getByRole("button", { name: "CLAUDE.md: CLAUDE.md" }).click();
+  // Markdown renders, and the path moved from the list into the popup.
+  await instructions.getByRole("button", { name: "CLAUDE.md", exact: true }).click();
   const dialog = page.locator("dialog#config-modal");
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator("#modal-content")).toHaveText("# Alpha instructions");
-  await expect(dialog.locator("#modal-content h1")).toHaveCount(0);
+  await expect(dialog.locator("#modal-content h1")).toHaveText("Alpha instructions");
+  await expect(dialog.locator("#modal-path")).toContainText("CLAUDE.md");
   await expect(dialog.locator("#modal-path")).toContainText("Tracked in Git");
   await page.keyboard.press("Escape");
 
-  await config.getByRole("button", { name: "settings.json: .claude/settings.json" }).click();
-  await expect(dialog.locator("#modal-content")).toContainText("Environment variables: 1");
+  // Config shows its keys and safe values, never a secret.
+  await config.getByRole("button", { name: "settings.json" }).click();
+  await expect(dialog.locator("#modal-content .config-tree")).toContainText("Bash(ls:*)");
+  await expect(dialog.locator("#modal-content .config-tree")).toContainText("TOKEN");
   await expect(dialog.locator("#modal-content")).not.toContainText("alpha-secret-value");
+  await page.keyboard.press("Escape");
+
+  // A skill opens the global page's skill view, listing both harnesses' copies.
+  await skills.getByRole("button", { name: "alpha-skill" }).click();
+  await expect(dialog.locator("#modal-content .skill-source-view")).toContainText("Alpha skill body");
+  await expect(dialog.locator("#modal-path")).toContainText(".claude/skills/alpha-skill/SKILL.md");
+  await expect(dialog.locator("#modal-path")).toContainText(".agents/skills/alpha-skill/SKILL.md");
+  await expect(dialog.locator("#modal-cost-row")).toContainText("Startup:");
+  await expect(dialog.locator("#modal-cost-row")).toContainText("When run:");
   await page.keyboard.press("Escape");
 
   await chooseScope(page, "All repos");
   await expect(page).toHaveURL(/\/agents$/);
   await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Repo agent config" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /^Default Token Use for / })).toHaveCount(0);
 });
 
-test("scoped Agents says when the scan is partial or a harness is unsupported, and never shows another checkout's files", async ({ page }) => {
-  // Real inventory, marked partial: the notices come from the response, not the page.
+test("scoped Agents says when the scan is partial or an active harness is unsupported, and never shows another checkout's files", async ({ page }) => {
+  // An unsupported harness that is not active goes unmentioned.
+  await page.goto(`/agents?repo=${ALPHA}`);
+  await expect(inspectorSection(page, "Instructions")).toBeVisible();
+  await expect(page.locator("main")).not.toContainText("Gemini");
+  // Real inventory, marked partial, with Gemini active: the notices come from the response.
   await page.route((url) => url.pathname === "/api/config/repository", async (route) => {
     const response = await route.fetch();
     const data = await response.json();
-    await route.fulfill({ response, json: { ...data, truncated: ["files"] } });
+    const providers = data.providers.map((provider) => (provider.id === "gemini" ? { ...provider, enabled: true } : provider));
+    await route.fulfill({ response, json: { ...data, providers, truncated: ["files"] } });
   });
   await page.goto(`/agents?repo=${ALPHA}`);
   const notices = page.locator(".repo-inspector-notices");
-  await expect(notices).toContainText("Partial results: the scan stopped at its limit for the number of files listed.");
-  await expect(notices).toContainText("Gemini CLI: repo file discovery is not supported yet.");
+  await expect(notices).toContainText("Partial results: the scan hit its limit on files listed.");
+  await expect(notices).toContainText("Not inspected yet: Gemini CLI.");
   await page.unrouteAll({ behavior: "ignoreErrors" });
 
   // The server's checkout-unavailable answer: a splash, no files, and a way back to global Agents.
@@ -352,7 +387,7 @@ test("switching repos while an inventory or preview is pending shows only the cu
   await page.goto(`/agents?repo=${BETA}`);
   await expect(inspectorSection(page, "Instructions")).toContainText("AGENTS.md");
   await chooseScope(page, ALPHA);
-  await inspectorSection(page, "Instructions").getByRole("button", { name: "CLAUDE.md: CLAUDE.md" }).click();
+  await inspectorSection(page, "Instructions").getByRole("button", { name: "CLAUDE.md", exact: true }).click();
   await expect(page.locator("dialog#config-modal")).toBeVisible();
   await preview.reached;
   await page.goBack();

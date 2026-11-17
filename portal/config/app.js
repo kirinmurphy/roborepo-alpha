@@ -192,20 +192,12 @@ async function loadRepositoryInventory(scope, { keepShown = false } = {}) {
   renderScoped();
 }
 
-function openRepositoryEntry(entry) {
+// A row stands for one file, or one skill several harnesses carry; the popup reads the copy the
+// inventory read and lists every location.
+function openRepositoryEntry(group) {
   const scope = repoInventory?.scope;
-  modal.openRepositorySource(entry, { load: () => api.fetchRepositorySource(scope, entry.id), gitLabel });
-}
-
-// The machine-wide grid and its controls, reused under their own heading: the same harness rows,
-// file previews, and setup banner the global page shows.
-function machineSection(snap) {
-  if (!snap) return [];
-  return [
-    tmpl.repositoryMachineIntro(),
-    tmpl.harnessWarning(lastSetup || snap, { onRefreshed: reloadSetup, watch: false }),
-    tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
-  ].filter(Boolean);
+  const { primary } = group;
+  modal.openRepositorySource(group, { load: () => api.fetchRepositorySource(scope, primary.id), gitLabel });
 }
 
 function renderScoped() {
@@ -221,10 +213,11 @@ function renderScoped() {
   } else if (inventory.data.status === "checkout-unavailable") {
     main.replaceChildren(tmpl.repositoryCheckoutUnavailable(inventory.data, clearRepositoryScope));
   } else {
-    main.replaceChildren(
-      ...tmpl.repositoryInspector(inventory.data, { onOpen: openRepositoryEntry }),
-      ...machineSection(lastSnapshot),
-    );
+    // Total Usage adds the global startup estimate, so the inspector redraws when a snapshot lands.
+    main.replaceChildren(...tmpl.repositoryInspector(inventory.data, {
+      onOpen: openRepositoryEntry,
+      contextCost: lastSnapshot?.contextCost || null,
+    }));
   }
   portalHideLoading();
 }

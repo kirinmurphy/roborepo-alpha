@@ -112,7 +112,8 @@ Rules:
   carry `repository` only, and only to scope-aware pages (`_other` only to Tokens).
 - Agents' data owner depends on scope: the global page renders `/api/config`; a repo scope renders
   the read-only repo inspector from `/api/config/repository` (see
-  `docs/internal/config-panel-internals.md`), with the machine-wide harness grid below it.
+  `docs/internal/config-panel-internals.md`), whose token table adds the global snapshot's startup
+  estimate.
 - Plans filters its one cached snapshot per request; Tokens' analysis cache keys on the resolved
   `repositoryId`, and on the registry signature for `_other`, whose membership changes when a
   repository is found or ignored.

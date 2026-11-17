@@ -395,29 +395,21 @@ export function recommendationOption(rec) {
 
 // --------------------------------------------------------------------------- repo inspector
 
-const LOADING_LABELS = {
-  "root-level": "Root-level",
-  "potentially-conditional": "Potentially conditional",
-  "on-demand": "On demand",
-  unknown: "Unknown",
-};
-const LOADING_TIPS = {
-  "root-level": "At the repo root, where the harness looks first. Whether a session loads it depends on harness settings.",
-  "potentially-conditional": "In a subfolder or scoped to paths, so it may apply only to work there.",
-  "on-demand": "Read when the harness invokes it, not at startup.",
-  unknown: "Whether the installed harness reads this location is not verified.",
-};
-const GIT_LABELS = {
-  tracked: "Tracked",
-  untracked: "Untracked",
-  ignored: "Ignored (local only)",
-  unavailable: "Git status unavailable",
+const CONDITIONAL_TIP = "In a subfolder or scoped to paths, so it may apply only to work there.";
+const GIT_CHIPS = {
+  untracked: ["Untracked", "Not in Git yet; exists only on this computer."],
+  ignored: ["Local only", "Ignored by Git; exists only on this computer."],
 };
 const TRUNCATION_LABELS = {
-  entries: "the number of folder entries scanned",
+  entries: "folder entries",
   depth: "folder depth",
-  files: "the number of files listed",
-  bytes: "the total bytes read",
+  files: "files listed",
+  bytes: "bytes read",
+};
+const SECTION_TIPS = {
+  instructions: "Root-level files load at the start of every session; files in subfolders, or rules scoped to paths, may apply only to work there. Imports stay as written.",
+  skills: "Each skill's name and description load at startup; the rest only when it runs.",
+  config: "Settings, permissions, hooks, MCP servers, custom agents, and commands. Popups show keys and safe values; secrets, commands, and URLs stay hidden. Permission entries are declarations, not the effective policy.",
 };
 
 export function repositoryInspectorLoading() {
@@ -441,148 +433,231 @@ function repositoryNotice(text) {
   return fill(tpl("tpl-repo-inspector-notice"), { text });
 }
 
-function badge(text, cls = "", title = "") {
+// The global page's subtle chip; `tip` shows through the shared tooltip.
+function chip(text, tip = "") {
   const node = fill(tpl("tpl-badge"), { text });
-  if (cls) node.classList.add(cls);
-  if (title) node.title = title;
+  node.classList.add("badge-info");
+  if (tip) node.dataset.tip = tip;
   return node;
 }
 
-function entryBadges(entry) {
-  const badges = [
-    badge(entry.harnessName, "badge-harness"),
-    badge(entry.label),
-    badge(LOADING_LABELS[entry.loading] || entry.loading, "badge-loading", LOADING_TIPS[entry.loading] || ""),
-    badge(GIT_LABELS[entry.git?.status] || "Git status unavailable", "badge-git"),
-  ];
-  if (entry.git?.modified) badges.push(badge("Locally modified", "badge-warn"));
-  if (entry.override) badges.push(badge("Override", "badge-info"));
-  if (entry.symlink) badges.push(badge("Symbolic link", "badge-info", "Listed as a reference; its target is not read."));
-  return badges;
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
 }
 
-function repositoryEntry(entry, { onOpen, title }) {
+// One row per file, and one per skill however many harnesses carry it. The row opens the copy that
+// was read; its popup lists every location.
+export function groupRepositoryEntries(entries) {
+  const groups = new Map();
+  for (const entry of entries) {
+    const key = entry.area === "skills" ? `skill:${entry.name || entry.path}` : `path:${entry.path}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  }
+  return [...groups.values()].map((items) => {
+    const primary = items.find((entry) => entry.tokens != null)
+      || items.find((entry) => !entry.symlink || entry.linkTarget)
+      || items[0];
+    return {
+      entries: items,
+      primary,
+      harnessNames: unique(items.map((entry) => entry.harnessName)).sort(),
+      differs: unique(items.map((entry) => entry.contentHash)).length > 1,
+    };
+  });
+}
+
+function groupOpenable(group) {
+  const { primary } = group;
+  return primary.kind !== "linked-folder" && (!primary.symlink || !!primary.linkTarget);
+}
+
+function groupChips(group, { showHarness }) {
+  const { entries, primary } = group;
+  const chips = showHarness ? group.harnessNames.map((name) => chip(name)) : [];
+  if (entries.every((entry) => entry.loading === "potentially-conditional")) chips.push(chip("Conditional", CONDITIONAL_TIP));
+  const git = GIT_CHIPS[primary.git?.status];
+  if (git) chips.push(chip(...git));
+  if (entries.some((entry) => entry.git?.modified)) chips.push(chip("Modified", "Changed on this computer since the last commit."));
+  if (entries.some((entry) => entry.override)) chips.push(chip("Override"));
+  if (entries.every((entry) => entry.legacy)) chips.push(chip("Legacy location"));
+  if (entries.some((entry) => entry.symlink && !entry.linkTarget)) chips.push(chip("Link", "A symbolic link out of this repo; its target is not read."));
+  if (group.differs) chips.push(chip("Copies differ", "The harnesses' copies of this file are not identical; the popup shows one."));
+  return chips;
+}
+
+function repositoryEntry(group, { onOpen, title, showHarness, showChip }) {
+  const { primary } = group;
   const node = tpl("tpl-repo-inspector-entry");
-  node.dataset.entry = entry.id;
-  fill(node, { title, path: entry.path });
+  node.dataset.entry = primary.id;
   const open = node.querySelector('[data-slot="open"]');
-  if (entry.symlink) open.disabled = true;
-  else open.addEventListener("click", () => onOpen(entry));
-  open.setAttribute("aria-label", `${title}: ${entry.path}`);
-  node.querySelector('[data-slot="badges"]').replaceChildren(...entryBadges(entry));
-  if (entry.tokens != null) {
+  open.textContent = title;
+  if (groupOpenable(group)) open.addEventListener("click", () => onOpen(group));
+  else open.disabled = true;
+  node.querySelector('[data-slot="badges"]').replaceChildren(...groupChips(group, { showHarness }));
+  const notes = unique(group.entries.map((entry) => entry.note));
+  const tip = node.querySelector('[data-slot="tip"]');
+  if (notes.length) {
+    tip.hidden = false;
+    tip.dataset.tip = notes.join(" ");
+    tip.setAttribute("aria-label", notes.join(" "));
+  }
+  if (showChip && primary.tokens != null) {
     applyTokenChip(node.querySelector('[data-slot="chip"]'), {
-      tokens: entry.tokens,
-      level: entry.tokenLevel || null,
+      tokens: primary.tokens,
+      level: primary.tokenLevel || null,
       detail: "Estimated size of this file alone.",
     });
   }
-  toggleSlot(node, "description", !!entry.description, entry.description);
-  const sections = node.querySelector('[data-slot="sections"]');
-  if (entry.sections?.length) {
-    sections.replaceChildren(...entry.sections.map((line) => {
-      const item = document.createElement("li");
-      item.textContent = line;
-      return item;
-    }));
-    sections.hidden = false;
-  }
-  const note = [entry.diagnostic, entry.note, entry.symlink ? "Its target is not read." : null].filter(Boolean).join(" ");
-  toggleSlot(node, "note", !!note, note);
+  const description = primary.description || (primary.sections || []).join(" · ");
+  toggleSlot(node, "description", !!description, description);
+  toggleSlot(node, "note", !!primary.diagnostic, primary.diagnostic);
   return node;
 }
 
 // Root first, then folders in path order.
-function byFolder(entries) {
-  const groups = new Map();
-  for (const entry of entries) {
-    if (!groups.has(entry.folder)) groups.set(entry.folder, []);
-    groups.get(entry.folder).push(entry);
+function byFolder(groups) {
+  const folders = new Map();
+  for (const group of groups) {
+    const folder = group.primary.folder;
+    if (!folders.has(folder)) folders.set(folder, []);
+    folders.get(folder).push(group);
   }
-  return [...groups.entries()].sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b)));
+  return [...folders.entries()].sort(([a], [b]) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b)));
 }
 
-function inventorySection({ heading, description, empty, entries, render }) {
-  const panel = fill(tpl("tpl-repo-inspector-section"), {
-    heading,
-    description,
-    count: entries.length ? String(entries.length) : "",
+function folderGroups(groups, entryNode) {
+  return byFolder(groups).map(([folder, items]) => {
+    const node = fill(tpl("tpl-repo-inspector-folder"), { name: folder || "Repo root" });
+    node.querySelector('[data-slot="entries"]').replaceChildren(...items.map(entryNode));
+    return node;
   });
-  panel.dataset.area = heading;
-  panel.querySelector('[data-slot="items"]').replaceChildren(...render(entries));
-  toggleSlot(panel, "empty", entries.length === 0, empty);
+}
+
+function inventorySection({ area, heading, groups, render }) {
+  const panel = fill(tpl("tpl-repo-inspector-section"), { heading });
+  panel.dataset.area = area;
+  const tip = panel.querySelector('[data-slot="tip"]');
+  tip.dataset.tip = SECTION_TIPS[area];
+  tip.setAttribute("aria-label", `${heading}: ${SECTION_TIPS[area]}`);
+  panel.querySelector('[data-slot="items"]').replaceChildren(...render(groups));
+  toggleSlot(panel, "empty", groups.length === 0, "None in this repo.");
   return panel;
-}
-
-function folderGroups(entries, entryNode) {
-  return byFolder(entries).map(([folder, items]) => {
-    const group = fill(tpl("tpl-repo-inspector-folder"), { name: folder || "Repo root" });
-    group.querySelector('[data-slot="entries"]').replaceChildren(...items.map(entryNode));
-    return group;
-  });
 }
 
 function inspectorNotices(inventory) {
   const notices = [];
   if (inventory.truncated?.length) {
     const reasons = inventory.truncated.map((reason) => TRUNCATION_LABELS[reason] || reason).join(", ");
-    notices.push(`Partial results: the scan stopped at its limit for ${reasons}. Some files may be missing.`);
+    notices.push(`Partial results: the scan hit its limit on ${reasons}. Some files may be missing.`);
   }
   if (inventory.unreadableCount) {
     const named = (inventory.unreadableFolders || []).map((folder) => folder || "the repo root");
     const others = inventory.unreadableCount - named.length;
-    const list = [...named, ...(others > 0 ? [`${others} more`] : [])].join(", ");
-    notices.push(`Partial results: ${inventory.unreadableCount === 1 ? "a folder" : "some folders"} could not be read (${list}). Files in ${inventory.unreadableCount === 1 ? "it" : "them"} may be missing.`);
+    notices.push(`Partial results: could not open ${[...named, ...(others > 0 ? [`${others} more`] : [])].join(", ")}.`);
   }
   for (const provider of inventory.providers || []) {
     if (provider.error) notices.push(`${provider.displayName}: ${provider.error} Its files may be missing.`);
-    else if (!provider.supported) notices.push(`${provider.displayName}: repo file discovery is not supported yet.`);
+  }
+  const unsupported = (inventory.providers || []).filter((provider) => provider.enabled && !provider.supported);
+  if (unsupported.length) notices.push(`Not inspected yet: ${unsupported.map((provider) => provider.displayName).join(", ")}.`);
+  for (const total of inventory.startup || []) {
+    if (total.unmeasured) notices.push(`${total.displayName}: ${total.unmeasured} startup file${total.unmeasured === 1 ? "" : "s"} could not be measured.`);
   }
   return notices;
 }
 
-export function repositoryInspector(inventory, { onOpen }) {
-  const head = tpl("tpl-repo-inspector-head");
-  const gitHead = inventory.checkout?.head || {};
-  fill(head, {
-    path: inventory.checkout?.path || "",
-    "head-label": gitHead.kind === "detached" ? "Detached HEAD" : "Branch",
-    head: gitHead.kind === "branch" ? gitHead.name : gitHead.kind === "detached" ? gitHead.sha : "Unknown",
-  });
-  head.querySelector('[data-slot="notices"]').replaceChildren(...inspectorNotices(inventory).map(repositoryNotice));
-
-  const entries = inventory.entries || [];
-  const inArea = (area) => entries.filter((entry) => entry.area === area);
-  const titled = (entry) => repositoryEntry(entry, { onOpen, title: entry.path.split("/").at(-1) });
-  const skills = inArea("skills").sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-  return [
-    head,
-    inventorySection({
-      heading: "Instructions",
-      description: "Instruction files grouped by folder. Root-level files are where each harness looks first; files in subfolders may apply only to work there. Imports stay as source text.",
-      empty: "No Claude Code or Codex instruction files found in this checkout.",
-      entries: inArea("instructions"),
-      render: (items) => folderGroups(items, titled),
-    }),
-    inventorySection({
-      heading: "Skills",
-      description: "Skills this repo carries. Each is read only when invoked, so its size is shown alone, with no startup total.",
-      empty: "No Claude Code or Codex skills found in this checkout.",
-      entries: skills,
-      render: (items) => items.map((entry) => repositoryEntry(entry, { onOpen, title: entry.name || entry.path })),
-    }),
-    inventorySection({
-      heading: "Other configuration",
-      description: "Where settings, hooks, MCP servers, agents, commands, and permissions are declared. JSON and TOML previews show section names, never values; agent and command files preview as text; permission entries are declarations, not the effective policy.",
-      empty: "No Claude Code or Codex configuration files found in this checkout.",
-      entries: inArea("config"),
-      render: (items) => folderGroups(items, titled),
-    }),
-  ];
+function startupLevel(tokens, legend) {
+  if (!legend) return null;
+  if (tokens < legend.mediumAt) return "low";
+  if (tokens > legend.highAbove) return "high";
+  return "medium";
 }
 
-export function repositoryMachineIntro() {
-  return tpl("tpl-repo-inspector-machine");
+function repoUsageSpec(total) {
+  const b = total.breakdown || {};
+  return {
+    tokens: total.tokens,
+    level: null,
+    detail: "Read from this repo at the start of every session.",
+    breakdown: [
+      { label: "Instructions and rules", tokens: b.instructions || 0 },
+      { label: "Skill descriptions", tokens: b.skillDiscovery || 0 },
+      ...(b.commandDiscovery ? [{ label: "Command descriptions", tokens: b.commandDiscovery }] : []),
+    ],
+  };
+}
+
+function totalUsageSpec(total, contextCost) {
+  const global = contextCost?.harnesses?.[total.harness]?.startupTokens;
+  if (global == null) return null;
+  const legend = contextCost.startupThresholds || contextCost.thresholds || null;
+  const tokens = total.tokens + global;
+  return {
+    tokens,
+    level: startupLevel(tokens, legend),
+    detail: "Included automatically in every new session in this repo.",
+    breakdown: [{ label: "This repo", tokens: total.tokens }, { label: "Global config", tokens: global }],
+    legend,
+  };
+}
+
+// The table on top: per active harness, what this repo adds to every session and the session's total.
+function repositoryUsage(inventory, contextCost) {
+  const node = tpl("tpl-repo-usage");
+  fill(node, { title: `Default Token Use for ${inventory.displayName || "this repo"}` });
+  const active = new Set((inventory.providers || []).filter((provider) => provider.enabled).map((provider) => provider.id));
+  const rows = (inventory.startup || []).filter((total) => active.has(total.harness)).map((total) => {
+    const row = fill(tpl("tpl-repo-usage-row"), { label: total.displayName });
+    row.dataset.harness = total.harness;
+    applyTokenChip(row.querySelector('[data-slot="repo"]'), repoUsageSpec(total));
+    applyTokenChip(row.querySelector('[data-slot="total"]'), totalUsageSpec(total, contextCost));
+    return row;
+  });
+  if (rows.length) node.querySelector(".config-grid").append(...rows);
+  else node.querySelector(".panel").hidden = true;
+  node.querySelector('[data-slot="notices"]').replaceChildren(...inspectorNotices(inventory).map(repositoryNotice));
+  return node;
+}
+
+export function repositoryInspector(inventory, { onOpen, contextCost }) {
+  const entries = inventory.entries || [];
+  const showHarness = unique(entries.map((entry) => entry.harness)).length > 1;
+  const listed = entries.filter((entry) => !entry.generated);
+  const groupsIn = (area) => groupRepositoryEntries(listed.filter((entry) => entry.area === area));
+  const fileName = (group) => group.primary.path.split("/").at(-1);
+  const fileRow = (options) => (group) => repositoryEntry(group, { onOpen, title: fileName(group), showHarness, ...options });
+  const skills = groupsIn("skills").sort((a, b) => (a.primary.name || "").localeCompare(b.primary.name || ""));
+  const sections = [
+    repositoryUsage(inventory, contextCost),
+    inventorySection({
+      area: "instructions",
+      heading: "Instructions",
+      groups: groupsIn("instructions"),
+      render: (groups) => folderGroups(groups, fileRow({ showChip: true })),
+    }),
+    inventorySection({
+      area: "skills",
+      heading: "Skills",
+      groups: skills,
+      render: (groups) => groups.map((group) => repositoryEntry(group, { onOpen, title: group.primary.name || fileName(group), showHarness })),
+    }),
+    inventorySection({
+      area: "config",
+      heading: "Config and hooks",
+      groups: groupsIn("config"),
+      render: (groups) => folderGroups(groups, fileRow({})),
+    }),
+  ];
+  const generated = groupRepositoryEntries(entries.filter((entry) => entry.generated));
+  if (generated.length) {
+    const panel = tpl("tpl-repo-inspector-generated");
+    panel.querySelector('[data-slot="items"]').replaceChildren(
+      ...generated.map((group) => repositoryEntry(group, { onOpen, title: group.primary.path, showHarness, showChip: true })),
+    );
+    sections.push(panel);
+  }
+  return sections;
 }
 
 function wireInspectButton(btn, kind, id, harness, label, onInspectClick) {
