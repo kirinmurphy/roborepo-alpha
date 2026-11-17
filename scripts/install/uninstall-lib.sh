@@ -135,9 +135,23 @@ reclaim_link_target() {
   local src_rel="$1"
   local home_abs="$2"
   local harness="$3"
+  local flags="${4:-}"
   local src="${repo_root}/${src_rel}"
 
   remove_repo_symlink "${home_abs}"
+
+  # An `owned` row is a file only RoboRepo writes, so it is removed even when an older render left
+  # content that no longer matches the repo source. No pre-install original exists to restore.
+  if [[ ",${flags}," == *",owned,"* ]]; then
+    # Through an old parent link into the checkout, the file is the repo's own: drop the link only.
+    unlink_parent_repo_link "${home_abs}" && return 0
+    if [[ -f "${home_abs}" && ! -L "${home_abs}" ]]; then
+      assert_under_harness_home "${home_abs}"
+      [[ "${dry_run}" -eq 1 ]] || rm -f "${home_abs}"
+      echo "remove (owned file): ${home_abs}"
+    fi
+    return 0
+  fi
 
   if [[ -e "${home_abs}" && ! -L "${home_abs}" ]] && content_matches_repo_source "${src}" "${home_abs}"; then
     # Defense-in-depth: content_matches_repo_source already guards against deleting user/native
@@ -634,10 +648,13 @@ check_no_active_remnants() {
     fi
   done
 
-  while IFS=$'\t' read -r _h kind src_rel home_abs _flags; do
+  while IFS=$'\t' read -r _h kind src_rel home_abs flags; do
     case "${kind}" in
       managed_copy|link)
-        if [[ -L "${home_abs}" ]] && is_managed_link "${home_abs}"; then
+        if [[ ",${flags}," == *",owned,"* && -e "${home_abs}" ]]; then
+          echo "remnant: ${home_abs}" >&2
+          failed=1
+        elif [[ -L "${home_abs}" ]] && is_managed_link "${home_abs}"; then
           echo "remnant: ${home_abs}" >&2
           failed=1
         elif [[ "${src_rel}" != "-" && -e "${home_abs}" && ! -L "${home_abs}" ]] \

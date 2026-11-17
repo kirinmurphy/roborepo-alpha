@@ -665,6 +665,17 @@ $HarnessDisplayNames = @{ claude = "Claude"; codex = "Codex"; gemini = "Gemini C
 foreach ($id in $KnownHarnessIds) {
   if ($HarnessPresence[$id]) {
     Invoke-ManifestRows $HarnessDisplayNames[$id] @($id)
+    if ($id -eq "codex" -and (Get-Command node -ErrorAction SilentlyContinue)) {
+      # Strip RoboRepo rule lines that earlier installs copied into rules\default.rules; the user's
+      # own approvals stay. RoboRepo's rules now live in rules\roborepo.rules.
+      $migrateArgs = @(
+        (Join-Path $repoRoot "scripts\cli\codex-rules-migration.mjs"),
+        (Resolve-ManifestHomeRoot "codex"),
+        (Join-Path $repoRoot "generated\codex\rules\roborepo.rules")
+      )
+      if ($DryRun) { $migrateArgs += "--dry-run" }
+      & node @migrateArgs
+    }
     Render-HomeRules $id
     $harnessHome = Resolve-ManifestHomeRoot $id
     Copy-GlobalSkills $harnessHome @("roborepo-support")

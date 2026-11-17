@@ -279,7 +279,7 @@ the 5 named behaviors as a direct toggle, `roborepo config status` is read-only.
 The renderer writes the generated permission block in `generated/codex/config.toml`
 (`approval_policy`, `sandbox_mode`, `network_access` — derived from the `write-files`
 and `go-online` behaviors, and from whether any behavior Codex renders is `ask`), the generated shell
-prefix rules in `generated/codex/rules/default.rules`, and Claude
+prefix rules in `generated/codex/rules/roborepo.rules`, and Claude
 `permissions.allow` / `permissions.deny` / `permissions.ask` plus the shell `sandbox` key in
 `generated/claude/settings.json`.
 
@@ -288,15 +288,28 @@ and Claude's `deny`, `allow`, and `ask` arrays. An ask entry also selects Codex'
 approval policy. The renderer preserves the user-owned `approvals_reviewer` setting.
 The verified push exception uses the approval-event hook described above.
 
-`~/.codex/rules` is installed as a **managed copy** (`manifests/platform/manifest.tsv`,
-`kind = managed_copy`), NOT a symlink — a live file that starts as a copy of
-`generated/codex/rules/` but can diverge from it (e.g. the Codex CLI itself appends
-"always allow this command" rules here when a user approves a prompt in a live session).
-Once diverged, `roborepo update` does not silently overwrite it — reinstall only
-overwrites on an explicit "overwrite" collision choice, so a diverged live file persists
-indefinitely with no automated drift check today. Treat the live file as
-possibly-stale relative to repo intent; `roborepo doctor` only checks repo-source
-render drift (manifest vs. `generated/codex/rules/default.rules`), not live-machine drift.
+RoboRepo's Codex rules install as `~/.codex/rules/roborepo.rules`, a `managed_copy` row with the
+`owned` flag (`manifests/platform/manifest.tsv`). Only RoboRepo writes that file, so every install
+and `roborepo update` rewrites it from `generated/codex/rules/roborepo.rules` with no collision
+prompt, staging, or backup, and uninstall and `roborepo harness withdraw codex` remove it even if it
+no longer matches the repo. `~/.codex/rules/default.rules` belongs to Codex and the user: the Codex
+CLI appends "always allow this command" rules there when a user approves a prompt. Codex loads every
+`*.rules` file in `rules/` (checked on Codex 0.166.0: a malformed second file stops `codex exec`
+with a parse error naming it; a `.bak` file is not read), and the most restrictive decision wins
+(`forbidden` > `prompt` > `allow`), so a user allow in `default.rules` cannot weaken RoboRepo's
+`forbidden` or `prompt` rules. The cost is that a personal allow for a command RoboRepo prompts on
+has no effect; personal overrides go in `~/.roborepo/command-overrides.json`.
+
+Earlier installs copied RoboRepo's rules into `default.rules`. The Codex install step
+(`scripts/cli/codex-rules-migration.mjs`, called from `install-harness.sh`, the bundle apply path in
+`presets.mjs`, and `install-windows.ps1`) removes every line of `default.rules` that also appears in
+the generated rules, keeps the rest, and first copies the original to
+`~/.roborepo/backups/codex-rules/default.rules.<timestamp>`. A file that held only RoboRepo's rules
+is left empty. Lines are matched by their trimmed text, so a user approval identical to a RoboRepo
+rule is removed too; it stays in the backup, and while RoboRepo ships that rule `roborepo.rules`
+still applies it. An install that linked `~/.codex/rules` itself into the checkout has that link
+replaced with a real directory before the owned file is written, and uninstall or withdraw removes
+the link rather than deleting through it.
 
 `~/.codex/config.toml` is similar: it is an active local root config file, not a
 symlink, and can diverge the same way. Existing machines need the root config merge/export

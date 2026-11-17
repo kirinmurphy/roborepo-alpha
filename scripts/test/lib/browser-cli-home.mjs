@@ -21,8 +21,8 @@ export function createBrowserCliHome(prefix) {
 
   // Asynchronous: returns the child as well as its result, so a check can signal it mid-run or
   // keep serving a fixture app from its own event loop while the command runs.
-  function start(args, env = {}) {
-    const child = spawn(process.execPath, [cli, ...args], { cwd: home, env: envFor(env) });
+  function start(args, env = {}, { cwd = home } = {}) {
+    const child = spawn(process.execPath, [cli, ...args], { cwd, env: envFor(env) });
     let stdout = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     const done = new Promise((resolve) => child.on("close", (status) => resolve({ status, stdout })));

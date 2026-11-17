@@ -67,14 +67,22 @@ done < <(harness_detected_rows)
 snapshot_pre_install_original
 
 # Managed rows come from manifests/platform/manifest.tsv, filtered to this harness's column.
-while IFS=$'\t' read -r _h kind src_rel home_abs _flags; do
+while IFS=$'\t' read -r _h kind src_rel home_abs flags; do
   case "${kind}" in
     root_config)    export_user_config "${harness_id}" "${src_rel}" "${home_abs}" ;;
-    managed_copy)   install_copy_item "${src_rel}" "${home_abs}" "${harness_id}" ;;
+    managed_copy)   install_copy_item "${src_rel}" "${home_abs}" "${harness_id}" "${flags}" ;;
     hook_fragment|managed_files) shared_target_row apply "${kind}" "${harness_id}" "${src_rel}" "${home_abs}" ;;
     rendered_rules) ;;  # handled by the render step below
   esac
 done < <(manifest_rows "${harness_id}")
+
+# Earlier installs put RoboRepo's Codex rules in rules/default.rules, which Codex also appends user
+# approvals to. They now live in rules/roborepo.rules; strip the copied lines and keep the user's.
+if [[ "${harness_id}" == "codex" ]] && command -v node >/dev/null 2>&1; then
+  migrate_args=("${home_dir}" "${repo_root}/generated/codex/rules/roborepo.rules")
+  [[ "${dry_run}" -eq 1 ]] && migrate_args+=(--dry-run)
+  node "${repo_root}/scripts/cli/codex-rules-migration.mjs" "${migrate_args[@]}"
+fi
 
 # Render this harness's home rules file from base rule fragments + enabled-packages registry.
 if command -v node >/dev/null 2>&1; then

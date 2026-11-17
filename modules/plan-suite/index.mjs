@@ -45,7 +45,7 @@ export function withRelationshipFindings(plans) {
 // Any checkout of the repository resolves to the same store, so this reads alike from all of them.
 export function buildRepositoryPlanSnapshot({ cwd = process.cwd() } = {}) {
   const store = requireStore(path.resolve(cwd));
-  const repository = { ...repositoryRecord(fs.realpathSync(store.root), { name: path.basename(store.primary) }), codeRoot: store.primary };
+  const repository = repositoryRecord(fs.realpathSync(store.root), { name: path.basename(store.primary) });
   const plans = withRelationshipFindings(discoverPlansInRepository(repository));
   return { repository: publicRepository(repository), root: repository.root, plans };
 }
@@ -173,7 +173,6 @@ export function buildPrompt(command, selectedPlans, { mode = "repository-aware" 
 // `root` is the plans worktree. `canonical` carries the registry's identity when the scan comes from
 // a known repository, and at least its display name otherwise.
 export function repositoryRecord(root, canonical = null) {
-  const git = gitInfo(root);
   const repositoryId = canonical?.repositoryId ?? canonicalRepositoryId(resolveProjectIdentity(root, "plan-suite"));
   return {
     id: stableKey(canonical?.repositoryId ?? root),
@@ -183,9 +182,6 @@ export function repositoryRecord(root, canonical = null) {
     urlKey: canonical?.urlKey ?? null,
     root,
     providerUrl: providerUrlForRepositoryId(repositoryId),
-    gitHead: git.head,
-    branch: git.branch,
-    gitAvailable: git.available,
   };
 }
 
@@ -194,10 +190,7 @@ export function discoverPlansInRepository(repository) {
   return files.map((absolutePath) => readPlanRecord(scoped, absolutePath));
 }
 
-// The plan files in one checkout, without reading them, plus the repository record carrying that
-// walk's `truncated`/`errors`. Split from discoverPlansInRepository so a scan can decide which files
-// deserve a full record — building one costs several Git subprocesses.
-export function planFilesInRepository(repository) {
+function planFilesInRepository(repository) {
   const plansDir = path.join(repository.root, PLANS_DIR);
   const files = [];
   const errors = [];
@@ -233,7 +226,7 @@ function walkPlans(dir, repoRoot, files, errors) {
   }
 }
 
-export function readPlanRecord(repository, absolutePath) {
+function readPlanRecord(repository, absolutePath) {
   const relativePath = relative(repository.root, absolutePath);
   const stage = lifecycleFromPath(relativePath);
   const stat = fs.statSync(absolutePath);
@@ -297,7 +290,6 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
       reviewState: git.reviewState,
       modifiedAt: stat.mtime.toISOString(),
       gitLastChangedAt: git.lastChangedAt,
-      gitStatus: git.status,
       taskCounts: parsed.taskCounts,
       // Unchecked `## Not tested` entries, which are tasks too but never block implementation
       // completion; `taskCounts.remaining` minus this is the work still open.
@@ -648,16 +640,9 @@ function relationshipFindings(plans) {
   return findings;
 }
 
-function gitInfo(root) {
-  const head = git(root, ["rev-parse", "--verify", "HEAD"]);
-  const branch = git(root, ["branch", "--show-current"]);
-  return { available: head.ok, head: head.ok ? head.stdout : null, branch: branch.ok ? branch.stdout : null };
-}
-
 function gitFileInfo(repository, relativePath, frontmatter) {
   const { root } = repository;
   const last = git(root, ["log", "-1", "--format=%cI", "--", relativePath]);
-  const status = git(root, ["status", "--porcelain", "--", relativePath]);
   const reviewedCommit = frontmatter.reviewed_commit;
   let reviewState = "never-reviewed";
   if (reviewedCommit) {
@@ -671,7 +656,6 @@ function gitFileInfo(repository, relativePath, frontmatter) {
   }
   return {
     lastChangedAt: last.ok ? last.stdout : null,
-    status: status.ok && status.stdout ? status.stdout : null,
     reviewState,
   };
 }
@@ -716,9 +700,6 @@ export function publicRepository(repo) {
     urlKey: repo.urlKey ?? null,
     root: repo.root,
     providerUrl: repo.providerUrl ?? null,
-    gitHead: repo.gitHead,
-    branch: repo.branch,
-    gitAvailable: repo.gitAvailable,
   };
 }
 

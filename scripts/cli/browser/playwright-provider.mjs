@@ -10,7 +10,7 @@ import { runScriptScenario } from "./playwright-script.mjs";
 export const playwrightProvider = { id: "playwright", probe, run };
 
 async function probe({ dir, stateRoot }) {
-  const located = await locate({ fromDir: dir, stateRoot });
+  const located = await locate({ fromDirs: [dir], stateRoot });
   if (located.blocked) return { ...unavailableProbe(located.blocked), playwright: located.playwright };
   const { binaries, playwright } = located;
   const limitations = binaries.hasFfmpeg ? [] : [videoLimitation(playwright)];
@@ -22,8 +22,10 @@ async function probe({ dir, stateRoot }) {
   };
 }
 
-async function run({ scenarioPath, capture, url, evidence, stateRoot, timeoutMs }) {
-  const located = await locate({ fromDir: path.dirname(scenarioPath), stateRoot });
+// `cwd` is the directory the command ran from. It is searched after the scenario's own directory,
+// so a scenario outside the project still finds the project's Playwright.
+async function run({ scenarioPath, capture, url, evidence, stateRoot, cwd, timeoutMs }) {
+  const located = await locate({ fromDirs: [...new Set([path.dirname(scenarioPath), cwd].filter(Boolean))], stateRoot });
   if (located.blocked) return blockedResult(located.blocked);
   const { binaries, playwright } = located;
 
@@ -46,11 +48,11 @@ async function run({ scenarioPath, capture, url, evidence, stateRoot, timeoutMs 
   return { ...result, limitations: [...limitations, ...result.limitations] };
 }
 
-async function locate({ fromDir, stateRoot }) {
-  const playwright = resolvePlaywright({ fromDir, stateRoot });
+async function locate({ fromDirs, stateRoot }) {
+  const playwright = resolvePlaywright({ fromDirs, stateRoot });
   if (!playwright) {
     return {
-      blocked: [`Playwright is not installed in this project or RoboRepo's tool directory. Install it (needs approval): ${installCommand(stateRoot)}`],
+      blocked: [`Playwright is not installed in ${fromDirs.join(" or ")} or RoboRepo's tool directory. Install it (needs approval): ${installCommand(stateRoot)}`],
       playwright: null,
     };
   }
