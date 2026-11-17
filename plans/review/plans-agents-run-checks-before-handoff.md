@@ -461,6 +461,17 @@ None.
       meant to judge "nothing an agent could have done", and an agent could dry-run the branch's
       skill text against a fixture plan; installing skills reads as `Blocked:` — escalated; the user
       chose an agent dry-run plus a person's look (Decision Log); dry-run done, entry split
+- [x] Review round 2: after merging `main` at 97f65fa4, `plan-execute/SKILL.md` body passed the
+      500-line cap (doctor failed) — fixed in review (b30a7d54): the Not tested example and accepted
+      reasons, already in `plan-schema.md`, replaced by a pointer
+- [x] Review round 2: the blocked-check retry started `roborepo browser run --serve` while step 11
+      (new on `main`) leaves a dev server running — fixed in review (b30a7d54): retry against the
+      running environment first
+- [x] Review round 2: a `Blocked:` command went into the Open Questions queue, which marks tasks
+      blocked and lists it twice in Needs you — fixed in review (b30a7d54): listed only under
+      Commands to allow
+- [x] Review round 2: the running-server retry dropped the bare-call rule — fixed in review
+      (ef022392)
 
 ### Verification
 
@@ -517,14 +528,31 @@ None.
   (the Not tested entry above), nothing outside this plan; merged `findings.mjs` and `index.mjs`
   keep `NOT_TESTED_UNEXPLAINED` and wrapped-line parsing with no references to what `main` removed
 
+- Review round 2, 2026-11-17: approval of 39d4dfa9 went stale when `main` moved; `plans sync-base`
+  merged 38d51d48 (49866691) and then 97f65fa4 (11d298c0), both without conflicts
+- At 11d298c0: the four plan suites passed; `npm run check` failed in `doctor.sh` on the skill size
+  cap (fixed above). A Validator pass found the two retry/blocked findings above, nothing outside
+  this plan, and no change to `modules/plan-suite/` since 39d4dfa9
+- At b30a7d54: Validator pass over the fix found the bare-call finding (fixed in ef022392) and one
+  optional note, not taken: whether the `--url` retry reaches an isolated server (the agent that
+  started it knows its URL)
+- At ef022392: `skill-structure-check.mjs`, `plan-suite-skills-check.mjs`, and
+  `bash scripts/doctor.sh --quiet` ("doctor passed (98 checks)") passed
+- Interrupted gate runs, not code failures: one run hung 10 hours in an interactive `expect` step of
+  `test-install-collisions.sh` and was stopped; one failed an MCP-add case in `test-cli.sh` that
+  passed on rerun; one failed "update writes nothing into the source tree" because the skill was
+  edited mid-run
+- At ef022392: `npm run check` passed ("CI checks passed"): doctor, 426 CLI tests, install
+  collisions, 81/81 unit suites, package install, and the portal UI suite; the clean-machine and
+  Windows installer suites skipped (no Docker or `pwsh` on this machine)
 - Manual: the dry-run's review packet asks only for person-only checks (confirmed by the user,
   2026-11-16: "Yes, both need me")
 
 ### Result
 
 - Status: complete
-- Reviewed implementation commit: 39d4dfa915f6ea4f65eb111baf6dc286910f73f3
-- Base commit: 8f53ffdc276774d90ae5275a9be6c3c10ce72810
+- Reviewed implementation commit: ef022392942686a07875f3ad91f8db02a2d8ccbd
+- Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
 
 ### Approval
 - Decision: approved
