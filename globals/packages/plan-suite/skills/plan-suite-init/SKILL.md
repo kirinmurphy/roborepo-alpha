@@ -103,7 +103,7 @@ yes.
 | `missing`, `admin: true` | Tell the user what is unprotected, from the `policies` entries that list `missingRules`, and ask whether to protect the repository now. On a yes, run `roborepo protect` and report its final state. On a no, report that `roborepo protect` does it later. |
 | `missing` or `drifted`, `admin: false` | Report that the account in `login` is not an admin, and that a repository admin must run `roborepo protect`. |
 | `drifted`, `admin: true` | Report which managed ruleset differs and that `roborepo protect` updates it. |
-| `conflicting` | Report each entry under `conflicts`: that rule will refuse plan saves until the plans branch is excluded from its ruleset. |
+| `conflicting` | Report each entry under `conflicts` with its `detail`, which names what will refuse plan saves and where to turn it off: a ruleset to exclude the plans branch from, or a branch protection setting. |
 | `unsupported` | Report `reason` and the `manualSteps` for protecting the branches by hand. |
 | `unavailable` | Report `reason` and that protection was not checked. Setup is still complete. |
 | `protected`, `unmanaged` | Report the state in one line. |
