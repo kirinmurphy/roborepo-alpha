@@ -1,6 +1,6 @@
 ---
 id: nrvwti51
-next_action: "Review of 4e15c8aa done locally; CI on 4e15c8aa must pass, then the human approves that commit in /plan-review, merges PR #69, and runs /plan-close."
+next_action: "Approved at 4e15c8aa; the user merges PR #69, then runs /plan-close."
 blocked_by: []
 depends_on: []
 related: ["permva27"]
@@ -214,9 +214,11 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - Manual, run in human review with the user's go-ahead: in a fresh git repo holding `.codex/skills/legacy-probe-q7/SKILL.md` and a control `.agents/skills/control-probe-k3/SKILL.md`, `codex exec -s read-only` (codex-cli 0.166.0) listed both skills among those available. Codex reads `.codex/skills/` in that version.
 - Counting `.codex/skills` (f1145912, d1c327c4, 4e15c8aa): `repository-agent-config-check.mjs` passed; its new startup assertion fails when `.codex/skills` is left out, when duplicate names are not dropped, when same-name skills in one folder collapse, and when nested skills count. `repository-scope-portal-check.mjs`, `repository-scope.spec.mjs` (20 passed), `run-checks.mjs --filter harness` (14/14), `docs-reference-check.mjs`, and `git diff --check` passed.
 - Validator passes 5–7 on the `.codex/skills` change: passes 5 and 6 reported fix findings, all fixed above; pass 7 reported no fix findings.
+- CI `npm run check` passed on 4e15c8aa (macOS, Ubuntu, Windows installer).
 
 ### Result
 
-- Status: pending
+- Status: complete
 - Reviewed implementation commit: 4e15c8aa8515720a38f8a6aab186ce1a2b03417b
 - Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
+
