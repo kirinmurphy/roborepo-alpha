@@ -87,6 +87,13 @@ try {
     ".codex/skills/legacy-skill/SKILL.md": "---\nname: legacy-skill\ndescription: Kept in the older folder.\n---\n",
     // The same skill name in both Codex folders: listed twice, counted once at startup.
     ".codex/skills/codex-skill/SKILL.md": "---\nname: codex-skill\ndescription: An older copy with a longer description than the current one.\n---\n",
+    // Two current skills that share a name both count: only a name in both folders is dropped.
+    ".agents/skills/twin-a/SKILL.md": "---\nname: twin\ndescription: First of two.\n---\n",
+    ".agents/skills/twin-b/SKILL.md": "---\nname: twin\ndescription: Second of two.\n---\n",
+    // Nested skill folders apply to work in that package, not at startup.
+    "packages/web/.codex/skills/nested-older/SKILL.md": "---\nname: nested-older\ndescription: Only for the web package.\n---\n",
+    "packages/web/.agents/skills/nested-current/SKILL.md": "---\nname: nested-current\ndescription: Only for the web package.\n---\n",
+    "local/skills/codex-linked/SKILL.md": "---\nname: codex-linked\ndescription: Linked into the older folder.\n---\n",
     ".claude/settings.json": JSON.stringify({
       permissions: { allow: ["Bash(ls:*)"], deny: ["Read(.env)"], defaultMode: "acceptEdits" },
       hooks: { PreToolUse: [{ hooks: [{ type: "command", command: SECRETS[4] }] }], WeirdEvent: [] },
@@ -141,6 +148,8 @@ try {
   fs.symlinkSync("../../local/skills/inrepo", path.join(main, ".claude/skills/inrepo"));
   fs.mkdirSync(path.join(main, ".agents/skills"), { recursive: true });
   fs.symlinkSync("../../local/skills/inrepo", path.join(main, ".agents/skills/inrepo"));
+  // The shape RoboRepo's skill linking makes: a .codex/skills folder linked to a skill in the repo.
+  fs.symlinkSync("../../local/skills/codex-linked", path.join(main, ".codex/skills/codex-linked"));
   // A nested checkout is someone else's repo.
   makeRepo("main-checkout/vendored", { "CLAUDE.md": "# vendored\n" });
   git(main, "checkout", "-q", "-b", "feature/inspect");
@@ -269,9 +278,13 @@ try {
     return entry.discoveryTokens;
   };
   assert.notEqual(codexSkill(".codex/skills/codex-skill/SKILL.md"), codexSkill(".agents/skills/codex-skill/SKILL.md"));
+  codexSkill("packages/web/.codex/skills/nested-older/SKILL.md");
+  codexSkill("packages/web/.agents/skills/nested-current/SKILL.md");
   assert.equal(startup.codex.breakdown.skillDiscovery,
-    codexSkill(".agents/skills/codex-skill/SKILL.md") + codexSkill(".agents/skills/inrepo") + codexSkill(".codex/skills/legacy-skill/SKILL.md"),
-    "both folders count, and the duplicate name only once");
+    codexSkill(".agents/skills/codex-skill/SKILL.md") + codexSkill(".agents/skills/inrepo")
+      + codexSkill(".agents/skills/twin-a/SKILL.md") + codexSkill(".agents/skills/twin-b/SKILL.md")
+      + codexSkill(".codex/skills/legacy-skill/SKILL.md") + codexSkill(".codex/skills/codex-linked"),
+    "root skills in both folders count, a name in both only once, and nested skills not at all");
 
   // Other configuration: section labels only.
   const settings = byPath(".claude/settings.json");

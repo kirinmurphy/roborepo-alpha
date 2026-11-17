@@ -3,8 +3,9 @@
 // AGENTS.override.md (root and nested), .agents/skills/<name>/SKILL.md (root and nested),
 // .codex/config.toml, .codex/hooks.json, and .codex/agents/*.toml.
 //
-// .codex/skills/<name>/SKILL.md is a location RoboRepo itself links skills into. Whether the
-// installed Codex reads it is not verified here, so its loading is reported as unknown.
+// .codex/skills/<name>/SKILL.md is an older location that RoboRepo itself links skills into. The
+// docs no longer list it, but codex-cli 0.166.0 still reads it, so it loads on demand like
+// .agents/skills.
 
 import {
   LOADING, segmentsOf, isRootLevel, matchSkillPath, matchLinkedFolder, describeMarkdown, parseJsonObject, scanTomlStructure,
@@ -141,25 +142,19 @@ function unique(values) {
 // What a session started at the repo root reads before its first message: the root AGENTS.md (or
 // the AGENTS.override.md that takes its place) in full, and each root skill's name and description.
 // Codex reads root skills from .agents/skills and from the older .codex/skills (confirmed with
-// codex-cli 0.166.0). A skill name in both folders counts once, from .agents/skills, so a skill
-// linked into both is not doubled; how Codex itself handles that duplicate is not verified.
-const SKILL_ROOTS = [".agents/skills/", ".codex/skills/"];
-
+// codex-cli 0.166.0). A .codex/skills skill whose name is also in .agents/skills is left out, so a
+// skill linked into both folders is not doubled; how Codex itself handles that duplicate is not
+// verified.
 export function codexStartupEntries(entries) {
   const instructions = entries.filter((entry) => entry.area === "instructions" && entry.loading === LOADING.rootLevel);
   const override = instructions.find((entry) => entry.kind === "agents-override-md");
-  const seen = new Set();
-  const skills = SKILL_ROOTS
-    .flatMap((root) => entries.filter((entry) => entry.kind === "skill" && entry.path.startsWith(root)))
-    .filter((entry) => {
-      const key = entry.name ?? entry.path;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  const rootSkills = (root) => entries.filter((entry) => entry.kind === "skill" && entry.path.startsWith(root));
+  const current = rootSkills(".agents/skills/");
+  const currentNames = new Set(current.map((entry) => entry.name));
+  const older = rootSkills(".codex/skills/").filter((entry) => !currentNames.has(entry.name));
   return [
     ...(override ? [override] : instructions).map((entry) => ({ entry, basis: "instructions" })),
-    ...skills.map((entry) => ({ entry, basis: "skill-discovery" })),
+    ...[...current, ...older].map((entry) => ({ entry, basis: "skill-discovery" })),
   ];
 }
 
