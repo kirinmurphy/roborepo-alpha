@@ -113,6 +113,56 @@ test.describe("Branch protection", () => {
     expect(writes()).toEqual([]);
   });
 
+  test("a running Protect keeps its button disabled until the portal answers", async ({ page }) => {
+    start();
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    await page.route("**/protection", async (route) => {
+      if (route.request().method() === "POST") await held;
+      await route.continue();
+    });
+    await openPlans(page);
+    await notices(page).getByRole("button", { name: "Protect" }).click();
+    const running = notices(page).getByRole("button", { name: "Protecting…" });
+    await expect(running).toBeDisabled();
+    release();
+    await expect(panel(page).locator("[data-slot=state]")).toHaveText("protected");
+    await expect(notices(page)).toBeHidden();
+  });
+
+  test("a status read that started before a Protect does not bring the notice back", async ({ page }) => {
+    start();
+    await openPlans(page);
+    await notices(page).getByRole("button", { name: "Details" }).click();
+    await expect(panel(page)).toBeVisible();
+
+    // Hold the next status read with the answer GitHub gave before the Protect below.
+    let release;
+    const held = new Promise((resolve) => { release = resolve; });
+    let stale;
+    const staleRead = new Promise((resolve) => { stale = resolve; });
+    await page.route("**/protection", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      const before = await route.fetch();
+      stale();
+      await held;
+      await route.fulfill({ response: before });
+    });
+    // The open panel is modal, so a pointer cannot reach Refresh; this stands in for a refresh that
+    // starts while the panel is open.
+    await page.evaluate(() => document.getElementById("refresh").click());
+    await staleRead;
+
+    await panel(page).getByRole("button", { name: "Protect" }).click();
+    await expect(panel(page).locator("[data-slot=state]")).toHaveText("protected");
+    const staleAnswer = page.waitForResponse((response) => response.url().includes("/protection") && response.request().method() === "GET");
+    release();
+    await staleAnswer;
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 200)));
+    await expect(notices(page)).toBeHidden();
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
   test("a Protect GitHub refuses partway shows the refusal in the panel", async ({ page }) => {
     start({ refuseCreate: "roborepo-main-integrity" });
     await openPlans(page);
