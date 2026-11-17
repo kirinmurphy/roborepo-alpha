@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Owner approves reviewed commit 73f7643d, then opens and merges the pull request and runs /plan-close
+next_action: Owner decides the two escalated findings (refused-write exit code, classic protection without enforce_admins), then approves the re-reviewed commit
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -158,14 +158,21 @@ The command reads three things:
   returned only to accounts that can manage the ruleset. A non-admin therefore sees drift and
   coverage judged on rules and targets alone, and the report says the bypass was not visible.
 - **Admin rights**, from `permissions.admin` in `GET /repos/{owner}/{repo}`.
+- **Classic branch protection** on `repo-plans`, from
+  `GET /repos/{owner}/{repo}/branches/repo-plans/protection`, because the effective-rules read
+  shows rulesets only. GitHub answers 404 when there is none and to accounts that cannot administer
+  the repo; a 403 that says the plan lacks the feature also reads as none.
+
+Every list is read page by page, and every call is pinned to github.com with
+`gh api --hostname github.com`, so a `GH_HOST` set for an Enterprise host never receives these calls.
 
 | State | Condition | `--check` exit | Portal |
 | --- | --- | --- | --- |
 | `protected` | Every managed ruleset exists and matches the policy, or is `skipped`, and no push-blocking rule reaches `repo-plans` | 0 | Nothing |
-| `unmanaged` | Every policy rule applies, but through hand-made rulesets, with a managed ruleset absent | 0 | Nothing; the menu offers **Protect** to admins |
-| `missing` | A policy rule is absent from its branch's effective rules | 1 | Notice, once |
+| `unmanaged` | Every policy rule applies, but through hand-made rulesets whose bypass list is no wider than the policy's, with a managed ruleset absent | 0 | Nothing; the menu offers **Protect** to admins |
+| `missing` | A policy rule is absent from its branch's effective rules, or only a hand-made ruleset with a wider bypass list applies it | 1 | Notice, once |
 | `drifted` | A managed ruleset exists but differs from the policy, such as a renamed CI job | 1 | Notice, once, admins only |
-| `conflicting` | A push-blocking rule reaches `repo-plans` | 1 | Notice, once |
+| `conflicting` | A push-blocking ruleset rule reaches `repo-plans`, or its classic branch protection requires a pull request, status checks, or signed commits, restricts pushes, or locks the branch | 1 | Notice, once |
 | `unavailable` | `gh` missing, not signed in, or GitHub unreachable | 1 | Menu item gives the reason |
 | `unsupported` | The remote is not GitHub, or GitHub refuses rulesets for this repo (a private repo on a plan without them) | 1 | Menu item gives the reason; for another host it shows the manual steps |
 
@@ -180,7 +187,8 @@ rulesets, on the same target, apply every rule it has with parameters equal or s
 bypass list is no wider than its own. A managed ruleset may carry more rules than the one it covers.
 Only a covered ruleset is safe to delete. A hand-made ruleset with no bypass is never covered by
 `roborepo-main-merge`, which has one. Organization rulesets appear as "set by the organization" and
-are never covered.
+are never covered. When GitHub hides bypass lists from the signed-in account, no ruleset is marked
+covered, and a hand-made rule counts toward the policy without its bypass list being compared.
 
 ### The command
 
@@ -198,7 +206,8 @@ roborepo protect [--check] [--json] [--skip main-merge | --unskip main-merge]
 - `conflicting`, `unavailable`, and `unsupported` are reported, and nothing is written.
 - `--skip` and `--unskip` need `admin: true` and refuse in `conflicting`, `unavailable`, and
   `unsupported`.
-- Exit code: 0 when the final state is `protected` or `unmanaged`, 1 otherwise, for every flag.
+- Exit code: 0 when the final state is `protected` or `unmanaged` and GitHub refused no write, 1
+  otherwise, for every flag.
 
 ```mermaid
 flowchart TD
@@ -396,7 +405,7 @@ Manual, on a scratch GitHub repo where the user is admin:
 | A pull request that renames a CI job is blocked by the old required name, and its successful run makes the state read `drifted` before it merges | The admin merges it with the bypass and only then reruns `roborepo protect`, which reads the new name from that workflow's newest successful pull-request run |
 | Several `gh api` calls per repo on every Plans page load and **Refresh** slow the page or approach GitHub's rate limit | Status loads apart from the plan list, each call has a bounded timeout, and a failure reads as `unavailable` |
 | Under Part 01's bot identity, the bot has no admin rights | It reads as `admin: false`; the check needs only read access |
-| The effective-rules endpoint omits legacy branch protection | A legacy rule alone reads as `missing`; the managed ruleset then duplicates it, which is harmless |
+| The effective-rules endpoint omits legacy branch protection | On `repo-plans`, classic protection is read separately and a refusing setting reads as `conflicting`. On the default branch, a legacy rule alone reads as `missing`; the managed ruleset then duplicates it, which is harmless |
 | A wildcard ruleset adds a push-blocking rule to `repo-plans` | Reported as `conflicting`, naming the ruleset, before saves start failing |
 
 ## Decision Log
@@ -560,6 +569,19 @@ the Decision Log.
       `protect.mjs --doctor` — fixed in the plan
 - [x] Review: an import failure in `protect.mjs` still exits 1 and reads as a hint — no change; a
       broken install fails every `roborepo` command, not only this line
+- [ ] Re-review (pull request fixes 73f7643d..376c4f83): any 403 on the classic-protection read,
+      including a rate limit, reads as "no classic protection" and can hide a conflict —
+      `modules/forge/protection.mjs` `classicProtection`
+- [ ] Re-review: `plan-suite-init` SKILL.md step 4 `conflicting` row names only the ruleset remedy;
+      classic conflicts are fixed in branch protection settings
+- [ ] Re-review: the Plans notice's pending-Protect and stale-read guards have no browser test —
+      `portal/plans/protection-notice.js`
+- [x] Re-review: the plan's status sources, state table, exit code, and Risks predated the pull
+      request fixes — fixed in the plan
+- [ ] Re-review: a refused write now exits 1 even when the final state is `protected` or
+      `unmanaged`, changing the exit-code contract approved at 73f7643d — escalated to the owner
+- [ ] Re-review: any refusing classic setting on `repo-plans` reads as `conflicting`, even with
+      "include administrators" off, where an admin's saves still succeed — escalated to the owner
 
 ### Verification
 
@@ -596,8 +618,17 @@ the Decision Log.
 - `npm run check` (full local gate) passed at 73f7643d: CI checks passed, portal UI 268 passed.
 - Approval: the owner answered "Approve 73f7643d" in the review chat on 2026-11-17.
 
+- Re-review: approval at 73f7643d went stale; four pull request fix commits followed (a8f571b7,
+  45790c89, 5e2e9da1, 376c4f83). Base unchanged at 97f65fa4.
+- Re-review at 376c4f83: `protect-check.mjs` (17 groups) and `doctor-protection-check.mjs` (4)
+  pass; portal UI suite 268 passed. Pull request CI: ubuntu and windows-installer passed, macOS
+  pending.
+- Re-review at 376c4f83: live `roborepo protect --check --json` in this repo reads `missing`,
+  finds the three required checks from pull-request runs, and reports no classic conflict.
+- Re-review Validator pass (fresh-context subagent) at 376c4f83: 4 fix, 2 escalate.
+
 ### Result
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: 73f7643dfd335933a648d7625149376a92589253
 - Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
 
