@@ -531,8 +531,12 @@ Acceptance criteria:
   protected-branch hook approved them. A headless test showed why: Claude applies the
   `Bash(git push:*)` ask rule even when a PreToolUse hook allows the call. `push-code` now carries
   `askDecidedByHook`, and at `ask` Claude renders no rule for it. Alternative: `allow` (rejected:
-  without the hook it would push anywhere but the force variants). Cost: if the hook is missing, an
-  unlisted `git push` prompts in default mode but is left to the auto-mode reviewer in auto mode.
+  without the hook it would push anywhere but the force variants). With the hook installed, every
+  push it cannot verify or cannot read asks, including prefixed, wrapped, nested, and aliased ones.
+  Cost if the hook is missing: a bare `git push` runs outside the sandbox and prompts in default
+  mode (auto mode leaves it to the auto-mode reviewer), but a chained or wrapped push stays
+  sandboxed and runs with no prompt, leaving only the git `pre-push` backstop. RoboRepo installs
+  the hook for Claude with the base configuration.
   Codex and Gemini are unchanged; a separate session is researching whether they need the same.
 
 ## Not tested
@@ -704,6 +708,14 @@ Acceptance criteria:
       skipped when reading refspecs, remote deletes ask
 - [x] Past the folder cap, a relative `cd ..` out of a collapsed folder could miss main, and bare
       `pushd` ignored a `pushd` that may have failed (`base`) — fixed (d296cdf4)
+- [x] A push with `git -c` or an environment prefix, or one behind a wrapper, in a subshell or
+      substitution, through `xargs`, or through an alias, ran with no prompt; with a hooks bypass it
+      could land on main — fixed (09bc6110): the hook asks for a configured or prefixed push, and
+      asks when the command holds a push it did not read
+- [x] The docs still said anything chained onto a push goes to the permission prompt — fixed
+      (09bc6110)
+- [x] The Decision Log's cost statement for dropping the push ask rule was incomplete — escalated by
+      the Validator, corrected in the Decision Log entry (2026-11-16)
 
 ### Verification
 
@@ -786,6 +798,9 @@ Acceptance criteria:
 - Validation pass 23 at d30dbb92 (fresh-context subagent): 1 `fix` finding and 2 `base` items,
   fixed in d296cdf4. It confirmed that `roborepo update` clears an old `Bash(git push:*)` ask from
   live settings, and that `agent-run` and the config rows still show `push-code` as `ask`
+- Full local gate (`npm run check`, run unsandboxed) passed at d296cdf4 ("CI checks passed")
+- Validation pass 24 at d296cdf4 (fresh-context subagent, about 3,800 cases plus a real-git bypass
+  run): 2 `fix` findings and 1 `escalate`, fixed in 09bc6110 and the plan record
 - Full local gate at d30dbb92: 425 of 426 passed; `shared-target-rows-check` failed on an empty,
   untracked `.claude/.cc-writes` folder that Claude Code's write tracking left in
   `globals/system/git-hooks/` while this session's shell sat there. Removed; the check passes
