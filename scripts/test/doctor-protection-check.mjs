@@ -80,6 +80,19 @@ try {
   expectLine(1, /RoboRepo cannot manage branch protection for example\/project \(GitHub does not offer rulesets for this repo: .*\) — run roborepo protect --check for the manual steps/);
   console.log("✓ Each protection state maps to its doctor line: ok when nothing needs doing, a hint otherwise.");
 
+  // A ruleset GitHub returns in a shape the reader cannot handle is a crash, not a hint: one line
+  // with no stack trace and exit 3, which doctor reports as a failure.
+  start({ rulesets: [ruleset(1, "roborepo-plans", MAIN, "x")] });
+  const crashed = line();
+  assert.equal(crashed.status, 3, crashed.stdout + crashed.stderr);
+  assert.equal(crashed.stdout.trim().split("\n").length, 1, crashed.stdout);
+  assert.doesNotMatch(crashed.stdout + crashed.stderr, /^\s+at /m);
+  const crashedDoctor = doctor();
+  assert.notEqual(crashedDoctor.status, 0, crashedDoctor.stdout + crashedDoctor.stderr);
+  assert.match(crashedDoctor.stderr, /^fail: branch protection check crashed: /m);
+  assert.doesNotMatch(crashedDoctor.stderr, /^\s+at /m);
+  console.log("✓ An unexpected error exits 3 with one line, and doctor reports it as crashed.");
+
   // Outside a Git repo with a GitHub origin, doctor adds no line and gh is never called.
   start();
   for (const cwd of [clone("gitlab-clone", "git@gitlab.com:example/project.git"), fs.mkdtempSync(path.join(root, "not-a-repo-"))]) {
