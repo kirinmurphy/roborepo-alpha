@@ -409,7 +409,7 @@ const TRUNCATION_LABELS = {
 const SECTION_TIPS = {
   instructions: "Root-level files load at the start of every session; files in subfolders, or rules scoped to paths, may apply only to work there. Imports stay as written.",
   skills: "Each skill's name and description load at startup; the rest only when it runs.",
-  config: "Settings, permissions, hooks, MCP servers, custom agents, and commands. Popups show keys and safe values; secrets, commands, and URLs stay hidden. Permission entries are declarations, not the effective policy.",
+  config: "Settings, permissions, hooks, MCP servers, custom agents, and commands. Settings files (JSON and TOML) open as keys with safe values: environment values, headers, commands, and URLs stay hidden. Markdown agents and commands open as rendered text. Permission entries are declarations, not the effective policy.",
 };
 
 export function repositoryInspectorLoading() {
