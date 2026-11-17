@@ -60,7 +60,7 @@ export function classifyCodexProjectPath(relPath, { symlink = false } = {}) {
       format: "text",
       name: legacy.name,
       legacy: true,
-      note: "An older skill location that Codex still reads; new skills belong in .agents/skills.",
+      note: "An older skill location that Codex still reads alongside .agents/skills.",
     };
   }
   const parts = segmentsOf(relPath);

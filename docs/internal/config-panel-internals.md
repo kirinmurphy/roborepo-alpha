@@ -135,8 +135,9 @@ unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answer
   at the repo root reads from this repo, split into instructions, skill descriptions, and command
   descriptions, plus the instruction files counted. The provider's optional
   `projectInventory.startupEntries` picks the entries (Claude falls back to a root `AGENTS.md`
-  without a `CLAUDE.md`; Codex lets `AGENTS.override.md` replace `AGENTS.md`); generated files never
-  count. A skill or command's description cost is `discoveryTokens`, measured as the global
+  without a `CLAUDE.md`; Codex lets `AGENTS.override.md` replace `AGENTS.md`, and counts root skills
+  in both `.agents/skills` and `.codex/skills`, leaving out a `.codex/skills` skill whose name
+  `.agents/skills` already has); generated files never count. A skill or command's description cost is `discoveryTokens`, measured as the global
   estimate measures package skills. The page adds the snapshot's `contextCost` startup tokens for
   Total Usage and colors only that total, with the startup thresholds.
 - **Previews.** Text renders through `renderMarkdown`, then `withoutMarkdownImages` replaces each
