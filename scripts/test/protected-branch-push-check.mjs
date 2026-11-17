@@ -119,8 +119,17 @@ const cases = [
   // Interpreters other than shells can run the text too.
   ["echo git push --no-verify origin HEAD:main | python3 -c 'import os,sys;os.system(sys.stdin.read())'", "ask"],
   ["echo git push origin main | perl -e 'system(<STDIN>)'", "ask"],
+  ["echo git push origin main | awk '{system($0)}'", "ask"],
   ["python3 -c 'import os; os.system(\"git push origin main\")'", "ask"],
   ["echo 'all: ; git push origin main' > Makefile; make", "ask"],
+  ["python3 -c \"import subprocess; subprocess.run(['git','push','origin','main'])\"", "ask"],
+  ["python3 -c 'subprocess.run([\"git\",\"push\",\"origin\",\"main\"])'", "ask"],
+  // Operators and interpreter names inside quoted prose are not commands.
+  ["git commit -m \"Guard git push; make the hook clearer\"", "defer"],
+  ["git commit -m \"Guard git push (make it clearer)\"", "defer"],
+  ["git commit -m 'Hook: echo git push | node now asks'", "defer"],
+  ["gh pr create --title 'Ask about git push (node -e)' --body x", "defer"],
+  ["rg -n \"git push|python3\" scripts", "defer"],
   ["git log --grep push && eval \"$X\"", "ask"],
   ["xargs git log push", "ask"],
   ["git push origin feat && rm -rf build", "defer"],
@@ -283,7 +292,9 @@ for (const [command, expected] of cases) {
 {
   const started = Date.now();
   decide("; a=b".repeat(20000));
-  assert.ok(Date.now() - started < 5000, "a long chain of assignments took over 5 seconds");
+  decide("a=1\n".repeat(20000) + "echo $a");
+  decide("\n".repeat(40000) + "echo $a");
+  assert.ok(Date.now() - started < 5000, "long chains of assignments or lines took over 5 seconds");
 }
 // Codex runs a command whose hook result is "ask" without prompting, so its copy turns every ask
 // into a deny. It knows it is Codex's from its directory, in this repo and where it is installed.

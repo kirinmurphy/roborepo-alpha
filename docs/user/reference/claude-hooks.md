@@ -60,7 +60,9 @@ that changes what it reads (`export`, `unset`, a `GIT_*` or `PATH` assignment, `
 `git remote set-url`, `source`). A command that only mentions a push, such as `echo git push`,
 `grep "git push"`, or `git log --grep push`, asks nothing, unless something in the same command could
 run that text as a script (`echo git push origin main | sh`, a shell reading a file it wrote, or an
-interpreter such as `python3`, `perl`, `ruby`, `node`, or `make` anywhere in the command).
+interpreter such as `python3`, `perl`, `ruby`, `node`, `awk`, or `make` anywhere in the command).
+Quoted text is not a command, so a commit message such as `"guard git push; make it clearer"` asks
+nothing.
 
 A heredoc body is skipped only when it is plainly data: `cat`, `tee`, `gh`, or a `git commit`,
 `git tag`, or `git notes` message read from stdin reads it, nothing pipes that command on, no part

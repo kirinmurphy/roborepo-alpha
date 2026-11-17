@@ -981,7 +981,46 @@ function classifyCommand(text, startCwd) {
 const SCRIPT_RUNNERS = new Set(['source', '.', 'eval', 'exec', 'xargs', 'timeout', 'watch', 'parallel', 'script'])
 // Interpreters that can run text they read (`python3 -c 'os.system(…)'`, a Makefile written
 // earlier). Any `python` version counts too.
-const INTERPRETERS = new Set(['perl', 'ruby', 'node', 'dash', 'ksh', 'fish', 'pwsh', 'busybox', 'make', 'gmake'])
+const INTERPRETERS = new Set(['awk', 'gawk', 'perl', 'ruby', 'node', 'dash', 'ksh', 'fish', 'pwsh', 'busybox', 'make', 'gmake'])
+
+// `text` with operator characters inside quotes replaced by `_`, so `git commit -m "fix push; make
+// it clearer"` stays one command. A `$(…)` or backtick inside double quotes still runs, so it is kept.
+function maskQuotedOperators(text) {
+  let out = ''
+  const open = [] // ' " $( ( `
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    const top = open.at(-1)
+    if (top === "'") {
+      if (ch === "'") open.pop()
+      out += /[;&|()<>`\n{}$]/.test(ch) ? '_' : ch
+      continue
+    }
+    if (ch === '\\' && i + 1 < text.length) {
+      out += ch + text[i + 1]
+      i += 1
+      continue
+    }
+    if (ch === '$' && text[i + 1] === '(') {
+      open.push('$(')
+      out += '$('
+      i += 1
+      continue
+    }
+    if (top === '"') {
+      if (ch === '"') open.pop()
+      else if (ch === '`') open.push('`')
+      out += /[;&|()<>\n{}]/.test(ch) ? '_' : ch
+      continue
+    }
+    if (ch === "'" || ch === '"') open.push(ch)
+    else if (ch === '`') top === '`' ? open.pop() : open.push('`')
+    else if (ch === '(') open.push('(')
+    else if (ch === ')' && (top === '$(' || top === '(')) open.pop()
+    out += ch
+  }
+  return out
+}
 
 // The simple commands of `text`, each as its words with quotes and backslashes removed. It splits
 // at operators and at subshell and substitution edges, cuts a redirect glued to the program
@@ -989,7 +1028,7 @@ const INTERPRETERS = new Set(['perl', 'ruby', 'node', 'dash', 'ksh', 'fish', 'pw
 // and `bash`.
 function simpleCommands(text) {
   // `>|` is a redirect, not a pipe.
-  return text.replace(/>\|/g, '>').split(/[;&|()`\n]|\$\(/).map((part) => {
+  return maskQuotedOperators(text).replace(/>\|/g, '>').split(/[;&|()`\n]|\$\(/).map((part) => {
     const words = []
     const raw = part.trim().split(/\s+/).filter(Boolean)
     for (let i = 0; i < raw.length; i += 1) {
@@ -1007,15 +1046,17 @@ function simpleCommands(text) {
 
 // A command whose program the shell fills in from a substitution (`$(which sh) x`, quoted or not),
 // behind any assignments, wrappers, or keywords. `((`, `$((`, and `=(` open arithmetic or an array,
-// not a command. Words stop at an operator, so each command start scans only its own command.
-const SUBSTITUTED_PROGRAM = /(?:^|[;&|\n]|(?<![(=$])\((?!\()|\$\((?!\())\s*(?:[A-Za-z_]\w*=[^\s;&|()]*\s+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)\s+(?:-[^\s;&|()]+\s+)*)*"?(?:\$\(|`)/
+// not a command. Words and gaps stop at an operator or newline, so each command start scans only its
+// own command and the time stays linear. It reads text from `maskQuotedOperators`.
+const SUBSTITUTED_PROGRAM = /(?:^|[;&|\n]|(?<![(=$])\((?!\()|\$\((?!\())[ \t]*(?:[A-Za-z_]\w*=[^\s;&|()]*[ \t]+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)[ \t]+(?:-[^\s;&|()]+[ \t]+)*)*"?(?:\$\(|`)/
 
 // Whether some line of `text` starts a program that could run a heredoc's body or a file it wrote:
 // a shell, a script runner or interpreter, a program the shell fills in (`$SHELL`, `$(which sh)`),
 // a path (`./x.sh`), `env -S`, or a process substitution. It reads the command with heredoc bodies
 // taken out, so a body's prose does not count, and it errs toward keeping a body.
 function mayRunScripts(text) {
-  if (/[<>]\(/.test(text) || SUBSTITUTED_PROGRAM.test(text)) return true
+  const masked = maskQuotedOperators(text)
+  if (/[<>]\(/.test(masked) || SUBSTITUTED_PROGRAM.test(masked)) return true
   return simpleCommands(text).some((words) => {
     const p = programIndex(words)
     const program = words[p]
@@ -1277,7 +1318,7 @@ function scanPushes(text, found = { pushes: 0, environmentChanged: false }) {
     // (`echo 'git push origin main' | bash`), or code that builds it (`os.system("git push …")`).
     if (!mentionsOnly) {
       for (const word of words) {
-        if (/\s/.test(word) && !scripts.includes(word)) scanPushes(word.replace(/[(){}\[\],"'`]/g, ' '), found)
+        if (/[\s(){}[\],]/.test(word) && !scripts.includes(word)) scanPushes(word.replace(/[(){}[\],"'`]/g, ' '), found)
       }
     }
   }
@@ -1303,10 +1344,12 @@ const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).
 // Quotes, backslashes, backslash-newlines, and brace punctuation split a word without changing what
 // runs (`pu''sh`, `pu\sh`, `{push,}`), so the quick check reads the text without them. Any `$` or
 // backtick can build a word the quick check cannot see (`$'pu\x73h'`, `pu$(true)sh`), so it sends
-// the command to the full check.
+// the command to the full check. Interpreter code lists words with commas (`['git','push']`), so the
+// check also reads the text with its commas kept.
 const KEYWORDS = /\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/
 if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string'
-  || !(KEYWORDS.test(command.replace(/\\\n/g, '').replace(/['"\\{},]/g, '')) || /[$`]/.test(command))) process.exit(0)
+  || !(KEYWORDS.test(command.replace(/\\\n/g, '').replace(/['"\\{},]/g, ''))
+    || KEYWORDS.test(command.replace(/['"\\{}]/g, '')) || /[$`]/.test(command))) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
