@@ -144,9 +144,10 @@ unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answer
   `renderSkillSourceHtml`, the global skill popup's view, listing up to 40 bundled files and showing
   their text within one byte budget. JSON and TOML render with `renderConfigFileHtml`
   (`scripts/cli/config-tree-render.mjs`), whose key list shows booleans, numbers, and safe strings
-  and hides values under `env`, headers, `command`, `args`, URLs, credential-named keys, and
-  credential-shaped text. The global page's `config-file` and `harness-hooks` popups use the same
-  renderer.
+  and hides values under `env`, headers, `command`, `args`, URLs, credential-named keys,
+  credential-shaped text, and strings over `LONG_TEXT_LIMIT` (200 characters). The global page's
+  `config-file` and `harness-hooks` popups use the same renderer, and their responses carry the
+  rendered `html` only, never the raw file text.
 - **Safety.** Providers' `describe` returns allowlisted section labels only, and the config
   renderer never puts a hidden value in its HTML. Nothing writes to the checkout, its Git
   directory, or machine config.

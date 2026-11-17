@@ -9,7 +9,8 @@
 //   kind: short machine label (e.g. "claude-md", "skill", "settings"),
 //   label: human label for the kind,
 //   loading: one of LOADING,
-//   format: "text" | "json" | "toml" — text bodies are previewable as text, the others are summarized,
+//   format: "text" | "json" | "toml" — text bodies preview as text; the others are summarized
+//     here and preview as a key list,
 //   name?, override?, legacy?, note?
 // }
 // describe(entry, text) -> { name?, description?, loading?, sections?: string[], diagnostic? }

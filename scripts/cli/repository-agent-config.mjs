@@ -75,7 +75,8 @@ const GIT_TIMEOUT_MS = 5000;
 const GIT_BATCH = 200;
 const CONVERSION_ATTRIBUTES = ["filter", "text", "eol", "ident", "working-tree-encoding"];
 // The .gitattributes flag GitHub uses for committed tool output. A file carrying it is rendered from
-// somewhere else, so it is listed apart and never counted as this repo's own startup context.
+// somewhere else, so it is flagged for the page to leave out and never counted as this repo's own
+// startup context.
 const GENERATED_ATTRIBUTE = "linguist-generated";
 
 // --------------------------------------------------------------------------- checkout selection

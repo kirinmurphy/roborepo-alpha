@@ -47,8 +47,8 @@ and shows no files: it never reads another clone or worktree in its place.
   formatted text, with images left out so a repo file cannot make the page fetch a URL; imports
   such as `@AGENTS.md` stay as written. A skill opens the same skill view as the global page. JSON
   and TOML show every key with only safe values: booleans, numbers, names, modes, and permission
-  rules are shown; environment values, headers, commands, arguments, URLs, and anything that looks
-  like a credential are hidden. A symbolic link that points elsewhere in the repo opens its target;
+  rules are shown; environment values, headers, commands, arguments, URLs, very long text, and
+  anything that looks like a credential are hidden. A symbolic link that points elsewhere in the repo opens its target;
   one pointing outside the repo is listed but not opened.
 
 The global page's settings and hooks popups use the same readable key list with the same hidden
