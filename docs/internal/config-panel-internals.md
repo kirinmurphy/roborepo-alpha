@@ -96,7 +96,7 @@ unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answer
 
 | Endpoint | Result |
 | --- | --- |
-| `GET /api/config/repository?repo=<urlKey>` | `{ status: "ok", checkout: { path, head }, providers, startup, entries, truncated }`, or `{ status: "checkout-unavailable", reason, message }` |
+| `GET /api/config/repository?repo=<urlKey>` | `{ status: "ok", checkout: { head }, providers, startup, entries, truncated }`, or `{ status: "checkout-unavailable", reason, message }` |
 | `GET /api/config/repository/source?repo=<urlKey>&id=<harness>:<relPath>` | One entry's preview: `html` (rendered Markdown, the skill view, or the config key list), plus `content` for text bodies and `sections` for structured config |
 
 `scripts/cli/repository-agent-config.mjs` owns the work:

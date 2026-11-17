@@ -154,7 +154,7 @@ try {
   const inventory = await get(`/api/config/repository?repo=${inspectKey}`);
   assert.equal(inventory.status, 200);
   assert.equal(inventory.json.status, "ok");
-  assert.equal(inventory.json.checkout.path, inspectRoot);
+  assert.equal(JSON.stringify(inventory.json).includes(inspectRoot), false, "the checkout path stays on the server");
   assert.deepEqual(inventory.json.checkout.head, { kind: "branch", name: "main" });
   assert.deepEqual(inventory.json.entries.map((entry) => entry.path).sort(), [".claude/settings.json", "CLAUDE.md"]);
   assert.equal(JSON.stringify(inventory.json).includes("route-secret-value"), false, "config values never reach the browser");

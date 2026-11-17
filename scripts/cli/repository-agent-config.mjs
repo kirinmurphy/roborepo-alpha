@@ -714,7 +714,9 @@ export async function loadRepositoryAgentConfig({
   return {
     ...base,
     status: "ok",
-    checkout: { path: root, head: checkout.head },
+    // The checkout path stays on the server: the page never shows it, and absolute paths reveal the
+    // machine layout to anything that can call the route.
+    checkout: { head: checkout.head },
     truncated: [...new Set(truncated)],
     ...(unreadable.length ? { unreadableFolders: unreadable.slice(0, MAX_UNREADABLE_LISTED), unreadableCount: unreadable.length } : {}),
     providers: providerSummary(),

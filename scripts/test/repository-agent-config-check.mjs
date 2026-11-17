@@ -182,7 +182,8 @@ try {
   const byPath = (rel, harness) => inventory.entries.find((entry) => entry.path === rel && (!harness || entry.harness === harness));
 
   assert.equal(inventory.status, "ok");
-  assert.equal(inventory.checkout.path, main, "the primary checkout, not the worktree or clone");
+  assert.equal(selectPrimaryCheckout(registry, MAIN_ID).path, main, "the primary checkout, not the worktree or clone");
+  assert.equal(json.includes(tmp), false, "no absolute path reaches the response");
   assert.deepEqual(inventory.checkout.head, { kind: "branch", name: "feature/inspect" }, "a non-default branch is labeled");
   for (const foreign of ["WORKTREE_ONLY", "CLONE_ONLY", "vendored", "node_modules", "worktree only", "outside.md"]) {
     assert.equal(json.includes(foreign), false, `${foreign} never appears`);
