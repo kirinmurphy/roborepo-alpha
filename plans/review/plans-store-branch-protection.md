@@ -704,3 +704,37 @@ the Decision Log.
 | `globals/packages/plan-suite/skills/plan-suite-init/SKILL.md` | The check-and-offer step and its report lines |
 | `docs/internal/portal-architecture.md` | The `/api/repositories/:id/protection` routes |
 | `docs/internal/docs-map.md` | `modules/forge/` as the one home for `gh` calls |
+
+## Completion
+
+Closed 2026-11-17. `roborepo protect` now reads the GitHub rules on a repo's `repo-plans` and
+default branches, compares them with RoboRepo's three managed rulesets, and, when an admin runs it
+without `--check`, creates or updates only `roborepo-*` rulesets. Hand-made rulesets are never
+edited; the command lists those the managed ones fully cover so the owner can delete them.
+`roborepo doctor` adds one protection line, the Plans page shows a one-time notice for an
+unprotected repo, the Home repo card's ⋮ menu opens a **Branch protection** panel, and
+`/plan-suite-init` offers to protect a new store. All `gh` calls now live in `modules/forge/`.
+Merged to `main` through kirinmurphy/roborepo-alpha#72.
+
+## Verification
+
+- Completion gate: CI run 44195131591 on `main` at 7f4ee1e5 passed (`check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer`)
+- Focused checks rerun on `main` at 7f4ee1e5 with `ROBOREPO_SKIP_PROTECTION_CHECK=1`:
+  `protect-check.mjs`, `doctor-protection-check.mjs`, `delivery-synthetic-provider-check.mjs`, and
+  `docs-reference-check.mjs` passed
+- Plan claims checked against `main`: every implementation task and review finding is checked off
+  and present; `modules/forge/` holds `index.mjs`, `github.mjs`, `protection-policy.mjs`, and
+  `protection.mjs`; no file outside `modules/forge/` and `scripts/test/` runs `gh` through
+  `execFile` or `spawn`; `ROBOREPO_SKIP_PROTECTION_CHECK=1` is exported in `ci.sh`, `test-cli.sh`,
+  and `pre-push-check.sh`; `protect-check.mjs` and `doctor-protection-check.mjs` are in the CI
+  group; the Home ⋮ menu has **Branch protection**
+- Docs of record checked against the landed code: `roborepo-cli.md`, `plan-suite.md` (command
+  first, manual steps kept for other hosts), `plans-portal.md`, `repositories.md`, `testing.md`,
+  the `plan-suite-init` SKILL.md, `portal-architecture.md`, and `docs-map.md` describe the command,
+  routes, panel, and `modules/forge/` as built
+- Approval: fresh; approved commit 144da640db55fd6c6e545a5b167e1d56faf3ea98, confirmed by a human
+- Landing: newly scanned; branch `claude/plans-store-branch-protection` absorbed into `main`
+- Absorbing commit: 7f4ee1e5a3f5a24cf48025bc76433ed5444b261e
+- Not verified: `delivery-operations-check.mjs` and the portal UI suite were not rerun locally
+  after merge; CI covers them. `## Not tested` entries 4 (Actions disabled by an organization) and
+  7 (a non-admin merge attempt) were deferred by the owner on 2026-11-17
