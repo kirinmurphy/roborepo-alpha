@@ -88,6 +88,79 @@ one response.
 | `POST /api/config/skills` | `{ id, enabled }` | link/unlink a skill |
 | `POST /api/config/permissions` | `{ behaviorId, bucket }` or `{ tokens, bucket }` | set a named behavior or arbitrary command to `deny`, `ask`, `allow`, or `default` |
 
+### Repo inspector endpoints
+
+The scoped Agents view (`?repo=<urlKey>`) reads two GET routes in
+`scripts/cli/portal-routes-config.mjs`. Both resolve the scope with `readRepositoryScope`: an
+unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answers `400`.
+
+| Endpoint | Result |
+| --- | --- |
+| `GET /api/config/repository?repo=<urlKey>` | `{ status: "ok", checkout: { head }, providers, startup, entries, truncated }`, or `{ status: "checkout-unavailable", reason, message }` |
+| `GET /api/config/repository/source?repo=<urlKey>&id=<harness>:<relPath>` | One entry's preview: `html` (rendered Markdown, the skill view, or the config key list), plus `content` for text bodies and `sections` for structured config |
+
+`scripts/cli/repository-agent-config.mjs` owns the work:
+
+- **Checkout selection.** `selectPrimaryCheckout` reads the record's `localRoots`. Exactly one
+  `primary` root must have a recorded path; with none marked primary, the registered roots must
+  resolve to a single Git family. The family's main checkout comes from Git's common directory
+  (`mainCheckoutPath`), and its identity must still resolve to the requested `repositoryId`. Any
+  other case (`no-path`, `missing`, `ambiguous`, `moved`) is checkout-unavailable; no other
+  checkout substitutes. HEAD is read from the checkout's `HEAD` file; a reftable repo's placeholder
+  there is resolved with `git symbolic-ref` and `git rev-parse` instead.
+- **Discovery.** An asynchronous breadth-first walk bounded by `INVENTORY_LIMITS` (depth, entries
+  visited, files returned, bytes per file and in total), so a large checkout never blocks the portal.
+  Folders are listed one at a time in path order, so the limits cut at the same place every run. It
+  skips `.git`, dependency trees, and build outputs (inside `.claude`, `.agents`, or `.codex` only
+  `.git`, so a skill named `build` is still found), skips any subfolder with its own `.git`, and
+  never traverses a symlink. Each relative path goes to every provider's
+  `projectInventory.classify` (see `docs/internal/harness-provider-interface.md`), whatever the
+  machine's enablement.
+- **Reads.** File reads run up to eight at a time, with each file's share of the byte budget fixed
+  in listing order before any read starts. `readConfinedFile` rechecks at read time that each parent
+  is a real directory inside the checkout with no nested `.git`, that the file is regular and not a
+  symlink, and that its realpath stays under the checkout. A symlinked entry is read through its
+  target only when the target resolves inside the checkout to a path the walk could list (a
+  symlinked skill folder resolves to its `SKILL.md`); the entry carries that `linkTarget`. A target
+  shared by several entries is read once. Previews accept only an id the provider classifies again
+  on the request.
+- **Git.** Status comes from `git ls-files` (cached, untracked, ignored) and `git check-attr` through
+  the hardened helper, never `git status`, which can run clean filters or an fsmonitor. Local
+  modification is the in-process blob hash of the working file against the index entry. When a
+  conversion attribute is set or unknown, the label is omitted whether or not the hash matches, since
+  a clean filter decides what Git would store; a mismatch in a file with CR bytes is omitted too.
+  `check-attr` also reads `linguist-generated`; a file carrying it is marked `generated`. In a
+  partial clone `check-attr` does not run, so no attribute is known and nothing is marked.
+- **Startup totals.** `startup` has one record per supported harness: the tokens a session started
+  at the repo root reads from this repo, split into instructions, skill descriptions, and command
+  descriptions, plus the instruction files counted. The provider's optional
+  `projectInventory.startupEntries` picks the entries (Claude falls back to a root `AGENTS.md`
+  without a `CLAUDE.md`; Codex lets `AGENTS.override.md` replace `AGENTS.md`, and counts root skills
+  in both `.agents/skills` and `.codex/skills`, leaving out a `.codex/skills` skill whose name
+  `.agents/skills` already has); generated files never count. A skill or command's description cost is `discoveryTokens`, measured as the global
+  estimate measures package skills. The page adds the snapshot's `contextCost` startup tokens for
+  Total Usage and colors only that total, with the startup thresholds.
+- **Previews.** Text renders through `renderMarkdown`, then `withoutMarkdownImages` replaces each
+  image with its alt text, so a repo file cannot make the page fetch a URL. A skill renders with
+  `renderSkillSourceHtml`, the global skill popup's view, listing up to 40 bundled files and showing
+  their text within one byte budget. JSON and TOML render with `renderConfigFileHtml`
+  (`scripts/cli/config-tree-render.mjs`), whose key list shows booleans, numbers, and safe strings
+  and hides values under `env`, headers, `command`, `args`, URLs, credential-named keys,
+  credential-shaped text, and strings over `LONG_TEXT_LIMIT` (200 characters). The global page's
+  `config-file` and `harness-hooks` popups use the same renderer, and their responses carry the
+  rendered `html` only, never the raw file text.
+- **Safety.** Providers' `describe` returns allowlisted section labels only, and the config
+  renderer never puts a hidden value in its HTML. Nothing writes to the checkout, its Git
+  directory, or machine config.
+
+The page drops `generated` entries, groups the rest into rows (one per file path, one per skill
+name), and files rows under Rules (Repo Root when any harness reads the file at root level,
+otherwise Conditional), Config and hooks (by harness), and Skills. It discards an inventory or
+preview response for a scope that is no longer current, and closes the preview dialog on a scope
+change. `scripts/test/repository-agent-config-check.mjs` covers selection, discovery, confinement,
+startup totals, preview rendering, and the no-process/no-write guarantees against real Git fixtures;
+`scripts/test/config-tree-render-check.mjs` covers the TOML parser and the hidden values.
+
 ## Context Cost Estimates
 
 The snapshot carries `contextCost` (computed by `scripts/cli/context-cost.mjs`): per-harness

@@ -370,6 +370,12 @@ source, _wherever a clean source exists_ — and where one doesn't (hooks) or sh
 say so out loud instead of forcing it. The two exceptions are exceptions precisely because their
 semantics or their mutability make a shared generator a worse fit than honest duplication.
 
+One more case sits outside the table because RoboRepo produces nothing for it: the files a repo
+carries for each harness. There, parity means *reading* each harness's native layout honestly rather
+than writing one. Each provider names its own project files through the optional `projectInventory`
+adapter group (Claude's `CLAUDE.md` and `.claude/`, Codex's `AGENTS.md`, `.agents/`, and `.codex/`),
+and the Agents page lists them side by side without claiming the two load the same way.
+
 For the lookup table of every element, its source location, and the exact command to change it, see
 [Harness Anatomy](harness-anatomy.md). For the filesystem and symlink mechanics underneath, see
 [How It Works](../user/reference/architecture.md).

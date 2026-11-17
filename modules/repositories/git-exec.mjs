@@ -39,6 +39,9 @@ export const GIT_READONLY_COMMANDS = new Set([
   "merge-base",
   "log",
   "for-each-ref",
+  // Index and attribute reads for the repo agent-config inspector. Neither runs filters or hooks.
+  "ls-files",
+  "check-attr",
 ]);
 
 // Config overrides applied to every invocation.
@@ -64,9 +67,13 @@ const HARDENING_ARGS = [
 
 // Belt-and-braces against anything that could block on input or pull in outside configuration.
 // A credential prompt in a background scan would hang until the timeout fires on every single poll.
+// GIT_NO_LAZY_FETCH stops a partial clone from fetching a missing object (for example the indexed
+// .gitattributes blob that `check-attr` falls back to), so no allowlisted read contacts a remote.
+// Git before 2.44 ignores it.
 const HARDENING_ENV = {
   GIT_OPTIONAL_LOCKS: "0",
   GIT_TERMINAL_PROMPT: "0",
+  GIT_NO_LAZY_FETCH: "1",
   GIT_ASKPASS: "",
   SSH_ASKPASS: "",
   GIT_CONFIG_NOSYSTEM: "1",

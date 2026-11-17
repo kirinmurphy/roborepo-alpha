@@ -22,8 +22,8 @@ export function repositoryScopeChoices(repositories, { outsideActivity = false }
 }
 
 // { status: "all" | "repository" | "outside" | "unavailable", repository? } for `scope` on a page.
-// The selector decides this from its own list, so a page that loads no repository data (Agents)
-// shows the same unavailable state as one whose data route refused the key.
+// The selector decides this from its own list, so a page that resolves the scope before any data
+// request (Agents) shows the same unavailable state as one whose data route refused the key.
 export function resolveScopeChoice(scope, repositories, { outsideActivity = false } = {}) {
   if (!scope) return { status: "all" };
   if (scope === OUTSIDE_ACTIVITY_SCOPE) return { status: outsideActivity ? "outside" : "unavailable" };
