@@ -436,7 +436,8 @@ function unique(values) {
 }
 
 // One row per file, and one per skill however many harnesses carry it. The row opens the copy that
-// was read; its popup lists every location.
+// was read; its popup lists every location. A file one harness reads at startup and another only
+// conditionally (a root AGENTS.md) sits under Repo Root, so its startup copy sets the row's color.
 export function groupRepositoryEntries(entries) {
   const groups = new Map();
   for (const entry of entries) {
@@ -445,7 +446,8 @@ export function groupRepositoryEntries(entries) {
     groups.get(key).push(entry);
   }
   return [...groups.values()].map((items) => {
-    const primary = items.find((entry) => entry.tokens != null)
+    const primary = items.find((entry) => entry.tokens != null && entry.loading === "root-level")
+      || items.find((entry) => entry.tokens != null)
       || items.find((entry) => !entry.symlink || entry.linkTarget)
       || items[0];
     return {

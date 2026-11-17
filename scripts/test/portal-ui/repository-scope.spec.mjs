@@ -33,7 +33,8 @@ test.beforeAll(() => {
       ".gitattributes": "gen/** linguist-generated=true\n",
       "gen/CLAUDE.md": "# Rendered elsewhere\n",
     },
-    [BETA]: { "AGENTS.md": "# Beta instructions\n" },
+    // About 2,000 tokens: low against the startup bands, medium against the on-demand ones.
+    [BETA]: { "AGENTS.md": `# Beta instructions\n${"Beta guidance line.\n".repeat(400)}` },
   };
   for (const [name, title] of [[ALPHA, "Alpha"], [BETA, "Beta"]]) {
     fx.repository(name, {
@@ -320,6 +321,20 @@ test("scoped Agents shows the repo's token use and its own files read-only, with
   await expect(selector(page)).toHaveAccessibleName("Repo: All repos");
   await expect(page.getByRole("heading", { name: "Available Agent Tools" })).toBeVisible();
   await expect(page.getByRole("heading", { name: /^Token Use for / })).toHaveCount(0);
+});
+
+test("scoped Agents sizes a root AGENTS.md as startup context, though Claude reads it only conditionally", async ({ page }) => {
+  await page.goto(`/agents?repo=${BETA}`);
+  const rootGroup = inspectorSection(page, "Rules").locator(".repo-inspector-group").first();
+  await expect(rootGroup.locator(".repo-inspector-group-name")).toHaveText("Repo Root");
+  const row = rootGroup.locator(".repo-inspector-entry").filter({ has: page.getByRole("button", { name: "AGENTS.md", exact: true }) });
+  await expect(row).toHaveCount(1);
+  await expect.poll(() => row.locator("token-chip").evaluate((chip) => chip.level)).toBe("low");
+  await row.getByRole("button", { name: "AGENTS.md", exact: true }).click();
+  const costRow = page.locator("dialog#config-modal #modal-cost-row");
+  await expect(costRow).toContainText("Startup:");
+  await expect(costRow).not.toContainText("When loaded:");
+  await page.keyboard.press("Escape");
 });
 
 test("scoped Agents says when the scan is partial or an active harness is unsupported, and never shows another checkout's files", async ({ page }) => {
