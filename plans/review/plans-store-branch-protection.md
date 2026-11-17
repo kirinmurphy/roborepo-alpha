@@ -505,6 +505,15 @@ Manual, on a scratch GitHub repo where the user is admin:
   (a non-admin merge attempt) are deferred and not required for approval ("let's defer the 4 and 7
   and approve this feature"). Entry 4 needs an organization-owned repo with Actions off; entry 7
   needs a second GitHub account. The other five entries were confirmed on live GitHub.
+- 2026-11-17, user: a write GitHub refuses makes `roborepo protect` exit 1 even when the state
+  read afterwards is `protected` or `unmanaged`, replacing the state-only exit code approved at
+  73f7643d. A refused `--unskip`, for example, leaves the merge rules skipped while the state reads
+  `protected`. The alternative, exit code from the final state alone, would report success there.
+- 2026-11-17, user: classic branch protection on `repo-plans` that requires a pull request, status
+  checks, or signed commits, restricts pushes, or locks the branch reads as `conflicting` whatever
+  "include administrators" says. With admins exempt, an admin's saves still succeed, but a
+  non-admin clone's or an agent bot's are refused. The alternative, a conflict only when it refuses
+  the signed-in account, would hide that from an admin.
 
 ## Open questions
 
@@ -579,10 +588,12 @@ the Decision Log.
       `portal/plans/protection-notice.js` — added; each fails with its guard removed (52db71b5)
 - [x] Re-review: the plan's status sources, state table, exit code, and Risks predated the pull
       request fixes — fixed in the plan
-- [ ] Re-review: a refused write now exits 1 even when the final state is `protected` or
-      `unmanaged`, changing the exit-code contract approved at 73f7643d — escalated to the owner
-- [ ] Re-review: any refusing classic setting on `repo-plans` reads as `conflicting`, even with
-      "include administrators" off, where an admin's saves still succeed — escalated to the owner
+- [x] Re-review: a refused write now exits 1 even when the final state is `protected` or
+      `unmanaged`, changing the exit-code contract approved at 73f7643d — escalated; owner kept
+      exit 1, no change
+- [x] Re-review: any refusing classic setting on `repo-plans` reads as `conflicting`, even with
+      "include administrators" off, where an admin's saves still succeed — escalated; owner kept it
+      as a conflict for any writer, no change
 
 ### Verification
 
@@ -629,6 +640,7 @@ the Decision Log.
 - Re-review Validator pass (fresh-context subagent) at 376c4f83: 4 fix, 2 escalate.
 - Review fixes at 52db71b5: `protect-check.mjs` passes; branch-protection browser spec, 10
   passed. Pushed to the pull request for CI.
+- Re-review Validator pass (fresh-context subagent) at 52db71b5: 0 fix, 0 escalate.
 
 ### Result
 - Status: pending
