@@ -600,6 +600,11 @@ the Decision Log.
 - Reviewed implementation commit: 73f7643dfd335933a648d7625149376a92589253
 - Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
 
+### Approval
+- Decision: approved
+- Reviewed implementation commit: 73f7643dfd335933a648d7625149376a92589253
+- Confirmed by: human
+
 ## Not tested
 
 - [x] `roborepo protect --check` in this repo reads the real rulesets and reports `unmanaged` or
