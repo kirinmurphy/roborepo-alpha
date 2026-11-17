@@ -35,8 +35,8 @@ and shows no files: it never reads another clone or worktree in its place.
   summary of what it declares. Permission entries here are declarations, not the effective policy.
 - **Skills.** `.claude/skills/<name>/SKILL.md` and `.agents/skills/<name>/SKILL.md`, at the root and
   in subfolders, with each skill's name and description. A skill several harnesses carry is one
-  row. Skills in `.codex/skills/` do not count toward Repo Usage: RoboRepo links skills there, but
-  whether a given Codex version reads that location is not verified.
+  row. Skills in `.codex/skills/`, an older location Codex still reads, are listed and count toward
+  Codex's Repo Usage; a skill name in both `.agents/skills/` and `.codex/skills/` counts once.
 - **No tags.** Rows carry no tags. The few facts that tell a file apart (a legacy location, an
   override, a symbolic link out of the repo, copies that differ between harnesses) sit in the info
   icon beside the row; Git status is in the popup.

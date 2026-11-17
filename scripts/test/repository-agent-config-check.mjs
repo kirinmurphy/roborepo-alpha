@@ -84,7 +84,9 @@ try {
     ".claude/skills/review/SKILL.md": "---\nname: review\ndescription: Reviews a diff.\n---\nBody\n",
     "packages/web/.claude/skills/nested-skill/SKILL.md": "---\nname: nested-skill\ndescription: Only for the web package.\n---\n",
     ".agents/skills/codex-skill/SKILL.md": "---\nname: codex-skill\ndescription: A Codex skill.\n---\n",
-    ".codex/skills/legacy-skill/SKILL.md": "---\nname: legacy-skill\n---\n",
+    ".codex/skills/legacy-skill/SKILL.md": "---\nname: legacy-skill\ndescription: Kept in the older folder.\n---\n",
+    // The same skill name in both Codex folders: listed twice, counted once at startup.
+    ".codex/skills/codex-skill/SKILL.md": "---\nname: codex-skill\ndescription: An older copy with a longer description than the current one.\n---\n",
     ".claude/settings.json": JSON.stringify({
       permissions: { allow: ["Bash(ls:*)"], deny: ["Read(.env)"], defaultMode: "acceptEdits" },
       hooks: { PreToolUse: [{ hooks: [{ type: "command", command: SECRETS[4] }] }], WeirdEvent: [] },
@@ -225,7 +227,7 @@ try {
   assert.equal(byPath("packages/web/.claude/skills/nested-skill/SKILL.md").name, "nested-skill");
   assert.equal(byPath(".agents/skills/codex-skill/SKILL.md").harness, "codex");
   assert.equal(byPath(".codex/skills/legacy-skill/SKILL.md").legacy, true);
-  assert.equal(byPath(".codex/skills/legacy-skill/SKILL.md").loading, "unknown");
+  assert.equal(byPath(".codex/skills/legacy-skill/SKILL.md").loading, "on-demand", "Codex reads the older folder too");
   assert.equal(byPath(".claude/skills/draft/SKILL.md").git.status, "untracked");
   assert.equal(byPath(".claude/skills/shared").symlink, true);
   assert.equal(byPath(".claude/skills/linked-file/SKILL.md").symlink, true, "a symlinked SKILL.md is a reference too");
@@ -259,6 +261,17 @@ try {
   assert.equal(startup.claude.breakdown.skillDiscovery, rootSkillTokens, "nested and generated skills add nothing");
   assert.equal(startup.claude.tokens, startup.claude.breakdown.instructions + startup.claude.breakdown.skillDiscovery + startup.claude.breakdown.commandDiscovery);
   assert.deepEqual(startup.codex.files, ["AGENTS.md"]);
+  // Codex counts root skills from .agents/skills and .codex/skills; a name in both counts once,
+  // from .agents/skills.
+  const codexSkill = (rel) => {
+    const entry = byPath(rel);
+    assert.ok(entry?.discoveryTokens > 0, `${rel} is measured`);
+    return entry.discoveryTokens;
+  };
+  assert.notEqual(codexSkill(".codex/skills/codex-skill/SKILL.md"), codexSkill(".agents/skills/codex-skill/SKILL.md"));
+  assert.equal(startup.codex.breakdown.skillDiscovery,
+    codexSkill(".agents/skills/codex-skill/SKILL.md") + codexSkill(".agents/skills/inrepo") + codexSkill(".codex/skills/legacy-skill/SKILL.md"),
+    "both folders count, and the duplicate name only once");
 
   // Other configuration: section labels only.
   const settings = byPath(".claude/settings.json");

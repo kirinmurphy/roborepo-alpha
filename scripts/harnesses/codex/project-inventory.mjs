@@ -55,11 +55,11 @@ export function classifyCodexProjectPath(relPath, { symlink = false } = {}) {
       area: "skills",
       kind: "skill",
       label: "Skill (legacy location)",
-      loading: LOADING.unknown,
+      loading: LOADING.onDemand,
       format: "text",
       name: legacy.name,
       legacy: true,
-      note: "RoboRepo recognizes .codex/skills; whether this Codex version reads it is not verified.",
+      note: "An older skill location that Codex still reads; new skills belong in .agents/skills.",
     };
   }
   const parts = segmentsOf(relPath);
@@ -140,14 +140,26 @@ function unique(values) {
 
 // What a session started at the repo root reads before its first message: the root AGENTS.md (or
 // the AGENTS.override.md that takes its place) in full, and each root skill's name and description.
-// Skills in the legacy .codex/skills location are left out: whether Codex reads them is unverified.
+// Codex reads root skills from .agents/skills and from the older .codex/skills (confirmed with
+// codex-cli 0.166.0). A skill name in both folders counts once, from .agents/skills, so a skill
+// linked into both is not doubled; how Codex itself handles that duplicate is not verified.
+const SKILL_ROOTS = [".agents/skills/", ".codex/skills/"];
+
 export function codexStartupEntries(entries) {
   const instructions = entries.filter((entry) => entry.area === "instructions" && entry.loading === LOADING.rootLevel);
   const override = instructions.find((entry) => entry.kind === "agents-override-md");
+  const seen = new Set();
+  const skills = SKILL_ROOTS
+    .flatMap((root) => entries.filter((entry) => entry.kind === "skill" && entry.path.startsWith(root)))
+    .filter((entry) => {
+      const key = entry.name ?? entry.path;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   return [
     ...(override ? [override] : instructions).map((entry) => ({ entry, basis: "instructions" })),
-    ...entries.filter((entry) => entry.kind === "skill" && entry.path.startsWith(".agents/skills/"))
-      .map((entry) => ({ entry, basis: "skill-discovery" })),
+    ...skills.map((entry) => ({ entry, basis: "skill-discovery" })),
   ];
 }
 
