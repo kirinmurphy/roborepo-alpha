@@ -594,6 +594,7 @@ the Decision Log.
   see `## Not tested`.
 - Manual: Not tested entries 4 and 7 deferred by the owner on 2026-11-17.
 - `npm run check` (full local gate) passed at 73f7643d: CI checks passed, portal UI 268 passed.
+- Approval: the owner answered "Approve 73f7643d" in the review chat on 2026-11-17.
 
 ### Result
 - Status: complete
