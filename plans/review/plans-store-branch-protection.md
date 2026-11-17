@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Run /plan-review; before /plan-close the owner runs the live GitHub checks under Not tested, starting with roborepo protect --check in this repo
+next_action: Owner approves reviewed commit 73f7643d, then opens and merges the pull request and runs /plan-close
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -279,9 +279,10 @@ It opens a panel that fetches the current status and shows it in full:
 ### Doctor
 
 Doctor checks the Git repo it runs from: the top level of the current directory and its `origin`.
-Outside a Git repo, or with a non-GitHub `origin`, it adds no line. Otherwise it adds one line from
-`roborepo protect --check --json`,
-using the `ok` and `hint` helpers in `scripts/doctor.sh`, so it never turns doctor red. Like the
+Outside a Git repo, or with a non-GitHub `origin`, it adds no line. Otherwise it adds the one line
+`node scripts/cli/protect.mjs --doctor` prints, using the `ok` and `hint` helpers in
+`scripts/doctor.sh`, so a protection state never turns doctor red; only a crash of that script, which
+exits 3 with its message, is a `fail` line. Like the
 Node release check, it reports a skip as an `ok` line, and test suites set
 `ROBOREPO_SKIP_PROTECTION_CHECK=1` to stay off the network.
 
@@ -491,6 +492,11 @@ Manual, on a scratch GitHub repo where the user is admin:
   existing check whenever any workflow is quiet, would stop a renamed job in another workflow from
   ever being updated, because GitHub does not record which workflow a check came from.
 
+- 2026-11-17, user: Not tested entries 4 (Actions disabled by an organization or enterprise) and 7
+  (a non-admin merge attempt) are deferred and not required for approval ("let's defer the 4 and 7
+  and approve this feature"). Entry 4 needs an organization-owned repo with Actions off; entry 7
+  needs a second GitHub account. The other five entries were confirmed on live GitHub.
+
 ## Open questions
 
 None. The three questions raised during validation were answered by the user on 2026-11-16; see
@@ -545,6 +551,15 @@ the Decision Log.
 - [x] Two Not tested entries named the endpoints and fields the code no longer uses — fixed
 - [x] A quiet workflow's required checks are removed while other workflows still report — escalated;
       user chose to keep this behavior, no change
+- [x] Review, base merge: main's repo-list refresh and the protection notices conflicted in
+      `portal/plans/app.js`, `portal/home/app.js`, and `scripts/test/check-groups.json`; both sides
+      kept (ed20c8a6)
+- [x] Review: `protect.mjs --doctor` crashed with Node's exit 1, which doctor showed as a hint with a
+      stack trace — fixed, exits 3 with one line (52a38a49); test added (73f7643d), fails without the fix
+- [x] Review: the Doctor design section said doctor reads `protect --check --json`; it runs
+      `protect.mjs --doctor` — fixed in the plan
+- [x] Review: an import failure in `protect.mjs` still exits 1 and reads as a hint — no change; a
+      broken install fails every `roborepo` command, not only this line
 
 ### Verification
 
@@ -566,6 +581,24 @@ the Decision Log.
   to read its `.env` and `.pem` fixtures. Environment, not a gate failure.
 - Portal UI suite: 261 passed at ee8c010c's parent; the branch-protection spec, 7 passed at
   ee8c010c, and its new failed-Protect test fails with the fix removed.
+- Review sync: `roborepo plans sync-base` merged main 97f65fa4 at ed20c8a6, resolving three
+  conflicts.
+- Review: `protect-check.mjs`, `doctor-protection-check.mjs`, and `plan-sync-base-check.mjs` pass at
+  ed20c8a6 (`plan-sync-base-check.mjs` outside the session sandbox, which refuses its git worktrees);
+  portal UI specs `branch-protection` and `repository-list-change`, 13 passed.
+- Review Validator pass (fresh-context subagent) at ed20c8a6: 2 fix, 0 escalate. Pass at 52a38a49:
+  1 fix (the missing test), 1 escalate (import failures), resolved as above.
+- No CI result exists for the branch: CI runs on pull requests and `main` only, and no pull request
+  is open.
+- Live GitHub checks on 2026-11-16, run against roborepo-alpha and three scratch repos since deleted:
+  see `## Not tested`.
+- Manual: Not tested entries 4 and 7 deferred by the owner on 2026-11-17.
+- `npm run check` (full local gate) passed at 73f7643d: CI checks passed, portal UI 268 passed.
+
+### Result
+- Status: complete
+- Reviewed implementation commit: 73f7643dfd335933a648d7625149376a92589253
+- Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
 
 ## Not tested
 
@@ -578,7 +611,8 @@ the Decision Log.
 - [x] A private repo on GitHub Free answers rulesets with HTTP 403 and a message matching
       "Upgrade to GitHub" or "make this repository public", so it reads as `unsupported`. Confirmed
       2026-11-16: "Upgrade to GitHub Pro or make this repository public to enable this feature."
-- [ ] A repo whose Actions are disabled by its organization or enterprise answers
+- [ ] Deferred by the owner on 2026-11-17, not required for approval. A repo whose Actions are
+      disabled by its organization or enterprise answers
       `GET /repos/{owner}/{repo}/actions/workflows` with HTTP 404, so existing checks are kept rather
       than the read becoming `unavailable`. The 404 is taken from GitHub's documentation. Observed
       2026-11-16: a repo-level "Disable actions" setting returns no 404; GitHub still lists the
@@ -591,8 +625,11 @@ the Decision Log.
       GitHub rejects force-push and deletion of `repo-plans` and `main`, including for the admin.
       Confirmed 2026-11-16 on scratch repos: GH013 refused force-push to both branches and deletion
       of `repo-plans`; GitHub's own default-branch rule refused deleting `main`.
-- [ ] A pull request with a failing check cannot be merged by a non-admin, and the admin sees the
-      bypass; renaming a CI job then reads as `drifted`, naming the check.
+- [ ] Deferred by the owner on 2026-11-17, not required for approval. A pull request with a
+      failing check cannot be merged by a non-admin. Observed 2026-11-16 on a scratch repo: the
+      admin's merge without `--admin` was refused with "the base branch policy prohibits the merge"
+      and `gh` offered `--admin`; renaming a CI job read as `drifted`, naming both checks. Only the
+      non-admin attempt, which needs a second GitHub account, is untested.
 
 ## Documentation impact
 
