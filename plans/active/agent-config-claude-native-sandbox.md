@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run the last validation pass and the full gate on the final commit, then submit for review and push.
+next_action: Run Validator pass 26 (the last) on 0b5d7c38, fix its findings, run the full gate on the final commit, then submit for review and push.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -307,13 +307,16 @@ Acceptance criteria:
 - [x] ~~In a manual-mode desktop-app session, `rm` …, `git switch` asks …, and the plans commands
       run without a prompt.~~ Moved to `## Not tested`: an agent cannot observe its own permission
       prompts. The rendered rules behind each are asserted by `claude-sandbox-projection-check.mjs`.
-- [ ] `gh pr merge` is denied in the rendered rules for Claude, Codex, and Gemini, and the hook
+- [x] `gh pr merge` is denied in the rendered rules for Claude, Codex, and Gemini, and the hook
       denies it bare and flag-first (`gh -R owner/repo pr merge`); `gh api` and the other
-      `change-github-directly` commands stay denied.
-- [ ] In a checkout with a protected branch checked out, `git merge <branch>`, `git pull`,
+      `change-github-directly` commands stay denied. Rendered: `generated/claude/settings.json` deny,
+      `generated/codex/rules/roborepo.rules` forbidden, Gemini policy deny; asserted by
+      `agent-permission-defaults-check.mjs` and `protected-branch-push-check.mjs`.
+- [x] In a checkout with a protected branch checked out, `git merge <branch>`, `git pull`,
       `git rebase`, and `git cherry-pick` are denied, including after `cd` or with `git -C`;
       `git pull --ff-only` and `git merge --ff-only origin/main` are not. In a feature-branch
-      checkout none of them is denied by the hook.
+      checkout none of them is denied by the hook. Asserted by the merge cases in
+      `protected-branch-push-check.mjs`.
 - [x] A verified feature-branch push runs without a Claude prompt, and a push to `main` is still
       blocked. Headless Claude 2.1.309 in a throwaway repo: with the live settings the feature push
       was refused in default and auto mode although the hook returned allow; with only the
@@ -531,8 +534,14 @@ Acceptance criteria:
   protected-branch hook approved them. A headless test showed why: Claude applies the
   `Bash(git push:*)` ask rule even when a PreToolUse hook allows the call. `push-code` now carries
   `askDecidedByHook`, and at `ask` Claude renders no rule for it. Alternative: `allow` (rejected:
-  without the hook it would push anywhere but the force variants). With the hook installed, every
-  push it cannot verify or cannot read asks, including prefixed, wrapped, nested, and aliased ones.
+  without the hook it would push anywhere but the force variants). With the hook installed, a push
+  it reads but cannot verify asks, and so does a push it can tell is there but cannot read: prefixed,
+  wrapped, nested, aliased, handed to a shell as a string (`eval`, `bash -c`, a shell heredoc or
+  here-string), spelled by the shell (`git $CMD`, `$GIT push`, `git {push,}`), or after a command
+  that changes what it reads (`export`, `git config`). Pushes it cannot see at all are left to the
+  permission rules and the `pre-push` backstop: ones started by another program (`python -c`,
+  `node -e`, `make`), run over `ssh`, through a shell function or alias from an earlier command, with
+  a subcommand from a variable when the command never names `push`, or in any form it does not parse.
   Cost if the hook is missing: a bare `git push` runs outside the sandbox and prompts in default
   mode (auto mode leaves it to the auto-mode reviewer), but a chained or wrapped push stays
   sandboxed and runs with no prompt, leaving only the git `pre-push` backstop. RoboRepo installs
@@ -716,6 +725,23 @@ Acceptance criteria:
       (09bc6110)
 - [x] The Decision Log's cost statement for dropping the push ask rule was incomplete — escalated by
       the Validator, corrected in the Decision Log entry (2026-11-16)
+- [x] Prose inside a heredoc body counted as an unread push, so `git commit -m "$(cat <<'EOF'…`,
+      `gh pr create --body "$(cat <<'EOF'…`, and `cat > f <<'EOF'` asked (Codex: denied) — fixed
+      (0b5d7c38): bodies no shell reads are skipped; `bash <<EOF` and `cat <<EOF | sh` are still read
+- [x] A backslash-newline was kept as a word, so `git \<newline>push` was missed and
+      `git push \<newline> origin feat` read a garbled remote — fixed (0b5d7c38)
+- [x] A push word split by quotes or escapes (`git pu''sh`, `git "pu"sh`, `git pu\sh`,
+      `git $'push'`, `git {push,}`) skipped the hook — fixed (0b5d7c38): the quick check reads the text
+      without quotes and backslashes, `$'…'` is a quoted string with escapes, a brace word asks
+- [x] A push inside `eval`, `watch`, or `env -S` arguments, or a `<<<` here-string given to a shell or
+      `source`, was not counted — fixed (0b5d7c38)
+- [x] `git $CMD`, `git $(…)`, `xargs git` with no subcommand, and `$GIT push` ran unasked — fixed
+      (0b5d7c38)
+- [x] `export`, `unset`, a `GIT_*` assignment, or `git config` before a push could change where it
+      lands unasked — fixed (0b5d7c38), together with `PATH`/`HOME` assignments, mutating `git remote`
+      subcommands, and `git branch -u`
+- [x] The docs and the Decision Log did not say which pushes the hook cannot see at all — fixed
+      (0b5d7c38): `claude-hooks.md` lists them, and the Decision Log entry names them
 
 ### Verification
 
@@ -801,6 +827,16 @@ Acceptance criteria:
 - Full local gate (`npm run check`, run unsandboxed) passed at d296cdf4 ("CI checks passed")
 - Validation pass 24 at d296cdf4 (fresh-context subagent, about 3,800 cases plus a real-git bypass
   run): 2 `fix` findings and 1 `escalate`, fixed in 09bc6110 and the plan record
+- Full local gate (`npm run check`, run unsandboxed) at 09bc6110: 425 of 426 passed;
+  `cli-surface-integration-check` failed once and passed 3 of 3 reruns, the same flaky menu test
+  as at a9c5db66
+- Validation pass 25 at 09bc6110 (fresh-context subagent): 6 `fix` findings and a doc gap, fixed in
+  0b5d7c38; 1 `escalate` (over-asks on commands that only name a push) recorded in Open questions
+- Checks at 0b5d7c38: `protected-branch-push-check.mjs` (with a case for each fix) and
+  `docs-reference-check.mjs` passed; the Claude and Codex hook copies are byte-identical; a probe
+  comparison against 09bc6110 over every earlier case file (about 4,000 cases) changed only intended
+  decisions and crashed on none; 1,500 new fuzzed commands mixing heredocs, newlines, quoting, and
+  push words produced no crash or hang
 - Full local gate at d30dbb92: 425 of 426 passed; `shared-target-rows-check` failed on an empty,
   untracked `.claude/.cc-writes` folder that Claude Code's write tracking left in
   `globals/system/git-hooks/` while this session's shell sat there. Removed; the check passes
@@ -820,4 +856,16 @@ Acceptance criteria:
 
 ## Open questions
 
-None. The `delete-files` question was answered by the user on 2026-11-14 (Decision Log).
+- **The hook asks about a few commands that only name a push.** Validation pass 25 (escalated, O2):
+  `git log --grep push`, `echo git push`, and `git -c alias.m=merge m feat` ask (Codex: deny), the
+  last with a reason that names a push. The hook counts a `push` word anywhere after `git`, which is
+  what catches pushes it cannot read.
+  - Keep it (recommended): these are rare, an ask is safe, and the user confirms in one click on
+    Claude. Codex denies them, which costs a retry in another form.
+  - Count only `push` in git's subcommand position, and handle alias definitions apart: removes these
+    over-asks, but reopens forms the last passes closed (`xargs git … push`, an alias body), so each
+    would need its own rule.
+  - Blocked rather than decided: both have a real argument, and it trades prompts against coverage,
+    which is the user's call. It blocks no task; the plan can be reviewed with it open.
+
+None other. The `delete-files` question was answered by the user on 2026-11-14 (Decision Log).
