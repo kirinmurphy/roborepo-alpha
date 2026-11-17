@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Run Validator pass 26 (the last) on 0b5d7c38, fix its findings, run the full gate on the final commit, then submit for review and push.
+next_action: Confirm the full gate (npm run check) on c90c5e7d, check off its acceptance criterion, then submit for review and push.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -742,6 +742,21 @@ Acceptance criteria:
       subcommands, and `git branch -u`
 - [x] The docs and the Decision Log did not say which pushes the hook cannot see at all — fixed
       (0b5d7c38): `claude-hooks.md` lists them, and the Decision Log entry names them
+- [x] Heredoc stripping dropped bodies the shell still runs: `$(…)` or backticks in an unquoted
+      body, a body piped on to `sh`, read by `$SHELL`, `xargs sh -c`, or `tee >(sh)`, or written to a
+      script a later line runs; a push to main with `--no-verify` there got no decision — fixed
+      (c90c5e7d): a body is dropped only when `cat`, `tee`, `gh`, or `git commit -F -` reads it, nothing
+      pipes it on, no part of the command could run a script, and nothing in it expands
+- [x] The push and delete walkers still read data heredoc bodies as commands, so a README or commit
+      message line in push form was denied — fixed (c90c5e7d): every walk reads the stripped text
+- [x] The quick keyword check missed `git pu\<newline>sh` and `git pu$"s"h`, and `git pu$(true)sh`
+      and backtick forms deferred — fixed (c90c5e7d): backslash-newlines are joined and any `$` or
+      backtick sends the command to the full check, which asks when git's subcommand word runs into
+      a substitution
+- [x] The docs said the `pre-push` hook refuses every unseen push, which `--no-verify` defeats —
+      fixed (c90c5e7d)
+- [x] `source` and `.` did not count as environment changes, and `git config get` or
+      `git config --file f x` over-asked — fixed (c90c5e7d)
 
 ### Verification
 
@@ -837,6 +852,13 @@ Acceptance criteria:
   comparison against 09bc6110 over every earlier case file (about 4,000 cases) changed only intended
   decisions and crashed on none; 1,500 new fuzzed commands mixing heredocs, newlines, quoting, and
   push words produced no crash or hang
+- Validation pass 26 at 0b5d7c38 (fresh-context subagent, 119 hook runs plus bash and zsh expansion
+  checks): 5 `fix` findings and 2 minor ones, fixed in c90c5e7d; no new `escalate`. This was the
+  eighth and last pass of the run, so the c90c5e7d fixes were not revalidated by a fresh Validator.
+  They are covered by a case for each in `protected-branch-push-check.mjs` (passed), the docs
+  references check (passed), byte-identical hook copies, and a probe comparison against 09bc6110
+  over every earlier case file plus the 1,500 fuzzed commands: only intended decisions changed and
+  nothing crashed
 - Full local gate at d30dbb92: 425 of 426 passed; `shared-target-rows-check` failed on an empty,
   untracked `.claude/.cc-writes` folder that Claude Code's write tracking left in
   `globals/system/git-hooks/` while this session's shell sat there. Removed; the check passes
