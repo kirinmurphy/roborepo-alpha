@@ -53,8 +53,8 @@ the store render from the repository the update runs in, so saves fail until the
 ### 3. Namespaces
 
 Read `plans/plans-config.json` from the worktree the command reported. A `namespaces` key means this
-step is done, even when empty: that records that the user chose no project namespaces. Skip to the
-report.
+step is done, even when empty: that records that the user chose no project namespaces. Continue at
+step 4.
 
 A plan filename is `<namespace>-<slug>.md`. The universal namespaces (`cli`, `git`, `infra`, `os`,
 `testing`, `docs`, `security`, `perf`) need no declaration; the config holds only the project's own

@@ -14,6 +14,10 @@ export function createProtectionNotices({ container, panel }) {
   // The lines on screen, by repository id. A line stays up until the next `refresh` (page load,
   // Refresh, or a repo scope change); being seen once dismisses it from then on.
   const shown = new Map();
+  // Repos whose Protect request is still running; their line keeps a disabled button across renders.
+  const pending = new Set();
+  // Bumped by every action result, so a read that started before the action cannot overwrite it.
+  const revisions = new Map();
   let sequence = 0;
 
   // Reads each repo's status, one at a time so a long repo list never starts dozens of GitHub
@@ -23,6 +27,7 @@ export function createProtectionNotices({ container, panel }) {
     shown.clear();
     render();
     for (const repositoryId of repositoryIds) {
+      const revision = revisions.get(repositoryId) || 0;
       let report;
       try {
         report = await loadProtection(repositoryId);
@@ -30,6 +35,7 @@ export function createProtectionNotices({ container, panel }) {
         continue;
       }
       if (current !== sequence) return;
+      if ((revisions.get(repositoryId) || 0) !== revision) continue;
       if (shouldNotify(recall(repositoryId), report)) shown.set(repositoryId, report);
       remember(repositoryId, report);
       render();
@@ -38,6 +44,7 @@ export function createProtectionNotices({ container, panel }) {
 
   // A panel or notice action changed this repo: drop its line unless it still needs attention.
   function update(repositoryId, report) {
+    revisions.set(repositoryId, (revisions.get(repositoryId) || 0) + 1);
     if (shown.has(repositoryId) && isNoticeable(report)) shown.set(repositoryId, report);
     else shown.delete(repositoryId);
     remember(repositoryId, report);
@@ -54,18 +61,23 @@ export function createProtectionNotices({ container, panel }) {
     const node = fill(tpl("tpl-protection-notice"), { text: noticeText(report) });
     const protect = node.querySelector("[data-slot=protect]");
     protect.hidden = !(report.admin && ["missing", "drifted"].includes(report.state));
-    protect.addEventListener("click", async () => {
+    if (pending.has(repositoryId)) {
       protect.disabled = true;
       protect.textContent = "Protecting…";
+    }
+    protect.addEventListener("click", async () => {
+      pending.add(repositoryId);
+      render();
       try {
         const result = await applyProtection(repositoryId, "protect");
+        pending.delete(repositoryId);
         update(repositoryId, result);
         panel.open(repository, { report: result });
       } catch (error) {
         // The line stays, so its button must work again; the panel shows the current state and why
         // the action failed.
-        protect.disabled = false;
-        protect.textContent = "Protect";
+        pending.delete(repositoryId);
+        render();
         panel.open(repository, { error: `Protect failed: ${error.message}` });
       }
     });

@@ -47,8 +47,15 @@ function buildProtectionPanel() {
   buttons.protect.addEventListener("click", () => run("protect"));
   buttons.unskip.addEventListener("click", () => run("unskip"));
   // Skipping is the one action that loosens protection, so it asks first.
-  buttons.skip.addEventListener("click", () => { slot("skip-confirm").hidden = false; });
-  slot("skip-cancel").addEventListener("click", () => { slot("skip-confirm").hidden = true; });
+  // The confirmation is an alertdialog, so focus moves into it and returns to Skip on cancel.
+  buttons.skip.addEventListener("click", () => {
+    slot("skip-confirm").hidden = false;
+    slot("skip-cancel").focus();
+  });
+  slot("skip-cancel").addEventListener("click", () => {
+    slot("skip-confirm").hidden = true;
+    buttons.skip.focus();
+  });
   slot("skip-accept").addEventListener("click", () => run("skip"));
 
   const isCurrent = (opening) => dialog.open && target === opening;

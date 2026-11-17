@@ -91,9 +91,11 @@ A repository in one of these states gets one line above the board:
 | `conflicting` | Everyone | Which rule, from which ruleset, will refuse plan saves |
 | `drifted` | Repo admins | Which RoboRepo ruleset no longer matches the policy |
 
-For a repo admin the line offers **Protect**, which runs the same steps as `roborepo protect` and
-then opens the status panel with the result. For anyone else it names the signed-in GitHub account
-and says a repo admin must run `roborepo protect`. **Details** opens the status panel.
+A `missing` or `drifted` line offers a repo admin **Protect**, which runs the same steps as
+`roborepo protect` and then opens the status panel with the result. A `missing` line seen by anyone
+else names the signed-in GitHub account and says a repo admin must run `roborepo protect`. A
+`conflicting` line offers no Protect, since the fix is in the other ruleset. Every line has
+**Details**, which opens the status panel.
 
 Each viewer sees a line once. The browser remembers, per repository, the state and admin flag it
 last showed; nothing is written to the repository. The line returns only when one of these changes:

@@ -189,9 +189,12 @@ test.describe("Branch protection", () => {
     const confirm = dialog.getByRole("alertdialog", { name: "Skip merge rules" });
     await expect(confirm).toContainText("This turns off the required approval and the required CI checks on the default branch");
     await expect(confirm).toContainText("The plans and integrity rules stay on.");
+    // Focus moves into the confirmation, and back to Skip when it is cancelled.
+    await expect(confirm.getByRole("button", { name: "Keep merge rules" })).toBeFocused();
     expect(writes()).toEqual([]);
     await confirm.getByRole("button", { name: "Keep merge rules" }).click();
     await expect(confirm).toBeHidden();
+    await expect(dialog.getByRole("button", { name: "Skip merge rules" })).toBeFocused();
     expect(writes()).toEqual([]);
 
     await dialog.getByRole("button", { name: "Skip merge rules" }).click();
