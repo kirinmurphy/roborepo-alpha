@@ -865,21 +865,16 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
     if (hooksStorageOf(harnessSafe) === "dedicated-json-sidecar") {
       const abs = generatedSidecarHooksPath(harnessSafe);
       const source = readSourceFile(abs, `${displayName} hooks`);
-      if (!source.ok) return source;
-      return { ...source, html: renderConfigFileHtml(source.content, { format: "json" }) };
+      return withConfigTreeHtml(source, "json");
     }
 
     const abs = rootConfigBaseline[harnessSafe];
     const source = readSourceFile(abs, `${displayName} hooks`);
     if (!source.ok) return source;
-    const settings = readJson(abs, {});
-    const content = JSON.stringify(settings.hooks || {}, null, 2) + "\n";
     return {
-      ok: true,
+      ...withConfigTreeHtml(source, "json", (parsed) => parsed?.hooks ?? {}),
       title: `${displayName} hooks`,
       path: `${source.path}#hooks`,
-      content,
-      html: renderConfigFileHtml(source.content, { format: "json", pick: (parsed) => parsed?.hooks ?? {} }),
     };
   }
 
@@ -922,9 +917,11 @@ export function loadConfigSource({ kind, id, harness = "claude" }) {
 }
 
 // Live config files hold secrets beside ordinary settings, so the popup shows a key tree with only
-// safe values in place of the raw-text code block readExternalSourceFile renders.
-function withConfigTreeHtml(source, format) {
-  return source.ok ? { ...source, html: renderConfigFileHtml(source.content, { format }) } : source;
+// safe values, and the raw text is dropped from the response rather than merely left unrendered.
+function withConfigTreeHtml(source, format, pick) {
+  if (!source.ok) return source;
+  const { content, ...rest } = source;
+  return { ...rest, html: renderConfigFileHtml(content, { format, ...(pick ? { pick } : {}) }) };
 }
 
 export function configCommand(args) {

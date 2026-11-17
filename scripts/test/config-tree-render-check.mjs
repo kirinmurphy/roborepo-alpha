@@ -3,6 +3,10 @@
 // safe-value policy (names always shown, values that can carry a credential never), and the HTML,
 // which must escape everything and contain no hidden value anywhere.
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { parseTomlDocument, UNPARSED } from "../harnesses/toml-document.mjs";
 import {
   configTree, renderConfigFileHtml, renderConfigTreeHtml, safeConfigValue,
@@ -233,6 +237,49 @@ const hiddenValues = [
 
   const hooksOnly = renderConfigFileHtml(JSON.stringify(settings), { format: "json", pick: (parsed) => parsed.hooks });
   assert.ok(hooksOnly.includes("PreToolUse") && !hooksOnly.includes("permissions"));
+}
+
+// --- The global page's settings popups: the response itself carries no hidden value ---------------
+
+{
+  // Harness config paths resolve from the home directory at import, so the read runs in a child
+  // process whose HOME holds settings files with a secret in every hidden category.
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "config-tree-home-"));
+  try {
+    fs.mkdirSync(path.join(home, ".claude"));
+    fs.mkdirSync(path.join(home, ".codex"));
+    fs.writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify({
+      env: { API_KEY: "home-env-secret" },
+      apiKeyHelper: "home-helper-secret",
+      hooks: { Stop: [{ hooks: [{ type: "command", command: "home-hook-secret" }] }] },
+      permissions: { defaultMode: "acceptEdits" },
+    }));
+    fs.writeFileSync(path.join(home, ".codex", "config.toml"), [
+      "model = \"o3\"", "[mcp_servers.docs]", "url = \"https://home-url-secret.invalid\"",
+      "env = { TOKEN = \"home-toml-secret\" }",
+    ].join("\n"));
+    const configModule = new URL("../cli/config.mjs", import.meta.url).href;
+    const script = `
+      const { loadConfigSource } = await import(${JSON.stringify(configModule)});
+      const out = ["claude-settings", "codex-settings"].map((id) => loadConfigSource({ kind: "config-file", id }));
+      process.stdout.write(JSON.stringify(out));
+    `;
+    const stateRoot = path.join(home, ".roborepo");
+    const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], {
+      env: { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: stateRoot }, encoding: "utf8",
+    });
+    assert.equal(run.status, 0, run.stderr);
+    const [claude, codex] = JSON.parse(run.stdout);
+    assert.ok(claude.ok && codex.ok, "both settings files were read");
+    assert.equal(claude.content, undefined, "the raw settings text is not sent");
+    assert.equal(codex.content, undefined, "the raw config text is not sent");
+    assert.ok(claude.html.includes("acceptEdits") && codex.html.includes(">o3<"), "safe values still show");
+    for (const secret of ["home-env-secret", "home-helper-secret", "home-hook-secret", "home-url-secret", "home-toml-secret"]) {
+      assert.ok(!run.stdout.includes(secret), `hidden value reached the settings popup response: ${secret}`);
+    }
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 }
 
 console.log("config-tree-render-check: ok");
