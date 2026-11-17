@@ -127,6 +127,13 @@ const cases = [
   ["cat > x.sh <<'EOF'\ngit push origin main\nEOF\n# don't worry\nbash x.sh", "deny"],
   ["echo $'a\\'' ; echo git push origin main | sh", "ask"],
   ["echo $'a\\'' ; echo git push origin main | python3", "ask"],
+  // A comment ends where bash ends it: at a newline, or at the backtick that closes its substitution.
+  ["echo `#x`; sudo git push origin main", "ask"],
+  ["echo `true #x`; command git push origin main", "ask"],
+  ["echo git push origin main $(true)#x | sh", "ask"],
+  ["echo git push origin main\\ #x | sh", "ask"],
+  ["echo git push origin main `#x` | sh", "ask"],
+  ["true # note \\\nsudo git push origin main", "ask"],
   ["python3 -c 'import os; os.system(\"git push origin main\")'", "ask"],
   ["echo 'all: ; git push origin main' > Makefile; make", "ask"],
   ["python3 -c \"import subprocess; subprocess.run(['git','push','origin','main'])\"", "ask"],
@@ -549,6 +556,10 @@ fs.symlinkSync(path.join(onMain, "src"), path.join(scratch, "src-link"));
 const temps = { ROBOREPO_TEMP_ROOTS: scratch, TMPDIR: scratch };
 const deleteCases = [
   [onMain, "rm a.txt", "ask"],
+  // A comment hides only what bash hides.
+  [onMain, "echo `#x`; rm -rf build", "ask"],
+  [onMain, "echo hi # it's\nrm -rf build", "ask"],
+  [onMain, "echo hi # note \\\nrm -rf build", "ask"],
   [onMain, "rm -rf build", "ask"],
   [onMain, `rm ${path.join(scratch, "x")}`, "defer"],
   [onMain, 'rm "$TARGET"', "ask"],
@@ -753,6 +764,8 @@ assert.equal(unsandboxedDecision(`rm ${path.join(scratch, "x")}`, onFeature), "d
 // from the branch's own upstream, and stopping one in progress, are not.
 const mergeCases = [
   [onMain, "git merge feature", "deny"],
+  [onMain, "echo `true #x`; git merge feature", "deny"],
+  [onMain, "echo hi # note \\\ngit merge feature", "deny"],
   [onMain, "git merge --no-ff --no-edit feature", "deny"],
   [onMain, "git merge --ff-only feature", "deny"],
   [onMain, "git merge --continue", "deny"],

@@ -626,7 +626,8 @@ function exposeNestedCommands(text) {
     let depth = 0
     let pending = []
     const flush = () => {
-      for (const inner of pending) out += ` ; ${SCOPE_OPEN} ; ${inner} ; ${SCOPE_CLOSE} ; `
+      // The newline ends a comment inside the substitution (`` `#x` ``) where the substitution ends.
+      for (const inner of pending) out += ` ; ${SCOPE_OPEN} ; ${inner}\n ; ${SCOPE_CLOSE} ; `
       pending = []
     }
     while (i < text.length) {
@@ -641,6 +642,14 @@ function exposeNestedCommands(text) {
         const escaped = ch === '\\' && i + 1 < text.length
         out += escaped ? ch + text[i + 1] : ch
         i += escaped ? 2 : 1
+      } else if (ch === '#' && quote === null && (out === '' || (/[\s;&|(]$/.test(out) && !/\\\s$/.test(out)))) {
+        // A comment runs to the end of the line, or to the backtick that closes the substitution it
+        // is in. Nothing in it runs, and a backslash before its newline joins nothing.
+        let stop = text.indexOf('\n', i)
+        if (stop === -1) stop = text.length
+        if (end === '`' && text.indexOf('`', i) !== -1) stop = Math.min(stop, text.indexOf('`', i))
+        out += text.slice(i, stop)
+        i = stop
       } else if (ch === '\\' && text[i + 1] === '\n') {
         i += 2 // a backslash-newline joins the lines
       } else if (ch === '$' && text[i + 1] === "'" && quote === null) {
@@ -1029,9 +1038,12 @@ function maskQuotedOperators(text) {
       i += 1
       continue
     }
-    if (ch === '#' && (i === 0 || /[\s;&|()`]/.test(text[i - 1]))) {
-      const end = text.indexOf('\n', i)
-      i = (end === -1 ? text.length : end) - 1
+    if (ch === '#' && (i === 0 || (/[\s;&|(]/.test(text[i - 1]) && text[i - 2] !== '\\')
+      || (text[i - 1] === '`' && top === '`'))) {
+      let end = text.indexOf('\n', i)
+      if (end === -1) end = text.length
+      if (top === '`' && text.indexOf('`', i) !== -1) end = Math.min(end, text.indexOf('`', i))
+      i = end - 1
       continue
     }
     if (ch === "'" || ch === '"') open.push(ch)
