@@ -20,7 +20,7 @@
       "id": "rules",
       "label": "Codex rules",
       "description": "Generated Codex command permission rules.",
-      "rows": ["codex:rules"]
+      "rows": ["codex:rules/roborepo.rules"]
     },
     {
       "id": "hooks",

@@ -92,7 +92,7 @@ Repo files are source input. The global harness path receives concrete files or 
 ~/.codex/commands               # managed_copy
 ~/.codex/hooks.json             # hook_fragment: core entries merged beside package hooks
 ~/.codex/hooks                  # managed_files: core scripts copied beside package scripts
-~/.codex/rules                  # managed_copy
+~/.codex/rules/roborepo.rules   # managed_copy (owned): rewritten on every update
 ~/.codex/skills/<name>          # symlink to ~/.roborepo/skills/<name>
 ~/.claude/CLAUDE.md             # rendered_rules
 ~/.claude/commands              # managed_copy
@@ -123,10 +123,10 @@ Implication: runtime trust, hook approvals, local profiles, and machine-specific
 Agent permission defaults are authored in `manifests/inventory/agent-permissions.json` and rendered by `roborepo config permissions --render`.
 
 - `generated/codex/config.toml` receives generated session defaults such as `sandbox_mode`, `approval_policy`, and workspace network access.
-- `generated/codex/rules/default.rules` receives generated shell command prefix policy such as allowed local commands and denied Git remote commands.
+- `generated/codex/rules/roborepo.rules` receives generated shell command prefix policy such as allowed local commands and denied Git remote commands.
 - `generated/claude/settings.json` receives generated `permissions.allow`, `permissions.deny`, and `permissions.ask` arrays from the same behavior and command buckets.
 
-Because `~/.codex/rules` and root config are copied, repo edits require `roborepo update` or the relevant renderer before they affect an existing machine.
+Because `~/.codex/rules/roborepo.rules` and root config are copied, repo edits require `roborepo update` or the relevant renderer before they affect an existing machine.
 
 `roborepo mcp add` is the Codex MCP registration exception: it writes active
 `~/.codex/config.toml` immediately so the server is usable on this machine without waiting for a

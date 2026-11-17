@@ -35,9 +35,9 @@ fi
 
 stop_cli_processes
 
-while IFS=$'\t' read -r _h kind src_rel home_abs _flags; do
+while IFS=$'\t' read -r _h kind src_rel home_abs flags; do
   case "${kind}" in
-    managed_copy)    reclaim_link_target          "${src_rel}" "${home_abs}" "${_h}" ;;
+    managed_copy)    reclaim_link_target          "${src_rel}" "${home_abs}" "${_h}" "${flags}" ;;
     hook_fragment|managed_files) shared_target_row remove "${kind}" "${_h}" "${src_rel}" "${home_abs}" ;;
     link)            reclaim_link_target          "${src_rel}" "${home_abs}" "${_h}" ;;
     root_config)     remove_root_config           "${home_abs}" "${_h}" "${src_rel}" ;;

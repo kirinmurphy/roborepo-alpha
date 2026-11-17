@@ -690,18 +690,114 @@ test_uninstall_preserves_user_modified_copy() {
     || fail "uninstall keeps a user-modified copy (content diverged from repo)" "$home_dir/uninstall.out"
 }
 
-test_uninstall_reclaims_real_dir_link_remnant() {
+test_uninstall_removes_diverged_owned_codex_rules() {
   local home_dir
   home_dir="$(make_home)"
 
-  # Simulate a legacy/materialized link: a REAL ~/.codex/rules dir holding roborepo's own content
-  # (the bug we found — uninstall's symlink-only pass used to skip it).
-  cp -R "$repo_root/generated/codex/rules" "$home_dir/.codex/rules"
+  # Codex's rules/roborepo.rules is an `owned` file: uninstall removes it even when an older render
+  # left content that no longer matches the repo, and leaves the user's default.rules alone.
+  mkdir -p "$home_dir/.codex/rules"
+  { cat "$repo_root/generated/codex/rules/roborepo.rules"; echo '# stale render'; } > "$home_dir/.codex/rules/roborepo.rules"
+  printf 'prefix_rule(pattern=["make"], decision="allow")\n' > "$home_dir/.codex/rules/default.rules"
   HOME="$home_dir" "$repo_root/scripts/install/uninstall.sh" >"$home_dir/uninstall.out"
 
-  [[ ! -e "$home_dir/.codex/rules" ]] \
-    && pass "uninstall reclaims a real-dir roborepo copy left at a link path" \
-    || fail "uninstall reclaims a real-dir roborepo copy left at a link path" "$home_dir/uninstall.out"
+  [[ ! -e "$home_dir/.codex/rules/roborepo.rules" ]] \
+    && pass "uninstall removes the owned Codex rules file even when it diverged" \
+    || fail "uninstall removes the owned Codex rules file even when it diverged" "$home_dir/uninstall.out"
+  assert_file_contains "$home_dir/.codex/rules/default.rules" 'pattern=\["make"\]' "uninstall keeps the user's default.rules"
+}
+
+# Older installs linked ~/.codex/rules itself into the checkout. Install must replace that link with a
+# real dir, and uninstall must drop the link; neither may write or delete the repo's file through it.
+test_codex_legacy_rules_dir_link() {
+  local home_dir generated saved
+  home_dir="$(make_home)"
+  generated="$repo_root/generated/codex/rules/roborepo.rules"
+  saved="$home_dir/generated-roborepo.rules"
+  cp "$generated" "$saved"
+
+  ln -s "$repo_root/generated/codex/rules" "$home_dir/.codex/rules"
+  HOME="$home_dir" "$repo_root/scripts/install/uninstall.sh" >"$home_dir/uninstall.out" 2>&1
+  [[ ! -L "$home_dir/.codex/rules" ]] && cmp -s "$saved" "$generated" \
+    && pass "uninstall drops a legacy rules-dir link without deleting the repo file" \
+    || fail "uninstall drops a legacy rules-dir link without deleting the repo file" "$home_dir/uninstall.out"
+  [[ -f "$generated" ]] || cp "$saved" "$generated"
+
+  ln -s "$repo_root/generated/codex/rules" "$home_dir/.codex/rules"
+  HOME="$home_dir" "$repo_root/scripts/install/install-harness.sh" codex >"$home_dir/install.out" 2>&1
+  [[ -d "$home_dir/.codex/rules" && ! -L "$home_dir/.codex/rules" ]] \
+    && cmp -s "$generated" "$home_dir/.codex/rules/roborepo.rules" \
+    && cmp -s "$saved" "$generated" \
+    && pass "install replaces a legacy rules-dir link with a real dir" \
+    || fail "install replaces a legacy rules-dir link with a real dir" "$home_dir/install.out"
+  [[ -f "$generated" ]] || cp "$saved" "$generated"
+  [[ ! -e "$repo_root/generated/codex/rules/default.rules" ]] \
+    && pass "install writes nothing into the checkout through the old link" \
+    || fail "install writes nothing into the checkout through the old link" "$home_dir/install.out"
+}
+
+# RoboRepo's Codex rules live in rules/roborepo.rules, a file only RoboRepo writes. Codex appends
+# approvals to rules/default.rules, so that file is never RoboRepo's: an update must rewrite a stale
+# roborepo.rules without a collision prompt (even under --on-conflict keep) and leave default.rules be.
+test_codex_owned_rules_rewritten_on_update() {
+  local home_dir generated
+  home_dir="$(make_home)"
+  generated="$repo_root/generated/codex/rules/roborepo.rules"
+
+  run_harness_install_args "$home_dir" "$home_dir/install.out" --on-conflict keep
+  cmp -s "$generated" "$home_dir/.codex/rules/roborepo.rules" \
+    && pass "fresh install writes rules/roborepo.rules from the generated rules" \
+    || fail "fresh install writes rules/roborepo.rules from the generated rules" "$home_dir/install.out"
+
+  echo 'prefix_rule(pattern=["stale"], decision="allow")' >> "$home_dir/.codex/rules/roborepo.rules"
+  printf 'prefix_rule(pattern=["make"], decision="allow")\n' > "$home_dir/.codex/rules/default.rules"
+  run_harness_install_args "$home_dir" "$home_dir/update.out" --on-conflict keep
+
+  cmp -s "$generated" "$home_dir/.codex/rules/roborepo.rules" \
+    && pass "update rewrites a stale roborepo.rules under --on-conflict keep" \
+    || fail "update rewrites a stale roborepo.rules under --on-conflict keep" "$home_dir/update.out"
+  if compgen -G "$home_dir/.codex/rules/roborepo.rules.*" >/dev/null; then
+    fail "owned rules file leaves no staged or backup siblings" "$home_dir/update.out"
+  else
+    pass "owned rules file leaves no staged or backup siblings"
+  fi
+  assert_file_contains "$home_dir/.codex/rules/default.rules" 'pattern=\["make"\]' "update keeps a user approval in default.rules"
+}
+
+# Earlier installs copied RoboRepo's rules into rules/default.rules. The installer strips those lines,
+# keeps the user's approvals, and backs the file up first.
+test_codex_default_rules_migration() {
+  local home_dir generated backups
+  home_dir="$(make_home)"
+  generated="$repo_root/generated/codex/rules/roborepo.rules"
+  mkdir -p "$home_dir/.codex/rules"
+  { cat "$generated"; echo 'prefix_rule(pattern=["make", "test"], decision="allow")'; } > "$home_dir/.codex/rules/default.rules"
+
+  HOME="$home_dir" "$repo_root/scripts/install/install-harness.sh" codex --dry-run >"$home_dir/dry.out" 2>&1
+  assert_file_contains "$home_dir/dry.out" "would remove" "dry run reports the default.rules migration"
+  cmp -s <(cat "$generated"; echo 'prefix_rule(pattern=["make", "test"], decision="allow")') "$home_dir/.codex/rules/default.rules" \
+    && pass "dry run leaves default.rules unchanged" \
+    || fail "dry run leaves default.rules unchanged" "$home_dir/dry.out"
+
+  HOME="$home_dir" "$repo_root/scripts/install/install-harness.sh" codex >"$home_dir/out" 2>&1
+  [[ "$(cat "$home_dir/.codex/rules/default.rules")" == 'prefix_rule(pattern=["make", "test"], decision="allow")' ]] \
+    && pass "migration keeps only the user's lines in default.rules" \
+    || fail "migration keeps only the user's lines in default.rules" "$home_dir/out"
+  backups=("$home_dir"/.roborepo/backups/codex-rules/default.rules.*)
+  [[ -f "${backups[0]}" ]] && grep -q 'pattern=\["make", "test"\]' "${backups[0]}" \
+    && pass "migration backs up default.rules first" \
+    || fail "migration backs up default.rules first" "$home_dir/out"
+
+  # A default.rules byte-identical to the generated rules (a plain old install) ends up empty.
+  cp "$generated" "$home_dir/.codex/rules/default.rules"
+  HOME="$home_dir" "$repo_root/scripts/install/install-harness.sh" codex >"$home_dir/out2" 2>&1
+  [[ -f "$home_dir/.codex/rules/default.rules" && ! -s "$home_dir/.codex/rules/default.rules" ]] \
+    && pass "migration empties a default.rules that held only RoboRepo rules" \
+    || fail "migration empties a default.rules that held only RoboRepo rules" "$home_dir/out2"
+  backups=("$home_dir"/.roborepo/backups/codex-rules/default.rules.*)
+  [[ "${#backups[@]}" -eq 2 ]] && grep -q 'pattern=\["make", "test"\]' "${backups[0]}" \
+    && pass "a second migration keeps the first backup" \
+    || fail "a second migration keeps the first backup (${#backups[@]} backups)" "$home_dir/out2"
 }
 
 # Shell wiring written by a checkout that has since moved (or been deleted) must still be pruned.
@@ -1293,7 +1389,10 @@ test_uninstall_removes_repo_owned_links
 test_install_writes_durable_original_snapshot
 test_uninstall_reclaims_repo_copies_and_restores_originals
 test_uninstall_preserves_user_modified_copy
-test_uninstall_reclaims_real_dir_link_remnant
+test_uninstall_removes_diverged_owned_codex_rules
+test_codex_legacy_rules_dir_link
+test_codex_owned_rules_rewritten_on_update
+test_codex_default_rules_migration
 test_uninstall_removes_runtime_state_and_backups
 test_uninstall_prunes_stale_shell_wiring
 test_uninstall_check_clean_reports_remnant

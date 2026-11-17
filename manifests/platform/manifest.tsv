@@ -14,6 +14,9 @@
 #   flags     comma list, or "-". Flags:
 #               nodoctor  = not checked by doctor --installed (verify still checks)
 #               nosync    = not pulled from live home config by the installer / update path
+#               owned     = managed_copy of a file only RoboRepo writes: every install/update
+#                           rewrites it with no collision prompt or backup, and uninstall/withdraw
+#                           remove it even when its content no longer matches the repo source
 #
 # kind semantics:
 #   managed_copy   roborepo-owned copy: repo src copied to home_sub on install/update,
@@ -53,6 +56,6 @@ codex	managed_copy	globals/harnesses/codex/MANAGED_BY_ROBOREPO.md	MANAGED_BY_ROB
 codex	hook_fragment	generated/codex/hooks.json	hooks.json	codex	-
 codex	managed_files	globals/harnesses/codex/hooks	hooks	codex	-
 codex	managed_files	globals/system/git-hooks	git-hooks	codex	-
-codex	managed_copy	generated/codex/rules	rules	codex	-
+codex	managed_copy	generated/codex/rules/roborepo.rules	rules/roborepo.rules	codex	owned
 gemini	managed_copy	globals/harnesses/gemini/MANAGED_BY_ROBOREPO.md	MANAGED_BY_ROBOREPO.md	gemini	nodoctor
 gemini	managed_copy	generated/gemini/policies	policies	gemini	-
