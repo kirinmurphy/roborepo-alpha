@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Review the finished work with /plan-review; one open question (the hook asking on commands that only name a push) waits for your decision.
+next_action: Review the finished work with /plan-review.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -549,6 +549,17 @@ Acceptance criteria:
   the hook for Claude with the base configuration.
   Codex and Gemini are unchanged; a separate session is researching whether they need the same.
 
+- **2026-11-17 — User decision: a command that only mentions a push asks nothing.** Validation pass
+  25 escalated that `git log --grep push`, `echo git push`, and similar commands asked (Codex:
+  denied). The user: "if it's not actually going to push, i don't care". Done in 638f0b39: an inert
+  program (`echo`, `printf`, `cat`, `grep`, `rg`, and similar) and a git subcommand that runs nothing
+  (`log`, `show`, `diff`, `commit`, and similar) no longer count as a push. This holds only when
+  nothing in the command could run text as a script, so `echo git push origin main | sh` still
+  asks. Where something could, quoted words are now scanned too, which also catches
+  `echo 'git push origin main' | bash`. Alternative: count `push` only in git's subcommand position
+  (rejected: it reopens `xargs git … push` and alias bodies). A `git -c alias.*` definition still
+  asks, because the alias could be a push.
+
 ## Not tested
 
 - [ ] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
@@ -861,6 +872,10 @@ Acceptance criteria:
   over every earlier case file plus the 1,500 fuzzed commands: only intended decisions changed and
   nothing crashed
 - Full local gate (`npm run check`, run unsandboxed) passed at c90c5e7d ("CI checks passed")
+- After the user's 2026-11-17 decision, 638f0b39 (made after submission, not revalidated by a fresh
+  Validator): `protected-branch-push-check.mjs` with new cases and `docs-reference-check.mjs`
+  passed, the hook copies are byte-identical, and the probe comparison over every earlier case file
+  plus 1,500 fuzzed commands changed only commands that merely mention a push and crashed on none
 - Full local gate at d30dbb92: 425 of 426 passed; `shared-target-rows-check` failed on an empty,
   untracked `.claude/.cc-writes` folder that Claude Code's write tracking left in
   `globals/system/git-hooks/` while this session's shell sat there. Removed; the check passes
@@ -880,16 +895,5 @@ Acceptance criteria:
 
 ## Open questions
 
-- **The hook asks about a few commands that only name a push.** Validation pass 25 (escalated, O2):
-  `git log --grep push`, `echo git push`, and `git -c alias.m=merge m feat` ask (Codex: deny), the
-  last with a reason that names a push. The hook counts a `push` word anywhere after `git`, which is
-  what catches pushes it cannot read.
-  - Keep it (recommended): these are rare, an ask is safe, and the user confirms in one click on
-    Claude. Codex denies them, which costs a retry in another form.
-  - Count only `push` in git's subcommand position, and handle alias definitions apart: removes these
-    over-asks, but reopens forms the last passes closed (`xargs git … push`, an alias body), so each
-    would need its own rule.
-  - Blocked rather than decided: both have a real argument, and it trades prompts against coverage,
-    which is the user's call. It blocks no task; the plan can be reviewed with it open.
-
-None other. The `delete-files` question was answered by the user on 2026-11-14 (Decision Log).
+None. The pass 25 question about commands that only name a push was answered by the user on
+2026-11-17 (Decision Log). The `delete-files` question was answered by the user on 2026-11-14 (Decision Log).
