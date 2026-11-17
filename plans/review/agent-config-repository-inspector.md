@@ -226,3 +226,23 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - Decision: approved
 - Reviewed implementation commit: 4e15c8aa8515720a38f8a6aab186ce1a2b03417b
 - Confirmed by: human
+
+## Completion
+
+Closed 2026-11-17. Choosing a repo on the Agents page now shows that repo's own Claude Code and
+Codex files instead of a placeholder. A token table comes first: what the repo adds to each
+session, and that plus the global startup context. Below it are the repo's rules, config and
+hooks, and skills. Each row opens a read-only preview with rendered Markdown or a key list that
+shows only safe values. Inspection never writes to the checkout, Git metadata, or machine config.
+Merged to `main` through kirinmurphy/roborepo-alpha#69.
+
+## Verification
+
+- Completion gate: CI run 44176776728 on `main` at 07fa15f8 passed (check on ubuntu-latest and macos-latest, windows-installer)
+- Focused checks rerun on `main` at 07fa15f8: `run-checks.mjs --filter repository-agent-config` (1/1), `run-checks.mjs --filter repository-scope` (2/2), and `npm run test:portal-ui -- repository-scope.spec.mjs` (20 passed)
+- Plan claims checked against `main`: every implementation, validation, `## Not tested`, and review finding item is checked off; the `projectInventory` adapter group, the `/api/config/repository` routes, and the `linguist-generated` line in `.gitattributes` are present
+- Docs of record checked against the landed code: `docs/user/reference/config-control-panel.md`, `docs/internal/config-panel-internals.md`, `docs/internal/portal-architecture.md`, `docs/internal/harness-provider-interface.md`, `docs/internal/harness-anatomy.md`, and `docs/internal/harnesses-explained.md` describe the inspector, its endpoints, and the discovery contract as built
+- Approval: fresh; approved commit 4e15c8aa8515720a38f8a6aab186ce1a2b03417b, confirmed by a human
+- Landing: newly scanned; branch `claude/agent-config-repository-inspector` absorbed into `main`
+- Absorbing commit: 07fa15f86d62b98666b1b531d75fdd92c5a0fda7
+- Not verified: no browser capture of the scoped view on `main` after merge; the last capture was against the branch portal during human review
