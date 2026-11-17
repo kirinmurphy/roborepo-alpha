@@ -120,6 +120,13 @@ const cases = [
   ["echo git push --no-verify origin HEAD:main | python3 -c 'import os,sys;os.system(sys.stdin.read())'", "ask"],
   ["echo git push origin main | perl -e 'system(<STDIN>)'", "ask"],
   ["echo git push origin main | awk '{system($0)}'", "ask"],
+  // An apostrophe in a comment opens no quote, and `$'…'` keeps its escapes.
+  ["# it's a note\ngit push origin main", "deny"],
+  ["echo hi # don't\ngit push origin main", "deny"],
+  ["echo hi # it's done\necho git push origin main | sh", "ask"],
+  ["cat > x.sh <<'EOF'\ngit push origin main\nEOF\n# don't worry\nbash x.sh", "deny"],
+  ["echo $'a\\'' ; echo git push origin main | sh", "ask"],
+  ["echo $'a\\'' ; echo git push origin main | python3", "ask"],
   ["python3 -c 'import os; os.system(\"git push origin main\")'", "ask"],
   ["echo 'all: ; git push origin main' > Makefile; make", "ask"],
   ["python3 -c \"import subprocess; subprocess.run(['git','push','origin','main'])\"", "ask"],

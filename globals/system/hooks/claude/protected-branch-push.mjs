@@ -96,7 +96,8 @@ function ansiCEscape(text, i) {
 }
 
 // Splits a shell command into simple commands (word lists), honoring quotes, including `$'…'`
-// with its escapes. Separators are ; & | && || and newlines; a backslash-newline joins lines.
+// with its escapes, and `#` comments, whose apostrophes open no quote. Separators are ; & | && ||
+// and newlines; a backslash-newline joins lines.
 // Expansion is not performed; a word that still holds $ or a backtick is reported so the caller can
 // decline to classify it.
 function splitCommands(text) {
@@ -138,6 +139,9 @@ function splitCommands(text) {
     } else if (ch === "'" || ch === '"') {
       quote = ch
       word ??= ''
+    } else if (ch === '#' && word === null) {
+      const end = text.indexOf('\n', i)
+      i = (end === -1 ? text.length : end) - 1
     } else if (ch === '\\' && text[i + 1] === '\n') {
       i += 1
     } else if (ch === '\\' && i + 1 < text.length) {
@@ -985,13 +989,19 @@ const INTERPRETERS = new Set(['awk', 'gawk', 'perl', 'ruby', 'node', 'dash', 'ks
 
 // `text` with operator characters inside quotes replaced by `_`, so `git commit -m "fix push; make
 // it clearer"` stays one command. A `$(…)` or backtick inside double quotes still runs, so it is kept.
+// Comments are dropped, so an apostrophe in one opens no quote.
 function maskQuotedOperators(text) {
   let out = ''
-  const open = [] // ' " $( ( `
+  const open = [] // ' $' " $( ( `
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i]
     const top = open.at(-1)
-    if (top === "'") {
+    if (top === "'" || top === "$'") {
+      if (top === "$'" && ch === '\\' && i + 1 < text.length) {
+        out += '__'
+        i += 1
+        continue
+      }
       if (ch === "'") open.pop()
       out += /[;&|()<>`\n{}$]/.test(ch) ? '_' : ch
       continue
@@ -1011,6 +1021,17 @@ function maskQuotedOperators(text) {
       if (ch === '"') open.pop()
       else if (ch === '`') open.push('`')
       out += /[;&|()<>\n{}]/.test(ch) ? '_' : ch
+      continue
+    }
+    if (ch === '$' && text[i + 1] === "'") {
+      open.push("$'")
+      out += "$'"
+      i += 1
+      continue
+    }
+    if (ch === '#' && (i === 0 || /[\s;&|()`]/.test(text[i - 1]))) {
+      const end = text.indexOf('\n', i)
+      i = (end === -1 ? text.length : end) - 1
       continue
     }
     if (ch === "'" || ch === '"') open.push(ch)
