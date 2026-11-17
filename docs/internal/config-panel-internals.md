@@ -126,10 +126,11 @@ unavailable key answers `404 REPOSITORY_SCOPE_UNAVAILABLE`, and All repos answer
   on the request.
 - **Git.** Status comes from `git ls-files` (cached, untracked, ignored) and `git check-attr` through
   the hardened helper, never `git status`, which can run clean filters or an fsmonitor. Local
-  modification is the in-process blob hash of the working file against the index entry; when a
-  conversion attribute is set or the file contains CR bytes, the label is omitted. `check-attr` also
-  reads `linguist-generated`; a file carrying it is marked `generated`. In a partial clone no
-  attribute is trusted, so nothing is marked.
+  modification is the in-process blob hash of the working file against the index entry. When a
+  conversion attribute is set or unknown, the label is omitted whether or not the hash matches, since
+  a clean filter decides what Git would store; a mismatch in a file with CR bytes is omitted too.
+  `check-attr` also reads `linguist-generated`; a file carrying it is marked `generated`. In a
+  partial clone `check-attr` does not run, so no attribute is known and nothing is marked.
 - **Startup totals.** `startup` has one record per supported harness: the tokens a session started
   at the repo root reads from this repo, split into instructions, skill descriptions, and command
   descriptions, plus the instruction files counted. The provider's optional

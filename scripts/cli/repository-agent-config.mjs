@@ -497,13 +497,16 @@ async function classifyGitStatus(root, relPaths, { runGit = defaultRunGit } = {}
 }
 
 // True or false when the in-process hash comparison is reliable; null when it is not. `converted`
-// is null when the conversion attributes are unknown, which makes a hash mismatch inconclusive.
+// is null when the conversion attributes are unknown. Unless they are known to be absent, neither
+// outcome is conclusive: a clean filter can make different working bytes clean to Git, or make
+// bytes equal to the blob differ from what Git would store.
 function localModification(git, buffer, complete, converted) {
   if (git.status !== "tracked" || !git.blob || git.mode === "120000" || !buffer || !complete) return null;
+  if (converted !== false) return null;
   const algorithm = git.blob.length === 64 ? "sha256" : "sha1";
   const hash = createHash(algorithm).update(`blob ${buffer.length}\0`).update(buffer).digest("hex");
   if (hash === git.blob) return false;
-  if (converted !== false || buffer.includes(0x0d)) return null;
+  if (buffer.includes(0x0d)) return null;
   return true;
 }
 

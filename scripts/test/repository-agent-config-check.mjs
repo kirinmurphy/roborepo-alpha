@@ -112,7 +112,9 @@ try {
     ".codex/agents/helper.toml": 'name = "helper"\ndescription = "Helps"\n',
     ".gitignore": "CLAUDE.local.md\n",
     // A discovered file under a repo-configured filter: hashing it cannot decide modification.
-    ".gitattributes": ".claude/rules/always.md filter=evil\ngenerated/** linguist-generated=true\n",
+    ".gitattributes": ".claude/rules/always.md filter=evil\n.claude/agents/filtered.md filter=evil\ngenerated/** linguist-generated=true\n",
+    // Filtered and unchanged: matching the index blob proves nothing when a clean filter applies.
+    ".claude/agents/filtered.md": "---\nname: filtered\n---\nUnchanged\n",
     "node_modules/pkg/CLAUDE.md": "# never listed\n",
   }, { remote: REMOTE });
   // Local-only and changed files.
@@ -204,6 +206,7 @@ try {
   assert.equal(byPath(".claude/rules/always.md").loading, "root-level");
   assert.equal(byPath(".claude/rules/always.md").git.status, "tracked");
   assert.equal(byPath(".claude/rules/always.md").git.modified, undefined, "a filtered file's modification is omitted, not guessed");
+  assert.equal(byPath(".claude/agents/filtered.md").git.modified, undefined, "an unchanged filtered file is not called unmodified either");
   assert.equal(byPath(".claude/rules/scoped.md").loading, "potentially-conditional");
   assert.match(byPath(".claude/rules/huge.md").diagnostic, /Larger than/);
   assert.equal(byPath(".claude/rules/huge.md").tokens, null);
@@ -365,7 +368,7 @@ try {
   const unknownAttributes = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, runGit: noAttributes });
   const unknownByPath = (rel) => unknownAttributes.entries.find((entry) => entry.path === rel);
   assert.equal(unknownByPath("packages/web/CLAUDE.md").git.modified, undefined, "unknown attributes leave a changed file unlabeled");
-  assert.equal(unknownByPath("CLAUDE.md").git.modified, false, "an unchanged file still matches its index blob");
+  assert.equal(unknownByPath("CLAUDE.md").git.modified, undefined, "unknown attributes leave an unchanged file unlabeled too");
   const unknownPreview = await loadRepositoryAgentConfigSource({ registry, repositoryId: MAIN_ID, id: "claude:packages/web/CLAUDE.md", runtime, runGit: noAttributes });
   assert.equal(unknownPreview.git.modified, undefined);
 
