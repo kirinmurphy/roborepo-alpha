@@ -329,29 +329,19 @@ one of the states `/plan-write`'s `references/plan-schema.md` defines:
 | A tool blocked the check | Open, ending `Blocked: <exact command> failed with <error>`, and what would unblock it |
 | Only a person can make it | Open, ending `Needs a person: <why an agent cannot>` |
 
-```markdown
-## Not tested
-
-- [ ] The setup dialog's wording reads clearly to a new user. Needs a person: judging wording is a
-      human judgment.
-- [x] The setup action enables every required component. — Verified by agent 2026-11-20 at a1b2c3d:
-      `roborepo browser run --serve "npm run portal"` → all components shown enabled.
-```
+The schema lists the accepted `Needs a person:` reasons and shows an example entry in each state.
 
 A blocked check is retried through the harness's normal route before it is written down:
 
-1. Run `roborepo browser run --serve` as a bare call, with no pipe, `cd`, or chained command.
-   Where the harness sandboxes shell commands but excludes `roborepo`, only a bare call is excluded.
-2. Use the app's preview tools where they exist.
+1. Check against the environment step 11 left running, through the harness's preview tools or
+   `roborepo browser run --url`, rather than starting a second server on the same port.
+2. With nothing running, run `roborepo browser run --serve` as a bare call, with no pipe, `cd`, or
+   chained command. Where the harness sandboxes shell commands but excludes `roborepo`, only a bare
+   call is excluded.
 3. Otherwise rerun the command outside the sandbox, which goes through the permission prompt.
 
-Only then write the `Blocked:` reason, and add the command to the Open Questions queue so the final
-report asks the user to allow it.
-
-Accepted reasons for `Needs a person:` are human judgment of look, feel, or wording; an account,
-credential, or payment an agent must not use; a physical device; a third-party system the agent
-cannot reach; and an action the user's rules reserve to the user. "No time" and "no test exists"
-are not reasons.
+Only then write the `Blocked:` reason. The final report lists the command under Commands to allow;
+it is not an Open Question and marks no task blocked under the Blocker Policy.
 
 Never check off a person-only entry on your own judgment, never clear an entry without a
 resolution naming the passing evidence, and record a user's confirmation only from their explicit
