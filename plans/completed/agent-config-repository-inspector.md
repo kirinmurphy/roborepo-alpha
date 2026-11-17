@@ -1,6 +1,6 @@
 ---
 id: nrvwti51
-next_action: "Approved at 4e15c8aa; the user merges PR #69, then runs /plan-close."
+next_action:
 blocked_by: []
 depends_on: []
 related: ["permva27"]
