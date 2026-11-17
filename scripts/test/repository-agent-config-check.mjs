@@ -16,12 +16,17 @@ import {
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import { validateCapabilityAdapters } from "../harnesses/contract.mjs";
 import { describeCodexProjectFile } from "../harnesses/codex/project-inventory.mjs";
+import { defaultRunGit } from "../../modules/repositories/git-exec.mjs";
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "repository-agent-config-")));
 const marker = path.join(tmp, "process-ran");
 
+// Git hooks export these; inherited, they would point the fixture's commands at the outer repo.
+const fixtureGitEnv = { ...process.env };
+for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete fixtureGitEnv[key];
+
 function git(cwd, ...args) {
-  const result = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8" });
+  const result = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd, encoding: "utf8", env: fixtureGitEnv });
   if (result.status !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
   return result.stdout.trim();
 }
@@ -309,6 +314,34 @@ try {
   assert.equal(budget.entries.some((entry) => /Larger than/.test(entry.diagnostic || "") && entry.size < INVENTORY_LIMITS.maxFileBytes), false);
   const shallow = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, limits: { ...INVENTORY_LIMITS, maxDepth: 1 } });
   assert.ok(shallow.truncated.includes("depth"));
+  const fewEntries = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, limits: { ...INVENTORY_LIMITS, maxEntriesVisited: 3 } });
+  assert.ok(fewEntries.truncated.includes("entries"), "the entry budget stops the walk and says so");
+  assert.ok(fewEntries.entries.length <= 3);
+
+  // When the attribute query fails, a changed tracked file's modification is unknown, not "modified".
+  const noAttributes = (cwd, args, options) => (args[0] === "check-attr"
+    ? Promise.resolve({ ok: false, stdout: "", code: 1, error: "check-attr failed" })
+    : defaultRunGit(cwd, args, options));
+  const unknownAttributes = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime, runGit: noAttributes });
+  const unknownByPath = (rel) => unknownAttributes.entries.find((entry) => entry.path === rel);
+  assert.equal(unknownByPath("packages/web/CLAUDE.md").git.modified, undefined, "unknown attributes leave a changed file unlabeled");
+  assert.equal(unknownByPath("CLAUDE.md").git.modified, false, "an unchanged file still matches its index blob");
+  const unknownPreview = await loadRepositoryAgentConfigSource({ registry, repositoryId: MAIN_ID, id: "claude:packages/web/CLAUDE.md", runtime, runGit: noAttributes });
+  assert.equal(unknownPreview.git.modified, undefined);
+
+  // A folder the walk cannot open makes the result partial instead of looking empty.
+  const locked = path.join(main, "locked");
+  write(main, "locked/CLAUDE.md", "# locked\n");
+  fs.chmodSync(locked, 0o000);
+  try {
+    const partial = await loadRepositoryAgentConfig({ registry, repositoryId: MAIN_ID, runtime });
+    assert.equal(partial.status, "ok");
+    assert.deepEqual(partial.unreadableFolders, ["locked"], "an unreadable folder is named");
+    assert.equal(partial.unreadableCount, 1);
+  } finally {
+    fs.chmodSync(locked, 0o755);
+    fs.rmSync(locked, { recursive: true, force: true });
+  }
   const failing = {
     projectInventoryProviders: () => runtime.projectInventoryProviders().map((item) => (item.provider.id === "codex"
       ? { ...item, inventory: { classify: () => { throw new Error("boom"); }, describe: () => ({}) } }
@@ -412,14 +445,19 @@ try {
 
   // A reftable repo's HEAD file is a placeholder; the branch comes from Git.
   const REFTABLE_REMOTE = "https://github.com/acme/reftable.git";
+  // Git before 2.45 has no reftable; only this case is skipped there.
   const reftable = path.join(tmp, "reftable");
   fs.mkdirSync(reftable);
-  git(reftable, "init", "-q", "--ref-format=reftable", "-b", "trunk");
-  git(reftable, "remote", "add", "origin", REFTABLE_REMOTE);
-  git(reftable, "commit", "-q", "--allow-empty", "-m", "init");
-  assert.equal(fs.readFileSync(path.join(reftable, ".git", "HEAD"), "utf8").trim(), "ref: refs/heads/.invalid");
-  const reftableHead = selectPrimaryCheckout(registryWith(normalizeGitRemote(REFTABLE_REMOTE), [{ path: reftable, kind: "primary" }]), normalizeGitRemote(REFTABLE_REMOTE));
-  assert.deepEqual(reftableHead.head, { kind: "branch", name: "trunk" });
+  const reftableInit = spawnSync("git", ["init", "-q", "--ref-format=reftable", "-b", "trunk"], { cwd: reftable, encoding: "utf8", env: fixtureGitEnv });
+  if (reftableInit.status === 0) {
+    git(reftable, "remote", "add", "origin", REFTABLE_REMOTE);
+    git(reftable, "commit", "-q", "--allow-empty", "-m", "init");
+    assert.equal(fs.readFileSync(path.join(reftable, ".git", "HEAD"), "utf8").trim(), "ref: refs/heads/.invalid");
+    const reftableHead = selectPrimaryCheckout(registryWith(normalizeGitRemote(REFTABLE_REMOTE), [{ path: reftable, kind: "primary" }]), normalizeGitRemote(REFTABLE_REMOTE));
+    assert.deepEqual(reftableHead.head, { kind: "branch", name: "trunk" });
+  } else {
+    console.log("skipped: reftable HEAD (this Git cannot create a reftable repo)");
+  }
 
   // Codex config spelled with inline tables and dotted keys summarizes the same way, without values.
   const inline = (text) => describeCodexProjectFile({ kind: "config" }, text).sections;
@@ -448,6 +486,14 @@ try {
   assert.deepEqual(badKey, { sections: [], diagnostic: "Could not parse TOML on line 1." }, "a malformed key line still closes its value");
   const innerName = describeCodexProjectFile({ kind: "agent" }, 'developer_instructions = """\nname = "inner-value"\n"""\nname = "real"\n');
   assert.equal(innerName.name, "real", "an agent's name comes from its own key, not text inside another value");
+  const quotedEquals = describeCodexProjectFile({ kind: "config" }, '"bad=key" extra = """\n[mcp_servers.ghp_LEAK4]\n"""\n');
+  assert.deepEqual(quotedEquals, { sections: [], diagnostic: "Could not parse TOML on line 1." }, "an = inside a quoted key does not hide the value it opens");
+  assert.deepEqual(inline('mcp_servers = { docs = { command = """tool"}, ghp_LEAK5 = { command = "ignored""" } }\n'), ["MCP servers: docs"], "a triple-quoted string is one value");
+  assert.deepEqual(inline("mcp_servers = { docs = { command = '''a}, ghp_LEAK6 = {''' }, two = {} }\n"), ["MCP servers: docs, two"]);
+  assert.deepEqual(inline('mcp_servers = { docs = { args = """x"""""}, two = {} }\n'), ["MCP servers: docs, two"], "quotes before the closing delimiter belong to the string");
+  for (const spelling of ["[features]\nmulti_agent = true\n", "features.multi_agent = true\n", "features = { multi_agent = true }\n"]) {
+    assert.deepEqual(inline(spelling), ["Also declares: Feature flags"], `section labels for ${JSON.stringify(spelling)}`);
+  }
 
   // ------------------------------------------------------------------ provider contract
   assert.throws(() => validateCapabilityAdapters([], { projectInventory: { classify() {} } }), /projectInventory\.describe/);

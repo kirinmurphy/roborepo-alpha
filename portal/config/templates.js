@@ -528,6 +528,12 @@ function inspectorNotices(inventory) {
     const reasons = inventory.truncated.map((reason) => TRUNCATION_LABELS[reason] || reason).join(", ");
     notices.push(`Partial results: the scan stopped at its limit for ${reasons}. Some files may be missing.`);
   }
+  if (inventory.unreadableCount) {
+    const named = (inventory.unreadableFolders || []).map((folder) => folder || "the repo root");
+    const others = inventory.unreadableCount - named.length;
+    const list = [...named, ...(others > 0 ? [`${others} more`] : [])].join(", ");
+    notices.push(`Partial results: ${inventory.unreadableCount === 1 ? "a folder" : "some folders"} could not be read (${list}). Files in ${inventory.unreadableCount === 1 ? "it" : "them"} may be missing.`);
+  }
   for (const provider of inventory.providers || []) {
     if (provider.error) notices.push(`${provider.displayName}: ${provider.error} Its files may be missing.`);
     else if (!provider.supported) notices.push(`${provider.displayName}: repo file discovery is not supported yet.`);
@@ -567,7 +573,7 @@ export function repositoryInspector(inventory, { onOpen }) {
     }),
     inventorySection({
       heading: "Other configuration",
-      description: "Where settings, hooks, MCP servers, agents, commands, and permissions are declared. Configuration shows section names only, never its values; permission entries are declarations, not the effective policy.",
+      description: "Where settings, hooks, MCP servers, agents, commands, and permissions are declared. JSON and TOML previews show section names, never values; agent and command files preview as text; permission entries are declarations, not the effective policy.",
       empty: "No Claude Code or Codex configuration files found in this checkout.",
       entries: inArea("config"),
       render: (items) => folderGroups(items, titled),

@@ -52,6 +52,8 @@ function skippedFolder(name, ancestors) {
   return SKIPPED_LOWERCASE.has(lower);
 }
 
+// Unreadable folders named in the response; the rest are counted.
+const MAX_UNREADABLE_LISTED = 5;
 const GIT_TIMEOUT_MS = 5000;
 const GIT_BATCH = 200;
 const CONVERSION_ATTRIBUTES = ["filter", "text", "eol", "ident", "working-tree-encoding"];
@@ -186,30 +188,29 @@ function classifyWith(providers, relPath, options) {
 function walkCheckout(root, providers, limits) {
   const candidates = [];
   const truncated = new Set();
+  // Folders the walk could not open: their files may be missing, which is not the same as none.
+  const unreadable = [];
   let visited = 0;
+  const done = () => ({ candidates, truncated: [...truncated], unreadable });
   const queue = [{ rel: "", depth: 0 }];
   while (queue.length) {
     const { rel, depth } = queue.shift();
-    let dirents;
-    try {
-      dirents = fs.readdirSync(rel ? path.join(root, rel) : root, { withFileTypes: true });
-    } catch {
+    const listing = readDirectoryBounded(rel ? path.join(root, rel) : root, limits.maxEntriesVisited - visited);
+    if (!listing) {
+      unreadable.push(rel);
       continue;
     }
+    const { dirents, more } = listing;
     dirents.sort((a, b) => a.name.localeCompare(b.name));
     for (const dirent of dirents) {
       visited += 1;
-      if (visited > limits.maxEntriesVisited) {
-        truncated.add("entries");
-        return { candidates, truncated: [...truncated] };
-      }
       const childRel = rel ? `${rel}/${dirent.name}` : dirent.name;
       if (dirent.isSymbolicLink() || dirent.isFile()) {
         const symlink = dirent.isSymbolicLink();
         for (const found of classifyWith(providers, childRel, { symlink })) {
           if (candidates.length >= limits.maxFiles) {
             truncated.add("files");
-            return { candidates, truncated: [...truncated] };
+            return done();
           }
           candidates.push({ rel: childRel, symlink, ...found });
         }
@@ -225,8 +226,34 @@ function walkCheckout(root, providers, limits) {
         queue.push({ rel: childRel, depth: depth + 1 });
       }
     }
+    if (more) {
+      truncated.add("entries");
+      return done();
+    }
   }
-  return { candidates, truncated: [...truncated] };
+  return done();
+}
+
+// Up to `budget` entries of a folder, read incrementally so a huge folder is never listed or sorted
+// whole: { dirents, more } where `more` says entries were left unread, or null when it cannot be
+// opened. Within a folder cut short, which entries are kept follows the filesystem's order.
+function readDirectoryBounded(dirPath, budget) {
+  let dir;
+  try {
+    dir = fs.opendirSync(dirPath);
+  } catch {
+    return null;
+  }
+  const dirents = [];
+  try {
+    let dirent;
+    while (dirents.length < budget && (dirent = dir.readSync()) !== null) dirents.push(dirent);
+    return { dirents, more: dirents.length >= budget && dir.readSync() !== null };
+  } catch {
+    return null;
+  } finally {
+    dir.closeSync();
+  }
 }
 
 // --------------------------------------------------------------------------- confinement
@@ -275,6 +302,10 @@ export function readConfinedFile(root, relPath, maxBytes) {
     const real = fs.realpathSync(filePath);
     if (!real.startsWith(root + path.sep)) return { ok: false, diagnostic: "The path leaves this checkout." };
     fd = fs.openSync(filePath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+    // The open resolves the path again, so a parent swapped for a symlink since the checks above
+    // could open a file outside the checkout. Only the file that was checked is read.
+    const opened = fs.fstatSync(fd);
+    if (opened.dev !== stat.dev || opened.ino !== stat.ino) return { ok: false, diagnostic: "The file changed while it was being read." };
     const length = Math.min(stat.size, maxBytes);
     const buffer = Buffer.alloc(length);
     let offset = 0;
@@ -303,11 +334,28 @@ function chunks(values, size) {
   return out;
 }
 
-// relPath -> { status: "tracked" | "untracked" | "ignored" | "unavailable", blob?, mode? }.
+// A partial clone may lack the indexed .gitattributes blob that `check-attr` falls back to when the
+// working file is missing. With lazy fetch off, Git then reports "unspecified" and exits 0, so no
+// attribute answer from a partial clone can be trusted.
+function isPartialClone(root) {
+  const resolved = resolveGitDir(root);
+  if (!resolved) return false;
+  try {
+    const config = fs.readFileSync(path.join(resolved.commonDir, "config"), "utf8");
+    return /^\s*(?:partialclone\s*=|promisor\s*=\s*true\b)/im.test(config);
+  } catch {
+    return false;
+  }
+}
+
+// statuses: relPath -> { status: "tracked" | "untracked" | "ignored" | "unavailable", blob?, mode? }.
+// converted: relPath -> true when a conversion attribute applies, false when none does; a path whose
+// attribute query failed or cannot be trusted is absent, meaning unknown.
 async function classifyGitStatus(root, relPaths, { runGit = defaultRunGit } = {}) {
   const result = new Map(relPaths.map((rel) => [rel, { status: "unavailable" }]));
-  if (!relPaths.length || !resolveGitDir(root)) return { statuses: result, attributes: new Map() };
-  const attributes = new Map();
+  const converted = new Map();
+  if (!relPaths.length || !resolveGitDir(root)) return { statuses: result, converted };
+  const attributesTrusted = !isPartialClone(root);
   const run = (args) => runGit(root, args, { timeoutMs: GIT_TIMEOUT_MS });
   for (const batch of chunks(relPaths, GIT_BATCH)) {
     const specs = batch.map((rel) => `:(literal)${rel}`);
@@ -329,25 +377,27 @@ async function classifyGitStatus(root, relPaths, { runGit = defaultRunGit } = {}
         if (result.has(rel) && result.get(rel).status !== "tracked") result.set(rel, { status });
       }
     }
-    if (attrs.ok) {
+    if (attrs.ok && attributesTrusted) {
+      for (const rel of batch) converted.set(rel, false);
       const fields = String(attrs.stdout).split("\0");
       for (let index = 0; index + 2 < fields.length; index += 3) {
         const [rel, , value] = fields.slice(index, index + 3);
-        if (value && value !== "unspecified") attributes.set(rel, true);
+        if (value && value !== "unspecified" && converted.has(rel)) converted.set(rel, true);
       }
     }
   }
   // A failed query leaves its paths "unavailable" rather than guessing a status.
-  return { statuses: result, attributes };
+  return { statuses: result, converted };
 }
 
-// True or false when the in-process hash comparison is reliable; null when it is not.
+// True or false when the in-process hash comparison is reliable; null when it is not. `converted`
+// is null when the conversion attributes are unknown, which makes a hash mismatch inconclusive.
 function localModification(git, buffer, complete, converted) {
   if (git.status !== "tracked" || !git.blob || git.mode === "120000" || !buffer || !complete) return null;
   const algorithm = git.blob.length === 64 ? "sha256" : "sha1";
   const hash = createHash(algorithm).update(`blob ${buffer.length}\0`).update(buffer).digest("hex");
   if (hash === git.blob) return false;
-  if (converted || buffer.includes(0x0d)) return null;
+  if (converted !== false || buffer.includes(0x0d)) return null;
   return true;
 }
 
@@ -393,9 +443,9 @@ export async function loadRepositoryAgentConfig({
   }
 
   const root = checkout.path;
-  const { candidates, truncated } = walkCheckout(root, providers, limits);
+  const { candidates, truncated, unreadable } = walkCheckout(root, providers, limits);
   const relPaths = [...new Set(candidates.map((candidate) => candidate.rel))];
-  const { statuses, attributes } = await classifyGitStatus(root, relPaths, { runGit });
+  const { statuses, converted } = await classifyGitStatus(root, relPaths, { runGit });
 
   let bytesRead = 0;
   const reads = new Map();
@@ -447,7 +497,7 @@ export async function loadRepositoryAgentConfig({
     const read = readOnce(rel);
     if (!read.ok) return { ...entry, diagnostic: read.diagnostic };
     entry.size = read.size;
-    const modified = localModification(git, read.buffer, read.complete, attributes.has(rel));
+    const modified = localModification(git, read.buffer, read.complete, converted.get(rel) ?? null);
     if (modified !== null) entry.git.modified = modified;
     if (!read.complete) {
       return { ...entry, diagnostic: read.budgetCut
@@ -474,6 +524,7 @@ export async function loadRepositoryAgentConfig({
     status: "ok",
     checkout: { path: root, head: checkout.head },
     truncated: [...new Set(truncated)],
+    ...(unreadable.length ? { unreadableFolders: unreadable.slice(0, MAX_UNREADABLE_LISTED), unreadableCount: unreadable.length } : {}),
     providers: providerSummary(),
     entries,
   };
@@ -498,10 +549,10 @@ export async function loadRepositoryAgentConfigSource({
   const match = found.match;
   const read = readConfinedFile(checkout.path, rel, Math.max(limits.previewBytes, limits.maxFileBytes));
   if (!read.ok) return { ok: false, status: 404, error: read.diagnostic };
-  const { statuses, attributes } = await classifyGitStatus(checkout.path, [rel], { runGit });
+  const { statuses, converted } = await classifyGitStatus(checkout.path, [rel], { runGit });
   const gitStatus = statuses.get(rel) || { status: "unavailable" };
   const git = { status: gitStatus.status };
-  const modified = localModification(gitStatus, read.buffer, read.complete, attributes.has(rel));
+  const modified = localModification(gitStatus, read.buffer, read.complete, converted.get(rel) ?? null);
   if (modified !== null) git.modified = modified;
   const text = textOf(read.buffer);
   const described = read.complete ? describeWith(provider, match, text) : {};

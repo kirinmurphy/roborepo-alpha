@@ -181,9 +181,11 @@ export function scanTomlStructure(text, { rootStrings = [] } = {}) {
     const assignment = key && /^\s*=\s*(.*)$/.exec(key.rest);
     if (!assignment) {
       report(index);
-      // An unparseable key may still open a multi-line value; its lines stay unread.
-      const equals = line.indexOf("=");
-      if (equals !== -1) openValue = continueValue({ depth: 0, quote: null }, line.slice(equals + 1));
+      // An unparseable key may still open a multi-line value; its lines stay unread. After a key
+      // that parsed, the delimiter is searched past it, so an `=` inside a quoted key is not it.
+      const remainder = key ? key.rest : line;
+      const equals = remainder.indexOf("=");
+      if (equals !== -1) openValue = continueValue({ depth: 0, quote: null }, remainder.slice(equals + 1));
       return;
     }
     const value = assignment[1];
@@ -280,6 +282,18 @@ function inlineTableKeys(value) {
   let expectKey = false;
   for (let i = 0; i < value.length; i += 1) {
     const char = value[i];
+    // A """ or ''' string is one value: its `}`, `,`, and quotes are text, never structure.
+    if (value.startsWith("\"\"\"", i) || value.startsWith("'''", i)) {
+      const delimiter = value.slice(i, i + 3);
+      let end = i + 3;
+      while (end < value.length && !value.startsWith(delimiter, end)) end += delimiter === "\"\"\"" && value[end] === "\\" ? 2 : 1;
+      if (end >= value.length) break;
+      // Up to two quotes right before the closing delimiter belong to the string (`"""a"""""`).
+      for (let extra = 0; extra < 2 && value[end + 3] === delimiter[0]; extra += 1) end += 1;
+      expectKey = false;
+      i = end + 2;
+      continue;
+    }
     if (char === "\"" || char === "'") {
       // Basic strings honor backslash escapes; literal strings have none.
       let end = i + 1;

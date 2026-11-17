@@ -61,8 +61,11 @@ hideRepository(registry, MULTI, { hidden: true });
 const INSPECT = "git:github.com/acme/scope-inspect";
 fs.mkdirSync(path.join(tmp, "scope-inspect"));
 const inspectRoot = fs.realpathSync(path.join(tmp, "scope-inspect"));
+// Git hooks export these; inherited, they would point the fixture's commands at the outer repo.
+const fixtureGitEnv = { ...process.env };
+for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete fixtureGitEnv[key];
 const runGit = (...args) => {
-  const result = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd: inspectRoot, encoding: "utf8" });
+  const result = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd: inspectRoot, encoding: "utf8", env: fixtureGitEnv });
   if (result.status !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
 };
 runGit("init", "-q", "-b", "main");

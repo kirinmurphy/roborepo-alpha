@@ -128,7 +128,8 @@ function describeConfigToml(text) {
   const profiles = namesUnder("profiles");
   if (profiles.length) sections.push(`Profiles: ${profiles.map((name) => safeName(name) ?? "(unnamed)").join(", ")}`);
 
-  const labeled = unique(tables.map((table) => TABLE_LABELS[table[0]]).filter(Boolean));
+  // From every declared path, so `[features]`, `features.x = 1`, and `features = { x = 1 }` agree.
+  const labeled = unique(paths.map((entry) => TABLE_LABELS[entry[0]]).filter(Boolean));
   if (labeled.length) sections.push(`Also declares: ${labeled.join(", ")}`);
   return { sections, ...(diagnostic ? { diagnostic } : {}) };
 }

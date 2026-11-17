@@ -196,7 +196,11 @@ export const configRoutes = defineRoutes([
       Promise.resolve()
         .then(() => handlers.loadRepositoryAgentConfig({ repositoryId: scope.repositoryId }))
         .then((result) => send(res, 200, "application/json", JSON.stringify(result)))
-        .catch((error) => send(res, 500, "application/json", JSON.stringify({ error: String(error?.message || error) })));
+        // The exception text can carry local paths or a parser excerpt; it stays in the server log.
+        .catch((error) => {
+          console.error("repo agent config inventory failed:", error);
+          send(res, 500, "application/json", JSON.stringify({ error: "The repo's agent config could not be read." }));
+        });
       return true;
     },
   },
@@ -210,7 +214,10 @@ export const configRoutes = defineRoutes([
       Promise.resolve()
         .then(() => handlers.loadRepositoryAgentConfigSource({ repositoryId: scope.repositoryId, id: params.get("id") }))
         .then((result) => send(res, result.ok ? 200 : result.status || 400, "application/json", JSON.stringify(result)))
-        .catch((error) => send(res, 500, "application/json", JSON.stringify({ ok: false, error: String(error?.message || error) })));
+        .catch((error) => {
+          console.error("repo agent config preview failed:", error);
+          send(res, 500, "application/json", JSON.stringify({ ok: false, error: "This file's preview could not be read." }));
+        });
       return true;
     },
   },
