@@ -130,13 +130,20 @@ export function doctorLine(report) {
 
 // --doctor is scripts/doctor.sh's contract, run directly like node-release-health.mjs: one line,
 // exit 0 for an `ok` line and 1 for a `hint` line. It prints nothing, exit 0, when the current
-// directory is not a Git repo with a GitHub origin, so doctor adds no line there.
+// directory is not a Git repo with a GitHub origin, so doctor adds no line there. An unexpected
+// error prints its message alone and exits 3: Node's own exit code for an uncaught error is 1,
+// which doctor would show as a hint carrying the whole stack trace.
 async function doctorMode() {
-  const repositoryId = await currentRepositoryId(process.cwd());
-  if (forgeTargetForRepositoryId(repositoryId)?.host !== "github.com") return 0;
-  const { level, text } = doctorLine(await readProtection({ repositoryId, cwd: process.cwd(), timeoutMs: DOCTOR_TIMEOUT_MS }));
-  console.log(text);
-  return level === "hint" ? 1 : 0;
+  try {
+    const repositoryId = await currentRepositoryId(process.cwd());
+    if (forgeTargetForRepositoryId(repositoryId)?.host !== "github.com") return 0;
+    const { level, text } = doctorLine(await readProtection({ repositoryId, cwd: process.cwd(), timeoutMs: DOCTOR_TIMEOUT_MS }));
+    console.log(text);
+    return level === "hint" ? 1 : 0;
+  } catch (error) {
+    console.log(String(error?.message || error));
+    return 3;
+  }
 }
 
 if (isMainModule(import.meta.url)) {
