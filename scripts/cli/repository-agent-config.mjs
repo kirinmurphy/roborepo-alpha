@@ -361,6 +361,14 @@ export async function readConfinedFile(root, relPath, maxBytes) {
     // could open a file outside the checkout. Only the file that was checked is read.
     const opened = await handle.stat();
     if (opened.dev !== stat.dev || opened.ino !== stat.ino) return { ok: false, diagnostic: "The file changed while it was being read." };
+    // A parent swapped to a symlink for the lstat and the open, but back for the realpath, would pass
+    // the checks above. After the open, the path must still resolve inside the checkout to the very
+    // file that was opened. Node has no openat-style resolution, so a swap timed between these calls
+    // remains possible; this narrows it to a window after the open.
+    const reopened = await fsp.realpath(filePath);
+    if (!reopened.startsWith(root + path.sep)) return { ok: false, diagnostic: "The path leaves this checkout." };
+    const resolved = await fsp.lstat(reopened);
+    if (resolved.dev !== opened.dev || resolved.ino !== opened.ino) return { ok: false, diagnostic: "The file changed while it was being read." };
     const length = Math.min(stat.size, maxBytes);
     const buffer = Buffer.alloc(length);
     let offset = 0;
@@ -425,7 +433,8 @@ function chunks(values, size) {
 
 // A partial clone may lack the indexed .gitattributes blob that `check-attr` falls back to when the
 // working file is missing. With lazy fetch off, Git then reports "unspecified" and exits 0, so no
-// attribute answer from a partial clone can be trusted.
+// attribute answer from a partial clone can be trusted. Git before 2.44 ignores GIT_NO_LAZY_FETCH
+// and would fetch that blob from the remote, so `check-attr` is not run there at all.
 function isPartialClone(root) {
   const resolved = resolveGitDir(root);
   if (!resolved) return false;
@@ -454,7 +463,9 @@ async function classifyGitStatus(root, relPaths, { runGit = defaultRunGit } = {}
       run(["ls-files", "-z", "-s", "--", ...specs]),
       run(["ls-files", "-z", "--others", "--exclude-standard", "--", ...specs]),
       run(["ls-files", "-z", "--others", "--ignored", "--exclude-standard", "--", ...specs]),
-      run(["check-attr", "-z", ...CONVERSION_ATTRIBUTES, GENERATED_ATTRIBUTE, "--", ...batch]),
+      attributesTrusted
+        ? run(["check-attr", "-z", ...CONVERSION_ATTRIBUTES, GENERATED_ATTRIBUTE, "--", ...batch])
+        : { ok: false },
     ]);
     if (cached.ok) {
       for (const line of splitZ(cached.stdout)) {

@@ -369,6 +369,30 @@ try {
   const unknownPreview = await loadRepositoryAgentConfigSource({ registry, repositoryId: MAIN_ID, id: "claude:packages/web/CLAUDE.md", runtime, runGit: noAttributes });
   assert.equal(unknownPreview.git.modified, undefined);
 
+  // In a partial clone, check-attr could fetch a missing .gitattributes blob on Git that ignores
+  // GIT_NO_LAZY_FETCH, so it never runs there, and a changed tracked file's modification is unknown.
+  const PARTIAL_REMOTE = "https://github.com/acme/partial.git";
+  const partialRepo = makeRepo("partial-clone", { "CLAUDE.md": "# Partial\n" }, { remote: PARTIAL_REMOTE });
+  write(partialRepo, "CLAUDE.md", "# Partial, edited\n");
+  git(partialRepo, "config", "remote.origin.promisor", "true");
+  git(partialRepo, "config", "extensions.partialclone", "origin");
+  const gitCalls = [];
+  const countingGit = (cwd, args, options) => {
+    gitCalls.push(args[0]);
+    return defaultRunGit(cwd, args, options);
+  };
+  const partialInventory = await loadRepositoryAgentConfig({
+    registry: registryWith(normalizeGitRemote(PARTIAL_REMOTE), [{ path: partialRepo, kind: "primary" }]),
+    repositoryId: normalizeGitRemote(PARTIAL_REMOTE),
+    runtime,
+    runGit: countingGit,
+  });
+  const partialClaude = partialInventory.entries.find((entry) => entry.path === "CLAUDE.md" && entry.harness === "claude");
+  assert.ok(gitCalls.includes("ls-files"), "the partial clone was still classified");
+  assert.equal(gitCalls.includes("check-attr"), false, "check-attr never runs in a partial clone");
+  assert.equal(partialClaude.git.status, "tracked");
+  assert.equal(partialClaude.git.modified, undefined, "a changed tracked file in a partial clone has no modification label");
+
   // A folder the walk cannot open makes the result partial instead of looking empty.
   const locked = path.join(main, "locked");
   write(main, "locked/CLAUDE.md", "# locked\n");
