@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Owner decides the two escalated findings (refused-write exit code, classic protection without enforce_admins), then approves the re-reviewed commit
+next_action: Owner approves re-reviewed commit 52db71b5, then merges the pull request and runs /plan-close
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
@@ -641,10 +641,12 @@ the Decision Log.
 - Review fixes at 52db71b5: `protect-check.mjs` passes; branch-protection browser spec, 10
   passed. Pushed to the pull request for CI.
 - Re-review Validator pass (fresh-context subagent) at 52db71b5: 0 fix, 0 escalate.
+- Pull request CI at 52db71b5 (run 44172795658): `check (ubuntu-latest)`, `check (macos-latest)`,
+  and `windows-installer` passed.
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: 73f7643dfd335933a648d7625149376a92589253
+- Status: complete
+- Reviewed implementation commit: 52db71b5b107e64a148dcd3fdd4110bc31837025
 - Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
 
 ### Approval
