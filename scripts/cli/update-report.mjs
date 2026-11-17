@@ -96,7 +96,7 @@ function snapshotInstallState() {
     rootConfig: snapshotManifestRows(rows, "root_config"),
     renderedRules: snapshotManifestRows(rows, "rendered_rules"),
     hooks: snapshotNamedRows(rows, new Set(["hooks", "hooks.json"])),
-    permissions: snapshotNamedRows(rows, new Set(["rules"])),
+    permissions: snapshotNamedRows(rows, new Set(["rules/roborepo.rules"])),
     packageRegistry: fileDigest(enabledPackagesPath),
     skills: snapshotSkillBodies(),
     skillLinks: snapshotManagedSkills(),
@@ -146,7 +146,7 @@ function labelForRow(row) {
   if (row.kind === "rendered_rules") return `rules ${row.harness}`;
   if (row.kind === "root_config") return `root config ${row.harness}`;
   if (row.homeSub === "hooks" || row.homeSub === "hooks.json") return `hooks ${row.harness}`;
-  if (row.homeSub === "rules") return `permissions ${row.harness}`;
+  if (row.homeSub === "rules/roborepo.rules") return `permissions ${row.harness}`;
   return `${row.homeSub.replaceAll("/", " ")} ${row.harness}`;
 }
 

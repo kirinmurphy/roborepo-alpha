@@ -474,11 +474,40 @@ install_copy_item() {
   local repo_rel="$1"
   local home_path="$2"
   local harness="${3:-}"
+  local flags="${4:-}"
   local src="${repo_root}/${repo_rel}"
 
   if [[ ! -e "${src}" ]]; then
     echo "missing source: ${src}" >&2
     return 1
+  fi
+
+  # An `owned` row is a file only RoboRepo writes (Codex's rules/roborepo.rules): any difference is
+  # a stale copy, not a user edit, so it is rewritten in place with no prompt, staging, or backup.
+  if [[ ",${flags}," == *",owned,"* ]]; then
+    # Older installs linked the whole parent dir (~/.codex/rules) into the checkout; writing through
+    # that link would write into the repo, so replace it with a real directory first.
+    local parent; parent="$(dirname "${home_path}")"
+    if [[ -L "${parent}" ]]; then
+      local parent_real repo_real
+      parent_real="$(cd "${parent}" 2>/dev/null && pwd -P)" || parent_real=""
+      repo_real="$(cd "${repo_root}" && pwd -P)"
+      if [[ -z "${parent_real}" || "${parent_real}" == "${repo_real}" || "${parent_real}" == "${repo_real}/"* ]]; then
+        [[ "${dry_run}" -eq 0 ]] && rm "${parent}" && mkdir -p "${parent}"
+        say unlink "${parent} (old link into the checkout)"
+      fi
+    fi
+    if [[ -e "${home_path}" && ! -L "${home_path}" ]] && paths_equivalent_for_copy "${src}" "${home_path}"; then
+      say ok "${home_path}"
+    else
+      if [[ "${dry_run}" -eq 0 ]]; then
+        rm -rf "${home_path}"
+        copy_tree "${src}" "${home_path}"
+      fi
+      say copy "${home_path} <- ${src}"
+    fi
+    CONFIG_COLLISION_ACTION="wrote"
+    return 0
   fi
 
   save_pre_install_backup "${home_path}" "${harness}" "${src}"

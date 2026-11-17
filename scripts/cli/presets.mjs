@@ -10,6 +10,7 @@ import { installStatePath, presetsStatePath, recordAppRoot } from "./state-paths
 import { readConfigSnapshot, buildBehaviorView } from "./config.mjs";
 import { mutatePackage, setBehaviorBucket } from "./config-mutate.mjs";
 import { renderHomeRules, removeHomeRules, isRenderedRulesOutput } from "./rules-render.mjs";
+import { migrateCodexDefaultRules } from "./codex-rules-migration.mjs";
 import { listHarnessProviders, getHarnessProvider } from "../harnesses/registry.mjs";
 import { readinessSupported } from "../harnesses/hook-readiness.mjs";
 import { confirmYesNo, makePrompter, selectMenu, wizard } from "./skill-lib.mjs";
@@ -616,6 +617,7 @@ function removeBundle(bundle, rows, retainedRows = new Set()) {
 function applyRow(row, policy) {
   if (!harnessAvailable(row.harness)) return;
   if (row.kind === "rendered_rules") return renderRulesItem(row);
+  if (row.kind === "managed_copy" && rowHasFlag(row, "owned")) return copyOwnedItem(row);
   if (row.kind === "managed_copy" || row.kind === "link") return copyItem(row, policy);
   if (row.kind === "root_config") return copyItem(row, policy);
   if (SHARED_TARGET_KINDS.includes(row.kind)) return applySharedTarget(row, policy);
@@ -629,6 +631,34 @@ function applySharedTarget(row, policy) {
     console.error(`abort: install canceled by user (${error.message})`);
     console.error("Rerun with --on-conflict keep or --on-conflict overwrite to continue.");
     process.exit(1);
+  }
+}
+
+function rowHasFlag(row, flag) {
+  return String(row.flags ?? "").split(",").map((value) => value.trim()).includes(flag);
+}
+
+// An `owned` row is a file only RoboRepo writes (Codex's rules/roborepo.rules): any difference is a
+// stale copy, not a user edit, so it is rewritten in place with no prompt, staging, or backup.
+function copyOwnedItem(row) {
+  const source = path.join(repoRoot, row.srcRel);
+  // Older installs linked the whole parent dir (~/.codex/rules) into the checkout; writing through
+  // that link would write into the repo, so replace it with a real directory first.
+  const parent = path.dirname(row.homeAbs);
+  if (readlink(parent) && (resolvesInsideRepo(parent) || !fs.existsSync(parent))) {
+    fs.unlinkSync(parent);
+    console.log(`unlink: ${parent} (old link into the checkout)`);
+  }
+  fs.mkdirSync(path.dirname(row.homeAbs), { recursive: true });
+  if (!readlink(row.homeAbs) && pathExists(row.homeAbs) && pathsEquivalentForCopy(source, row.homeAbs)) {
+    console.log(`ok: ${row.homeAbs}`);
+  } else {
+    fs.rmSync(row.homeAbs, { recursive: true, force: true });
+    copyTree(source, row.homeAbs);
+    console.log(`copy: ${row.homeAbs} <- ${source}`);
+  }
+  if (row.harness === "codex") {
+    migrateCodexDefaultRules({ codexHome: MANIFEST_HOME.codex, sourcePath: source });
   }
 }
 
@@ -796,6 +826,12 @@ function removeRenderedRulesRow(row) {
 function removeRow(row, policy) {
   if (row.kind === "rendered_rules") return removeRenderedRulesRow(row);
   if (SHARED_TARGET_KINDS.includes(row.kind)) return removeSharedTargetRow(row);
+  if (row.kind === "managed_copy" && rowHasFlag(row, "owned")) {
+    if (!pathExists(row.homeAbs) && !readlink(row.homeAbs)) return;
+    fs.rmSync(row.homeAbs, { recursive: true, force: true });
+    console.log(`unlink: ${row.homeAbs}`);
+    return;
+  }
   const source = path.join(repoRoot, row.srcRel);
   const staged = findSiblingArtifact(row.homeAbs, "update");
   const backup = findSiblingArtifact(row.homeAbs, "original");

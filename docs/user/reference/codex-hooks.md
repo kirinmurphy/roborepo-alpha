@@ -155,11 +155,19 @@ through Codex's hook review flow. Until that hook is trusted, matching pushes ca
 normal approval flow. Do not use this unverified integration as evidence that desktop confirmation
 is complete.
 
-`~/.codex/rules/` and `~/.codex/config.toml` are live files that Codex itself can change — for
-example, approving "always allow this command" in a session appends a rule. Once they differ from
-RoboRepo's version, `roborepo update` leaves them alone unless you choose `--on-conflict overwrite`.
-`roborepo config root inspect` reports when `config.toml` has drifted; nothing checks `rules/` for
-drift.
+RoboRepo's command rules live in `~/.codex/rules/roborepo.rules`. RoboRepo owns that file and
+rewrites it on every `roborepo update`, so edits to it do not last. Codex keeps your own approvals in
+`~/.codex/rules/default.rules`: approving "always allow this command" in a session appends a rule
+there, and RoboRepo never changes those lines. Codex reads both files and applies the most
+restrictive match, so an allow in `default.rules` cannot override a command RoboRepo forbids or
+prompts on. To change how RoboRepo treats a command, use `~/.roborepo/command-overrides.json`.
+
+If an older install copied RoboRepo's rules into `default.rules`, `roborepo update` removes those
+lines, keeps the ones you added, and saves the original under `~/.roborepo/backups/codex-rules/`.
+
+`~/.codex/config.toml` is a live file that Codex itself can change. Once it differs from RoboRepo's
+version, `roborepo update` leaves it alone unless you choose `--on-conflict overwrite`.
+`roborepo config root inspect` reports when it has drifted.
 
 See [Hooks Internals](../../internal/hooks-internals.md) for script locations and protocol detail.
 
