@@ -121,6 +121,20 @@ const cases = [
   ["echo '<<EOF'\n(git push origin feat)\nEOF", "ask"],
   ["echo x # <<EOF\n(git push origin feat)\nEOF", "ask"],
   ["cat <<EOF\n(git push origin feat)", "ask"],
+  // A body is data only when nothing can run it: an unquoted body's substitutions run, and a body
+  // piped on, read by a shell from a variable or xargs, or written to a script that runs, is read.
+  ["cat <<EOF\n$(git push --no-verify origin HEAD:main)\nEOF", "ask"],
+  ["cat <<EOF\n`git push origin feat`\nEOF", "ask"],
+  ["cat <<EOF |\nenv git push --no-verify origin HEAD:main\nEOF\nsh", "ask"],
+  ["$SHELL <<EOF\nenv git push --no-verify origin HEAD:main\nEOF", "ask"],
+  ["xargs -I{} sh -c {} <<EOF\nenv git push origin feat\nEOF", "ask"],
+  ["tee >(sh) <<EOF\nenv git push origin feat\nEOF", "ask"],
+  ["cat > x.sh <<EOF\nenv git push origin feat\nEOF\nbash x.sh", "ask"],
+  ["cat > x.sh <<'EOF'\nenv git push origin feat\nEOF\n./x.sh", "ask"],
+  // A data body in push form is neither a push nor denied.
+  ["cat > README.md <<'EOF'\n```\ngit push origin main\n```\nEOF", "defer"],
+  ["git commit -F - <<'EOF'\ngit push origin main is blocked now\nEOF", "defer"],
+  [`gh pr create --body "$(cat <<'EOF'\n- git push asks\n\nMade with [a tool](https://example.com/x)\nEOF\n)"`, "defer"],
   // A backslash-newline joins the lines, as the shell does.
   ["git \\\npush origin main", "deny"],
   ["git push \\\n  origin feat", "allow"],
@@ -133,6 +147,10 @@ const cases = [
   ["git push origin $'feat'", "allow"],
   ["git {push,} origin main", "ask"],
   ["git pu{s,}h origin main", "ask"],
+  ["git pu\\\nsh origin main", "deny"],
+  ['git pu$"s"h origin main', "deny"],
+  ["git pu`true`sh origin main", "ask"],
+  ["git pu$(true)sh origin main", "ask"],
   // Scripts handed to a shell another way.
   ["eval 'git push origin feat'", "ask"],
   ["watch 'git push origin feat'", "ask"],
@@ -156,6 +174,9 @@ const cases = [
   ["X=1; git push origin feat", "defer"],
   ["git remote -v && git push origin feat", "defer"],
   ["git config --get remote.origin.url && git push origin feat", "defer"],
+  ["git config get remote.origin.url && git push origin feat", "defer"],
+  ["git config --file f x && git push origin feat", "defer"],
+  ["source ./activate && git push origin feat", "ask"],
   ["git push --no-verify origin feat", "ask"],
   ["git push origin main", "deny"],
   ["git push origin HEAD:main", "deny"],

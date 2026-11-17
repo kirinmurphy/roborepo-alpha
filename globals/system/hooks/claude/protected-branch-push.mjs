@@ -603,6 +603,9 @@ const SCOPE_OPEN = '\u0001('
 const SCOPE_CLOSE = '\u0001)'
 // Stands in for a substitution's output; the `$` keeps every reader from following it.
 const SUBSTITUTION_PLACEHOLDER = '$__SUBSTITUTION'
+// The same, split off the bare name it was written against (`pu$(…)sh`), so a reader can tell the
+// name is incomplete.
+const JOINED_SUBSTITUTION_PLACEHOLDER = '$__JOINED_SUBSTITUTION'
 
 // Splits subshells and command substitutions into their own commands, each between scope markers.
 // An unquoted `( … )` is marked where it stands. A `$(…)` or backtick substitution leaves an
@@ -653,7 +656,7 @@ function exposeNestedCommands(text) {
         // The placeholder joins the word it is part of (`$TMPDIR/$(date)`), except after a bare
         // name or option, so `rm$(…)` and `-delete$(…)` still read as `rm` and `-delete`.
         const word = /[^\s;&|]*$/.exec(out)[0]
-        out += quote === null && /^-*[A-Za-z]+$/.test(word) ? ` ${SUBSTITUTION_PLACEHOLDER}` : SUBSTITUTION_PLACEHOLDER
+        out += quote === null && /^-*[A-Za-z]+$/.test(word) ? ` ${JOINED_SUBSTITUTION_PLACEHOLDER}` : SUBSTITUTION_PLACEHOLDER
       } else if (ch === '"' || (ch === "'" && quote === null)) {
         quote = quote === ch ? null : quote ?? ch
         out += ch
@@ -974,21 +977,49 @@ function classifyCommand(text, startCwd) {
   return onlyVerifiedPushes && backstopInstalled() ? VERIFIED : null
 }
 
-// Drops the body of every `<<` heredoc that no shell reads, so the prose of a commit message or a
-// written file is not taken for commands. A body stays when its line starts a shell, `source`,
-// `.`, or `eval` (`bash <<EOF`, `cat <<EOF | sh`). Quotes, `$(…)`, backticks, and comments are
+// Programs that run text they are given, or a file written earlier in the command.
+const SCRIPT_RUNNERS = new Set(['source', '.', 'eval', 'exec', 'xargs', 'timeout', 'watch', 'parallel', 'script'])
+
+// Whether some line of `text` starts a program that could run a heredoc's body or a file it wrote:
+// a shell, a script runner, a program the shell fills in (`$SHELL`), a path (`./x.sh`), or a process
+// substitution. It reads the command with heredoc bodies taken out, so a body's prose does not
+// count, and it errs toward keeping a body.
+function mayRunScripts(text) {
+  if (/[<>]\(/.test(text)) return true
+  return text.split(/[;&|(`\n]|\$\(/).some((part) => {
+    const words = part.trim().split(/\s+/).map((word) => word.replace(/['"\\]/g, ''))
+    const program = words[programIndex(words)]
+    return Boolean(program) && (SHELLS.has(path.basename(program)) || SCRIPT_RUNNERS.has(program)
+      || /^[$`]/.test(program) || program.includes('/'))
+  })
+}
+
+// Whether the simple command `words` only stores or forwards a heredoc as data: `cat` (into a file
+// or a substitution), `tee`, a git message read from stdin, or a gh body.
+function readsHeredocAsData(words) {
+  const p = programIndex(words)
+  const program = path.basename(words[p] ?? '')
+  if (['cat', 'tee', 'gh'].includes(program)) return true
+  if (program !== 'git') return false
+  let j = p + 1
+  while (j < words.length && words[j].startsWith('-')) j += GIT_VALUE_OPTIONS.has(words[j]) ? 2 : 1
+  return ['commit', 'tag', 'notes'].includes(words[j])
+}
+
+// Drops the body of a `<<` heredoc only when it is plainly data, so the prose of a commit message
+// or a written file is not taken for commands: the heredoc's own command reads it as data
+// (`readsHeredocAsData`), nothing pipes that command onward, no line of the whole command could run
+// it (`mayRunScripts`), and the shell expands nothing in it (a quoted delimiter, or no `$(` or
+// backtick in the body). Every other body is kept. Quotes, `$(…)`, backticks, and comments are
 // tracked so a `<<` inside a string is not taken for a heredoc, and a body whose closing line never
-// appears is kept, so a misread can only keep text.
-function withoutHeredocBodies(text) {
+// appears is kept. With `skeleton`, every body is dropped except one the shell expands, leaving the
+// commands around them for `mayRunScripts`.
+function withoutHeredocBodies(text, skeleton = false) {
   let out = ''
   const open = [] // quotes and substitutions still open: ' $' " $( ( `
   let pending = []
   let i = 0
-  const shellReads = (line) => line.split(/[;&|(`\n]|\$\(/).some((part) => {
-    const words = part.trim().split(/\s+/).map((word) => word.replace(/['"\\]/g, ''))
-    const program = words[programIndex(words)]
-    return Boolean(program) && (SHELLS.has(path.basename(program)) || ['source', '.', 'eval'].includes(program))
-  })
+  const runsScripts = !skeleton && mayRunScripts(withoutHeredocBodies(text, true))
   while (i < text.length) {
     const ch = text[i]
     const top = open.at(-1)
@@ -1047,20 +1078,27 @@ function withoutHeredocBodies(text) {
       while (text[k] === ' ' || text[k] === '\t') k += 1
       let delimiter = ''
       let quote = null
+      // A quoted delimiter (`'EOF'`, `"EOF"`, `\EOF`) keeps the shell from expanding the body.
+      let literal = false
       for (; k < text.length; k += 1) {
         const c = text[k]
         if (quote) {
           if (c === quote) quote = null
           else delimiter += c
-        } else if (c === "'" || c === '"') quote = c
-        else if (c === '\\' && k + 1 < text.length) delimiter += text[++k]
-        else if (/[\s;&|<>()]/.test(c)) break
+        } else if (c === "'" || c === '"') {
+          quote = c
+          literal = true
+        } else if (c === '\\' && k + 1 < text.length) {
+          delimiter += text[++k]
+          literal = true
+        } else if (/[\s;&|<>()]/.test(c)) break
         else delimiter += c
       }
       if (delimiter && !quote) {
-        const lineStart = out.lastIndexOf('\n') + 1
+        const ownCommand = out.split(/[;&|(`\n]|\$\(/).at(-1).trim().split(/\s+/).map((word) => word.replace(/['"\\]/g, ''))
         const lineEnd = text.indexOf('\n', k)
-        pending.push({ delimiter, stripTabs, kept: shellReads(out.slice(lineStart) + text.slice(i, lineEnd === -1 ? text.length : lineEnd)) })
+        const pipedOn = text.slice(k, lineEnd === -1 ? text.length : lineEnd).includes('|')
+        pending.push({ delimiter, stripTabs, literal, kept: !skeleton && (runsScripts || pipedOn || !readsHeredocAsData(ownCommand)) })
       }
       out += text.slice(i, k)
       i = k
@@ -1081,7 +1119,9 @@ function withoutHeredocBodies(text) {
           start = end + 1
         }
         if (closing === -1) break // no closing line: keep the rest as it is
-        if (heredoc.kept) out += text.slice(i, closing)
+        const body = text.slice(i, closing)
+        // The shell runs `$(…)` and backticks in a body whose delimiter is unquoted.
+        if (heredoc.kept || (!heredoc.literal && /\$\(|`/.test(body))) out += body
         i = closing
       }
       pending = []
@@ -1097,14 +1137,21 @@ function withoutHeredocBodies(text) {
 const GIT_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env'])
 // Commands that change what a push reads before it runs: setting a variable git reads, or git's
 // own remote, upstream, and push configuration.
-const ENVIRONMENT_BUILTINS = new Set(['export', 'unset', 'declare', 'typeset'])
+const ENVIRONMENT_BUILTINS = new Set(['export', 'unset', 'declare', 'typeset', 'source', '.'])
+// `git config` options that take the next word as their value.
+const CONFIG_VALUE_OPTIONS = new Set(['-f', '--file', '--blob', '--type', '--default', '--comment', '--value'])
 const PUSH_ENVIRONMENT = /^(GIT_[A-Za-z0-9_]*|HOME|XDG_CONFIG_HOME|PATH)\+?=/
 
 function changesGitConfig(subcommand, args) {
   if (subcommand === 'config') {
-    // A lookup (`git config --get x`, `git config x`) changes nothing; a value, an edit, or a
-    // removal does.
-    const operands = args.filter((arg) => !arg.startsWith('-'))
+    // A lookup (`git config --get x`, `git config x`, `git config get x`) changes nothing; a value,
+    // an edit, or a removal does.
+    const operands = []
+    for (let k = 0; k < args.length; k += 1) {
+      if (CONFIG_VALUE_OPTIONS.has(args[k])) k += 1
+      else if (!args[k].startsWith('-')) operands.push(args[k])
+    }
+    if (['get', 'list'].includes(operands[0]) || args.some((arg) => /^(--get(-all|-regexp|-urlmatch)?|--list|-l)$/.test(arg))) return false
     return operands.length >= 2 || ['set', 'unset', 'edit', 'rename-section', 'remove-section'].includes(operands[0])
       || args.some((arg) => /^(--(add|unset|unset-all|replace-all|rename-section|remove-section|edit)|-e)$/.test(arg))
   }
@@ -1125,7 +1172,7 @@ function mayPush(words) {
     if (after.some((word) => !word.startsWith('-') && word.includes('{') && word.replace(/[{},]/g, '').includes('push'))) return true
     let j = g + 1
     while (j < words.length && words[j].startsWith('-')) j += GIT_VALUE_OPTIONS.has(words[j]) ? 2 : 1
-    if (/[$`]/.test(words[j] ?? '')) return true
+    if (/[$`]/.test(words[j] ?? '') || words[j + 1]?.startsWith(JOINED_SUBSTITUTION_PLACEHOLDER)) return true
     if (words.slice(0, g).some((word) => path.basename(word) === 'xargs') && !/^[a-z][a-z0-9-]*$/.test(words[j] ?? '')) return true
   }
   const p = programIndex(words)
@@ -1193,25 +1240,29 @@ const toolName = input.tool_name || input.toolName || ''
 const toolInput = input.tool_input || input.toolInput || {}
 const rawCommand = toolInput.command ?? toolInput.cmd
 const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).replaceAll("'", "'\\''")}'`).join(' ') : rawCommand
-// Quotes, backslashes, and brace punctuation split a word without changing what runs (`pu''sh`,
-// `pu\sh`, `{push,}`), so the quick check reads the text without them; a `$'…'` string can spell any
-// word with escapes, so it always gets the full check.
+// Quotes, backslashes, backslash-newlines, and brace punctuation split a word without changing what
+// runs (`pu''sh`, `pu\sh`, `{push,}`), so the quick check reads the text without them. Any `$` or
+// backtick can build a word the quick check cannot see (`$'pu\x73h'`, `pu$(true)sh`), so it sends
+// the command to the full check.
 const KEYWORDS = /\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/
-if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !(KEYWORDS.test(command.replace(/['"\\{},]/g, '')) || command.includes("$'"))) process.exit(0)
+if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string'
+  || !(KEYWORDS.test(command.replace(/\\\n/g, '').replace(/['"\\{},]/g, '')) || /[$`]/.test(command))) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
+// Every walk reads the command without the heredoc bodies that are plainly data.
+const text = withoutHeredocBodies(command)
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
-let result = stricter(classifyCommand(command, cwd), classifyDeletes(command, cwd))
+let result = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
 // A push the walk could not read (wrapped, nested, aliased, or spelled by the shell) asks: no
 // permission rule would.
-const scanned = scanPushes(command)
+const scanned = scanPushes(text)
 if (scanned.pushes > pushesRead) {
   result = stricter(result, ask('cannot check this `git push`: it runs behind a wrapper, in a subshell, substitution, or script string, through an alias, or with words the shell fills in'))
 }
 // The hook reads git's configuration and environment as they are before the command runs.
 if (scanned.environmentChanged && (pushesRead > 0 || scanned.pushes > 0)) {
-  result = stricter(result, ask('this command changes the environment or git configuration a push reads (`export`, `unset`, a GIT_* or PATH assignment, `git config`, `git remote`, or `git branch -u`) before it pushes, so the hook cannot tell where the push lands'))
+  result = stricter(result, ask('this command changes the environment or git configuration a push reads (`export`, `unset`, `source`, a GIT_* or PATH assignment, `git config`, `git remote`, or `git branch -u`) before it pushes, so the hook cannot tell where the push lands'))
 }
 if (!result) process.exit(0)
 

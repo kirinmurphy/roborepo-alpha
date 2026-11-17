@@ -57,9 +57,15 @@ a subshell or `$(…)`, through `xargs`, or through an alias. So does a push in 
 shell (`bash -c`, `eval`, `watch`, `env -S`, a `bash <<EOF` heredoc or `<<<` here-string), a push
 whose words the shell builds (`git $CMD`, `$GIT push`, `git {push,}`), and a push after a command
 that changes what it reads (`export`, `unset`, a `GIT_*` or `PATH` assignment, `git config`,
-`git remote set-url`). So does a command that only names a push, such as `echo git push` or
-`git log --grep push`. A heredoc that no shell reads is data, so a commit message or file body that
-mentions `git push` asks nothing.
+`git remote set-url`, `source`). So does a command that only names a push, such as `echo git push`
+or `git log --grep push`.
+
+A heredoc body is skipped only when it is plainly data: `cat`, `tee`, `gh`, or a `git commit -F -`
+reads it, nothing pipes that command on, no part of the command could run it as a script (a shell,
+`source`, `eval`, `xargs`, a path such as `./x.sh`, a program from a variable), and the shell expands
+nothing in it (a quoted delimiter such as `<<'EOF'`, or no `$(…)` or backticks in the body). So a
+commit message, pull request body, or written file that mentions `git push` asks nothing, and every
+other body is read like the rest of the command.
 
 Some pushes the hook cannot see at all, so it neither asks nor allows them, and the decision falls
 to the permission rules and the `pre-push` hook below:
@@ -72,7 +78,8 @@ to the permission rules and the `pre-push` hook below:
 - any other form the hook does not parse.
 
 The `pre-push` hook still refuses each of these when it would reach a protected branch or rewrite
-history.
+history, unless the push passes `--no-verify`, which skips it. Only branch protection on the remote
+stops such a push.
 
 On Codex, every push the hook would ask about is denied instead, with a message to run it yourself.
 Codex has been seen running commands whose hook result was ask without prompting, and a push with
