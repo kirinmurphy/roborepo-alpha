@@ -1,6 +1,6 @@
 ---
 id: 3xh2sq32
-next_action: Owner approves re-reviewed commit 144da640, then merges the pull request and runs /plan-close
+next_action:
 blocked_by: []
 depends_on: []
 related: ["w7vls1yk", "vzgsx5vz", "developer-runtime-remote-branch-status"]
