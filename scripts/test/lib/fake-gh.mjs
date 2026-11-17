@@ -7,6 +7,9 @@
 //             | "actions-off" (runs endpoint answers 404) | "runs-error" (runs endpoint answers 502)
 //   login, admin, defaultBranch
 //   refuseCreate  a ruleset name whose create answers 422, to fail an apply partway
+//   refuseUpdate  a ruleset name whose update answers 422
+// List endpoints page by `per_page` and `page` as GitHub does; each log entry records the
+// `--hostname` the call named.
 //   rulesets  full ruleset objects; `source_type` other than "Repository" marks an inherited one
 //   runs      workflow runs, newest first: { id, conclusion, jobs: [{ name, conclusion }] }, plus optional
 //             `event` (default "pull_request") and `workflow` (workflow id, default 1)
@@ -63,7 +66,8 @@ if (args[0] !== "api") fail(1, "fake gh: only \`gh api\` is implemented");
 const method = args[args.indexOf("--method") + 1];
 const endpoint = args.find((arg) => /^(repos\\/|user$)/.test(arg));
 const body = args.includes("--input") ? JSON.parse(fs.readFileSync(0, "utf8")) : null;
-fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ method, endpoint, body }) + "\\n");
+const hostname = args.includes("--hostname") ? args[args.indexOf("--hostname") + 1] : null;
+fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ method, endpoint, body, hostname }) +"\\n");
 
 if (state.failure === "not-signed-in") fail(4, "To get started with GitHub CLI, please run:  gh auth login");
 if (state.failure === "unreachable") fail(1, "error connecting to api.github.com");
@@ -75,6 +79,12 @@ function respond() {
 
 const [pathname, query = ""] = endpoint.split("?");
 const params = new URLSearchParams(query);
+// GitHub's paging: per_page (default 30) items from page (default 1).
+const paged = (list) => {
+  const size = Number(params.get("per_page") || 30);
+  const page = Number(params.get("page") || 1);
+  return list.slice((page - 1) * size, page * size);
+};
 const route = pathname.replace(/^repos\\/[^/]+\\/[^/]+\\/?/, "");
 const visible = (ruleset) => {
   if (state.admin) return ruleset;
@@ -102,11 +112,11 @@ if (branchRules) {
       rules.push({ ...rule, ruleset_source_type: ruleset.source_type, ruleset_source: ruleset.source, ruleset_id: ruleset.id });
     }
   }
-  reply(rules);
+  reply(paged(rules));
 }
 
 if (route === "rulesets" && method === "GET") {
-  reply(state.rulesets.map(({ id, name, target, source_type, source, enforcement }) => ({ id, name, target, source_type, source, enforcement })));
+  reply(paged(state.rulesets.map(({ id, name, target, source_type, source, enforcement }) => ({ id, name, target, source_type, source, enforcement }))));
 }
 if (route === "rulesets" && method === "POST") {
   if (!state.admin) httpError(403, "Resource not accessible by personal access token");
@@ -124,6 +134,7 @@ if (one) {
   if (method === "GET") reply(visible(state.rulesets[index]));
   if (!state.admin) httpError(403, "Resource not accessible by personal access token");
   if (method === "PUT") {
+    if (state.refuseUpdate && body.name === state.refuseUpdate) httpError(422, "Validation Failed");
     const { id, source_type, source } = state.rulesets[index];
     state.rulesets[index] = stored({ id, source_type, source }, body);
     save();
@@ -142,7 +153,7 @@ if (actionsRoute && state.failure === "runs-error") httpError(502, "Server Error
 const workflowOf = (run) => run.workflow ?? 1;
 if (route === "actions/workflows") {
   const workflows = state.workflows || [...new Set(state.runs.map(workflowOf))].map((id) => ({ id, state: "active" }));
-  reply({ total_count: workflows.length, workflows });
+  reply({ total_count: workflows.length, workflows: paged(workflows) });
 }
 const workflowRuns = route.match(/^actions\\/workflows\\/(\\d+)\\/runs$/);
 if (workflowRuns) {
@@ -153,7 +164,7 @@ if (workflowRuns) {
   reply({ workflow_runs: runs.slice(0, Number(params.get("per_page") || 30)).map((run) => ({ id: run.id, conclusion: run.conclusion, status: "completed", event: run.event || "pull_request", workflow_id: workflowOf(run) })) });
 }
 const jobs = route.match(/^actions\\/runs\\/(\\d+)\\/jobs$/);
-if (jobs) reply({ jobs: (state.runs.find((run) => run.id === Number(jobs[1])) || { jobs: [] }).jobs });
+if (jobs) reply({ jobs: paged((state.runs.find((run) => run.id === Number(jobs[1])) || { jobs: [] }).jobs) });
 
 httpError(404, "Not Found");
 }

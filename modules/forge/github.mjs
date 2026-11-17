@@ -50,8 +50,10 @@ function describeGhFailure(error) {
   return new GitHubError("unavailable", "GitHub could not be reached");
 }
 
+// `--hostname` keeps every call on github.com even when GH_HOST names an Enterprise host, where a
+// repo of the same name could otherwise receive the protection changes.
 async function api(context, endpoint, { method = "GET", body = null } = {}) {
-  const args = ["api", "--method", method, "-H", "Accept: application/vnd.github+json", endpoint];
+  const args = ["api", "--hostname", "github.com", "--method", method, "-H", "Accept: application/vnd.github+json", endpoint];
   if (body) args.push("--input", "-");
   let stdout;
   try {
@@ -68,6 +70,24 @@ async function api(context, endpoint, { method = "GET", body = null } = {}) {
 
 const repoPath = (repo) => `repos/${repo}`;
 
+const PAGE_SIZE = 100;
+// A list longer than this many pages is far beyond any real repo; stopping keeps a misbehaving
+// answer from looping forever.
+const MAX_PAGES = 20;
+
+// Every item of a paged list. `pick` takes the items out of one page's body. A page shorter than
+// PAGE_SIZE is the last one, so a list of 100 or fewer items costs one request, as before.
+async function allPages(context, endpoint, pick = (body) => body) {
+  const items = [];
+  const separator = endpoint.includes("?") ? "&" : "?";
+  for (let page = 1; page <= MAX_PAGES; page += 1) {
+    const batch = pick(await api(context, `${endpoint}${separator}per_page=${PAGE_SIZE}&page=${page}`)) || [];
+    items.push(...batch);
+    if (batch.length < PAGE_SIZE) break;
+  }
+  return items;
+}
+
 // `context` is `{ cwd, timeoutMs }`; `repo` is `owner/name`.
 export const githubClient = {
   host: "github.com",
@@ -81,10 +101,10 @@ export const githubClient = {
   },
 
   // Every active rule that applies to the branch, from any ruleset at any level.
-  branchRules: (context, repo, branch) => api(context, `${repoPath(repo)}/rules/branches/${encodeURIComponent(branch)}?per_page=100`),
+  branchRules: (context, repo, branch) => allPages(context, `${repoPath(repo)}/rules/branches/${encodeURIComponent(branch)}`),
 
   // The list carries no rules; `ruleset` reads one in full.
-  rulesets: (context, repo) => api(context, `${repoPath(repo)}/rulesets?per_page=100`),
+  rulesets: (context, repo) => allPages(context, `${repoPath(repo)}/rulesets`),
   ruleset: (context, repo, id) => api(context, `${repoPath(repo)}/rulesets/${id}`),
 
   createRuleset: (context, repo, body) => api(context, `${repoPath(repo)}/rulesets`, { method: "POST", body }),
@@ -98,8 +118,8 @@ export const githubClient = {
   // cancelled and failed runs. Each workflow is asked for its own newest run, so a quiet workflow
   // is never crowded out by a busy one.
   async pullRequestCheckJobs(context, repo) {
-    const workflows = await api(context, `${repoPath(repo)}/actions/workflows?per_page=100`);
-    const active = (workflows.workflows || []).filter((workflow) => workflow.state === "active");
+    const workflows = await allPages(context, `${repoPath(repo)}/actions/workflows`, (body) => body.workflows);
+    const active = workflows.filter((workflow) => workflow.state === "active");
     const runIds = [];
     const names = new Set();
     // One request at a time, so a failed read leaves no other `gh` request running.
@@ -108,8 +128,8 @@ export const githubClient = {
       const run = runs.workflow_runs?.[0];
       if (!run) continue;
       runIds.push(run.id);
-      const jobs = await api(context, `${repoPath(repo)}/actions/runs/${run.id}/jobs?per_page=100`);
-      for (const job of jobs.jobs || []) if (job.conclusion === "success") names.add(job.name);
+      const jobs = await allPages(context, `${repoPath(repo)}/actions/runs/${run.id}/jobs`, (body) => body.jobs);
+      for (const job of jobs) if (job.conclusion === "success") names.add(job.name);
     }
     return names.size > 0 ? { runIds, jobs: [...names].sort() } : null;
   },
