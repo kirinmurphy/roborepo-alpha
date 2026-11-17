@@ -629,6 +629,8 @@ the Decision Log.
 - Manual: Not tested entries 4 and 7 deferred by the owner on 2026-11-17.
 - `npm run check` (full local gate) passed at 73f7643d: CI checks passed, portal UI 268 passed.
 - Approval: the owner answered "Approve 73f7643d" in the review chat on 2026-11-17.
+- Approval: after the re-review and base sync, the owner answered "Approve 144da640" in the review
+  chat on 2026-11-17.
 
 - Re-review: approval at 73f7643d went stale; four pull request fix commits followed (a8f571b7,
   45790c89, 5e2e9da1, 376c4f83). Base unchanged at 97f65fa4.
