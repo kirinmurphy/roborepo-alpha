@@ -121,6 +121,9 @@ export function doctorLine(report) {
       return { level: "hint", text: `branch protection has drifted from the RoboRepo policy for ${repo} — ${adminAction}` };
     case "conflicting": {
       const [conflict] = report.conflicts;
+      if (conflict.source === "branch-protection") {
+        return { level: "hint", text: `branch protection setting ${conflict.rule} on the plans branch will refuse plan saves in ${repo} — turn it off in the repo's branch protection settings` };
+      }
       return { level: "hint", text: `rule ${conflict.rule} from ruleset ${conflict.ruleset} will refuse plan saves in ${repo} — exclude the plans branch from that ruleset` };
     }
     case "unsupported":

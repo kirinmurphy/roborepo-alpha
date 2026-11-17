@@ -73,6 +73,8 @@ try {
 
   start({ rulesets: [...structuredClone(managed), ruleset(40, "sign-everything", { ref_name: { include: ["~ALL"], exclude: [] } }, [{ type: "required_signatures" }])] });
   expectLine(1, /rule required_signatures from ruleset sign-everything will refuse plan saves in example\/project — exclude the plans branch from that ruleset/);
+  start({ rulesets: structuredClone(managed), classicProtection: { "repo-plans": { lock_branch: { enabled: true } } } });
+  expectLine(1, /branch protection setting lock_branch on the plans branch will refuse plan saves in example\/project — turn it off in the repo's branch protection settings/);
 
   start({ failure: "not-signed-in" });
   expectLine(0, /branch protection check skipped \(the GitHub CLI is not signed in \(run: gh auth login\)\)/);

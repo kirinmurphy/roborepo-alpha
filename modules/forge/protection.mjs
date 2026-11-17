@@ -72,11 +72,12 @@ function resolveTarget({ repositoryId, cwd = process.cwd(), timeoutMs } = {}) {
 async function readSnapshot({ client, context, repo }) {
   const [repository, login] = await settleAll([client.repository(context, repo), client.login(context)]);
   const defaultBranch = repository.default_branch;
-  const [plansRules, mainRules, listed, run] = await settleAll([
+  const [plansRules, mainRules, listed, run, plansClassic] = await settleAll([
     client.branchRules(context, repo, PLANS_BRANCH),
     client.branchRules(context, repo, defaultBranch),
     client.rulesets(context, repo),
     pullRequestCheckJobs(client, context, repo),
+    classicProtection(client, context, repo, PLANS_BRANCH),
   ]);
   // Only repository rulesets are read in full; one set by an organization is reported by name.
   const rulesets = await settleAll(listed.map((entry) => (
@@ -84,8 +85,40 @@ async function readSnapshot({ client, context, repo }) {
   )));
   return {
     repo, defaultBranch, login, admin: repository.permissions?.admin === true,
-    plansRules, mainRules, rulesets, foundChecks: run ? run.jobs : null,
+    plansRules, mainRules, rulesets, foundChecks: run ? run.jobs : null, plansClassic,
   };
+}
+
+// Classic branch protection lives outside rulesets, so the effective-rules read never shows it.
+// 404 means the branch has none, or the account cannot administer the repo and so cannot see it;
+// 403 is a plan that offers no branch protection. Either way there is nothing readable to report.
+// Any other error makes the whole read `unavailable`, as for the Actions reads.
+async function classicProtection(client, context, repo, branch) {
+  try {
+    return await client.branchProtection(context, repo, branch);
+  } catch (error) {
+    if (error instanceof GitHubError && error.kind === "http" && [403, 404].includes(error.status)) return null;
+    throw error;
+  }
+}
+
+// The classic settings that refuse the plain fast-forward push of unsigned commits a plan save
+// makes, keyed by their field in GitHub's answer. Force-push, deletion, and linear-history settings
+// never refuse one.
+const CLASSIC_REFUSING_SETTINGS = [
+  ["required_pull_request_reviews", "require a pull request before merging", (value) => Boolean(value)],
+  ["required_status_checks", "require status checks to pass", (value) => Boolean(value)],
+  ["restrictions", "restrict who can push", (value) => Boolean(value)],
+  ["required_signatures", "require signed commits", (value) => value?.enabled === true],
+  ["lock_branch", "lock branch", (value) => value?.enabled === true],
+];
+
+function classicConflicts(protection) {
+  if (!protection) return [];
+  return CLASSIC_REFUSING_SETTINGS.filter(([field, , refuses]) => refuses(protection[field])).map(([field, label]) => ({
+    source: "branch-protection", rule: field, rulesetId: null, ruleset: null,
+    detail: `The ${PLANS_BRANCH} branch's branch protection setting "${label}" will refuse plan saves. Turn it off in the repo's branch protection settings for ${PLANS_BRANCH}.`,
+  }));
 }
 
 // Like Promise.all, but waits for every request before rejecting with the first failure. A read
@@ -121,6 +154,16 @@ export function assessProtection(snapshot) {
   // GitHub returns bypass lists only to accounts that can manage the ruleset.
   const bypassVisible = rulesets.filter((ruleset) => ruleset.source_type === "Repository").every((ruleset) => Array.isArray(ruleset.bypass_actors));
 
+  const byId = new Map(rulesets.map((ruleset) => [ruleset.id, ruleset]));
+  // Whether the ruleset supplying an effective rule lets no one bypass it whom the policy would not.
+  // An organization ruleset, or one whose bypass list GitHub hides from this account, cannot be
+  // checked; its rule counts, as it did before bypass lists were compared.
+  const supplierBypassFits = (rule, policy) => {
+    const supplier = byId.get(rule.ruleset_id);
+    if (!supplier || !Array.isArray(supplier.bypass_actors)) return true;
+    return bypassNoWider(supplier.bypass_actors, policy.bypass_actors);
+  };
+
   const policies = managedRulesets({ requiredChecks }).map((policy) => {
     const ruleset = managed.get(policy.name);
     const base = {
@@ -139,19 +182,23 @@ export function assessProtection(snapshot) {
       const missingRules = policy.rules.filter((wanted) => !effective.some((rule) => rule.type === wanted.type)).map((rule) => rule.type);
       return describedPolicy({ ...base, status: drift.length ? "drifted" : "ok", missingRules, drift });
     }
-    // With no managed ruleset, a policy rule is missing unless some other ruleset applies it.
-    const missingRules = policy.rules.filter((wanted) => !effective.some((rule) => ruleAtLeastAsStrict(rule, wanted))).map((rule) => rule.type);
-    return describedPolicy({ ...base, status: "absent", missingRules, drift: [] });
+    // With no managed ruleset, a policy rule is missing unless some other ruleset applies it at
+    // least as strictly, to no wider bypass list than the policy's: a hand-made integrity ruleset
+    // that admins can bypass does not protect the branch "for everyone, admins included".
+    const strict = (wanted) => effective.filter((rule) => ruleAtLeastAsStrict(rule, wanted));
+    const missingRules = policy.rules.filter((wanted) => !strict(wanted).some((rule) => supplierBypassFits(rule, policy))).map((rule) => rule.type);
+    const widerBypass = policy.rules.filter((wanted) => missingRules.includes(wanted.type) && strict(wanted).length > 0).map((rule) => rule.type);
+    return describedPolicy({ ...base, status: "absent", missingRules, widerBypass, drift: [] });
   });
 
   const names = new Map(rulesets.map((ruleset) => [ruleset.id, ruleset.name]));
   const conflicts = plansRules.filter((rule) => !PLANS_SAFE_RULE_TYPES.has(rule.type)).map((rule) => {
     const ruleset = names.get(rule.ruleset_id) || rule.ruleset_source || "an unnamed ruleset";
     return {
-      rule: rule.type, rulesetId: rule.ruleset_id ?? null, ruleset,
+      source: "ruleset", rule: rule.type, rulesetId: rule.ruleset_id ?? null, ruleset,
       detail: `Rule ${rule.type} from ruleset ${ruleset} reaches the ${PLANS_BRANCH} branch and will refuse plan saves. Exclude that branch from the ruleset.`,
     };
-  });
+  }).concat(classicConflicts(snapshot.plansClassic));
 
   const state = conflicts.length ? "conflicting"
     : policies.some((policy) => policy.missingRules.length) ? "missing"
@@ -194,6 +241,7 @@ function describedPolicy(policy) {
   const detail = policy.status === "skipped" ? "skipped (turned off for this repo)"
     : policy.status === "ok" ? "matches the policy"
       : policy.status === "drifted" ? `differs from the policy: ${policy.drift.join("; ")}`
+        : policy.widerBypass?.length > 0 ? `not created; missing ${policy.missingRules.join(", ")} (hand-made rulesets apply ${policy.widerBypass.join(", ")}, but let more people bypass ${policy.widerBypass.length === 1 ? "it" : "them"})`
         : policy.missingRules.length > 0 ? `not created; missing ${policy.missingRules.join(", ")}`
           : "not created; hand-made rulesets apply its rules";
   return { ...policy, detail };

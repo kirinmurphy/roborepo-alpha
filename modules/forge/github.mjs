@@ -103,6 +103,10 @@ export const githubClient = {
   // Every active rule that applies to the branch, from any ruleset at any level.
   branchRules: (context, repo, branch) => allPages(context, `${repoPath(repo)}/rules/branches/${encodeURIComponent(branch)}`),
 
+  // A branch's classic (pre-ruleset) branch protection settings. GitHub answers 404 when the
+  // branch has none, and also to an account that cannot administer the repo.
+  branchProtection: (context, repo, branch) => api(context, `${repoPath(repo)}/branches/${encodeURIComponent(branch)}/protection`),
+
   // The list carries no rules; `ruleset` reads one in full.
   rulesets: (context, repo) => allPages(context, `${repoPath(repo)}/rulesets`),
   ruleset: (context, repo, id) => api(context, `${repoPath(repo)}/rulesets/${id}`),

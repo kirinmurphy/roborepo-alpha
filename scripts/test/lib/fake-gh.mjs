@@ -8,6 +8,7 @@
 //   login, admin, defaultBranch
 //   refuseCreate  a ruleset name whose create answers 422, to fail an apply partway
 //   refuseUpdate  a ruleset name whose update answers 422
+//   classicProtection  optional { [branch]: GitHub's classic branch protection answer }
 // List endpoints page by `per_page` and `page` as GitHub does; each log entry records the
 // `--hostname` the call named.
 //   rulesets  full ruleset objects; `source_type` other than "Repository" marks an inherited one
@@ -145,6 +146,14 @@ if (one) {
     save();
     reply({});
   }
+}
+
+// Classic branch protection: only an admin can read it; anyone else, or a branch without it, gets 404.
+const classic = route.match(/^branches\\/([^/]+)\\/protection$/);
+if (classic) {
+  const settings = (state.classicProtection || {})[decodeURIComponent(classic[1])];
+  if (!state.admin || !settings) httpError(404, "Branch not protected");
+  reply(settings);
 }
 
 const actionsRoute = /^actions\\//.test(route);

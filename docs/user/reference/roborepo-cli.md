@@ -323,7 +323,8 @@ hand. Managed and hand-made rulesets stack, so adding the managed ones never loo
 The report lists each hand-made ruleset and marks it **covered** when the managed rulesets apply
 every one of its rules at least as strictly, on the same branches, with no wider bypass. A covered
 ruleset is safe to delete in GitHub; the command leaves that to you. GitHub shows bypass lists only
-to accounts that can manage rulesets, so for anyone else no ruleset is marked covered.
+to accounts that can manage rulesets, so for anyone else no ruleset is marked covered, and a
+hand-made rule counts toward the policy without its bypass list being compared.
 
 Only the merge rules can be skipped. The plans and integrity rulesets have no opt-out.
 
@@ -332,10 +333,10 @@ Only the merge rules can be skipped. The plans and integrity rulesets have no op
 | State | Meaning | Exit code |
 | --- | --- | --- |
 | `protected` | Every RoboRepo ruleset exists and matches the policy, or is skipped | 0 |
-| `unmanaged` | Every policy rule applies, but through hand-made rulesets; `roborepo protect` adds the managed ones beside them | 0 |
-| `missing` | A policy rule is absent from its branch: no ruleset applies it, or the RoboRepo ruleset that should was disabled or lost it | 1 |
+| `unmanaged` | Every policy rule applies, but through hand-made rulesets that let no more people bypass it than the policy does; `roborepo protect` adds the managed ones beside them | 0 |
+| `missing` | A policy rule is absent from its branch: no ruleset applies it, only a hand-made ruleset with a wider bypass list does (such as an integrity rule admins can bypass), or the RoboRepo ruleset that should was disabled or lost it | 1 |
 | `drifted` | A RoboRepo ruleset exists but differs from the policy | 1 |
-| `conflicting` | A rule other than the three on `roborepo-plans` reaches `repo-plans` and will refuse plan saves. The report names the rule and its ruleset; exclude `repo-plans` from that ruleset | 1 |
+| `conflicting` | Something on `repo-plans` will refuse plan saves: a ruleset rule other than the three on `roborepo-plans` (the report names the rule and its ruleset; exclude `repo-plans` from that ruleset), or a classic branch protection setting that requires a pull request, status checks, or signed commits, restricts who can push, or locks the branch (turn it off in the repo's branch protection settings). GitHub shows classic branch protection only to repo admins | 1 |
 | `unavailable` | `gh` is not installed or not signed in, GitHub did not answer, or GitHub answered with an error such as a rate limit; the report gives the reason | 1 |
 | `unsupported` | The remote is not GitHub, or GitHub does not offer rulesets for this repo. The report lists the steps to protect the branches by hand | 1 |
 

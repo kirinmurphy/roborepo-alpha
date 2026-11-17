@@ -350,6 +350,38 @@ try {
   assert.deepEqual(writes(), []);
   console.log("✓ A push-blocking rule on the plans branch reads as conflicting, naming the rule and ruleset.");
 
+  // Classic branch protection on the plans branch is outside rulesets but refuses saves just the same.
+  const classicReviews = { "repo-plans": {
+    required_pull_request_reviews: { required_approving_review_count: 1 },
+    required_signatures: { enabled: false }, allow_force_pushes: { enabled: false }, allow_deletions: { enabled: false },
+  } };
+  start({ rulesets: structuredClone(managedOnly), classicProtection: classicReviews });
+  result = run(["--json"]);
+  assert.equal(result.status, 1);
+  assert.equal(result.json.state, "conflicting");
+  assert.deepEqual(result.json.conflicts.map((conflict) => [conflict.source, conflict.rule]), [["branch-protection", "required_pull_request_reviews"]]);
+  assert.match(result.json.conflicts[0].detail, /branch protection setting "require a pull request before merging" will refuse plan saves/);
+  assert.deepEqual(writes(), []);
+  // Settings that never refuse a fast-forward push are not conflicts.
+  start({ rulesets: structuredClone(managedOnly), classicProtection: { "repo-plans": {
+    required_signatures: { enabled: false }, allow_force_pushes: { enabled: false }, required_linear_history: { enabled: true },
+  } } });
+  assert.equal(run(["--check", "--json"]).json.state, "protected");
+  // A non-admin cannot read classic protection; the state comes from the rulesets alone.
+  start({ admin: false, login: "octo-reader", rulesets: structuredClone(managedOnly), classicProtection: classicReviews });
+  assert.equal(run(["--check", "--json"]).json.state, "protected");
+  console.log("✓ Classic branch protection that refuses a push on the plans branch reads as conflicting.");
+
+  // A hand-made ruleset that admins can bypass does not supply a no-bypass policy rule.
+  const bypassable = structuredClone(fullyHandMade).map((ruleset) => ruleset.name === "protect-main" ? { ...ruleset, bypass_actors: ADMIN_BYPASS } : ruleset);
+  start({ rulesets: bypassable });
+  result = run(["--check", "--json"]);
+  assert.equal(result.json.state, "missing");
+  assert.deepEqual(policy(result.json, "main-integrity").missingRules, ["deletion", "non_fast_forward"]);
+  assert.match(policy(result.json, "main-integrity").detail, /hand-made rulesets apply deletion, non_fast_forward, but let more people bypass them/);
+  assert.equal(policy(result.json, "plans").missingRules.length, 0, "the plans branch's no-bypass ruleset still counts");
+  console.log("✓ A hand-made rule counts toward a policy only when its ruleset's bypass list is no wider.");
+
   // unavailable: no answer from GitHub.
   for (const [failure, reason] of [["not-signed-in", /not signed in \(run: gh auth login\)/], ["unreachable", /GitHub could not be reached/]]) {
     start({ failure });
