@@ -29,7 +29,7 @@ section links the matching step in [the teaching doc](harnesses-explained.md).
 | Install bundles | Named groups of install-time file operations applied at install/update. Internal to the install pipeline — not a user-facing verb. | `manifests/platform/presets.json` | `roborepo update` (applies them); `roborepo bundle …` is an internal verb called by `scripts/install/main.sh` |
 | Hooks | Scripts the harness runs on lifecycle/tool events. | System hooks: `globals/system/hooks/claude/*.mjs` + `settings.json` wiring, `globals/harnesses/codex/hooks/*.mjs` + `hooks.json`. Package-owned hooks (e.g. Caveman's Codex `SessionStart`, telemetry capture) live under `globals/packages/<package>/hooks*` and are composed in only when that package is enabled | edit source, then `roborepo update` |
 | MCP servers | External tool servers registered with every enabled harness. | Claude: native live store<br>Codex: active `~/.codex/config.toml`, fully owned by each package's `mcp` components and Codex `config-patch` tool approvals<br>Gemini: `mcpServers` key in `~/.gemini/settings.json`, direct JSON read/write | `roborepo mcp add <name-or-url>` |
-| Permissions | Allowed, denied, and ask-before-run behavior for commands, tools, and network defaults. | Claude: `settings.json` `permissions.*`<br>Codex: `config.toml` + `rules/default.rules` + runtime ask hook<br>Gemini: `~/.gemini/policies/generated-permissions.toml`, one fully-owned file in the Policy Engine's rule directory | `roborepo config permissions [--render\|--check]` |
+| Permissions | Allowed, denied, and ask-before-run behavior for commands, tools, and network defaults. | Claude: `settings.json` `permissions.*`<br>Codex: `config.toml` + `rules/roborepo.rules` + runtime ask hook<br>Gemini: `~/.gemini/policies/generated-permissions.toml`, one fully-owned file in the Policy Engine's rule directory | `roborepo config permissions [--render\|--check]` |
 | Telemetry | Local capture + analysis of sessions, tools, MCP, and token usage; spike detection + cause attribution + dashboard; backup/reset. | Package-owned hooks (`globals/packages/telemetry/hooks-{claude,codex}.json`) feed `~/.roborepo/telemetry`. Gemini sessions can appear in capture/analysis (harness id is a free-form CLI flag), but the package declares no Gemini hook wiring yet, so capture isn't wired in for it | `roborepo telemetry enable\|disable\|status\|report\|backup\|purge` |
 | Root config | Mutable, machine-local settings (model, trust, hook approvals). | Claude: `generated/claude/settings.json` (baseline)<br>Codex: `generated/codex/config.toml` (baseline)<br>Gemini: `~/.gemini/settings.json`, merged with the same recursive-object-merge rule as Claude's | `roborepo update` (export/merge) |
 
@@ -174,7 +174,7 @@ such as sandboxing, approval policy, and Codex network access.
 
 **Parity model:** authored once in `manifests/inventory/agent-permissions.json`, rendered into each harness's
 native shape — Claude's `permissions.allow`/`permissions.deny`/`permissions.ask` in
-`settings.json`, Codex's `config.toml` session defaults + `rules/default.rules` command policy, and
+`settings.json`, Codex's `config.toml` session defaults + `rules/roborepo.rules` command policy, and
 Gemini's `~/.gemini/policies/generated-permissions.toml` — one fully-owned file inside the Policy
 Engine's rule directory, rather than a marked block inside a shared file. Codex's static rules cannot
 express per-command `ask`, so `globals/harnesses/codex/hooks/permission-check.mjs` supplies that runtime

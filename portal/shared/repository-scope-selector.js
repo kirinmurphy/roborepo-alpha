@@ -1,11 +1,12 @@
 // The repository selector in the sub-header row theme.js adds on pages whose manifest entry sets
 // `repositoryScope`. It lists the visible repositories, writes the choice to the URL through
-// repository-scope.js, and opens the shared Manage repositories dialog from an action row.
+// repository-scope.js, and opens the shared Manage repositories dialog from an action row. It
+// re-reads its list on the shared "repos changed" signal (repository-list-change.js).
 //
 // Pages that need to know what the scope resolved to (Agents, which loads no repository data) use
 // onRepositoryScopeResolved; pages with scoped data routes also get the same answer from the route.
 import "/portal/shared/option-dropdown.js";
-import { portalGetJson, portalTpl as tpl } from "/portal/shared/api.js";
+import { portalTpl as tpl } from "/portal/shared/api.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import {
   clearRepositoryScope,
@@ -18,37 +19,23 @@ import {
   repositoryScopeChoices,
   resolveScopeChoice,
 } from "/portal/shared/repository-scope-choices.js";
+import {
+  loadRepositoryList,
+  onRepositoriesChanged,
+  readCachedRepositories,
+} from "/portal/shared/repository-list-change.js";
 
 const RESOLVED_EVENT = "portal:repositoryscoperesolved";
-// Every page load builds this selector from scratch and the repo list is a request away, so the
-// last list seen in this tab is kept: the selector then names the current repo on first paint
-// instead of flashing "Unavailable repo" while the list loads. The list is path-free summaries.
-const LIST_CACHE_KEY = "portal-repo-list";
 let resolved = null;
-
-function readCachedRepositories() {
-  try {
-    const list = JSON.parse(sessionStorage.getItem(LIST_CACHE_KEY));
-    return Array.isArray(list) ? list : null;
-  } catch {
-    return null;
-  }
-}
-
-function cacheRepositories(list) {
-  try {
-    sessionStorage.setItem(LIST_CACHE_KEY, JSON.stringify(list));
-  } catch {
-    // Private windows and blocked storage just lose the head start.
-  }
-}
 
 export function mountRepositoryScopeSelector(page, host = document.getElementById("repository-scope")) {
   if (!host) return;
   const outsideActivity = Boolean(page.outsideActivityScope);
   let repositories = readCachedRepositories();
-  // A cached list can name a repo as present but never as missing: a repo added since would be
-  // called unavailable for a moment. Only a list fetched by this page may say "unavailable".
+  // The last list seen in this tab names the current repo on first paint instead of flashing
+  // "Unavailable repo" while the list loads. A cached list can name a repo as present but never as
+  // missing: a repo added since would be called unavailable for a moment. Only a list fetched by
+  // this page may say "unavailable".
   let fresh = false;
   const dropdown = document.createElement("option-dropdown");
   dropdown.name = "Repo";
@@ -57,7 +44,7 @@ export function mountRepositoryScopeSelector(page, host = document.getElementByI
     // A page can hold the change for unsaved work, so the selector shows the scope actually in force.
     dropdown.value = currentRepositoryScope() ?? ALL_REPOSITORIES;
   };
-  const manageDialog = createRepositorySourcesDialog({ onChange: () => void loadRepositories() });
+  const manageDialog = createRepositorySourcesDialog();
   dropdown.actions = [{ label: "Manage Repos", icon: "pencil", onSelect: () => manageDialog.open() }];
   host.replaceChildren(dropdown);
 
@@ -71,22 +58,17 @@ export function mountRepositoryScopeSelector(page, host = document.getElementByI
     if (fresh || resolution.status !== "unavailable") publish({ scope, ...resolution });
   };
 
-  async function loadRepositories() {
-    try {
-      repositories = (await portalGetJson("/api/repositories")).repositories || [];
-      cacheRepositories(repositories);
-      fresh = true;
-    } catch {
-      // Without the list no key can be confirmed, so a scoped page shows unavailable, never All.
-      repositories = [];
-      fresh = true;
-    }
+  // Without the list no key can be confirmed, so a scoped page shows unavailable, never All.
+  function showRepositories(list) {
+    repositories = list || [];
+    fresh = true;
     render();
   }
 
   onRepositoryScopeChange(render);
+  onRepositoriesChanged((change) => showRepositories(change.repositories));
   render();
-  void loadRepositories();
+  void loadRepositoryList().then(showRepositories);
 }
 
 // Calls `listener({ scope, status, repository })` with the latest resolution, now if one exists and

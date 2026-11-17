@@ -211,10 +211,15 @@ any other's, and the run records that those fixes were not revalidated. The find
   each entry that does neither.
 
 If the loop has ended and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
-which moves the plan to `review/`, then pushes the plan's feature branch so CI starts before you
-review. That says the work is complete and checked, not that you accepted it. If the push is
-refused, the plan still moves and the report gives you the command to push it yourself. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
+which moves the plan to `review/`. That says the work is complete and checked, not that you
+accepted it. Otherwise the plan stays in `active/` with a `next_action` for the next run; an open
 `escalate` finding is an unchecked task, so it holds the plan in `active/` until you answer it.
+
+Either way, every `/plan-execute` and `/plan-review` run that commits to the plan's feature branch
+ends by pushing that branch, so the work is never only on your machine and CI runs on each step's
+result. Only the feature branch is pushed, never the base branch, and never with force. If the push
+is refused, the plan's lifecycle still stands and the report gives you the command to push it
+yourself.
 
 Worktrees go where you confirmed in `/plan-suite-init`. In Claude, each run also asks once for access to the worktree folder, then works inside it, so edits
 there do not prompt one file at a time.

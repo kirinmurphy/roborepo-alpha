@@ -15,7 +15,7 @@
 generated/codex/AGENTS.md
 generated/codex/config.toml
 generated/codex/hooks.json
-generated/codex/rules/default.rules
+generated/codex/rules/roborepo.rules
 manifests/inventory/agent-permissions.json
 manifests/inventory/package-categories.json
 manifests/platform/cli-commands.json

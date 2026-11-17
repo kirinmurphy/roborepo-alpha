@@ -64,7 +64,7 @@ const SKILLS = {
     boundaryPhrases: [
       "fix a finding that chooses between real alternatives, changes requirements, or changes a contract",
       "infer, assume, or record approval without the human's explicit answer",
-      "merge the feature branch into the base branch, push code, open or merge pull requests",
+      "merge the feature branch into the base branch, push anything but the plan's feature branch, open or merge pull requests",
       "move a plan back to `ready/`",
     ],
   },
@@ -193,6 +193,13 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "the plan stays in `active/`",
     "`roborepo plans submit <plan> --json`",
   ]);
+  // Every run that commits to the feature branch pushes it, not only the review handoff.
+  includesAll("plan-execute push", skill, [
+    "Every run that commits to the feature branch ends by pushing it",
+    "when the plan stays in `active/`",
+    "never the base branch or any other protected branch",
+    "Never force-push",
+  ]);
   assert.ok(skill.slice(order[5]).includes("then run the Validation Loop over the result"), "plan-execute: fixes made in review mode are validated too");
   includesAll("plan-execute review findings", skill.slice(order[5]), [
     "nothing else is in scope",
@@ -290,6 +297,12 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // --- plan-review: preflight, base synchronization, the check, fixes, the review packet, and approval ---
 {
   const review = readSkill("plan-review");
+  includesAll("plan-review push", review, [
+    "Every review run that commits to the feature branch",
+    "then push the feature branch (see Push the feature branch)",
+    "never the base branch or any other protected branch",
+    "Never force-push",
+  ]);
   const order = ["### 1. Confirm implementation is complete", "### 2. Synchronize the base branch", "### 3. Check the work", "### 4. Record the review", "### 5. Fix what has a clear fix", "### 6. Present the review", "#### 6a.", "#### 6b.", "#### 6c."]
     .map((heading) => review.indexOf(heading));
   assert.ok(order.every((at, i) => at > 0 && (i === 0 || at > order[i - 1])), "plan-review: preflight, sync, check, record, fix, present, then the three outcomes");
