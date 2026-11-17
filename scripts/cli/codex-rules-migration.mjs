@@ -40,15 +40,16 @@ export function migrateCodexDefaultRules({ codexHome, sourcePath, dryRun = false
   const plan = planDefaultRulesMigration(current, fs.readFileSync(sourcePath, "utf8"));
   if (plan.removed === 0) return { changed: false };
 
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..*$/, "");
-  const backup = path.join(backupRoot ?? path.join(stateRoot, "backups", "codex-rules"), `default.rules.${stamp}`);
+  // Millisecond stamp plus pid keeps names sortable; COPYFILE_EXCL below refuses to overwrite one.
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace("Z", "");
+  const backup = path.join(backupRoot ?? path.join(stateRoot, "backups", "codex-rules"), `default.rules.${stamp}-${process.pid}`);
   const summary = `${plan.removed} RoboRepo rule line(s) from ${target} (now in roborepo.rules)`;
   if (dryRun) {
     log(`would remove ${summary}; backup -> ${backup}`);
     return { changed: true, backup, removed: plan.removed };
   }
   fs.mkdirSync(path.dirname(backup), { recursive: true });
-  fs.copyFileSync(target, backup);
+  fs.copyFileSync(target, backup, fs.constants.COPYFILE_EXCL);
   fs.writeFileSync(target, plan.text);
   log(`removed ${summary}; backup -> ${backup}`);
   return { changed: true, backup, removed: plan.removed };

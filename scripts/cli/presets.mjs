@@ -634,6 +634,23 @@ function applySharedTarget(row, policy) {
   }
 }
 
+// Older installs linked a whole parent dir (~/.codex/rules) into the checkout. Writing or deleting an
+// owned file through that link would change the repo's own file, so remove the link instead.
+// A dangling link counts too: its target was a checkout path that has since moved.
+function unlinkParentRepoLink(homeAbs) {
+  const parent = path.dirname(homeAbs);
+  if (!readlink(parent)) return false;
+  let real = null;
+  try {
+    real = fs.realpathSync(parent);
+  } catch {}
+  const repoReal = fs.realpathSync(repoRoot);
+  if (real && real !== repoReal && !real.startsWith(`${repoReal}${path.sep}`)) return false;
+  fs.unlinkSync(parent);
+  console.log(`unlink: ${parent} (old link into the checkout)`);
+  return true;
+}
+
 function rowHasFlag(row, flag) {
   return String(row.flags ?? "").split(",").map((value) => value.trim()).includes(flag);
 }
@@ -642,13 +659,8 @@ function rowHasFlag(row, flag) {
 // stale copy, not a user edit, so it is rewritten in place with no prompt, staging, or backup.
 function copyOwnedItem(row) {
   const source = path.join(repoRoot, row.srcRel);
-  // Older installs linked the whole parent dir (~/.codex/rules) into the checkout; writing through
-  // that link would write into the repo, so replace it with a real directory first.
-  const parent = path.dirname(row.homeAbs);
-  if (readlink(parent) && (resolvesInsideRepo(parent) || !fs.existsSync(parent))) {
-    fs.unlinkSync(parent);
-    console.log(`unlink: ${parent} (old link into the checkout)`);
-  }
+  // Writing through an old parent link would write into the repo: replace it with a real dir.
+  unlinkParentRepoLink(row.homeAbs);
   fs.mkdirSync(path.dirname(row.homeAbs), { recursive: true });
   if (!readlink(row.homeAbs) && pathExists(row.homeAbs) && pathsEquivalentForCopy(source, row.homeAbs)) {
     console.log(`ok: ${row.homeAbs}`);
@@ -827,6 +839,8 @@ function removeRow(row, policy) {
   if (row.kind === "rendered_rules") return removeRenderedRulesRow(row);
   if (SHARED_TARGET_KINDS.includes(row.kind)) return removeSharedTargetRow(row);
   if (row.kind === "managed_copy" && rowHasFlag(row, "owned")) {
+    // Through an old parent link into the checkout, the file is the repo's own: drop the link only.
+    if (unlinkParentRepoLink(row.homeAbs)) return;
     if (!pathExists(row.homeAbs) && !readlink(row.homeAbs)) return;
     fs.rmSync(row.homeAbs, { recursive: true, force: true });
     console.log(`unlink: ${row.homeAbs}`);

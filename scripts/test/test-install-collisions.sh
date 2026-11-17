@@ -690,7 +690,7 @@ test_uninstall_preserves_user_modified_copy() {
     || fail "uninstall keeps a user-modified copy (content diverged from repo)" "$home_dir/uninstall.out"
 }
 
-test_uninstall_reclaims_real_dir_link_remnant() {
+test_uninstall_removes_diverged_owned_codex_rules() {
   local home_dir
   home_dir="$(make_home)"
 
@@ -705,6 +705,35 @@ test_uninstall_reclaims_real_dir_link_remnant() {
     && pass "uninstall removes the owned Codex rules file even when it diverged" \
     || fail "uninstall removes the owned Codex rules file even when it diverged" "$home_dir/uninstall.out"
   assert_file_contains "$home_dir/.codex/rules/default.rules" 'pattern=\["make"\]' "uninstall keeps the user's default.rules"
+}
+
+# Older installs linked ~/.codex/rules itself into the checkout. Install must replace that link with a
+# real dir, and uninstall must drop the link; neither may write or delete the repo's file through it.
+test_codex_legacy_rules_dir_link() {
+  local home_dir generated saved
+  home_dir="$(make_home)"
+  generated="$repo_root/generated/codex/rules/roborepo.rules"
+  saved="$home_dir/generated-roborepo.rules"
+  cp "$generated" "$saved"
+
+  ln -s "$repo_root/generated/codex/rules" "$home_dir/.codex/rules"
+  HOME="$home_dir" "$repo_root/scripts/install/uninstall.sh" >"$home_dir/uninstall.out" 2>&1
+  [[ ! -L "$home_dir/.codex/rules" ]] && cmp -s "$saved" "$generated" \
+    && pass "uninstall drops a legacy rules-dir link without deleting the repo file" \
+    || fail "uninstall drops a legacy rules-dir link without deleting the repo file" "$home_dir/uninstall.out"
+  [[ -f "$generated" ]] || cp "$saved" "$generated"
+
+  ln -s "$repo_root/generated/codex/rules" "$home_dir/.codex/rules"
+  HOME="$home_dir" "$repo_root/scripts/install/install-harness.sh" codex >"$home_dir/install.out" 2>&1
+  [[ -d "$home_dir/.codex/rules" && ! -L "$home_dir/.codex/rules" ]] \
+    && cmp -s "$generated" "$home_dir/.codex/rules/roborepo.rules" \
+    && cmp -s "$saved" "$generated" \
+    && pass "install replaces a legacy rules-dir link with a real dir" \
+    || fail "install replaces a legacy rules-dir link with a real dir" "$home_dir/install.out"
+  [[ -f "$generated" ]] || cp "$saved" "$generated"
+  [[ ! -e "$repo_root/generated/codex/rules/default.rules" ]] \
+    && pass "install writes nothing into the checkout through the old link" \
+    || fail "install writes nothing into the checkout through the old link" "$home_dir/install.out"
 }
 
 # RoboRepo's Codex rules live in rules/roborepo.rules, a file only RoboRepo writes. Codex appends
@@ -765,6 +794,10 @@ test_codex_default_rules_migration() {
   [[ -f "$home_dir/.codex/rules/default.rules" && ! -s "$home_dir/.codex/rules/default.rules" ]] \
     && pass "migration empties a default.rules that held only RoboRepo rules" \
     || fail "migration empties a default.rules that held only RoboRepo rules" "$home_dir/out2"
+  backups=("$home_dir"/.roborepo/backups/codex-rules/default.rules.*)
+  [[ "${#backups[@]}" -eq 2 ]] && grep -q 'pattern=\["make", "test"\]' "${backups[0]}" \
+    && pass "a second migration keeps the first backup" \
+    || fail "a second migration keeps the first backup (${#backups[@]} backups)" "$home_dir/out2"
 }
 
 # Shell wiring written by a checkout that has since moved (or been deleted) must still be pruned.
@@ -1356,7 +1389,8 @@ test_uninstall_removes_repo_owned_links
 test_install_writes_durable_original_snapshot
 test_uninstall_reclaims_repo_copies_and_restores_originals
 test_uninstall_preserves_user_modified_copy
-test_uninstall_reclaims_real_dir_link_remnant
+test_uninstall_removes_diverged_owned_codex_rules
+test_codex_legacy_rules_dir_link
 test_codex_owned_rules_rewritten_on_update
 test_codex_default_rules_migration
 test_uninstall_removes_runtime_state_and_backups

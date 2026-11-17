@@ -304,8 +304,11 @@ Earlier installs copied RoboRepo's rules into `default.rules`. The Codex install
 `presets.mjs`, and `install-windows.ps1`) removes every line of `default.rules` that also appears in
 the generated rules, keeps the rest, and first copies the original to
 `~/.roborepo/backups/codex-rules/default.rules.<timestamp>`. A file that held only RoboRepo's rules
-is left empty. An install that linked `~/.codex/rules` itself into the checkout has that link
-replaced with a real directory before the owned file is written.
+is left empty. Lines are matched by their trimmed text, so a user approval identical to a RoboRepo
+rule is removed too; it stays in the backup, and while RoboRepo ships that rule `roborepo.rules`
+still applies it. An install that linked `~/.codex/rules` itself into the checkout has that link
+replaced with a real directory before the owned file is written, and uninstall or withdraw removes
+the link rather than deleting through it.
 
 `~/.codex/config.toml` is similar: it is an active local root config file, not a
 symlink, and can diverge the same way. Existing machines need the root config merge/export

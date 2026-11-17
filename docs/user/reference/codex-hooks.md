@@ -164,6 +164,7 @@ prompts on. To change how RoboRepo treats a command, use `~/.roborepo/command-ov
 
 If an older install copied RoboRepo's rules into `default.rules`, `roborepo update` removes those
 lines, keeps the ones you added, and saves the original under `~/.roborepo/backups/codex-rules/`.
+A line you added that is identical to one of RoboRepo's rules is removed as well; the backup keeps it.
 
 `~/.codex/config.toml` is a live file that Codex itself can change. Once it differs from RoboRepo's
 version, `roborepo update` leaves it alone unless you choose `--on-conflict overwrite`.

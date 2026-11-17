@@ -143,6 +143,8 @@ reclaim_link_target() {
   # An `owned` row is a file only RoboRepo writes, so it is removed even when an older render left
   # content that no longer matches the repo source. No pre-install original exists to restore.
   if [[ ",${flags}," == *",owned,"* ]]; then
+    # Through an old parent link into the checkout, the file is the repo's own: drop the link only.
+    unlink_parent_repo_link "${home_abs}" && return 0
     if [[ -f "${home_abs}" && ! -L "${home_abs}" ]]; then
       assert_under_harness_home "${home_abs}"
       [[ "${dry_run}" -eq 1 ]] || rm -f "${home_abs}"
