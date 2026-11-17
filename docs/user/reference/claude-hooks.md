@@ -53,8 +53,26 @@ Anything else in the same command (`git push origin feat && npm publish`) keeps 
 approving it, so the other commands are left to the sandbox and the permission rules; a verified
 feature push in such a chain still lands only where the hook checked. A push the hook cannot read
 asks instead: one with a `git -c` or environment prefix, one behind a wrapper (`env`, `command`), in
-a subshell or `$(…)`, through `xargs`, or through an alias. So does a command that only names a
-push, such as `echo git push`.
+a subshell or `$(…)`, through `xargs`, or through an alias. So does a push in a script handed to a
+shell (`bash -c`, `eval`, `watch`, `env -S`, a `bash <<EOF` heredoc or `<<<` here-string), a push
+whose words the shell builds (`git $CMD`, `$GIT push`, `git {push,}`), and a push after a command
+that changes what it reads (`export`, `unset`, a `GIT_*` or `PATH` assignment, `git config`,
+`git remote set-url`). So does a command that only names a push, such as `echo git push` or
+`git log --grep push`. A heredoc that no shell reads is data, so a commit message or file body that
+mentions `git push` asks nothing.
+
+Some pushes the hook cannot see at all, so it neither asks nor allows them, and the decision falls
+to the permission rules and the `pre-push` hook below:
+
+- a push started by another program, such as `python -c`, `node -e`, `make`, or an npm script;
+- a push on another machine through `ssh`;
+- a shell function or alias defined in an earlier command;
+- a subcommand that comes from a variable or file the command never spells out, such as
+  `git $CMD` with no `push` anywhere in the command;
+- any other form the hook does not parse.
+
+The `pre-push` hook still refuses each of these when it would reach a protected branch or rewrite
+history.
 
 On Codex, every push the hook would ask about is denied instead, with a message to run it yourself.
 Codex has been seen running commands whose hook result was ask without prompting, and a push with

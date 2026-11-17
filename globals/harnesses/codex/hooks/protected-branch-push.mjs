@@ -80,9 +80,25 @@ function readHookInput() {
   }
 }
 
-// Splits a shell command into simple commands (word lists), honoring quotes. Separators are
-// ; & | && || and newlines. Expansion is not performed; a word that still holds $ or a backtick
-// is reported so the caller can decline to classify it.
+// The character a `$'…'` escape stands for, and how many characters of `text` after the backslash
+// it used. Unknown escapes keep their backslash, as bash does.
+const ANSI_C_ESCAPES = { a: '\x07', b: '\b', e: '\x1b', E: '\x1b', f: '\f', n: '\n', r: '\r', t: '\t', v: '\v', '\\': '\\', "'": "'", '"': '"', '?': '?' }
+function ansiCEscape(text, i) {
+  const ch = text[i]
+  if (ch in ANSI_C_ESCAPES) return [ANSI_C_ESCAPES[ch], 1]
+  const coded = /^(?:x([0-9A-Fa-f]{1,2})|u([0-9A-Fa-f]{1,4})|U([0-9A-Fa-f]{1,8})|([0-7]{1,3}))/.exec(text.slice(i))
+  if (coded) {
+    const hex = coded[1] ?? coded[2] ?? coded[3]
+    const point = hex ? parseInt(hex, 16) : parseInt(coded[4], 8)
+    return [point <= 0x10ffff ? String.fromCodePoint(point) : '', coded[0].length]
+  }
+  return [`\\${ch ?? ''}`, ch === undefined ? 0 : 1]
+}
+
+// Splits a shell command into simple commands (word lists), honoring quotes, including `$'…'`
+// with its escapes. Separators are ; & | && || and newlines; a backslash-newline joins lines.
+// Expansion is not performed; a word that still holds $ or a backtick is reported so the caller can
+// decline to classify it.
 function splitCommands(text) {
   const commands = []
   let words = []
@@ -102,13 +118,28 @@ function splitCommands(text) {
     if (quote === "'") {
       if (ch === "'") quote = null
       else word += ch
+    } else if (quote === "$'") {
+      if (ch === "'") quote = null
+      else if (ch === '\\') {
+        const [decoded, used] = ansiCEscape(text, i + 1)
+        word += decoded
+        i += used
+      } else word += ch
     } else if (quote === '"') {
       if (ch === '"') quote = null
+      else if (ch === '\\' && text[i + 1] === '\n') i += 1
       else if (ch === '\\' && i + 1 < text.length) word += text[++i]
       else word += ch
+    } else if (ch === '$' && (text[i + 1] === "'" || text[i + 1] === '"')) {
+      // `$'…'` is a quoted string with escapes, and `$"…"` a double-quoted one.
+      quote = text[i + 1] === "'" ? "$'" : '"'
+      word ??= ''
+      i += 1
     } else if (ch === "'" || ch === '"') {
       quote = ch
       word ??= ''
+    } else if (ch === '\\' && text[i + 1] === '\n') {
+      i += 1
     } else if (ch === '\\' && i + 1 < text.length) {
       word = (word ?? '') + text[++i]
     } else if (ch === '&' && word !== null && /[<>]$/.test(word)) {
@@ -597,6 +628,18 @@ function exposeNestedCommands(text) {
         if (ch === "'") quote = null
         out += ch
         i += 1
+      } else if (quote === "$'") {
+        // A `$'…'` string runs nothing either; its `\'` does not close it.
+        if (ch === "'") quote = null
+        const escaped = ch === '\\' && i + 1 < text.length
+        out += escaped ? ch + text[i + 1] : ch
+        i += escaped ? 2 : 1
+      } else if (ch === '\\' && text[i + 1] === '\n') {
+        i += 2 // a backslash-newline joins the lines
+      } else if (ch === '$' && text[i + 1] === "'" && quote === null) {
+        quote = "$'"
+        out += "$'"
+        i += 2
       } else if (ch === '\\' && i + 1 < text.length) {
         out += ch + text[i + 1]
         i += 2
@@ -668,6 +711,19 @@ function changedDirectory(cwd, args) {
   return path.resolve(cwd, target)
 }
 
+// Where a simple command's program word sits, past variable assignments, shell keywords, and
+// wrappers with their options (`if … then rm`, `env rm`, `sudo -u x rm`).
+function programIndex(words) {
+  let i = 0
+  for (;;) {
+    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
+    if (!SHELL_KEYWORDS.has(words[i])) return i
+    const valueOptions = WRAPPER_VALUE_OPTIONS[words[i]]
+    i += 1
+    while (i < words.length && words[i].startsWith('-')) i += valueOptions?.has(words[i]) ? 2 : 1
+  }
+}
+
 // Walks every simple command looking for deletes, following `cd`, `cd -`, `pushd`, and `popd`,
 // shell keywords and wrappers (`if … then rm`, `env rm`, `sudo rm`), subshells and command
 // substitutions (each with its own working folder), and `sh -c`.
@@ -726,14 +782,7 @@ function classifyDeletes(text, startCwd) {
       }
       continue
     }
-    let i = 0
-    for (;;) {
-      while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
-      if (!SHELL_KEYWORDS.has(words[i])) break
-      const valueOptions = WRAPPER_VALUE_OPTIONS[words[i]]
-      i += 1
-      while (i < words.length && words[i].startsWith('-')) i += valueOptions?.has(words[i]) ? 2 : 1
-    }
+    const i = programIndex(words)
     const program = words[i] && path.basename(words[i])
     const args = words.slice(i + 1)
     const dirArgs = ['cd', 'pushd'].includes(program) ? withoutRedirects(args) : args
@@ -925,21 +974,205 @@ function classifyCommand(text, startCwd) {
   return onlyVerifiedPushes && backstopInstalled() ? VERIFIED : null
 }
 
-// The `git push` commands in `text`, wherever they sit: as a git word followed by a `push` word in
-// any simple command (after a wrapper, inside `( … )` or `$(…)`), a `git -c alias.*` that could
-// define one, and inside `sh -c` strings. Compared with `pushesRead`, it finds pushes the walk could
-// not read.
-function unreadPushes(text) {
-  let found = 0
-  for (const words of splitCommands(exposeNestedCommands(text))) {
-    const g = words.findIndex((word) => path.basename(word) === 'git')
-    if (g !== -1 && (words.slice(g + 1).includes('push') || words.some((word) => word.startsWith('alias.')))) found += 1
-    words.forEach((word, k) => {
-      if (SHELLS.has(path.basename(word))) {
-        const flag = words.findIndex((w, m) => m > k && /^-[a-z]*c[a-z]*$/.test(w))
-        if (flag !== -1 && words[flag + 1]) found += unreadPushes(words[flag + 1])
+// Drops the body of every `<<` heredoc that no shell reads, so the prose of a commit message or a
+// written file is not taken for commands. A body stays when its line starts a shell, `source`,
+// `.`, or `eval` (`bash <<EOF`, `cat <<EOF | sh`). Quotes, `$(…)`, backticks, and comments are
+// tracked so a `<<` inside a string is not taken for a heredoc, and a body whose closing line never
+// appears is kept, so a misread can only keep text.
+function withoutHeredocBodies(text) {
+  let out = ''
+  const open = [] // quotes and substitutions still open: ' $' " $( ( `
+  let pending = []
+  let i = 0
+  const shellReads = (line) => line.split(/[;&|(`\n]|\$\(/).some((part) => {
+    const words = part.trim().split(/\s+/).map((word) => word.replace(/['"\\]/g, ''))
+    const program = words[programIndex(words)]
+    return Boolean(program) && (SHELLS.has(path.basename(program)) || ['source', '.', 'eval'].includes(program))
+  })
+  while (i < text.length) {
+    const ch = text[i]
+    const top = open.at(-1)
+    if (top === "'" || top === "$'") {
+      if (ch === '\\' && top === "$'" && i + 1 < text.length) {
+        out += ch + text[i + 1]
+        i += 2
+        continue
       }
-    })
+      if (ch === "'") open.pop()
+      out += ch
+      i += 1
+      continue
+    }
+    if (ch === '\\' && i + 1 < text.length) {
+      out += ch + text[i + 1]
+      i += 2
+      continue
+    }
+    if (ch === '$' && text[i + 1] === '(') {
+      open.push('$(')
+      out += '$('
+      i += 2
+      continue
+    }
+    if (top === '"') {
+      if (ch === '"') open.pop()
+      else if (ch === '`') open.push('`')
+      out += ch
+      i += 1
+      continue
+    }
+    if (ch === '$' && text[i + 1] === "'") {
+      open.push("$'")
+      out += "$'"
+      i += 2
+      continue
+    }
+    if (ch === "'" || ch === '"') open.push(ch)
+    else if (ch === '`') top === '`' ? open.pop() : open.push('`')
+    else if (ch === '(') open.push('(')
+    else if (ch === ')' && (top === '$(' || top === '(')) open.pop()
+    else if (ch === '#' && (i === 0 || /[\s;&|(]/.test(text[i - 1]))) {
+      const end = text.indexOf('\n', i)
+      out += text.slice(i, end === -1 ? text.length : end)
+      i = end === -1 ? text.length : end
+      continue
+    } else if (text.startsWith('<<<', i)) {
+      out += '<<<'
+      i += 3
+      continue
+    } else if (text.startsWith('<<', i)) {
+      let k = i + 2
+      const stripTabs = text[k] === '-'
+      if (stripTabs) k += 1
+      while (text[k] === ' ' || text[k] === '\t') k += 1
+      let delimiter = ''
+      let quote = null
+      for (; k < text.length; k += 1) {
+        const c = text[k]
+        if (quote) {
+          if (c === quote) quote = null
+          else delimiter += c
+        } else if (c === "'" || c === '"') quote = c
+        else if (c === '\\' && k + 1 < text.length) delimiter += text[++k]
+        else if (/[\s;&|<>()]/.test(c)) break
+        else delimiter += c
+      }
+      if (delimiter && !quote) {
+        const lineStart = out.lastIndexOf('\n') + 1
+        const lineEnd = text.indexOf('\n', k)
+        pending.push({ delimiter, stripTabs, kept: shellReads(out.slice(lineStart) + text.slice(i, lineEnd === -1 ? text.length : lineEnd)) })
+      }
+      out += text.slice(i, k)
+      i = k
+      continue
+    } else if (ch === '\n' && pending.length) {
+      out += ch
+      i += 1
+      for (const heredoc of pending) {
+        let closing = -1
+        for (let start = i; start <= text.length;) {
+          const end = text.indexOf('\n', start) === -1 ? text.length : text.indexOf('\n', start)
+          const line = text.slice(start, end)
+          if ((heredoc.stripTabs ? line.replace(/^\t+/, '') : line) === heredoc.delimiter) {
+            closing = end
+            break
+          }
+          if (end === text.length) break
+          start = end + 1
+        }
+        if (closing === -1) break // no closing line: keep the rest as it is
+        if (heredoc.kept) out += text.slice(i, closing)
+        i = closing
+      }
+      pending = []
+      continue
+    }
+    out += ch
+    i += 1
+  }
+  return out
+}
+
+// git options that take the next word as their value.
+const GIT_VALUE_OPTIONS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--config-env'])
+// Commands that change what a push reads before it runs: setting a variable git reads, or git's
+// own remote, upstream, and push configuration.
+const ENVIRONMENT_BUILTINS = new Set(['export', 'unset', 'declare', 'typeset'])
+const PUSH_ENVIRONMENT = /^(GIT_[A-Za-z0-9_]*|HOME|XDG_CONFIG_HOME|PATH)\+?=/
+
+function changesGitConfig(subcommand, args) {
+  if (subcommand === 'config') {
+    // A lookup (`git config --get x`, `git config x`) changes nothing; a value, an edit, or a
+    // removal does.
+    const operands = args.filter((arg) => !arg.startsWith('-'))
+    return operands.length >= 2 || ['set', 'unset', 'edit', 'rename-section', 'remove-section'].includes(operands[0])
+      || args.some((arg) => /^(--(add|unset|unset-all|replace-all|rename-section|remove-section|edit)|-e)$/.test(arg))
+  }
+  if (subcommand === 'remote') return ['add', 'set-url', 'set-head', 'rename', 'remove', 'rm', 'set-branches'].includes(args.find((arg) => !arg.startsWith('-')))
+  if (subcommand === 'branch') return args.some((arg) => arg.startsWith('--set-upstream-to') || /^-[A-Za-z]*u/.test(arg))
+  return false
+}
+
+// Whether one simple command may run `git push` in a form the walk cannot read: a git word followed
+// by a `push` word, a `git -c alias.*` that could define one, a brace word that expands to push
+// (`git {push,}`), a subcommand the shell fills in (`git $CMD`, `git $(…)`), `xargs git` with its
+// subcommand on stdin, or a program the shell fills in followed by a push word (`$GIT push`).
+function mayPush(words) {
+  const g = words.findIndex((word) => path.basename(word) === 'git')
+  if (g !== -1) {
+    const after = words.slice(g + 1)
+    if (after.includes('push') || words.some((word) => word.startsWith('alias.'))) return true
+    if (after.some((word) => !word.startsWith('-') && word.includes('{') && word.replace(/[{},]/g, '').includes('push'))) return true
+    let j = g + 1
+    while (j < words.length && words[j].startsWith('-')) j += GIT_VALUE_OPTIONS.has(words[j]) ? 2 : 1
+    if (/[$`]/.test(words[j] ?? '')) return true
+    if (words.slice(0, g).some((word) => path.basename(word) === 'xargs') && !/^[a-z][a-z0-9-]*$/.test(words[j] ?? '')) return true
+  }
+  const p = programIndex(words)
+  return /[$`]/.test(words[p] ?? '') && words.slice(p + 1).includes('push')
+}
+
+// Text a command hands to a shell to run: `sh -c` strings, `eval` and `watch` arguments, `env -S`
+// strings, and a `<<<` here-string given to a shell or to `source`.
+function nestedScripts(words) {
+  const scripts = []
+  const shellCommand = words.some((word) => {
+    const name = path.basename(word.split('<<<')[0])
+    return SHELLS.has(name) || name === 'source' || name === '.'
+  })
+  words.forEach((word, k) => {
+    const name = path.basename(word)
+    if (SHELLS.has(name)) {
+      const flag = words.findIndex((w, m) => m > k && /^-[a-z]*c[a-z]*$/.test(w))
+      if (flag !== -1 && words[flag + 1]) scripts.push(words[flag + 1])
+    }
+    if (name === 'eval' || name === 'watch') scripts.push(words.slice(k + 1).join(' '))
+    if (name === 'env' && words.slice(k + 1).some((w) => /^(-S|--split-string)/.test(w))) {
+      scripts.push(words.slice(k + 1).map((w) => w.replace(/^(-S|--split-string=?)/, '')).join(' '))
+    }
+    if (shellCommand && word.includes('<<<')) {
+      const string = word.slice(word.indexOf('<<<') + 3)
+      scripts.push(string || words[k + 1] || '')
+    }
+  })
+  return scripts
+}
+
+// The `git push` commands in `text`, wherever they sit (after a wrapper, inside `( … )` or `$(…)`,
+// in a script handed to a shell), counted by `mayPush`, and whether any command there changes what
+// a push reads. Compared with `pushesRead`, the count finds pushes the walk could not read.
+function scanPushes(text, found = { pushes: 0, environmentChanged: false }) {
+  for (const words of splitCommands(exposeNestedCommands(withoutHeredocBodies(text)))) {
+    if (mayPush(words)) found.pushes += 1
+    const p = programIndex(words)
+    if (ENVIRONMENT_BUILTINS.has(words[p]) || (p === words.length && words.some((word) => PUSH_ENVIRONMENT.test(word)))) found.environmentChanged = true
+    const g = words.findIndex((word) => path.basename(word) === 'git')
+    if (g !== -1) {
+      let j = g + 1
+      while (j < words.length && words[j].startsWith('-')) j += GIT_VALUE_OPTIONS.has(words[j]) ? 2 : 1
+      if (changesGitConfig(words[j], words.slice(j + 1))) found.environmentChanged = true
+    }
+    for (const script of nestedScripts(words)) scanPushes(script, found)
   }
   return found
 }
@@ -960,15 +1193,25 @@ const toolName = input.tool_name || input.toolName || ''
 const toolInput = input.tool_input || input.toolInput || {}
 const rawCommand = toolInput.command ?? toolInput.cmd
 const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).replaceAll("'", "'\\''")}'`).join(' ') : rawCommand
-if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !/\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/.test(command)) process.exit(0)
+// Quotes, backslashes, and brace punctuation split a word without changing what runs (`pu''sh`,
+// `pu\sh`, `{push,}`), so the quick check reads the text without them; a `$'…'` string can spell any
+// word with escapes, so it always gets the full check.
+const KEYWORDS = /\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/
+if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string' || !(KEYWORDS.test(command.replace(/['"\\{},]/g, '')) || command.includes("$'"))) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
 let result = stricter(classifyCommand(command, cwd), classifyDeletes(command, cwd))
-// A push the walk could not read (wrapped, nested, or aliased) asks: no permission rule would.
-if (unreadPushes(command) > pushesRead) {
-  result = stricter(result, ask('cannot check this `git push`: it runs behind a wrapper, in a subshell or substitution, or through an alias'))
+// A push the walk could not read (wrapped, nested, aliased, or spelled by the shell) asks: no
+// permission rule would.
+const scanned = scanPushes(command)
+if (scanned.pushes > pushesRead) {
+  result = stricter(result, ask('cannot check this `git push`: it runs behind a wrapper, in a subshell, substitution, or script string, through an alias, or with words the shell fills in'))
+}
+// The hook reads git's configuration and environment as they are before the command runs.
+if (scanned.environmentChanged && (pushesRead > 0 || scanned.pushes > 0)) {
+  result = stricter(result, ask('this command changes the environment or git configuration a push reads (`export`, `unset`, a GIT_* or PATH assignment, `git config`, `git remote`, or `git branch -u`) before it pushes, so the hook cannot tell where the push lands'))
 }
 if (!result) process.exit(0)
 
