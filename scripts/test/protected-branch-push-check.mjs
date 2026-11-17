@@ -134,6 +134,12 @@ const cases = [
   ["echo git push origin main\\ #x | sh", "ask"],
   ["echo git push origin main `#x` | sh", "ask"],
   ["true # note \\\nsudo git push origin main", "ask"],
+  // Where `#` is not a comment, the command after it is still read.
+  ["x=${line%% #*}; git push origin main", "deny"],
+  ["x=${a:- #}; sudo git push origin main", "ask"],
+  ["echo a\\\\ #it's\necho git push origin main | sh", "ask"],
+  ["(true)#it's\necho git push origin main | sh", "ask"],
+  ["case a in a)#it's\necho git push origin main | sh;; esac", "ask"],
   ["python3 -c 'import os; os.system(\"git push origin main\")'", "ask"],
   ["echo 'all: ; git push origin main' > Makefile; make", "ask"],
   ["python3 -c \"import subprocess; subprocess.run(['git','push','origin','main'])\"", "ask"],
@@ -308,6 +314,7 @@ for (const [command, expected] of cases) {
   decide("; a=b".repeat(20000));
   decide("a=1\n".repeat(20000) + "echo $a");
   decide("\n".repeat(40000) + "echo $a");
+  decide("echo hi #c\n".repeat(20000) + "git push origin main");
   assert.ok(Date.now() - started < 5000, "long chains of assignments or lines took over 5 seconds");
 }
 // Codex runs a command whose hook result is "ask" without prompting, so its copy turns every ask
@@ -560,6 +567,7 @@ const deleteCases = [
   [onMain, "echo `#x`; rm -rf build", "ask"],
   [onMain, "echo hi # it's\nrm -rf build", "ask"],
   [onMain, "echo hi # note \\\nrm -rf build", "ask"],
+  [onMain, "x=${a:- #}; rm -rf build", "ask"],
   [onMain, "rm -rf build", "ask"],
   [onMain, `rm ${path.join(scratch, "x")}`, "defer"],
   [onMain, 'rm "$TARGET"', "ask"],
@@ -766,6 +774,7 @@ const mergeCases = [
   [onMain, "git merge feature", "deny"],
   [onMain, "echo `true #x`; git merge feature", "deny"],
   [onMain, "echo hi # note \\\ngit merge feature", "deny"],
+  [onMain, "x=${a:- #}; git merge feature", "deny"],
   [onMain, "git merge --no-ff --no-edit feature", "deny"],
   [onMain, "git merge --ff-only feature", "deny"],
   [onMain, "git merge --continue", "deny"],

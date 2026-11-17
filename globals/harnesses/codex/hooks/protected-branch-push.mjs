@@ -139,7 +139,7 @@ function splitCommands(text) {
     } else if (ch === "'" || ch === '"') {
       quote = ch
       word ??= ''
-    } else if (ch === '#' && word === null) {
+    } else if (ch === '#' && word === null && !commentsAsCode) {
       const end = text.indexOf('\n', i)
       i = (end === -1 ? text.length : end) - 1
     } else if (ch === '\\' && text[i + 1] === '\n') {
@@ -642,7 +642,7 @@ function exposeNestedCommands(text) {
         const escaped = ch === '\\' && i + 1 < text.length
         out += escaped ? ch + text[i + 1] : ch
         i += escaped ? 2 : 1
-      } else if (ch === '#' && quote === null && (out === '' || (/[\s;&|(]$/.test(out) && !/\\\s$/.test(out)))) {
+      } else if (ch === '#' && quote === null && !commentsAsCode && (i === 0 || /[\s;&|()]/.test(text[i - 1]))) {
         // A comment runs to the end of the line, or to the backtick that closes the substitution it
         // is in. Nothing in it runs, and a backslash before its newline joins nothing.
         let stop = text.indexOf('\n', i)
@@ -923,6 +923,13 @@ function ask(detail) {
 // wrapper, in a subshell or substitution, through an alias) is caught by `unreadPushes`.
 let pushesRead = 0
 
+// Bash's comment rules have many corners (`${a:- #}`, `a\\ #x`, `$(true)#x`, `(true)#x`), so the
+// hook reads each command twice: once skipping what looks like a comment, and once with
+// `commentsAsCode` set, reading it as code. It keeps the stricter decision, so a misread comment can
+// only add a prompt, never hide a command: where `#` is not a comment the second reading is right,
+// and where it is, the first one is.
+let commentsAsCode = false
+
 // Walks every simple command, following `cd` so a later `git push` is resolved in the right
 // directory, and descending into `sh -c '...'` strings. A deny or ask from any push wins. A push with
 // a leading environment assignment or `git -c` asks: either can point git at another destination or
@@ -998,7 +1005,7 @@ const INTERPRETERS = new Set(['awk', 'gawk', 'perl', 'ruby', 'node', 'dash', 'ks
 
 // `text` with operator characters inside quotes replaced by `_`, so `git commit -m "fix push; make
 // it clearer"` stays one command. A `$(…)` or backtick inside double quotes still runs, so it is kept.
-// Comments are dropped, so an apostrophe in one opens no quote.
+// Comments are dropped (unless `commentsAsCode`), so an apostrophe in one opens no quote.
 function maskQuotedOperators(text) {
   let out = ''
   const open = [] // ' $' " $( ( `
@@ -1038,7 +1045,7 @@ function maskQuotedOperators(text) {
       i += 1
       continue
     }
-    if (ch === '#' && (i === 0 || (/[\s;&|(]/.test(text[i - 1]) && text[i - 2] !== '\\')
+    if (ch === '#' && !commentsAsCode && (i === 0 || /[\s;&|()]/.test(text[i - 1])
       || (text[i - 1] === '`' && top === '`'))) {
       let end = text.indexOf('\n', i)
       if (end === -1) end = text.length
@@ -1386,20 +1393,34 @@ if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string'
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
-// Every walk reads the command without the heredoc bodies that are plainly data.
-const text = withoutHeredocBodies(command)
-// A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
-let result = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
-// A push the walk could not read (wrapped, nested, aliased, or spelled by the shell) asks: no
-// permission rule would.
-const scanned = scanPushes(text)
-if (scanned.pushes > pushesRead) {
-  result = stricter(result, ask('cannot check this `git push`: it runs behind a wrapper, in a subshell, substitution, or script string, through an alias, or with words the shell fills in'))
+
+// The decision for one reading of comments (see `commentsAsCode`).
+function decide(asCode) {
+  commentsAsCode = asCode
+  pushesRead = 0
+  // Every walk reads the command without the heredoc bodies that are plainly data.
+  const text = withoutHeredocBodies(command)
+  // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
+  let decision = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
+  // A push the walk could not read (wrapped, nested, aliased, or spelled by the shell) asks: no
+  // permission rule would.
+  const scanned = scanPushes(text)
+  if (scanned.pushes > pushesRead) {
+    decision = stricter(decision, ask('cannot check this `git push`: it runs behind a wrapper, in a subshell, substitution, or script string, through an alias, or with words the shell fills in'))
+  }
+  // The hook reads git's configuration and environment as they are before the command runs.
+  if (scanned.environmentChanged && (pushesRead > 0 || scanned.pushes > 0)) {
+    decision = stricter(decision, ask('this command changes the environment or git configuration a push reads (`export`, `unset`, `source`, a GIT_* or PATH assignment, `git config`, `git remote`, or `git branch -u`) before it pushes, so the hook cannot tell where the push lands'))
+  }
+  return decision
 }
-// The hook reads git's configuration and environment as they are before the command runs.
-if (scanned.environmentChanged && (pushesRead > 0 || scanned.pushes > 0)) {
-  result = stricter(result, ask('this command changes the environment or git configuration a push reads (`export`, `unset`, `source`, a GIT_* or PATH assignment, `git config`, `git remote`, or `git branch -u`) before it pushes, so the hook cannot tell where the push lands'))
-}
+
+const RANK = { allow: 1, ask: 2, deny: 3 }
+const skippingComments = decide(false)
+const readingComments = decide(true)
+const result = (RANK[readingComments?.decision] ?? 0) > (RANK[skippingComments?.decision] ?? 0)
+  ? readingComments
+  : skippingComments
 if (!result) process.exit(0)
 
 process.stdout.write(JSON.stringify({
