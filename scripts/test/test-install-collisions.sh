@@ -11,6 +11,36 @@ tmp_base="${TMPDIR:-/tmp}"
 homes_root="$(mktemp -d "${tmp_base%/}/roborepo-install-collisions.XXXXXX")"
 trap 'rm -rf "$homes_root"' EXIT
 
+# Shared by every expect-driven test. Bare Tcl `expect "pattern"` returns silently on a timeout, and
+# `wait` blocks until the spawned process exits, so one missed prompt used to leave the installer
+# waiting for input and the suite waiting on `wait` forever (a run once sat ~10 hours). These procs
+# turn a timeout or an early exit into a named failure, and kill the installer's process group
+# (spawn makes it a session leader) so nothing is left reading the pty.
+expect_lib="$homes_root/expect-lib.tcl"
+cat >"$expect_lib" <<'EOF'
+proc expect_fail {message} {
+  puts stderr "\nEXPECT FAILURE: $message"
+  if {![catch {exp_pid} pid] && $pid > 1} { catch {exec kill -9 -$pid} }
+  exit 124
+}
+# Waits for a glob pattern; fails by name when it does not appear within $timeout seconds.
+proc expect_prompt {pattern} {
+  expect {
+    -gl $pattern {}
+    timeout { expect_fail "timed out after ${::timeout}s waiting for \"$pattern\"" }
+    eof { expect_fail "process exited before printing \"$pattern\"" }
+  }
+}
+# Waits for the process to finish and exits with its status; never reaches `wait` on a live process.
+proc expect_exit {} {
+  expect {
+    eof {}
+    timeout { expect_fail "process still running after ${::timeout}s (waiting for a prompt nobody answered?)" }
+  }
+  exit [lindex [wait] 3]
+}
+EOF
+
 pass() {
   echo "ok: $1"
 }
@@ -215,14 +245,14 @@ run_expect_install() {
   # load). The wizard itself is covered by test_onboarding_wizard_toggles_and_applies, which spawns
   # `onboard` alone so it reaches the wizard instantly. 120s tolerates the full install under load
   # (main.sh always terminates in skip mode, so eof is guaranteed — the timeout just bounds install).
-  HC_REPO="$repo_root" HC_HOME="$home_dir" HC_EXPECT_SCRIPT="$script" expect <<'EOF' >"$output" 2>&1
+  # Each prompt the script waits for, and the final exit, fail by name after 120s (expect_lib above).
+  HC_REPO="$repo_root" HC_HOME="$home_dir" HC_EXPECT_SCRIPT="$script" HC_EXPECT_LIB="$expect_lib" \
+    expect <<'EOF' >"$output" 2>&1 || fail "interactive install did not complete" "$output"
 set timeout 120
+source $env(HC_EXPECT_LIB)
 spawn env HOME=$env(HC_HOME) ROBOREPO_ASSUME_INTERACTIVE=1 ROBOREPO_PRESETS_ONBOARD=skip $env(HC_REPO)/scripts/install/main.sh
 source $env(HC_EXPECT_SCRIPT)
-expect eof
-set wait_result [wait]
-set exit_code [lindex $wait_result 3]
-exit $exit_code
+expect_exit
 EOF
 }
 
@@ -266,14 +296,37 @@ process.exit(state.onboardedAt ? 0 : 1);
     || fail "main install applies harness root config automatically"
 }
 
+# Guards the guard: a prompt that never appears must fail within the timeout with a named error,
+# not hang. The spawned shell waits on input forever, as an installer at an unanswered prompt does.
+test_expect_missed_prompt_fails_by_name() {
+  local home_dir started elapsed status=0
+  home_dir="$(make_home)"
+  command -v expect >/dev/null 2>&1 || fail "expect is required for interactive installer tests"
+  started="$(date +%s)"
+  HC_EXPECT_LIB="$expect_lib" expect <<'EOF' >"$home_dir/out" 2>&1 || status=$?
+set timeout 2
+source $env(HC_EXPECT_LIB)
+spawn sh -c "echo Welcome; read never"
+expect_prompt "*Selection*"
+send "2\r"
+expect_exit
+EOF
+  elapsed=$(( $(date +%s) - started ))
+  [[ "$status" -eq 124 && "$elapsed" -lt 30 ]] \
+    && pass "a missed expect prompt fails within the timeout" \
+    || fail "a missed expect prompt fails within the timeout (status $status after ${elapsed}s)" "$home_dir/out"
+  assert_file_contains "$home_dir/out" 'EXPECT FAILURE: timed out after 2s waiting for "\*Selection\*"' \
+    "a missed expect prompt names the prompt it waited for"
+}
+
 test_conflict_policy_prompt_on_clean_machine() {
   local home_dir expect_file
   home_dir="$(make_home)"
   expect_file="$home_dir/expect.tcl"
   # Covers the conflict-policy prompt only; onboarding is skipped (see run_expect_install).
   cat >"$expect_file" <<'EOF'
-expect "Welcome to roborepo"
-expect "Selection*"
+expect_prompt "*Welcome to roborepo*"
+expect_prompt "*Selection*"
 send "2\r"
 EOF
 
@@ -305,14 +358,16 @@ test_onboarding_wizard_toggles_and_applies() {
   # script sent `onboard` + Esc, so it spawned a command that immediately exited with "`roborepo
   # onboard` was replaced by...", and every later send hit a closed spawn id — killing the suite
   # before its own assertions could report anything.
-  HC_HOME="$home_dir" HC_REPO="$repo_root" expect <<'EOF' >"$home_dir/wiz.out" 2>&1
+  HC_HOME="$home_dir" HC_REPO="$repo_root" HC_EXPECT_LIB="$expect_lib" \
+    expect <<'EOF' >"$home_dir/wiz.out" 2>&1 || fail "onboarding wizard did not complete" "$home_dir/wiz.out"
 set timeout 90
+source $env(HC_EXPECT_LIB)
 spawn env HOME=$env(HC_HOME) ROBOREPO_STATE_ROOT=$env(HC_HOME)/.roborepo node $env(HC_REPO)/scripts/cli/main.mjs package manage
-expect "Step 1"
+expect_prompt "*Step 1*"
 send "\033\[B"
 send " "
 send "\r"
-expect eof
+expect_exit
 EOF
 
   assert_file_contains "$home_dir/wiz.out" "Applying changes" "wizard runs deferred batch apply after a toggle"
@@ -1379,6 +1434,7 @@ test_rendered_rules_backup_then_render
 test_global_command_conflict_blocks_before_mutation
 test_direct_harness_conflict_dry_run_reports
 test_invalid_conflict_policy_refuses
+test_expect_missed_prompt_fails_by_name
 test_conflict_policy_prompt_on_clean_machine
 test_onboarding_wizard_toggles_and_applies
 test_overwrite_policy_preserves_existing_root_configs
