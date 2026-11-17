@@ -1,6 +1,6 @@
 ---
 id: w3tvb759
-next_action: Decide whether the branch picker compares each branch with main's current files or only with the branch's own changes (open question at the end of this plan), then run /plan-promote on this plan.
+next_action: The design is settled; once PR #69 (the repo inspector) merges, run /plan-promote on this plan to prepare it for implementation.
 blocked_by: []
 depends_on: ["nrvwti51"]
 related: []
@@ -112,11 +112,11 @@ newest commit first, capped at 200 branches examined. Below the list, a line rep
 
 | Branch | Differs when |
 | --- | --- |
-| No worktree | A path that changed between the comparison base and this branch's last commit is an agent-config path. The comparison base is main's last commit or the point where the branch split off; see the open question. |
+| No worktree | A path that changed between the base branch's last commit and this branch's last commit is an agent-config path. |
 | Has a worktree | The committed check above finds a change, or the worktree has untracked or modified agent-config files. Ignored local-only files such as `CLAUDE.local.md` do not count, because they are personal to the machine rather than part of the branch. |
 
 The committed check is one Git command per branch, which lists changed file names only:
-`git diff-tree -r -z --name-only --no-renames <comparison-base> <branch-commit>`. It reads no file content,
+`git diff-tree -r -z --name-only --no-renames <base-commit> <branch-commit>`. It reads no file content,
 so no text converter or external diff tool can run. A scratch repo with both configured confirmed
 neither ran on Git 2.50. Each changed path is checked with the same provider classification and
 skip rules the walk uses. When the output exceeds the size cap, the branch is listed as differing,
@@ -278,18 +278,6 @@ browser verification.
 - `docs/internal/portal-architecture.md`: the Agents-only `branch` parameter beside the shared `repo`
   parameter.
 
-## Open questions
-
-### What does "differs from main" compare against?
-
-A branch made a week ago has not seen main's changes since then. The two options treat that branch
-differently.
-
-| Option | Lists a branch when | Leads to |
-| --- | --- | --- |
-| **main's current files** (recommended) | Its config files differ from main's last commit in any way | The picker lists exactly the branches whose page would look different. An old branch is listed after main changes its config, even if the branch itself changed nothing. |
-| The branch's own changes | It changed config files since it split off from main | The picker lists only branches that edit config. An old branch can be left out while its page still looks different from main. Uses `merge-base` to find the split point. |
-
 ## Decision Log
 
 - **Branches are the only choice in the picker; a worktree is how a branch is read.** Chosen by the
@@ -304,6 +292,10 @@ differently.
   and Tokens also use and which has no branch notion.
 - **The picker lists only branches whose agent config differs from main.** Proposed by the user. A
   branch with the same config as main would show the same page, so listing it adds nothing.
+- **A branch differs when its config files differ from main's last commit.** Chosen by the user over
+  comparing only the branch's own changes since it split off. The picker then lists exactly the
+  branches whose page would look different from main's. An old branch is listed after main changes its
+  config, even if the branch changed nothing, because its page does look different.
 - **Branch content comes from Git objects, never from a temporary checkout.** A checkout, even into a
   scratch worktree, writes Git metadata and runs smudge filters and the post-checkout hook, which
   breaks the inspector's no-repo-process guarantee.
@@ -318,3 +310,5 @@ differently.
 - **Rejected: separate Checkouts and Branches groups.** An earlier draft listed worktrees and branches
   as two groups with a `worktree` URL parameter. It showed one branch in two places and made the
   reader learn two kinds of source.
+- **Rejected: comparing only the branch's own changes.** It would hide an old branch whose page still
+  differs from main, so the picker would no longer match what the page shows.
