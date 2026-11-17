@@ -16,10 +16,10 @@ Selecting a repo on the Agents page currently shows a placeholder. Replace it wi
 
 ## Goals
 
-- Show the checkout path and current branch or detached HEAD alongside a Git status for each source.
-- Make root and nested instructions and native skills easy to browse, with previews and individual token estimates.
-- Locate project settings, hooks, MCP servers, custom agents, commands where supported, and permission sources. Use source summaries for configuration that can hold sensitive values.
-- Reuse the global page's machine-wide harness status and controls in a labeled section. Show native repo files even when their harness is missing or disabled.
+- Lead with the repo's default token use per active harness: what the repo adds to every session, and that plus the global startup context.
+- Make root and nested instructions and native skills easy to browse, with previews and individual token estimates, and one row per file or skill however many harnesses carry it.
+- Locate project settings, hooks, MCP servers, custom agents, commands where supported, and permission sources. Show configuration as a readable key list with only safe values.
+- Popups match the global page: rendered Markdown, the global skill view, and the file path in the popup rather than the list. Show native repo files even when their harness is missing or disabled.
 - Keep the inspector read-only and describe file presence and possible applicability. Effective runtime policy, precedence, import expansion, package management for repo skills, and other harness providers are outside this release.
 
 ## Current state
@@ -34,16 +34,16 @@ Selecting a repo on the Agents page currently shows a placeholder. Replace it wi
 
 ## Happy path
 
-1. Select a repo in the Agents **Viewing** menu and confirm the primary checkout and branch.
-2. Open Instructions or Skills, select a path, and see a text preview, Git status, and individual token estimate.
-3. Open Other configuration to see where settings, hooks, MCP servers, agents, commands, or permission settings are declared.
+1. Select a repo in the Agents **Viewing** menu and read **Default Token Use for &lt;repo&gt;**: Repo Usage and Total Usage per active harness.
+2. Open a row under Instructions or Skills and see the rendered file or the global skill view, its locations, Git status, and token estimates.
+3. Open a row under Config and hooks to see the declared keys with safe values.
 4. Switch repos or return to **All repos** using the same selector.
 
 ## Proposed design
 
 ### Scope and ownership
 
-Resolve the scope on each inventory and preview request using the shared route helper. Read the primary designation from the registry record before resolving its local path. Resolve that checkout family through Git's common directory. For records without a primary designation, use a single verifiable family from the registered roots. If a designated primary checkout has no usable path, multiple roots are marked primary, or the family cannot be identified unambiguously, show a checkout-unavailable state. Avoid picking a secondary clone or linked worktree as a substitute. Read HEAD from the selected checkout and inspect its local files, including uncommitted changes. Keep absolute paths out of the selector, URL, and resource IDs. Show the selected checkout path in its scoped view.
+Resolve the scope on each inventory and preview request using the shared route helper. Read the primary designation from the registry record before resolving its local path. Resolve that checkout family through Git's common directory. For records without a primary designation, use a single verifiable family from the registered roots. If a designated primary checkout has no usable path, multiple roots are marked primary, or the family cannot be identified unambiguously, show a checkout-unavailable state. Avoid picking a secondary clone or linked worktree as a substitute. Read HEAD from the selected checkout and inspect its local files, including uncommitted changes. Keep absolute paths out of the selector, URL, resource IDs, and the scoped view; the view does not show the checkout path or branch.
 
 Place the orchestration behind read-only GET handlers in `scripts/cli/portal-routes-config.mjs`. Give the provider contract a narrow optional project discovery operation. The built-in adapters identify native patterns and extract display metadata. Shared server code selects the checkout, bounds and confines file access, classifies Git status, and estimates tokens. Query supported provider bindings independently of machine installation and enablement. The portal renders the returned records without inferring native configuration paths.
 
@@ -55,16 +55,18 @@ Place the orchestration behind read-only GET handlers in `scripts/cli/portal-rou
 | Skills | Discover `.claude/skills/<name>/SKILL.md` at the root and in supported nested locations. | Discover `.agents/skills/<name>/SKILL.md` at the root and in supported nested locations. Include `.codex/skills/<name>/SKILL.md` as a legacy location recognized by RoboRepo. Label its applicability unknown unless verified for the native version. |
 | Other configuration | Inventory project `.claude/settings.json`, `.claude/settings.local.json`, `.mcp.json`, and definitions under `.claude/agents/` and `.claude/commands/`. Identify hooks and permissions within their source settings. | Inventory project `.codex/config.toml`, `.codex/hooks.json`, and `.codex/agents/*.toml`. Identify supported inline hooks, MCP, and permission sections from their source. |
 
-Confirm the patterns against the versions supported at implementation time. Group instructions by folder with root entries first, and show each resource's harness, kind, relative path, and a loading hint such as **Root-level**, **Potentially conditional**, or **Unknown**. For skills, show the name, description when present, source directory, and on-demand estimated token cost. Omit a repo-wide token total.
+Confirm the patterns against the versions supported at implementation time. Group instructions and config by folder with root entries first. Each row shows its name, a description or one-line config summary, and only chips that tell files apart: harness names when the repo has files for more than one, **Conditional**, **Local only**, **Untracked**, **Modified**, **Override**, **Legacy location**, **Link**, and **Copies differ**. Harness-specific notes go in an info tooltip. The section for configuration is **Config and hooks**.
 
-Use tracked, untracked, ignored, or unavailable for the file's Git status. Call out tracked local modifications when Git reports them. Provider support, installation, source applicability, and Git status are separate facts.
+The token table lists active harnesses. **Repo Usage** is what a session started at the repo root reads from the repo: root-level instructions in full plus root skill and command names and descriptions, as each provider's optional `startupEntries` selects. **Total Usage** adds the global startup estimate and is the only colored column, on the existing startup thresholds. Active harnesses without repo discovery are named below the table; inactive ones are not mentioned. Files `.gitattributes` marks `linguist-generated` are collapsed into a Generated files section and never counted.
+
+Show untracked, ignored-and-local, and modified states as chips; tracked is the default and carries none. Provider support, installation, source applicability, and Git status are separate facts.
 
 ### Preview and failure behavior
 
-- List and preview through the selected checkout only. Accept a server-validated inventory entry for preview, recheck it at read time, and exclude nested Git checkouts and out-of-scope paths. List discovered symlink sources as references without reading the targets. Leave imports as source text.
-- Set limits on traversal depth, entries visited, files returned, bytes read, and preview size. Skip Git internals, dependency trees, and build outputs. Mark truncated inventories and isolate unreadable files and provider failures.
-- Render instruction, skill, and Markdown agent or command bodies as text. Reuse the existing dialog shell and token chips, without rendering repo-supplied HTML or remote media.
-- Show structured configuration using allowlisted labels and section names. For example, show hook event names and, where safe, MCP server names. Keep raw settings, commands, environment values, credentials, headers, and URLs from structured config out of the response and logs. If parsing fails, return a path and diagnostic.
+- List and preview through the selected checkout only. Accept a server-validated inventory entry for preview, recheck it at read time, and exclude nested Git checkouts and out-of-scope paths. Read a symlink source through its target only when the target resolves inside the checkout to a path the walk could list; list any other symlink as a reference without reading it. Leave imports as source text.
+- Set limits on traversal depth, entries visited, files returned, bytes read, and preview size, and do the traversal and reads asynchronously so a scan never blocks the portal. Skip Git internals, dependency trees, and build outputs. Mark truncated inventories and isolate unreadable files and provider failures.
+- Render instruction and Markdown agent or command bodies as Markdown without images, and skills in the global skill view. Escape repo-supplied HTML and never load remote media.
+- Show structured configuration as a key list with safe values: booleans, numbers, names, modes, hook events, and permission rules. Hide values under environment, header, command, argument, and URL keys, credential-named keys, URLs, credential-shaped text, and long strings, in the response as well as the page. The global page's settings and hooks popups use the same view. If parsing fails, return a path and diagnostic.
 - Show loading, empty, unsupported, checkout unavailable, and partial results distinctly. Close or clear the previous preview on a scope change and discard stale inventory and preview responses. Keep the existing unavailable-scope notice and the global editor in the global view.
 - Use the hardened Git execution helper for local classification and keep optional locks disabled. Use queries that cannot invoke repo-configured subprocesses, including Git filters. If local modifications cannot be determined under that constraint, omit the modification label. Inspection leaves the checkout, Git metadata, and machine configuration untouched.
 
@@ -87,15 +89,19 @@ Use tracked, untracked, ignored, or unavailable for the file's Git status. Call 
 - [x] Replace the scoped splash in `portal/config/app.js` using existing HTML templates, shared harness controls, and the source dialog shell. Add the folder-grouped instructions, skills, and configuration sections with explicit loading, empty, unsupported, and partial states.
 - [x] Extend the real-route coverage in `scripts/test/repository-scope-portal-check.mjs` and replace the splash expectation in `scripts/test/portal-ui/repository-scope.spec.mjs`. Cover switching repos while requests are pending, preview navigation, absence of package actions on repo skills and editing controls on repo permission sources, and return to global controls.
 - [x] Update the docs of record and run the focused checks below.
+- [x] Rework the scoped view after the first browser review: the token table first, no machine-wide grid or checkout display, shorter copy with notes in tooltips, one row per shared file or skill, subtle chips, the global popups, Config and hooks, and generated files apart.
+- [x] Make the inventory walk and reads asynchronous with bounded concurrency, keeping every limit and confinement check.
+- [x] Add the shared readable config renderer and TOML document parser, and use them for repo previews and the global settings and hooks popups.
 
 ## Validation
 
-- [x] Selecting a repo shows files only from its primary checkout and labels the current branch or detached HEAD.
+- [x] Selecting a repo shows files only from its primary checkout.
 - [x] A missing or ambiguous primary checkout cannot fall back to files from another checkout.
-- [x] Claude and Codex entries remain visible without an installed or enabled harness. Unsupported providers and failed or truncated scans are distinguishable from empty scans.
-- [x] Instruction and skill previews show source, Git status, and estimated size. Nested resources and skills contribute no startup aggregate.
-- [x] Other configuration shows source paths and safe metadata, with native permission sources described as declarations. Tests prove sensitive structured values never reach the browser.
-- [x] Switching scope while an inventory or preview is pending displays only the current scope's data. Global navigation and machine-wide controls still work.
+- [x] Claude and Codex entries remain visible without an installed or enabled harness. Active unsupported providers and failed or truncated scans are distinguishable from empty scans.
+- [x] The token table shows Repo Usage from root-level instructions and root skill and command descriptions only, never nested or generated files, and colors only Total Usage.
+- [x] Instruction and skill popups show every location, Git status, and estimated sizes, with Markdown rendered without images and skills in the global skill view.
+- [x] Config and hooks popups show keys and safe values. Tests prove sensitive structured values never reach the browser.
+- [x] Switching scope while an inventory or preview is pending displays only the current scope's data. Global navigation still works.
 - [x] Scans and previews leave repo files, Git metadata, and machine config intact and execute no harness or hook.
 
 Run the focused checks after implementation:
@@ -130,6 +136,11 @@ npm run test:portal-ui -- repository-scope.spec.mjs
 - **Claude `AGENTS.md` is a potentially conditional entry.** Claude Code's memory docs say it reads `AGENTS.md` where no `CLAUDE.md`, `.claude/CLAUDE.md`, or `CLAUDE.local.md` is in the working directory or above it, and a "Project instructions" setting changes that. That meets the plan's condition, so `AGENTS.md` is listed for both harnesses. (First implemented as Codex-only; corrected after validation pass 1.)
 - **Token level per file.** Root-level files use the startup thresholds, everything else the on-demand thresholds (`classifyStartupLevel` / `classifyOnDemandLevel`); there is no aggregate.
 - **JSON parse errors report no location.** V8's message quotes source text, which can be a secret; this Node version's messages carry no numeric position either, so the diagnostic is just "Could not parse JSON."
+- **Total Usage is the only colored column.** Chosen by the user: Total Usage keeps the startup thresholds (low under 8k, high over 20k) because it is the same per-session quantity as the global Usage; Repo Usage is a plain number. Separate repo bands were rejected.
+- **Config popups show keys and safe values, here and on the global page.** Chosen by the user over keys only or full values. This replaces the earlier promise that no structured value reaches the browser: safe values do, and the hidden categories never do.
+- **Generated files follow `linguist-generated`.** Chosen by the user over a RoboRepo-only special case: any repo can mark committed tool output, GitHub already honors the attribute, and RoboRepo's `.gitattributes` now marks `generated/**`.
+- **In-checkout symlinks are read through their targets.** A repo that links one skill folder into `.claude/skills` and `.codex/skills` would otherwise show no skill body at all. The target must resolve inside the checkout to a path the walk could list, so confinement is unchanged.
+- **Repo Usage counts skill and command descriptions.** The global Usage counts them, so leaving them out would undercount what a session starts with. Legacy `.codex/skills` entries are left out because whether Codex reads them is unverified.
 - **Browser verification ran against an isolated state root with a copy of the repo list,** started from the shell because the preview launcher reads only the primary checkout's `.claude/launch.json`, which this worktree session may not edit.
 
 ## Not tested
