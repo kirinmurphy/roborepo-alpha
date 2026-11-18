@@ -1,6 +1,6 @@
 ---
 id: 5xw1mmqy
-next_action: Built, validated, and waiting for a person to review it; one check needs you (run a real plan with this branch's skills installed and confirm the review asks only for what an agent cannot do). Run /plan-review on this plan.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["9671042v", "i5mnkm7z", "0jped168", "9njvfh5z", "vzgsx5vz"]
