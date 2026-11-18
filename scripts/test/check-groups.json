@@ -60,6 +60,8 @@
     "repository-overview-check.mjs",
     "repository-scope-check.mjs",
     "repository-scope-portal-check.mjs",
+    "repository-agent-config-check.mjs",
+    "config-tree-render-check.mjs",
     "telemetry-audit-tier1-check.mjs",
     "telemetry-boundaries-check.mjs",
     "telemetry-conditions-cache-check.mjs",
@@ -80,6 +82,8 @@
     "browser-playwright-cache-check.mjs",
     "browser-playwright-cli-check.mjs",
     "browser-playwright-resolve-check.mjs",
-    "delivery-operations-check.mjs"
+    "delivery-operations-check.mjs",
+    "protect-check.mjs",
+    "doctor-protection-check.mjs"
   ]
 }

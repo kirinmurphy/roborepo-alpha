@@ -12,8 +12,10 @@ url="${2:-${remote}}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${repo_root}"
 
-# doctor's Node release check reads nodejs.org; keep the push off the network, as ci.sh does.
+# doctor's Node release check reads nodejs.org and its branch protection check reads GitHub; keep
+# the push off the network, as ci.sh does.
 export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
+export ROBOREPO_SKIP_PROTECTION_CHECK=1
 
 failed=()
 

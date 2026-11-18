@@ -393,12 +393,254 @@ export function recommendationOption(rec) {
   return node;
 }
 
-export function repositorySplash(onRemoveFilter) {
+// --------------------------------------------------------------------------- repo inspector
+
+const TRUNCATION_LABELS = {
+  entries: "folder entries",
+  depth: "folder depth",
+  files: "files listed",
+  bytes: "bytes read",
+};
+const SECTION_TIPS = {
+  instructions: "Repo Root files load at the start of every session in this repo. Conditional files sit in a subfolder or are scoped to paths, so they apply only to work there. Imports stay as written.",
+  skills: "Each skill's name and description load at startup; the rest only when it runs.",
+  config: "Settings, permissions, hooks, MCP servers, custom agents, and commands. Settings files (JSON and TOML) open as keys with safe values: environment values, headers, commands, and URLs stay hidden. Markdown agents and commands open as rendered text. Permission entries are declarations, not the effective policy.",
+};
+// Rows carry no tags; the few facts that tell a file apart go in its info tooltip.
+const LINK_OUT_NOTE = "A symbolic link out of this repo; its target is not read.";
+const COPIES_DIFFER_NOTE = "The harnesses' copies of this skill are not identical; the popup shows one.";
+
+export function repositoryInspectorLoading() {
+  return tpl("tpl-repo-inspector-loading");
+}
+
+// A repo whose primary checkout cannot be used shows why, and never another checkout's files.
+export function repositoryCheckoutUnavailable(inventory, onRemoveFilter) {
   return pageSplash({
-    title: "Repo-level agent config coming soon",
-    body: "View per repo agent configurations for rules, skills, hooks, etc.",
+    title: "Primary checkout unavailable",
+    body: `${inventory.message || "This repo's primary checkout cannot be read."} Files from other checkouts are not shown in its place.`,
     actions: [{ label: "View Global Config", onClick: onRemoveFilter }],
   });
+}
+
+export function repositoryInspectorError(message) {
+  return repositoryNotice(`Could not read this repo's agent files: ${message}`);
+}
+
+function repositoryNotice(text) {
+  return fill(tpl("tpl-repo-inspector-notice"), { text });
+}
+
+function unique(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+// One row per file, and one per skill however many harnesses carry it. The row opens the copy that
+// was read; its popup lists every location. A file one harness reads at startup and another only
+// conditionally (a root AGENTS.md) sits under Repo Root, so its startup copy sets the row's color.
+export function groupRepositoryEntries(entries) {
+  const groups = new Map();
+  for (const entry of entries) {
+    const key = entry.area === "skills" ? `skill:${entry.name || entry.path}` : `path:${entry.path}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(entry);
+  }
+  return [...groups.values()].map((items) => {
+    const primary = items.find((entry) => entry.tokens != null && entry.loading === "root-level")
+      || items.find((entry) => entry.tokens != null)
+      || items.find((entry) => !entry.symlink || entry.linkTarget)
+      || items[0];
+    return {
+      entries: items,
+      primary,
+      harnessNames: unique(items.map((entry) => entry.harnessName)).sort(),
+      differs: unique(items.map((entry) => entry.contentHash)).length > 1,
+    };
+  });
+}
+
+function groupOpenable(group) {
+  const { primary } = group;
+  return primary.kind !== "linked-folder" && (!primary.symlink || !!primary.linkTarget);
+}
+
+function groupNotes(group) {
+  return unique([
+    ...group.entries.map((entry) => entry.note),
+    group.entries.some((entry) => entry.symlink && !entry.linkTarget) ? LINK_OUT_NOTE : null,
+    group.differs ? COPIES_DIFFER_NOTE : null,
+  ]);
+}
+
+function repositoryEntry(group, { onOpen, title, showChip }) {
+  const { primary } = group;
+  const node = tpl("tpl-repo-inspector-entry");
+  node.dataset.entry = primary.id;
+  const open = node.querySelector('[data-slot="open"]');
+  open.textContent = title;
+  if (groupOpenable(group)) open.addEventListener("click", () => onOpen(group));
+  else open.disabled = true;
+  const notes = groupNotes(group);
+  const tip = node.querySelector('[data-slot="tip"]');
+  if (notes.length) {
+    tip.hidden = false;
+    tip.dataset.tip = notes.join(" ");
+    tip.setAttribute("aria-label", notes.join(" "));
+  }
+  if (showChip && primary.tokens != null) {
+    applyTokenChip(node.querySelector('[data-slot="chip"]'), {
+      tokens: primary.tokens,
+      level: primary.tokenLevel || null,
+      detail: "Estimated size of this file alone.",
+    });
+  }
+  const description = primary.description || (primary.sections || []).join(" · ");
+  toggleSlot(node, "description", !!description, description);
+  toggleSlot(node, "note", !!primary.diagnostic, primary.diagnostic);
+  return node;
+}
+
+// Rows under a small heading; a heading with no rows is left out.
+function subgroups(named, entryNode) {
+  return named.filter(([, groups]) => groups.length).map(([name, groups]) => {
+    const node = fill(tpl("tpl-repo-inspector-group"), { name });
+    node.querySelector('[data-slot="entries"]').replaceChildren(...groups.map(entryNode));
+    return node;
+  });
+}
+
+const byPath = (a, b) => a.primary.path.localeCompare(b.primary.path);
+
+// Repo Root: what a session started at the root reads for some harness. Conditional: the rest,
+// which applies only to work in a subfolder or on matching paths. The path shows where.
+function rulesGroups(groups) {
+  const atRoot = (group) => group.entries.some((entry) => entry.loading === "root-level");
+  return [
+    ["Repo Root", groups.filter(atRoot).sort(byPath)],
+    ["Conditional", groups.filter((group) => !atRoot(group)).sort(byPath)],
+  ];
+}
+
+function harnessGroups(groups) {
+  const names = unique(groups.map((group) => group.harnessNames[0])).sort();
+  return names.map((name) => [name, groups.filter((group) => group.harnessNames[0] === name).sort(byPath)]);
+}
+
+function inventorySection({ area, heading, groups, render }) {
+  const panel = fill(tpl("tpl-repo-inspector-section"), { heading });
+  panel.dataset.area = area;
+  const tip = panel.querySelector('[data-slot="tip"]');
+  tip.dataset.tip = SECTION_TIPS[area];
+  tip.setAttribute("aria-label", `${heading}: ${SECTION_TIPS[area]}`);
+  panel.querySelector('[data-slot="items"]').replaceChildren(...render(groups));
+  toggleSlot(panel, "empty", groups.length === 0, "None in this repo.");
+  return panel;
+}
+
+function inspectorNotices(inventory) {
+  const notices = [];
+  if (inventory.truncated?.length) {
+    const reasons = inventory.truncated.map((reason) => TRUNCATION_LABELS[reason] || reason).join(", ");
+    notices.push(`Partial results: the scan hit its limit on ${reasons}. Some files may be missing.`);
+  }
+  if (inventory.unreadableCount) {
+    const named = (inventory.unreadableFolders || []).map((folder) => folder || "the repo root");
+    const others = inventory.unreadableCount - named.length;
+    notices.push(`Partial results: could not open ${[...named, ...(others > 0 ? [`${others} more`] : [])].join(", ")}.`);
+  }
+  for (const provider of inventory.providers || []) {
+    if (provider.error) notices.push(`${provider.displayName}: ${provider.error} Its files may be missing.`);
+  }
+  const unsupported = (inventory.providers || []).filter((provider) => provider.enabled && !provider.supported);
+  if (unsupported.length) notices.push(`Not inspected yet: ${unsupported.map((provider) => provider.displayName).join(", ")}.`);
+  for (const total of inventory.startup || []) {
+    if (total.unmeasured) notices.push(`${total.displayName}: ${total.unmeasured} startup file${total.unmeasured === 1 ? "" : "s"} could not be measured.`);
+  }
+  return notices;
+}
+
+function startupLevel(tokens, legend) {
+  if (!legend) return null;
+  if (tokens < legend.mediumAt) return "low";
+  if (tokens > legend.highAbove) return "high";
+  return "medium";
+}
+
+function repoUsageSpec(total) {
+  const b = total.breakdown || {};
+  return {
+    tokens: total.tokens,
+    level: null,
+    detail: "Read from this repo at the start of every session.",
+    breakdown: [
+      { label: "Instructions and rules", tokens: b.instructions || 0 },
+      { label: "Skill descriptions", tokens: b.skillDiscovery || 0 },
+      ...(b.commandDiscovery ? [{ label: "Command descriptions", tokens: b.commandDiscovery }] : []),
+    ],
+  };
+}
+
+function totalUsageSpec(total, contextCost) {
+  const global = contextCost?.harnesses?.[total.harness]?.startupTokens;
+  if (global == null) return null;
+  const legend = contextCost.startupThresholds || contextCost.thresholds || null;
+  const tokens = total.tokens + global;
+  return {
+    tokens,
+    level: startupLevel(tokens, legend),
+    detail: "Included automatically in every new session in this repo.",
+    breakdown: [{ label: "This repo", tokens: total.tokens }, { label: "Global config", tokens: global }],
+    legend,
+  };
+}
+
+// The table on top: per active harness, what this repo adds to every session and the session's total.
+function repositoryUsage(inventory, { contextCost, onViewGlobal }) {
+  const node = tpl("tpl-repo-usage");
+  fill(node, { title: `Token Use for ${inventory.displayName || "this repo"}` });
+  node.querySelector('[data-slot="view-global"]').addEventListener("click", onViewGlobal);
+  const active = new Set((inventory.providers || []).filter((provider) => provider.enabled).map((provider) => provider.id));
+  const rows = (inventory.startup || []).filter((total) => active.has(total.harness)).map((total) => {
+    const row = fill(tpl("tpl-repo-usage-row"), { label: total.displayName });
+    row.dataset.harness = total.harness;
+    applyTokenChip(row.querySelector('[data-slot="repo"]'), repoUsageSpec(total));
+    applyTokenChip(row.querySelector('[data-slot="total"]'), totalUsageSpec(total, contextCost));
+    return row;
+  });
+  if (rows.length) node.querySelector(".config-grid").append(...rows);
+  else node.querySelector(".panel").hidden = true;
+  node.querySelector('[data-slot="notices"]').replaceChildren(...inspectorNotices(inventory).map(repositoryNotice));
+  return node;
+}
+
+// Files marked linguist-generated are rendered from elsewhere, so they are left off the page.
+export function repositoryInspector(inventory, { onOpen, contextCost, onViewGlobal }) {
+  const listed = (inventory.entries || []).filter((entry) => !entry.generated);
+  const groupsIn = (area) => groupRepositoryEntries(listed.filter((entry) => entry.area === area));
+  const pathRow = (options) => (group) => repositoryEntry(group, { onOpen, title: group.primary.path, ...options });
+  const skills = groupsIn("skills").sort((a, b) => (a.primary.name || "").localeCompare(b.primary.name || ""));
+  return [
+    repositoryUsage(inventory, { contextCost, onViewGlobal }),
+    tpl("tpl-repo-agent-config-head"),
+    inventorySection({
+      area: "instructions",
+      heading: "Rules",
+      groups: groupsIn("instructions"),
+      render: (groups) => subgroups(rulesGroups(groups), pathRow({ showChip: true })),
+    }),
+    inventorySection({
+      area: "config",
+      heading: "Config and hooks",
+      groups: groupsIn("config"),
+      render: (groups) => subgroups(harnessGroups(groups), pathRow({})),
+    }),
+    inventorySection({
+      area: "skills",
+      heading: "Skills",
+      groups: skills,
+      render: (groups) => groups.map((group) => repositoryEntry(group, { onOpen, title: group.primary.name || group.primary.path })),
+    }),
+  ];
 }
 
 function wireInspectButton(btn, kind, id, harness, label, onInspectClick) {

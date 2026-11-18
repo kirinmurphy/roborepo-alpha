@@ -1,0 +1,60 @@
+<!-- Branch protection: the status panel for one repo, opened from a Home repo card's menu and from
+     the Plans page notice, plus that notice's line template. Injected at {{PROTECTION_PANEL}}
+     (scripts/cli/portal-server.mjs) on Home and Plans; driven by portal/shared/protection-panel.js. -->
+<link rel="stylesheet" href="/portal/shared/protection-panel.css" />
+<dialog id="protection-panel" class="protection-panel" data-dialog-size="md" aria-labelledby="protection-panel-title">
+  <div class="modal-head">
+    <h2 class="modal-title" id="protection-panel-title">Branch protection</h2>
+    <portal-close-button data-slot="close" aria-label="Close"></portal-close-button>
+  </div>
+  <div class="modal-body protection-panel-body">
+    <p class="protection-panel-summary" role="status">
+      <strong data-slot="repository"></strong>
+      <span class="protection-state" data-slot="state"></span>
+      <span data-slot="headline"></span>
+    </p>
+    <p class="protection-panel-note" data-slot="reason" hidden></p>
+    <section data-slot="policies-section" hidden>
+      <h3>RoboRepo rulesets</h3>
+      <ul class="protection-panel-list" data-slot="policies"></ul>
+      <p class="protection-panel-note" data-slot="checks"></p>
+    </section>
+    <ul class="protection-panel-list" data-slot="conflicts" aria-label="Rules that refuse plan saves" hidden></ul>
+    <section data-slot="hand-made-section" hidden>
+      <h3>Other rulesets</h3>
+      <ul class="protection-panel-list" data-slot="hand-made"></ul>
+      <p class="protection-panel-note" data-slot="bypass-note" hidden>Bypass lists are visible only to admins, so they were not compared.</p>
+    </section>
+    <section data-slot="manual-section" hidden>
+      <h3>Protect the branches by hand</h3>
+      <ol class="protection-panel-list" data-slot="manual-steps"></ol>
+    </section>
+    <p class="protection-panel-note" data-slot="admin-note" hidden></p>
+    <div class="protection-panel-confirm" data-slot="skip-confirm" role="alertdialog" aria-label="Skip merge rules" hidden>
+      <p>This turns off the required approval and the required CI checks on the default branch for this repo, for everyone who uses it. The plans and integrity rules stay on.</p>
+      <div class="protection-panel-confirm-actions">
+        <button type="button" data-btn="secondary" data-slot="skip-cancel">Keep merge rules</button>
+        <button type="button" data-btn="danger" data-slot="skip-accept">Turn off merge rules</button>
+      </div>
+    </div>
+    <div class="item-err" data-slot="error" hidden></div>
+  </div>
+  <div class="modal-actions">
+    <button type="button" data-btn="secondary" data-slot="skip" hidden>Skip merge rules</button>
+    <button type="button" data-btn="secondary" data-slot="unskip" hidden>Use merge rules</button>
+    <button type="button" data-btn="cta" data-slot="protect" hidden>Protect</button>
+  </div>
+</dialog>
+<template id="tpl-protection-item">
+  <li><strong data-slot="name"></strong> <span data-slot="detail"></span></li>
+</template>
+<template id="tpl-protection-line">
+  <li data-slot="text"></li>
+</template>
+<template id="tpl-protection-notice">
+  <div class="protection-notice">
+    <span data-slot="text"></span>
+    <button type="button" data-btn="secondary" data-slot="protect" hidden>Protect</button>
+    <button type="button" data-btn="text" data-slot="details">Details</button>
+  </div>
+</template>

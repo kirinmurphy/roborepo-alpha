@@ -23,6 +23,7 @@ import { readAppendedLines } from "./jsonl-tail.mjs";
 import { startPortalServer } from "./portal-server.mjs";
 import { computePortalSourceHash } from "./portal-source-hash.mjs";
 import { readConfigSnapshot, loadConfigSource } from "./config.mjs";
+import { loadRepositoryAgentConfig, loadRepositoryAgentConfigSource } from "./repository-agent-config.mjs";
 import { hookHarnessesForPackages, invalidateHookReadiness, reportPackageHookChange } from "./hook-readiness-status.mjs";
 import { launchHookReview, loadHookReviewStatus } from "./hook-review-launch.mjs";
 import { installCoreHooks } from "./hook-core-install.mjs";
@@ -54,6 +55,7 @@ import { MOCK_FIRST_RUN_VIEWS_ENABLED, mockHomeOverview } from "./mock-home.mjs"
 import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeTelemetryProjection } from "./telemetry-repository-overview.mjs";
 import { previewRepositoryWorktree, removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
+import { applyRepositoryProtection, loadRepositoryProtection } from "./repository-protection.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
@@ -838,6 +840,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       try { return setHarnessEnabled(id, enabled); } finally { invalidateHookReadiness(); }
     },
     loadConfigSource: (params) => loadConfigSource(params),
+    loadRepositoryAgentConfig: ({ repositoryId }) => loadRepositoryAgentConfig({ registry: loadRegistry({ stateRoot }), repositoryId }),
+    loadRepositoryAgentConfigSource: ({ repositoryId, id }) => loadRepositoryAgentConfigSource({ registry: loadRegistry({ stateRoot }), repositoryId, id }),
     loadPlans: (params) => loadPlansSnapshot(params),
     loadPlanDocument: (params) => loadPlanDocument(params),
     buildPlansPrompt: (params) => buildPlansPrompt(params),
@@ -867,6 +871,8 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     stopRepositoryWorktreeServers: (params) => afterWorktreeChange(stopRepositoryWorktreeServers(params)),
     enableWorktreeCleanup: (params) => afterWorktreeChange(enableWorktreeCleanup(params)),
     dismissWorktreeCleanupNotice: (params) => afterWorktreeChange(dismissWorktreeCleanupNotice(params)),
+    loadRepositoryProtection: (params) => loadRepositoryProtection(params),
+    applyRepositoryProtection: (params) => applyRepositoryProtection(params),
     // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after
     // each one; enabling auto-discovery starts the first process scan immediately.
     loadRepositorySources: () => loadRepositorySources(),

@@ -17,6 +17,15 @@ export function fetchSource({ kind, id, harness }) {
   return portalGetJson("/api/config/source?" + qs.toString());
 }
 
+// The selected repo's own agent files (read-only), and one file's preview by its inventory id.
+export function fetchRepositoryInventory(scope) {
+  return portalGetJson("/api/config/repository?" + new URLSearchParams({ repo: scope }).toString());
+}
+
+export function fetchRepositorySource(scope, id) {
+  return portalGetJson("/api/config/repository/source?" + new URLSearchParams({ repo: scope, id }).toString());
+}
+
 export function toggleItem(kind, id, enabled) {
   return portalPostJson(TOGGLE_ENDPOINT[kind], { id, enabled });
 }

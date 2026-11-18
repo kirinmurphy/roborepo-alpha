@@ -1,2 +1,5 @@
 # Markdown uses trailing spaces for hard line breaks. Keep other whitespace checks.
 *.md whitespace=-blank-at-eol
+# Rendered install baselines, not this repo's own agent config: GitHub collapses them in diffs and
+# the portal's repo inspector lists them apart without counting them toward startup tokens.
+generated/** linguist-generated=true

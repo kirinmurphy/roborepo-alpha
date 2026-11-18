@@ -1,0 +1,14 @@
+{
+  "path": ["protect"],
+  "kind": "command",
+  "title": "Protect",
+  "description": "Protect this repo's plans and default branches on GitHub",
+  "order": 45,
+  "advanced": true,
+  "usage": "roborepo protect [--check] [--json] [--skip main-merge | --unskip main-merge]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/protect.mjs",
+    "export": "protectCommand"
+  }
+}

@@ -23,7 +23,7 @@ Use it when you want to:
 
 | Command | What you get |
 | --- | --- |
-| `/plan-suite-init` | Set up a repo for the suite once: the plans branch and its worktree, where worktrees go, and `plans-config.json` with your plan-name namespaces. On a new machine it reconnects to the existing plans. `/plan-write` runs it for you when the config is missing |
+| `/plan-suite-init` | Set up a repo for the suite once: the plans branch and its worktree, where worktrees go, and `plans-config.json` with your plan-name namespaces. On a new machine it reconnects to the existing plans. It ends by checking [branch protection](#protect-the-plans-branch) and offering to add it. `/plan-write` runs it for you when the config is missing |
 | `/plan-write` | Create a plan with its initial checklist, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development, then move it to `ready/` |
 | `/plan-execute` | Start or resume implementation in an isolated worktree, check it with a validator and fix what it finds, then move the plan to `review/`; or fix findings a review sent back |
@@ -142,10 +142,30 @@ of truth.
 
 ### Protect the plans branch
 
-Where your Git host offers branch rules, add one for `repo-plans` that disallows force pushes and
-branch deletion and still permits direct pushes, including from any agent bot account. RoboRepo never
-force-pushes this branch. Pushes to it start no CI runs as long as your CI, like RoboRepo's, is limited
-to `main` and pull requests.
+`repo-plans` holds the only copy of your plans, so the Git host should refuse to delete or rewrite
+it. On GitHub, one command adds that protection, along with review and CI rules for the default
+branch:
+
+```bash
+roborepo protect
+```
+
+It needs repo admin rights and the GitHub CLI (`gh`). `roborepo protect --check` reports the
+current state without changing anything, and `/plan-suite-init` offers to run the command when it
+sets up a store. [Branch protection](../../../reference/roborepo-cli.md#branch-protection) lists
+the rules, the states, and how to skip the default-branch merge rules for one repo.
+
+On another Git host, add the rules by hand:
+
+1. On `repo-plans`: block deletion, block force pushes, and require linear history. Add no other
+   rule there. Required reviews, status checks, or signed commits would refuse plan saves, which
+   push directly to the branch.
+2. On the default branch: block deletion and force pushes for everyone, admins included.
+3. On the default branch: require a pull request with 1 approval (including approval of the last
+   push) and passing CI checks, with a bypass for repo admins only.
+
+RoboRepo never force-pushes `repo-plans`. Pushes to it start no CI runs as long as your CI, like
+RoboRepo's, is limited to `main` and pull requests.
 
 ## `/plan-write`
 
