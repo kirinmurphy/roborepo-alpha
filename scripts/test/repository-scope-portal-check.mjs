@@ -6,10 +6,11 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   URL_KEY_PATTERN, defaultRegistry, hideRepository, updateRegistry, upsertRepository, writeRegistry,
+  registerLocalRoot, registerLocalRootPath, rootId,
 } from "../../modules/repositories/index.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -54,6 +55,29 @@ for (const [id, displayName] of [[SHARED, "scope-shared"], [IDLE, "scope-idle"],
   upsertRepository(registry, { id, kind: "git", displayName, providerUrl: `https://github.com/acme/${displayName}` });
 }
 hideRepository(registry, MULTI, { hidden: true });
+
+// A repo with a real primary checkout for the Agents inspector routes. It has no telemetry, so the
+// Tokens totals below are unchanged by it.
+const INSPECT = "git:github.com/acme/scope-inspect";
+fs.mkdirSync(path.join(tmp, "scope-inspect"));
+const inspectRoot = fs.realpathSync(path.join(tmp, "scope-inspect"));
+// Git hooks export these; inherited, they would point the fixture's commands at the outer repo.
+const fixtureGitEnv = { ...process.env };
+for (const key of ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete fixtureGitEnv[key];
+const runGit = (...args) => {
+  const result = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", ...args], { cwd: inspectRoot, encoding: "utf8", env: fixtureGitEnv });
+  if (result.status !== 0) throw new Error(`git ${args.join(" ")}: ${result.stderr}`);
+};
+runGit("init", "-q", "-b", "main");
+runGit("remote", "add", "origin", "https://github.com/acme/scope-inspect.git");
+fs.writeFileSync(path.join(inspectRoot, "CLAUDE.md"), "# Inspect me\n");
+fs.mkdirSync(path.join(inspectRoot, ".claude"));
+fs.writeFileSync(path.join(inspectRoot, ".claude", "settings.json"), JSON.stringify({ env: { TOKEN: "route-secret-value" } }));
+runGit("add", "-A");
+runGit("commit", "-q", "-m", "init");
+upsertRepository(registry, { id: INSPECT, kind: "git", displayName: "scope-inspect", providerUrl: "https://github.com/acme/scope-inspect" });
+registerLocalRoot(registry, INSPECT, { rootId: rootId(inspectRoot), kind: "primary" });
+registerLocalRootPath(registry, INSPECT, { rootId: rootId(inspectRoot), path: inspectRoot });
 writeRegistry({ stateRoot: state, registry });
 
 const countFor = (predicate) => rows.filter((row) => predicate(row.repo?.repository_id || null)).length;
@@ -124,6 +148,31 @@ try {
     assert.equal(plans.status, 404, `/api/plans?repo=${value}`);
   }
   assert.equal((await get("/api/plans?repo=_other")).status, 404, "outside activity is Tokens-only");
+
+  // Agents inspector routes: scoped only, primary checkout only, unavailable keys answer 404.
+  const inspectKey = keyOf("scope-inspect");
+  const inventory = await get(`/api/config/repository?repo=${inspectKey}`);
+  assert.equal(inventory.status, 200);
+  assert.equal(inventory.json.status, "ok");
+  assert.equal(JSON.stringify(inventory.json).includes(inspectRoot), false, "the checkout path stays on the server");
+  assert.deepEqual(inventory.json.checkout.head, { kind: "branch", name: "main" });
+  assert.deepEqual(inventory.json.entries.map((entry) => entry.path).sort(), [".claude/settings.json", "CLAUDE.md"]);
+  assert.equal(JSON.stringify(inventory.json).includes("route-secret-value"), false, "config values never reach the browser");
+  const source = await get(`/api/config/repository/source?repo=${inspectKey}&id=${encodeURIComponent("claude:CLAUDE.md")}`);
+  assert.equal(source.status, 200);
+  assert.equal(source.json.content, "# Inspect me\n");
+  const settingsSource = await get(`/api/config/repository/source?repo=${inspectKey}&id=${encodeURIComponent("claude:.claude/settings.json")}`);
+  assert.equal(JSON.stringify(settingsSource.json).includes("route-secret-value"), false);
+  assert.equal((await get(`/api/config/repository/source?repo=${inspectKey}&id=${encodeURIComponent("claude:../outside")}`)).status, 404);
+  const noCheckout = await get(`/api/config/repository?repo=${sharedKey}`);
+  assert.equal(noCheckout.json.status, "checkout-unavailable", "a repo without a recorded checkout reads no files");
+  assert.equal(noCheckout.json.entries, undefined);
+  assert.equal((await get("/api/config/repository")).status, 400, "All repos has no repo inventory");
+  for (const value of ["nope", multiKey, "_other"]) {
+    const response = await get(`/api/config/repository?repo=${value}`);
+    assert.equal(response.status, 404, `/api/config/repository?repo=${value}`);
+    assert.equal((await get(`/api/config/repository/source?repo=${value}&id=claude:CLAUDE.md`)).status, 404);
+  }
 
   // Once RoboRepo finds the unknown repository, its sessions leave _other with no spool change.
   const spoolBefore = fs.readdirSync(spoolDir).map((name) => fs.statSync(path.join(spoolDir, name)).mtimeMs);

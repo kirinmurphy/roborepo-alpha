@@ -1,10 +1,11 @@
-import { execFile } from "node:child_process";
-import { isDeepStrictEqual, promisify } from "node:util";
+import { isDeepStrictEqual } from "node:util";
+import { forgeClient } from "../forge/index.mjs";
 import { runGitProcess } from "../repositories/git-exec.mjs";
 import { normalizeGitRemote } from "../repositories/identity.mjs";
 import { GIT_NETWORK_TIMEOUT_MS } from "../repositories/git-remote-operations.mjs";
 
-const execFileAsync = promisify(execFile);
+// Delivery refuses any remote that is not github.com before it reaches a `gh` call.
+const { run: gh } = forgeClient("github.com");
 
 async function git(cwd, args) {
   const result = await runGitProcess(cwd, args, { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
@@ -46,17 +47,6 @@ export async function fetchTrackingRefs(cwd, remote) {
     throw new Error(`Fetch from remote ${remote} failed (exit ${result.code ?? "unknown"}); Git's output is not printed because it can include the remote URL`);
   }
   return `Refreshed refs/remotes/${remote}/*`;
-}
-
-async function gh(cwd, args, input = "") {
-  const pending = execFileAsync("gh", args, {
-    cwd, encoding: "utf8", timeout: GIT_NETWORK_TIMEOUT_MS, maxBuffer: 1024 * 1024,
-    env: { ...process.env, GH_PROMPT_DISABLED: "1" },
-  });
-  pending.child.stdin.on("error", () => {});
-  pending.child.stdin.end(input);
-  const result = await pending;
-  return result.stdout;
 }
 
 // Remote URLs and paths can carry tokens in forms no redaction pattern reliably catches, and

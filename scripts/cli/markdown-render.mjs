@@ -261,3 +261,10 @@ export function renderMarkdown(text) {
   const normalized = String(text ?? "").replace(/\r\n/g, "\n");
   return renderBlocks(normalized.split("\n"));
 }
+
+// For Markdown a repo supplies: an <img> would fetch a URL the repo chose as soon as the preview
+// opens, so each image is replaced by its alt text. The pattern is renderInline's image output,
+// whose alt text is already escaped.
+export function withoutMarkdownImages(html) {
+  return String(html).replace(/<img src="[^"]*" alt="([^"]*)" class="markdown-image" loading="lazy">/g, "$1");
+}

@@ -408,6 +408,32 @@ check_node_release() {
   esac
 }
 
+# Whether the Git repo doctor runs from has the managed branch protection on GitHub. A gap is the
+# repo owner's to close, not a broken install, so it prints as a hint and doctor stays green. The
+# check prints nothing outside a Git repo with a GitHub origin. Needs gh and GitHub; without them it
+# reports a skip. Test suites set ROBOREPO_SKIP_PROTECTION_CHECK=1 to stay off the network.
+check_branch_protection() {
+  if ! command -v node >/dev/null 2>&1; then
+    ok "node unavailable; skipped branch protection check"
+    return 0
+  fi
+  if [[ "${ROBOREPO_SKIP_PROTECTION_CHECK:-}" == "1" ]]; then
+    ok "branch protection check skipped (ROBOREPO_SKIP_PROTECTION_CHECK=1)"
+    return 0
+  fi
+  local output status
+  set +e
+  output="$(node "${repo_root}/scripts/cli/protect.mjs" --doctor 2>&1)"
+  status=$?
+  set -e
+  [[ -z "${output}" && "${status}" -eq 0 ]] && return 0
+  case "${status}" in
+    0) ok "${output}" ;;
+    1) hint "${output}" ;;
+    *) fail "branch protection check crashed: ${output}" ;;
+  esac
+}
+
 check_local_config_repair_candidates() {
   if ! command -v node >/dev/null 2>&1; then
     ok "node unavailable; skipped local config repair check"
@@ -569,6 +595,7 @@ check_json "generated/claude/settings.json"
 check_toml "generated/codex/config.toml"
 
 check_node_release
+check_branch_protection
 
 if command -v node >/dev/null 2>&1; then
   node "${repo_root}/scripts/build/normalize-claude-settings.mjs" --check "${repo_root}/generated/claude/settings.json" >/dev/null \

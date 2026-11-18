@@ -94,6 +94,87 @@
         </span>
       </label>
     </template>
+    <!-- Repo inspector (a repo selected in Viewing): the repo's token use per active harness, then
+         read-only lists of its own agent files from its primary checkout. templates.js's
+         repositoryInspector fills these; nothing here offers a toggle or an edit, because the files
+         belong to the repo. Its info tips use the roomier tooltip. -->
+    <template id="tpl-repo-usage">
+      <div class="config-files-section repo-usage">
+        <div class="repo-usage-head">
+          <h2 class="config-files-title" data-slot="title"></h2>
+          <button type="button" class="text-link repo-view-global" data-slot="view-global">View Global Config</button>
+        </div>
+        <section class="panel wide">
+          <div class="config-grid repo-usage-grid" role="table" aria-label="Token use">
+            <div class="config-grid-head" role="row">
+              <div role="columnheader">Harness</div>
+              <div role="columnheader">
+                Repo Usage
+                <portal-info-icon data-tip-size="roomy" data-tip="Read from this repo at the start of every session: root-level instructions and rules in full, plus each skill's and command's name and description." aria-label="Repo Usage: read from this repo at the start of every session."></portal-info-icon>
+              </div>
+              <div role="columnheader">
+                Total Usage
+                <portal-info-icon data-tip-size="roomy" data-tip="Repo Usage plus this machine's global startup context: what every new session in this repo starts with." aria-label="Total Usage: repo usage plus global startup context."></portal-info-icon>
+              </div>
+            </div>
+          </div>
+        </section>
+        <div class="repo-inspector-notices" data-slot="notices"></div>
+      </div>
+    </template>
+    <template id="tpl-repo-usage-row">
+      <div class="config-grid-row" role="row">
+        <div class="config-harness" role="rowheader" data-slot="label"></div>
+        <div class="harness-provider harness-usage" role="cell" data-label="Repo">
+          <token-chip data-slot="repo"></token-chip>
+        </div>
+        <div class="harness-provider harness-usage" role="cell" data-label="Total">
+          <token-chip data-slot="total"></token-chip>
+        </div>
+      </div>
+    </template>
+    <template id="tpl-repo-agent-config-head">
+      <h2 class="config-files-title repo-agent-config-title">Agent Config</h2>
+    </template>
+    <template id="tpl-repo-inspector-notice">
+      <p class="repo-inspector-notice" role="status" data-slot="text"></p>
+    </template>
+    <template id="tpl-repo-inspector-loading">
+      <p class="repo-inspector-loading" role="status">Reading this repo's agent files…</p>
+    </template>
+    <template id="tpl-repo-inspector-section">
+      <section class="panel wide repo-inspector-section">
+        <div class="panel-head">
+          <h2 data-slot="heading"></h2>
+          <portal-info-icon data-slot="tip" data-tip-size="roomy"></portal-info-icon>
+        </div>
+        <div data-slot="items"></div>
+        <p class="repo-inspector-empty" data-slot="empty" hidden></p>
+      </section>
+    </template>
+    <!-- A small heading inside a section: Repo Root or Conditional under Rules, a harness under
+         Config and hooks. -->
+    <template id="tpl-repo-inspector-group">
+      <div class="repo-inspector-group">
+        <h3 class="repo-inspector-group-name" data-slot="name"></h3>
+        <div data-slot="entries"></div>
+      </div>
+    </template>
+    <!-- One row per file, or per skill when several harnesses carry the same one. Rows carry no tags;
+         what tells a file apart sits in its info tip, and its locations in the popup. -->
+    <template id="tpl-repo-inspector-entry">
+      <div class="item repo-inspector-entry">
+        <div class="item-body">
+          <div class="item-row">
+            <button type="button" class="item-label clickable repo-inspector-open" data-slot="open"></button>
+            <portal-info-icon data-slot="tip" data-tip-size="roomy" hidden></portal-info-icon>
+            <token-chip data-slot="chip" hidden></token-chip>
+          </div>
+          <div class="item-desc" data-slot="description" hidden></div>
+          <div class="item-note" data-slot="note" hidden></div>
+        </div>
+      </div>
+    </template>
     <!-- Persistent intro above the package sections: what the package manager provides. Not an
          onboarding notice — it renders on every load, whatever the onboarding state. A plain
          header, not a .panel: .panel is reserved for the package-group sections below it. -->

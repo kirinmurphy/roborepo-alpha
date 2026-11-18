@@ -10,6 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineHarnessProvider } from "../contract.mjs";
+import { claudeProjectInventory } from "./project-inventory.mjs";
 import { detectHarnessProvider } from "../discovery.mjs";
 import { stubAdapterGroups } from "../stub-adapter.mjs";
 import { hookRecordsFromFile, mergeRootConfigHooks, unmergeRootConfigHooks } from "../root-config-hooks.mjs";
@@ -109,6 +110,7 @@ export const claudeProvider = defineHarnessProvider({
       render: (content) => normalizeRootConfigContent("claude", content),
     },
     configEdit: jsonConfigEdit,
+    projectInventory: claudeProjectInventory,
     mcp: {
       ...stubGroups.mcp,
       remove: mcpRemove,

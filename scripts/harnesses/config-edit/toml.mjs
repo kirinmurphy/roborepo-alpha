@@ -166,7 +166,8 @@ function assignmentIndex(line) {
 
 // The last line a value starting on `start` occupies: it runs on while brackets or braces are open
 // or a multi-line (""" or ''') string is.
-function valueEndLine(lines, start, column) {
+// Exported for the read-only document parser (toml-document.mjs), which splits statements the same way.
+export function valueEndLine(lines, start, column) {
   let depth = 0;
   let quote = null;
   for (let row = start; row < lines.length; row += 1) {

@@ -152,6 +152,27 @@ Each capability maps to a required adapter group and method set, defined in
 | `session-launch` | `session` | `launch` |
 | `session-resume` | `session` | `resume` |
 
+### Optional groups: project inventory
+
+Some adapter groups belong to no capability. `OPTIONAL_ADAPTER_GROUPS` in `contract.mjs` lists
+them; a provider may omit one, and one it supplies must have every method.
+
+| Group | Methods | Used by |
+| --- | --- | --- |
+| `projectInventory` | `classify(relPath, { symlink })`, `describe(entry, text)`, optional `startupEntries(entries)` | The Agents repo inspector |
+
+`classify` names a native project file from its relative path alone (area, kind, label, loading
+hint, and whether it is text or structured); `describe` extracts display metadata from text the
+caller already read: a skill's name and description, or allowlisted section labels for settings.
+`startupEntries`, when present, picks which listed entries a session started at the repo root
+reads before its first message, and whether in full or only by name and description; without it,
+root-level instructions count. Providers never touch the filesystem and never return raw config
+values. Shared vocabulary and
+parsing helpers live in `scripts/harnesses/project-inventory.mjs`; Claude's and Codex's patterns in
+`scripts/harnesses/<id>/project-inventory.mjs`. Gemini has none yet, which the inspector reports as
+unsupported. `createHarnessRuntime().projectInventoryProviders()` returns every registered provider
+with its enablement, because repo files are listed whether or not this machine runs the harness.
+
 ### Hooks: read, merge order, and readiness
 
 `hooks.read({ cwd, hooksPath })` returns a promise of one record per installed hook handler:

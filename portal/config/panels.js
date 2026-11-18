@@ -59,6 +59,7 @@ export function createConfigModal() {
   }
 
   function setContent(data) {
+    contentEl.classList.remove("plain-source");
     if (data?.html) {
       contentEl.innerHTML = data.html;
       // Inspected sources are rendered markdown (skills, rules, guides), so any ```mermaid block
@@ -131,6 +132,7 @@ export function createConfigModal() {
     setBack(back);
     setRequires(requires, onRequire);
     setHeader(inspect.label || inspect.id, "", chips);
+    contentEl.classList.remove("plain-source");
     contentEl.replaceChildren(tmpl.packageContents(inspect, { entryChipSpec, onSelect }));
     setFooter(null);
     open();
@@ -147,7 +149,68 @@ export function createConfigModal() {
     open();
   }
 
-  return { openSource, openSnapshot, showContents };
+  // A repo file's popup, laid out like the global page's: title, every location the row stands for,
+  // cost chips, then the body the server rendered (Markdown without images, the skill view, or a
+  // list of config keys with safe values). Without rendered HTML it falls back to plain text.
+  async function openRepositorySource(group, { load, gitLabel }) {
+    const { primary, entries } = group;
+    const seq = ++viewSeq;
+    const title = primary.name || primary.path.split("/").at(-1);
+    const locations = entries.map((entry) => (entry.linkTarget ? `${entry.path} → ${entry.linkTarget}` : entry.path));
+    setBack(null);
+    setRequires();
+    setHeader(title, "loading…");
+    contentEl.replaceChildren();
+    setFooter(null);
+    open();
+    try {
+      const data = await load();
+      if (seq !== viewSeq) return;
+      const meta = [group.harnessNames.join(" · "), gitLabel(data.git)].join(" — ");
+      setHeader(data.title || title, [...locations, meta], repositoryChips(data, primary));
+      if (data.html) {
+        setContent(data);
+      } else if (data.format === "text") {
+        setPlainContent(data.truncated ? `${data.content}\n\n… Preview truncated.` : data.content);
+      } else {
+        const lines = data.sections?.length ? data.sections : ["No recognized sections."];
+        setPlainContent([...lines, ...(data.diagnostic ? ["", data.diagnostic] : [])].join("\n"));
+      }
+    } catch (e) {
+      if (seq !== viewSeq) return;
+      setHeader(title, locations);
+      setPlainContent("error: " + e.message);
+    }
+  }
+
+  // The global popup's chips: a skill or command costs its description at startup and its body when
+  // run; an instruction file costs its size when a session reads it.
+  function repositoryChips(data, primary) {
+    const chips = [];
+    if (data.discoveryTokens != null) {
+      chips.push({ label: "Startup", spec: { tokens: data.discoveryTokens, level: null, detail: "Name and description, read at the start of every session." } });
+    }
+    if (data.tokens != null) {
+      // A skill's body is colored nowhere on the global page either: only startup cost is.
+      const runnable = data.discoveryTokens != null;
+      const label = runnable ? "When run" : data.loading === "root-level" ? "Startup" : "When loaded";
+      chips.push({ label, spec: { tokens: data.tokens, level: runnable ? null : primary.tokenLevel || null, detail: "Estimated size of this file alone." } });
+    }
+    return chips;
+  }
+
+  function setPlainContent(text) {
+    contentEl.classList.add("plain-source");
+    contentEl.textContent = text;
+  }
+
+  // A scope change abandons whatever the dialog shows or is still loading.
+  function reset() {
+    viewSeq += 1;
+    if (dialogEl.open) close();
+  }
+
+  return { openSource, openSnapshot, showContents, openRepositorySource, reset };
 }
 
 // The recommendations dialog: after an enable that left some recommended packages off, ask which

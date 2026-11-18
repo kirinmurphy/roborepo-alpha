@@ -1491,6 +1491,10 @@ portal-menu-button {
 .portal-tooltip.portal-tooltip--wide {
   max-width: 460px;
 }
+/* `data-tip-size="roomy"`: a paragraph-length plain tip that would wrap too tightly at 260px. */
+.portal-tooltip.portal-tooltip--roomy {
+  max-width: 340px;
+}
 /* The same tip docked to the right edge on a wide screen: a fixed width, so it reads as a side
  * panel rather than a bubble sized to its longest line. */
 .portal-tooltip.portal-tooltip--panel {

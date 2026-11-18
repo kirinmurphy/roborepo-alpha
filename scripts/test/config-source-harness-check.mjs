@@ -16,6 +16,7 @@ testUnknownHarnessRejectedForScopedKind();
 testKnownHarnessReachesLoadConfigSource();
 testConfigFileKindIgnoresMissingHarness();
 testSnapshotHarnessesListMatchesRegistry();
+testHooksSourceSendsRenderedListOnly();
 console.log("config source harness checks passed");
 
 function testMissingHarnessRejectedForScopedKind() {
@@ -51,6 +52,18 @@ function testConfigFileKindIgnoresMissingHarness() {
   const body = JSON.parse(res.body);
   if (!body.ok) {
     assert.doesNotMatch(body.error, /missing or unknown harness/, "config-file kind must not require a harness param");
+  }
+}
+
+// Hook commands are hidden values, so the hooks popup gets the rendered key list and never the raw
+// hooks JSON. The source is the committed generated settings, which every checkout has.
+function testHooksSourceSendsRenderedListOnly() {
+  const claude = loadConfigSource({ kind: "harness-hooks", id: "hooks", harness: "claude" });
+  assert.equal(claude.ok, true, claude.error);
+  for (const result of [claude, loadConfigSource({ kind: "harness-hooks", id: "hooks", harness: "codex" })]) {
+    if (!result.ok) continue;
+    assert.equal("content" in result, false, `${result.title}: raw hooks text is not sent`);
+    assert.match(result.html, /config-tree/, `${result.title}: hooks render as the key list`);
   }
 }
 

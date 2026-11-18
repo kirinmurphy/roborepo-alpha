@@ -128,8 +128,32 @@ competes with a source that would find the repository again.
 ### Home card menu
 
 A repo card's ⋮ menu lists **All Plans**, **Agent Config**, and **Token Activity** (each opens that page already
-filtered to the repo, as `?repo=<key>`), then **Pin**/**Unpin** and **Ignore Repo** (**Forget This Repo** for a
-repo with no known checkout).
+filtered to the repo, as `?repo=<key>`), then **Pin**/**Unpin**, **Branch protection** for a repo
+with a Git remote, and **Ignore Repo** (**Forget This Repo** for a repo with no known checkout).
+
+### Branch protection
+
+**Branch protection** opens a panel that reads the repo's current
+[branch protection](roborepo-cli.md#branch-protection) status from GitHub and shows it in full:
+
+- the state, and for each RoboRepo ruleset whether it matches the policy, differs from it, is
+  skipped, or has not been created;
+- the CI checks the merge rules require;
+- every other ruleset on the repo, marked as covered when the RoboRepo rulesets make it safe to
+  delete;
+- for a repo on another Git host, or one GitHub offers no rulesets for, the steps to protect the
+  branches by hand.
+
+What the panel offers depends on the signed-in GitHub account:
+
+| Account | The panel offers |
+| --- | --- |
+| Repo admin | **Protect**, when a RoboRepo ruleset is missing or differs from the policy. **Skip merge rules** or **Use merge rules**, to turn the default-branch merge rules off or back on for this repo |
+| Anyone else | The account name and the command a repo admin would run |
+
+**Skip merge rules** asks for confirmation first. It turns off the required approval and the
+required CI checks on the default branch, for everyone who uses the repo; the plans and integrity
+rules stay on. Each button runs the same steps as the matching `roborepo protect` form.
 
 ### Ignore repository
 

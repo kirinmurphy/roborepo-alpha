@@ -19,6 +19,7 @@ import { codexPlansStoreWritablePaths } from "./plans-store-grants.mjs";
 import { addCodexMcpBlock, removeCodexMcpBlock, codexHasMcp, listCodexMcpServers } from "../mcp-codex-toml.mjs";
 import { transcriptStats, privacySafeRateLimits } from "../transcript-parse.mjs";
 import { tomlConfigEdit } from "../config-edit/toml.mjs";
+import { codexProjectInventory } from "./project-inventory.mjs";
 import { locateTranscript, extractHeavyTurns, transcriptTitle } from "../transcript-locate.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -156,6 +157,7 @@ export const codexProvider = defineHarnessProvider({
       render: (content) => normalizeRootConfigContent("codex", content),
     },
     configEdit: tomlConfigEdit,
+    projectInventory: codexProjectInventory,
     permissions: {
       workspaceRoots: ({ cwd } = {}) => loadPermissionWorkspaceRootsForCwd(cwd),
       writablePaths: codexPlansStoreWritablePaths,
