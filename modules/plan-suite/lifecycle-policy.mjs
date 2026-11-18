@@ -73,11 +73,36 @@ function universalFindings(doc, { lifecycle }) {
   return findings;
 }
 
-// Built work no test covers stays a finding until someone confirms it by hand. Active plans carry
+// Built work no test covers stays a finding while its entry is open: until an agent runs the check
+// and records the evidence, or the user confirms a check only a person can make. Active plans carry
 // these while work continues; /plan-close refuses to complete a plan while any remain.
 function notTestedFindings(doc) {
   const { unchecked } = doc.notTested;
   return unchecked > 0 ? [finding("UNCONFIRMED_NOT_TESTED", { count: unchecked })] : [];
+}
+
+// What an open entry must contain to say why an agent cannot clear it: one of the two markers as
+// its own word, with a reason after it. A bare marker explains no more than a missing one.
+const NOT_TESTED_REASON = /\b(?:needs a person|blocked):\s+\S/i;
+// A cleared entry's evidence: any text after a spaced em dash. The wording is the skills' to
+// prescribe; entries cleared before that wording existed stay valid.
+const NOT_TESTED_RESOLUTION = /\s—\s+\S/;
+
+// The `## Not tested` entries that explain nothing: open with no reason an agent cannot clear them,
+// or checked with no evidence. Whether a stated reason is true is a judgment this cannot make.
+export function unexplainedNotTested(entries) {
+  return entries.filter((entry) => !(entry.done ? NOT_TESTED_RESOLUTION : NOT_TESTED_REASON).test(entry.text));
+}
+
+// Kept apart from notTestedFindings because Completed reuses that one: a completed plan may hold
+// entries cleared before evidence was required, and close already refuses any open entry.
+function unexplainedNotTestedFindings(doc) {
+  const entries = unexplainedNotTested(doc.notTested.entries);
+  if (!entries.length) return [];
+  return [finding("NOT_TESTED_UNEXPLAINED", {
+    count: entries.length,
+    meta: { entries: entries.map(({ line, text, done }) => ({ line, text, done })) },
+  })];
 }
 
 // Backlog holds anything not yet started: proposed, draft, blocked, or ready. The only extra
@@ -112,9 +137,9 @@ function validateReady(doc) {
 }
 
 // Active means someone can pick this up and work it now. Built work no test covers may accumulate
-// here; it is reported, and resolved before completion.
+// here; it is reported, and each entry is run or explained before the plan moves to Review.
 function validateActive(doc) {
-  return [...workableFindings(doc), ...notTestedFindings(doc)];
+  return [...workableFindings(doc), ...notTestedFindings(doc), ...unexplainedNotTestedFindings(doc)];
 }
 
 // Review holds finished implementation awaiting QA and approval. It is still worked — findings get

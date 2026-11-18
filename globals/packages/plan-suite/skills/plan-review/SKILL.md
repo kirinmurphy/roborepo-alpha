@@ -152,7 +152,8 @@ of it. The human's review is the independent check; this step makes sure they re
   the gate output if the gate has finished, never an account of the work. It applies the same rubric as `/plan-execute`'s
   Validation Loop: every acceptance criterion against the code and test evidence (a checked task is a
   claim, not evidence), tests that assert observable outcomes for new behavior, docs of record that
-  match the code, `## Not tested` entries an agent could run instead, each gate failure, and the
+  match the code, `## Not tested` entries whose `Needs a person:` or `Blocked:` reason does not
+  hold and cleared entries without evidence, each gate failure, and the
   constraints of every loaded paired skill where the diff falls under them. Its three convention
   checks, Flow and cohesion, Data and state, and Comments and abstractions, apply to changed and
   directly affected code: a comment the diff adds that only restates the code is a fix, harmless
@@ -196,7 +197,7 @@ findings; earlier findings may stay for readable history.
 ### Verification
 - `npm run check` passed at <short commit>
 - Base failure: `<check>` fails on the base branch too
-- Manual: the setup dialog enables every component (confirmed by the user)
+- Manual: the setup dialog's wording reads clearly to a new user (confirmed by the user)
 
 ### Result
 - Status: pending
@@ -230,6 +231,13 @@ For each finding fixed here:
    review changed.
 3. Check the finding off with its commit: `- [x] Missing retry test — fixed in review (<short commit>)`.
 
+A `## Not tested` entry whose reason does not hold is a **fix**: run the check here and clear the
+entry with its evidence, `— Verified by agent <date> at <commit>: <command or method> → <result>`.
+A check that runs and fails is a finding to fix, not an entry. Retry each `Blocked:` entry once,
+since this session may run with different permissions; clear it when the check passes, and leave it
+open with its reason when the tool still refuses. Never check off a person-only entry on your own
+judgment.
+
 After code fixes, run another Validator pass over the result, as in step 3. Stop when a pass reports
 no **fix** findings, or after eight passes. The cap limits passes only: the eighth pass's findings are
 fixed like any other pass's, then the review continues without another pass. Record under
@@ -261,7 +269,10 @@ The first layer, always shown:
 - base failures, named as such, and issues outside this plan, each proposed as separate work when it
   is worth doing;
 - when the Validator reached its cap, the last pass's fixes, which were not revalidated;
-- the manual checks that need the human, from `## Not tested`;
+- the checks only the human can make: each open person-only `## Not tested` entry with its steps,
+  the expected result, and the reason an agent could not make it;
+- the commands to allow: each `Blocked:` entry as the exact command a tool refused, and its error.
+  A check an agent ran is evidence under its criterion, never a request to the human;
 - each escalated finding as a decision: the options, their consequences, and a recommendation.
 
 The second layer is offered in one line and given when the human asks. The plan's `## Review`
@@ -282,7 +293,9 @@ question. An agent cannot approve, and passing tests are not approval.
 
 #### 6a. The human approves
 
-Approval needs every finding resolved and every required manual check confirmed by the human.
+Approval needs every finding resolved and every `## Not tested` entry settled: person-only checks
+confirmed by the human, blocked ones run once allowed. Check a person-only entry off only from the
+human's explicit answer, quoting it: `— Confirmed by the user <date>: "<what they reported>"`.
 
 ```md
 ### Approval

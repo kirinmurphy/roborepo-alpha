@@ -88,7 +88,10 @@ Each pass checks:
 2. New and changed behavior has tests that assert observable outcomes.
 3. The docs listed under `## Documentation impact`, and any the diff newly affects, describe the
    code as it now is.
-4. Every `## Not tested` entry is a real gap: a check an agent can run is run, not listed.
+4. Every `## Not tested` entry is a real gap: a check an agent can run is run, not listed. Each
+   open entry's `Needs a person:` or `Blocked:` reason holds, and each cleared entry's evidence
+   names a real command or method and its result. A reason that does not hold is a `fix` finding:
+   the Implementer runs the check. A cleared entry without real evidence is a `fix` finding too.
 5. Every gate failure, classified below.
 6. The constraints of every loaded paired skill, where the diff falls under them.
 7. **Flow and cohesion:** the main execution path of changed code can be followed, and

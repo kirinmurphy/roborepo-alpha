@@ -464,7 +464,7 @@ accepts it. `--base` names the code branch the gates compare against:
 | `roborepo plans reopen <plan> [--base <branch>] [--json]` | Moves a review plan back to `active/` after a requirements change, and marks any approval `invalidated`. |
 | `roborepo plans close <plan> [--base <branch>] [--json]` | Checks that the approval is fresh and the branch landed (including squash, rebase, and fast-forward merges), clears `next_action`, and moves a review plan to `completed/`. |
 | `roborepo plans archive <plan> --reason <text> [--base <branch>] [--json]` | Records the reason under `## Archived`, clears `next_action`, clears the plan from unfinished plans' `depends_on` and `blocked_by`, and moves the plan to `archived/`. Never removes a worktree or branch. |
-| `roborepo plans preflight <plan> [--base <branch>] [--json]` | Reports whether implementation is complete: no task outside `## Not tested` open, no blockers, a clean worktree, a branch with its own commits, and no Review findings apart from Not tested. Exits 1 when a check fails. |
+| `roborepo plans preflight <plan> [--base <branch>] [--json]` | Reports whether implementation is complete: no task outside `## Not tested` open, no blockers, a clean worktree, a branch with its own commits, and no Review findings apart from open Not tested entries that give a reason. An entry with no reason or evidence (`NOT_TESTED_UNEXPLAINED`) fails the check, which quotes it. Exits 1 when a check fails. |
 | `roborepo plans landed <plan> [--base <branch>] [--json]` | Reports whether the plan's branch landed on the base branch, including squash and rebase merges, and the commit that absorbed it. Verifies an absorbing commit recorded in the plan's `## Verification` (`- Absorbing commit: <full commit id>`) before scanning base history, and says whether it reused that evidence. Read-only. Exits 1 unless landed. |
 | `roborepo plans approval <plan> [--base <branch>] [--json]` | Reports the recorded approval as `fresh`, `stale` (with the changed paths), `missing`, `not-approved` (including one a reopen invalidated), `invalid`, or `unavailable` (the plan's worktree is gone or detached, so its branch cannot be resolved). The text output counts base changes since the review; `--json` lists them. Exits 1 unless fresh. |
 | `roborepo plans sync-base [--continue] [--base <branch>] [--json]` | From a plan's linked worktree, merges the base branch into its branch; does nothing when up to date. Pauses on conflicts and exits 1; `--continue` refuses while conflicts or markers remain, then commits the merge. Refuses a dirty worktree or a base behind its upstream. Never merges into the base branch. |
@@ -487,9 +487,21 @@ errors and whether the push reached the remote appear in the dialog.
 
 A plan's `## Not tested` section lists built work that no test covers, one checkbox per entry.
 Unchecked entries on an active, review, or completed plan produce the `UNCONFIRMED_NOT_TESTED`
-finding. They never block the move to review, and `/plan-close` refuses to close a plan while any
-remain. Headings and checkboxes inside fenced code
-blocks never count as plan structure.
+finding. An open entry that says why an agent cannot clear it (`Needs a person:` or `Blocked:`)
+does not block the move to review, and `/plan-close` refuses to close a plan while any remain.
+
+On an active or review plan, an unchecked entry with neither reason, and a checked entry with no
+evidence after a ` — ` dash, produce the `NOT_TESTED_UNEXPLAINED` finding, which quotes each entry.
+
+| Where | `NOT_TESTED_UNEXPLAINED` |
+| --- | --- |
+| `roborepo plans validate`, the Plans page | Reported as advisory |
+| `roborepo plans save`, moves into `active/` (start, reopen) | Accepted without a report |
+| `roborepo plans preflight` and the move into `review/` (submit) | Refused |
+| Review Result freshness (`roborepo plans approval`) | Incomplete while a checked entry has no evidence |
+| Completed plans | Not computed |
+
+Headings and checkboxes inside fenced code blocks never count as plan structure.
 
 The Plans page uses the normalized package catalog state. It does not inspect skill symlinks directly.
 

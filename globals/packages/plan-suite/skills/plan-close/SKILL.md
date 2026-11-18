@@ -151,14 +151,14 @@ Follow `references/verdict.md`:
 
 ### 5. Confirm `## Not tested` is clear
 
-Unchecked `## Not tested` entries are built work nobody confirmed. Attempt each check the agent
-can perform: run an existing test, add a missing regression test for observable behavior, or use an
-available UI. Check off an entry only after recording the concrete passing evidence in the plan.
-If this changes code or tests, rerun the affected checks and the full gate as in step 1; rerun the
-plan validator after changing the document. Never check off manual-only `## Not tested` entries
-without the user's confirmation. A user may instead defer an entry to another plan; record that
-scope decision and its reason in the `## Decision Log` before removing the entry. While any
-unchecked entries remain, refuse and list them; the validator reports `UNCONFIRMED_NOT_TESTED`.
+This step only confirms. Every entry is settled in `/plan-review` before approval: an agent runs
+each check it can and records the evidence, and the user confirms the checks only a person can
+make. A review Result cannot be complete while an entry is open, so an entry found open here means
+approval was recorded outside the normal path.
+
+While any unchecked entries remain, refuse, list them, and send the user to `/plan-review`, which
+runs or confirms each one and renews the approval; the validator reports `UNCONFIRMED_NOT_TESTED`.
+Never run a check, check off an entry, or remove one here.
 
 ### 6. Confirm a fresh human approval
 
@@ -319,11 +319,12 @@ codes, or Git mechanics. For each issue, include:
 - whether it is manual confirmation, implementation work, an approval to renew, an external
   dependency, or an unconfirmed landing result.
 
-For unchecked `## Not tested` entries, quote or faithfully reproduce each entry so the user can
-confirm the specific behavior. For `landed: unconfirmed`, name the branch/worktree, base branch,
+For unchecked `## Not tested` entries, quote or faithfully reproduce each entry with its
+`Needs a person:` or `Blocked:` reason, and name `/plan-review` as the action that resolves it:
+only a person-only entry needs the user's own check, and review runs the rest. For `landed: unconfirmed`, name the branch/worktree, base branch,
 exact ancestry result, and the content-level check that is still needed. For a stale approval,
 name the approved commit, the branch tip, and the changed paths. Preserve all open issues in the
-plan's lifecycle folder; never check off a manual entry without user confirmation.
+plan's lifecycle folder; never check off a `## Not tested` entry here.
 
 End every blocked or refused report with: **Would you like help resolving any of these issues?**
 If the user says yes, help with the listed issues without silently changing their confirmation,
@@ -347,7 +348,7 @@ Do not:
 
 - close a plan while tests fail, work is open, a `## Not tested` entry is unchecked, the approval is
   not fresh, or landing is unconfirmed;
-- check off manual-only `## Not tested` entries without user confirmation;
+- run, check off, or remove a `## Not tested` entry; an open one goes back to `/plan-review`;
 - write, repair, or infer an approval;
 - archive a plan; that is `/plan-archive`;
 - synchronize the base branch into the feature branch, or wait for a merge;

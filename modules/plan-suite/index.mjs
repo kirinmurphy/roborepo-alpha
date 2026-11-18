@@ -291,8 +291,9 @@ function buildPlanRecord(repository, absolutePath, relativePath, stat, projectNa
       modifiedAt: stat.mtime.toISOString(),
       gitLastChangedAt: git.lastChangedAt,
       taskCounts: parsed.taskCounts,
-      // Unchecked `## Not tested` entries, which are tasks too but never block implementation
-      // completion; `taskCounts.remaining` minus this is the work still open.
+      // Unchecked `## Not tested` entries, which are tasks too but are not implementation work: one
+      // that gives its reason may reach review open. `taskCounts.remaining` minus this is the work
+      // still open.
       notTestedOpen: parsed.notTested.unchecked,
       // The outcome recorded in `## Review`, kept apart from task progress: open findings and the
       // recorded decision. Whether an approval is still fresh needs Git and is checked at close.
@@ -348,7 +349,7 @@ export function parsePlanMarkdown(markdown, context = {}) {
     title,
     headings,
     tasks,
-    notTested: notTestedEntries(headings, tasks, lines.length),
+    notTested: notTestedEntries(headings, tasks, lines),
     review: reviewRecord(headings, tasks, lines),
     taskCounts: {
       total: tasks.length,
@@ -362,14 +363,31 @@ export function parsePlanMarkdown(markdown, context = {}) {
 // next heading at the same or a shallower depth, so sub-headings inside it stay part of it. Only a
 // literal top-level `## Not tested` counts: prose headings that merely discuss the section, such as
 // ``### `## Not tested` ``, must not turn their examples into entries.
-function notTestedEntries(headings, tasks, lineCount) {
+//
+// An entry's `text` is the whole entry, wrapped lines included: the reason an open entry ends with,
+// or the evidence a cleared one carries, usually sits on a continuation line.
+function notTestedEntries(headings, tasks, lines) {
   const index = headings.findIndex((heading) => heading.depth === 2 && heading.text.toLowerCase() === "not tested");
   if (index === -1) return { present: false, entries: [], unchecked: 0 };
   const start = headings[index];
   const next = headings.slice(index + 1).find((heading) => heading.depth <= start.depth);
-  const end = next ? next.line : lineCount + 1;
-  const entries = tasks.filter((task) => task.line > start.line && task.line < end);
+  const end = next ? next.line : lines.length + 1;
+  const entries = tasks
+    .filter((task) => task.line > start.line && task.line < end)
+    .map((task) => ({ ...task, text: [task.text, ...continuationLines(lines, task.line)].join(" ") }));
   return { present: true, entries, unchecked: entries.filter((task) => !task.done).length };
+}
+
+// The indented, non-blank lines that continue the list item on 1-based `line`, up to the next list
+// item, blank line, or unindented text.
+function continuationLines(lines, line) {
+  const continued = [];
+  for (let index = line; index < lines.length; index += 1) {
+    const next = lines[index];
+    if (!/^\s+\S/.test(next) || /^\s*[-*+]\s/.test(next)) break;
+    continued.push(next.trim());
+  }
+  return continued;
 }
 
 export function parseFrontmatter(markdown) {

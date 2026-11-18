@@ -49,6 +49,7 @@ try {
     "plans/backlog/test-gone.md": planDoc({ id: "gone0001" }),
     "plans/backlog/test-ffwd.md": planDoc({ id: "ffwd0001" }),
     "plans/backlog/test-carry.md": planDoc({ id: "carry001" }),
+    "plans/backlog/test-unexplained.md": planDoc({ id: "unexpl01", extra: "\n## Not tested\n\n- [ ] The portal lists plans in a browser.\n" }),
     "src/app.txt": "v1\n",
   });
   const store = storePath(root);
@@ -253,6 +254,12 @@ try {
     assert.equal(json(plans(root, "approval", "flow0001"), "open review finding").review.state, "incomplete");
     saveReview(`${reviewDoc}\n## Not tested\n- [ ] Confirm the manual workflow\n`);
     assert.equal(json(plans(root, "approval", "flow0001"), "open manual check").review.state, "incomplete");
+    saveReview(`${reviewDoc}\n## Not tested\n- [x] Confirmed the manual workflow\n`);
+    const unevidenced = json(plans(root, "approval", "flow0001"), "checked entry with no evidence").review;
+    assert.equal(unevidenced.state, "incomplete", "a check nobody recorded evidence for cannot sit under a complete review");
+    assert.match(unevidenced.reason, /records no evidence/);
+    saveReview(`${reviewDoc}\n## Not tested\n- [x] Confirmed the manual workflow — Confirmed by the user 2026-11-21: "it works"\n`);
+    assert.equal(json(plans(root, "approval", "flow0001"), "checked entry with evidence").review.state, "fresh");
     saveReview(reviewDoc.replace(reviewedTip, "not-a-commit"));
     assert.equal(json(plans(root, "approval", "flow0001"), "invalid review commit").review.state, "invalid");
     saveReview(reviewDoc);
@@ -320,6 +327,37 @@ try {
     approve(flow, "flow0001");
     assert.equal(json(plans(root, "approval", "flow0001"), "approved again after reopen").state, "fresh");
     assert.match(read(inStore("plans/review/test-flow.md")), /### Approval\n- Decision: approved/, "a new approval replaces the retired record");
+  }
+
+  // ── Not tested entries: work resumes with an unexplained one, review does not begin with it ───
+  {
+    const entry = "- [ ] The portal lists plans in a browser.";
+    const reason = `${entry} Needs a person: judging the layout is a human call.`;
+    const activePath = "plans/active/test-unexplained.md";
+    approved(plans(root, "promote", "unexpl01"), "promote with an unexplained entry");
+    const wt = worktree(root, "feat/unexplained");
+    approved(plans(root, "start", "unexpl01", "--worktree", wt.name), "start with an unexplained entry");
+    commit(wt.path, "Implement unexpl01", { "src/unexpl01.txt": "done\n" });
+    edit(activePath, (text) => text.replace("- [ ] Build the thing.", "- [x] Build the thing."));
+
+    const preflight = json(plans(root, "preflight", "unexpl01"), "preflight with an unexplained entry");
+    assert.deepEqual(preflight.checks.filter((check) => !check.ok).map((check) => check.n), [6], "only the validator check fails");
+    assert.match(preflight.checks.find((check) => check.n === 6).observed,
+      /NOT_TESTED_UNEXPLAINED: 1 Not tested entry has no reason or evidence: "The portal lists plans in a browser\."/, "the preflight names the entry to fix");
+
+    const before = head(store);
+    const error = refused(plans(root, "submit", "unexpl01"), "submit with an unexplained entry", /Implementation is not complete/);
+    assert.match(error.details.join("\n"), /The portal lists plans in a browser\./, "the refusal names the entry too");
+    assert.match(error.resolution, /Needs a person: <why an agent cannot>/, "and says what an entry must end with");
+    assert.equal(head(store), before, "a refused submit commits nothing");
+
+    edit(activePath, (text) => text.replace(entry, reason));
+    assert.equal(json(plans(root, "preflight", "unexpl01"), "preflight with a reason").ok, true, "an open entry that gives a reason may reach review");
+    approved(plans(root, "submit", "unexpl01"), "submit once the entry gives a reason");
+
+    edit("plans/review/test-unexplained.md", (text) => text.replace(reason, entry));
+    approved(plans(root, "reopen", "unexpl01"), "reopen with an unexplained entry");
+    assert.ok(exists(activePath), "work resumes with the entry still unexplained");
   }
 
   // ── close: refused until the reviewed branch has merged, then review → completed ──────────────
