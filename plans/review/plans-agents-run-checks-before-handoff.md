@@ -547,12 +547,23 @@ None.
   Windows installer suites skipped (no Docker or `pwsh` on this machine)
 - Manual: the dry-run's review packet asks only for person-only checks (confirmed by the user,
   2026-11-16: "Yes, both need me")
+- Review round 3, 2026-11-17: approval of ef022392 went stale when `main` moved; `plans sync-base`
+  merged 7f4ee1e5 (#69, #72) cleanly as 750d1b29. `main` changed nothing under
+  `modules/plan-suite/` or the plan's skills; the two docs both sides edit changed in unrelated
+  sections
+- Review Validator pass at 750d1b29 (fresh-context subagent): no findings, nothing outside this
+  plan; the branch's own diff against `main` matches its diff at ef022392 line for line; the four
+  plan suites, `skill-structure-check.mjs`, `docs-reference-check.mjs`,
+  `plan-citation-comments-check.mjs`, and `roborepo plans validate` (0 findings) passed
+- At 750d1b29: `npm run check` passed ("CI checks passed"): 85/85 unit suites, package install,
+  and 275 portal UI tests; the clean-machine and Windows installer suites skipped (no Docker or
+  `pwsh` on this machine)
 
 ### Result
 
 - Status: complete
-- Reviewed implementation commit: ef022392942686a07875f3ad91f8db02a2d8ccbd
-- Base commit: 97f65fa4b04f2a7ba0ad0624841ca6c4b9e14635
+- Reviewed implementation commit: 750d1b29e198416f679fa3e5775aced2f56d4b78
+- Base commit: 7f4ee1e5a3f5a24cf48025bc76433ed5444b261e
 
 ### Approval
 - Decision: approved
