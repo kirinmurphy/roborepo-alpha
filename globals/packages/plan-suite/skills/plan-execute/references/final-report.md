@@ -121,7 +121,7 @@ Implementation result
 - Lifecycle: stays active | moved to review | stays review
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)
-- Base: merged <base> at <commit> | already up to date | not merged (<why>)
+- Base: merged <base> at <commit> | already up to date | not merged (<why>); compared with a fresh fetch | the last fetched copy (fetch failed) | a local branch
 - Pull request: <URL>, mergeable | conflicts | unknown; CI passed | failed | running | none (<why>)
 - Details: Decision Log, findings, and Not tested entries are in the plan document; ask here for any detail
 - Server: <URL> running from the worktree | isolated state at <URL> (<why>) | none (<why>)

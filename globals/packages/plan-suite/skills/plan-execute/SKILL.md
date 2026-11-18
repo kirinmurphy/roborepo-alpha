@@ -279,10 +279,10 @@ reason. It does not block completion; the user settles it in `/plan-review`, bef
 Every run that commits to the feature branch ends by pushing it, only that branch and never with
 force, as [references/handoff.md](references/handoff.md) describes. After the submit transition,
 and after Review Findings commits its fixes, follow its handoff from the worktree, without asking:
-merge the base in with `roborepo plans sync-base --json`, recheck what the merge changed, push, then
-open or update the pull request and report whether it merges cleanly and CI's result so far.
-Invoking `/plan-execute` authorizes this merge of the base into the plan's own feature branch.
-Merging the feature branch into the base stays forbidden, and the protected-branch hook denies it.
+merge the base in with `roborepo plans sync-base --base <base> --json`, recheck what the merge
+changed, push, then open or update the pull request and report whether it merges cleanly and CI's
+result so far. Invoking `/plan-execute` authorizes this merge of the base into the plan's own
+feature branch. Merging the feature branch into the base stays forbidden.
 
 ## Review Findings
 
@@ -304,6 +304,8 @@ A plan in `review/` returns here only to fix what review recorded.
 5. Commit the fixes in the worktree and save the plan update. The plan stays in `review/`; never run a
    lifecycle transition in this mode. Hand off the feature branch (see Push and hand off the
    feature branch), then report that `/plan-review` should run again.
+6. With no unchecked finding, finish an incomplete handoff instead: one whose branch is ahead of its
+   remote or has no open pull request. Run the handoff, and never report it done without the PR.
 
 ## Not Tested
 

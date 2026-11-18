@@ -271,7 +271,7 @@ async function plansSyncBaseCommand(args) {
   } else {
     const update = result.baseUpdate;
     if (update?.moved) console.log(`${result.base}: fast-forwarded to ${update.upstream} at ${update.to.slice(0, 12)}`);
-    if (update && !update.fetched) console.log(`${result.base}: compared with ${update.upstream} as of the last fetch; the fetch did not run or failed`);
+    if (update?.fetch === "failed") console.log(`${result.base}: the fetch failed, so it was compared with ${update.upstream} as of the last fetch`);
     console.log(`${result.branch}: ${result.state}${result.commit ? ` at ${result.commit.slice(0, 12)}` : ""}`);
     for (const conflict of result.conflicts) console.log(`conflict: ${conflict}`);
     if (result.state === "conflicts") console.log("Resolve the conflicts, stage them, run the checks, then run `roborepo plans sync-base --continue`.");

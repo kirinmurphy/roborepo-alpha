@@ -15,7 +15,7 @@ import path from "node:path";
 import { fetchTrackingRefs } from "../delivery/operations.mjs";
 import { domainError } from "./index.mjs";
 import { PLANS_BRANCH } from "./plan-store.mjs";
-import { currentBranch, dirtyPaths, git, primaryCheckout, topLevel } from "./plan-git.mjs";
+import { currentBranch, git, primaryCheckout, topLevel } from "./plan-git.mjs";
 
 const CONFLICT_MARKER = /^(<{7}|>{7}) /m;
 
@@ -34,6 +34,9 @@ export async function syncBase({ cwd = process.cwd(), base = "main", continueMer
   if (!git(worktree, ["rev-parse", "--verify", "-q", `refs/heads/${base}`]).ok) {
     throw domainError("INVALID_CHANGE", `The base branch ${base} does not exist locally.`);
   }
+  if (git(worktree, ["symbolic-ref", "-q", `refs/heads/${base}`]).ok) {
+    throw domainError("INVALID_CHANGE", `The base ${base} is a symbolic ref; pass the branch it points to.`);
+  }
   const merging = git(worktree, ["rev-parse", "--verify", "-q", "MERGE_HEAD"]).ok;
   // A paused merge already chose its base commit; a later sync-base picks up anything newer.
   if (continueMerge) return continueSync({ worktree, branch, base, merging });
@@ -42,7 +45,7 @@ export async function syncBase({ cwd = process.cwd(), base = "main", continueMer
       resolution: "Resolve the conflicts, stage the result, run the repository's checks, then run sync-base --continue.",
     });
   }
-  const dirty = dirtyPaths(worktree);
+  const dirty = cleanStatus(worktree);
   if (dirty.length) {
     throw domainError("INVALID_CHANGE", "The worktree has uncommitted changes, so base was not merged.", {
       resolution: "Commit the work in progress first; sync-base never merges over uncommitted changes.",
@@ -51,6 +54,12 @@ export async function syncBase({ cwd = process.cwd(), base = "main", continueMer
   }
 
   const baseUpdate = await refreshBase(worktree, base);
+  // The fetch can take a while; the worktree must still be on the same clean branch to merge.
+  if (currentBranch(worktree) !== branch || git(worktree, ["rev-parse", "--verify", "-q", "MERGE_HEAD"]).ok || cleanStatus(worktree).length) {
+    throw domainError("INVALID_CHANGE", `The worktree changed while ${base} was refreshed, so base was not merged.`, {
+      resolution: `Return the worktree to ${branch} with no uncommitted changes, then run sync-base again.`,
+    });
+  }
 
   const before = git(worktree, ["rev-parse", "HEAD"]).stdout;
   if (git(worktree, ["merge-base", "--is-ancestor", base, "HEAD"]).ok) {
@@ -94,64 +103,107 @@ function continueSync({ worktree, branch, base, merging }) {
 }
 
 function commitMerge(worktree, branch, base) {
+  // The paused merge's own base commit: another sync can move the base ref while it waits.
+  const mergeHead = git(worktree, ["rev-parse", "--verify", "-q", "MERGE_HEAD"]).stdout;
   const committed = git(worktree, ["commit", "--quiet", "--no-edit"]);
   if (!committed.ok) throw domainError("MOVE_FAILED", "The merge commit failed.", { details: [committed.stderr] });
   const commit = git(worktree, ["rev-parse", "HEAD"]).stdout;
   const parents = git(worktree, ["rev-list", "--parents", "-n", "1", commit]).stdout.split(" ").length - 1;
-  if (parents !== 2 || !git(worktree, ["merge-base", "--is-ancestor", base, commit]).ok) {
+  if (parents !== 2 || !mergeHead || !git(worktree, ["merge-base", "--is-ancestor", mergeHead, commit]).ok) {
     throw domainError("MOVE_FAILED", `The commit on ${branch} does not merge ${base}.`, { details: [commit] });
   }
   return { state: "merged", branch, base, commit, conflicts: [] };
 }
 
 // Fetches the base's upstream and fast-forwards the local base to it. Returns what happened, or
-// null when the base tracks nothing. A failed fetch falls back to the last fetched state, so an
-// offline run still merges what it has.
+// null when the base tracks nothing. `fetch` is "fetched", "failed" (the comparison used the last
+// fetched commit, so an offline run still merges what it has), or "local" (the upstream is a local
+// branch, which needs no fetch).
 async function refreshBase(worktree, base) {
-  const upstream = git(worktree, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", `${base}@{upstream}`]);
-  if (!upstream.ok || !upstream.stdout) return null;
-  const remote = git(worktree, ["config", "--get", `branch.${base}.remote`]).stdout;
-  let fetched = false;
-  if (remote && remote !== ".") {
-    fetched = await fetchTrackingRefs(worktree, remote).then(() => true, () => false);
+  const upstream = upstreamOf(worktree, base);
+  if (!upstream) return null;
+  let fetch = "local";
+  if (upstream.remote !== ".") {
+    fetch = await fetchTrackingRefs(worktree, upstream.remote).then(() => "fetched", () => "failed");
   }
   const from = git(worktree, ["rev-parse", `refs/heads/${base}`]).stdout;
-  const to = git(worktree, ["rev-parse", upstream.stdout]).stdout;
-  const report = { upstream: upstream.stdout, fetched, from, to, moved: false };
+  const to = git(worktree, ["rev-parse", "--verify", "-q", `${upstream.ref}^{commit}`]).stdout;
+  if (!to) {
+    throw domainError("INVALID_CHANGE", `${base}'s upstream ${upstream.name} could not be verified: ${fetch === "failed" ? "the fetch failed and no fetched copy exists" : "it does not exist"}.`, {
+      resolution: `Ask the user to check ${base}'s upstream (\`git branch -vv\`) and network access, then run sync-base again.`,
+    });
+  }
+  const report = { upstream: upstream.name, fetch, from, to, moved: false };
   if (from === to || git(worktree, ["merge-base", "--is-ancestor", to, from]).ok) return { ...report, to: from };
 
-  const behind = Number(git(worktree, ["rev-list", "--count", `${base}..${to}`]).stdout || "0");
-  const stale = `The local ${base} is ${behind} commit${behind === 1 ? "" : "s"} behind ${upstream.stdout}`;
+  const behind = Number(git(worktree, ["rev-list", "--count", `${from}..${to}`]).stdout || "0");
+  const stale = `The local ${base} is ${behind} commit${behind === 1 ? "" : "s"} behind ${upstream.name}`;
   if (!git(worktree, ["merge-base", "--is-ancestor", from, to]).ok) {
     throw domainError("INVALID_CHANGE", `${stale} and has commits of its own, so it cannot be fast-forwarded.`, {
-      resolution: `Ask the user to reconcile ${base} with ${upstream.stdout} in the checkout that holds it, then run sync-base again.`,
+      resolution: `Ask the user to reconcile ${base} with ${upstream.name} in the checkout that holds it, then run sync-base again.`,
     });
   }
   const holder = checkoutHolding(worktree, base);
   if (holder) {
-    const dirty = dirtyPaths(holder);
+    const dirty = cleanStatus(holder);
     if (dirty.length) {
       throw domainError("INVALID_CHANGE", `${stale}, and the checkout that has ${base} checked out has uncommitted changes, so it was not fast-forwarded.`, {
         resolution: `Ask the user to commit or clear the changes in ${holder} (or update ${base} there with \`git pull --ff-only\`), then run sync-base again.`,
         details: dirty,
       });
     }
+    // Recheck right before moving: the holder must still be on the base at the commit compared.
+    const onBase = git(holder, ["symbolic-ref", "-q", "HEAD"]).stdout === `refs/heads/${base}`;
+    if (!onBase || git(holder, ["rev-parse", "HEAD"]).stdout !== from) {
+      throw domainError("INVALID_CHANGE", `The checkout holding ${base} changed while it was checked, so ${base} was not fast-forwarded.`, {
+        resolution: "Run sync-base again.",
+      });
+    }
     const forwarded = git(holder, ["merge", "--ff-only", "--quiet", to]);
     if (!forwarded.ok) throw domainError("MOVE_FAILED", `Fast-forwarding ${base} in ${holder} failed.`, { details: [forwarded.stderr] });
   } else {
     // The old-value argument makes the update refuse if another process moved the base meanwhile.
-    const updated = git(worktree, ["update-ref", "-m", `sync-base: fast-forward to ${upstream.stdout}`, `refs/heads/${base}`, to, from]);
+    const updated = git(worktree, ["update-ref", "-m", `sync-base: fast-forward to ${upstream.name}`, `refs/heads/${base}`, to, from]);
     if (!updated.ok) throw domainError("MOVE_FAILED", `Fast-forwarding ${base} failed.`, { details: [updated.stderr] });
   }
   return { ...report, moved: true };
 }
 
-// The checkout that has `branch` checked out, or null when none does.
+// The base's configured upstream, resolved to the ref the guarded fetch refreshes
+// (`refs/remotes/<remote>/<branch>`) rather than through the remote's own refspecs, which may map
+// elsewhere or point at a ref that does not exist yet.
+function upstreamOf(worktree, base) {
+  const remote = git(worktree, ["config", "--get", `branch.${base}.remote`]).stdout;
+  const merge = git(worktree, ["config", "--get", `branch.${base}.merge`]).stdout;
+  if (!remote || !merge.startsWith("refs/heads/")) return null;
+  const branch = merge.slice("refs/heads/".length);
+  if (remote === ".") return { remote, ref: merge, name: branch };
+  return { remote, ref: `refs/remotes/${remote}/${branch}`, name: `${remote}/${branch}` };
+}
+
+// Status paths for a checkout, refusing when Git cannot report them: empty output from a failed
+// status would otherwise read as clean.
+function cleanStatus(cwd) {
+  const status = git(cwd, ["status", "--porcelain", "--untracked-files=all"]);
+  if (!status.ok) throw domainError("MOVE_FAILED", `Git could not read the status of ${cwd}.`, { details: [status.stderr] });
+  return status.raw.split("\n").filter(Boolean);
+}
+
+// The checkout that has `branch` checked out, or null after a successful inventory finds none. A
+// registered holder whose folder cannot be reached (an unmounted drive) refuses rather than reading
+// as absent, since moving the ref alone would leave that checkout's files behind.
 function checkoutHolding(cwd, branch) {
-  const entries = git(cwd, ["worktree", "list", "--porcelain"]).stdout.split("\n\n");
-  const entry = entries.find((item) => item.split("\n").includes(`branch refs/heads/${branch}`));
-  const found = entry && /^worktree (.+)$/m.exec(entry)?.[1];
-  return found && fs.existsSync(found) ? fs.realpathSync(found) : null;
+  const list = git(cwd, ["worktree", "list", "--porcelain"]);
+  if (!list.ok) throw domainError("MOVE_FAILED", "git worktree list failed.", { details: [list.stderr] });
+  const entry = list.stdout.split("\n\n").find((item) => item.split("\n").includes(`branch refs/heads/${branch}`));
+  if (!entry) return null;
+  const found = /^worktree (.+)$/m.exec(entry)?.[1];
+  if (!found || !fs.existsSync(found)) {
+    throw domainError("INVALID_CHANGE", `${branch} is checked out in a worktree that cannot be reached, so it was not fast-forwarded.`, {
+      resolution: `Ask the user to make ${found || "that worktree"} available or update ${branch} there, then run sync-base again.`,
+    });
+  }
+  return fs.realpathSync(found);
 }
 
 function unmergedPaths(worktree) {

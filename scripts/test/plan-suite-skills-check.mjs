@@ -211,11 +211,13 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   ]);
   includesAll("plan-execute handoff", handoff, [
     "After the submit transition, and after Review Findings commits its fixes",
-    "`roborepo plans sync-base --json`",
+    "`roborepo plans sync-base --base <base> --json`",
     "authorizes this merge of the base into the plan's own feature branch",
     "Merging the feature branch into the base stays forbidden",
     "Regenerate a generated file from its sources",
-    "`roborepo plans sync-base --continue --json`",
+    "`roborepo plans sync-base --continue --base <base> --json`",
+    "An existing open pull request whose base is not `<base>` is not edited or readied",
+    "`git rev-parse @{upstream}` equals `HEAD`",
     "report the conflicting paths and the choice under Needs you",
     "run the checks for the files it touched",
     "`roborepo delivery pr-body <file>`",

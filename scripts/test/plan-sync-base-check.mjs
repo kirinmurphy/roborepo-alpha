@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // `roborepo plans sync-base`: merging the base branch into a plan's feature branch from its linked
 // worktree. Covers a branch already up to date, a clean merge, a stale base fast-forwarded from its
-// upstream (checked out clean, checked out dirty, checked out nowhere, diverged, fetch failing), a
+// upstream (checked out clean, checked out dirty, checked out nowhere, diverged, fetch failing,
+// tracking ref missing, local upstream, symbolic base), a
 // conflict that pauses without losing work and then continues, and every refusal.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -74,8 +75,8 @@ try {
   const forwarded = json(sync(wt.path), "fast-forward in the base checkout");
   assert.equal(forwarded.state, "merged");
   assert.deepEqual(
-    { moved: forwarded.baseUpdate.moved, fetched: forwarded.baseUpdate.fetched, from: forwarded.baseUpdate.from, to: forwarded.baseUpdate.to },
-    { moved: true, fetched: true, from: mainStale, to: upstreamOne },
+    { moved: forwarded.baseUpdate.moved, fetch: forwarded.baseUpdate.fetch, from: forwarded.baseUpdate.from, to: forwarded.baseUpdate.to },
+    { moved: true, fetch: "fetched", from: mainStale, to: upstreamOne },
   );
   assert.equal(git(root, "rev-parse", "main"), upstreamOne, "main is fast-forwarded to its upstream");
   assert.equal(read(path.join(root, "src/upstream-one.txt")), "one\n", "the base checkout's files follow the fast-forward");
@@ -103,10 +104,30 @@ try {
   const originUrl = git(root, "remote", "get-url", "origin");
   git(root, "remote", "set-url", "origin", path.join(fx.tmp, "remotes", "missing.git"));
   const offline = json(sync(wt.path), "fast-forward from the last fetch");
-  assert.equal(offline.baseUpdate.fetched, false, "a failed fetch is reported");
+  assert.equal(offline.baseUpdate.fetch, "failed", "a failed fetch is reported");
   assert.equal(offline.baseUpdate.moved, true, "the last fetched upstream still fast-forwards main");
   assert.equal(git(root, "rev-parse", "main"), git(root, "rev-parse", "refs/remotes/origin/main"));
   git(root, "remote", "set-url", "origin", originUrl);
+
+  // A missing tracking ref is recreated by the fetch rather than read as "no upstream".
+  git(root, "update-ref", "-d", "refs/remotes/origin/main");
+  const upstreamFour = pushUpstream("Upstream commit four", { "src/upstream-four.txt": "four\n" });
+  const recreated = json(sync(wt.path), "fast-forward after the tracking ref was removed");
+  assert.equal(recreated.baseUpdate.fetch, "fetched");
+  assert.equal(git(root, "rev-parse", "main"), upstreamFour, "main reaches the refetched upstream");
+
+  // A local upstream needs no fetch and is reported as local, not as a failed fetch.
+  git(root, "branch", "--quiet", "trunk", "main");
+  git(root, "config", "branch.main.remote", ".");
+  git(root, "config", "branch.main.merge", "refs/heads/trunk");
+  assert.equal(json(sync(wt.path), "local upstream").baseUpdate.fetch, "local");
+  git(root, "config", "branch.main.remote", "origin");
+  git(root, "config", "branch.main.merge", "refs/heads/main");
+
+  // A symbolic base could advance a checked-out branch behind its checkout's back; it is refused.
+  git(root, "symbolic-ref", "refs/heads/alias", "refs/heads/main");
+  refused(sync(wt.path, "--base", "alias"), "a symbolic base", /symbolic ref/);
+  git(root, "update-ref", "--no-deref", "-d", "refs/heads/alias");
 
   // A conflict pauses with the merge in progress; nothing is discarded or chosen.
   commit(root, "Base edits shared", { "src/shared.txt": "line one from base\n" });
@@ -123,6 +144,8 @@ try {
   refused(sync(wt.path, "--continue"), "continue with conflict markers", /Conflict markers remain/);
   fs.writeFileSync(path.join(wt.path, "src/shared.txt"), "line one from base and the branch\n");
   git(wt.path, "add", "--", "src/shared.txt");
+  // The base moving while the merge is paused does not invalidate the resolution.
+  commit(root, "Base moves during the pause", { "src/later.txt": "later\n" });
   const continued = json(sync(wt.path, "--continue"), "continue");
   assert.equal(continued.state, "merged");
   assert.equal(git(wt.path, "rev-list", "--parents", "-n", "1", "HEAD").split(" ").length, 3);
