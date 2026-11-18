@@ -61,11 +61,13 @@ export async function syncBase({ cwd = process.cwd(), base = "main", continueMer
     });
   }
 
+  // Merge the exact commit just compared, not the base ref, which another process may move.
+  const baseCommit = baseUpdate?.to || git(worktree, ["rev-parse", `refs/heads/${base}`]).stdout;
   const before = git(worktree, ["rev-parse", "HEAD"]).stdout;
-  if (git(worktree, ["merge-base", "--is-ancestor", base, "HEAD"]).ok) {
+  if (git(worktree, ["merge-base", "--is-ancestor", baseCommit, "HEAD"]).ok) {
     return { state: "up-to-date", branch, base, baseUpdate, before, commit: before, conflicts: [] };
   }
-  const merged = git(worktree, ["merge", "--no-ff", "--no-edit", "-m", `Merge ${base} into ${branch}`, base]);
+  const merged = git(worktree, ["merge", "--no-ff", "--no-edit", "-m", `Merge ${base} into ${branch}`, baseCommit]);
   if (merged.ok) return { state: "merged", branch, base, baseUpdate, before, commit: git(worktree, ["rev-parse", "HEAD"]).stdout, conflicts: [] };
 
   const conflicted = unmergedPaths(worktree);
@@ -161,6 +163,15 @@ async function refreshBase(worktree, base) {
     }
     const forwarded = git(holder, ["merge", "--ff-only", "--quiet", to]);
     if (!forwarded.ok) throw domainError("MOVE_FAILED", `Fast-forwarding ${base} in ${holder} failed.`, { details: [forwarded.stderr] });
+    // Git cannot lock a checkout against a branch switch, and `merge` moves whatever branch HEAD
+    // names. Confirm it was the base that moved, so a switch in that instant is reported, never
+    // claimed as a fast-forward of the base.
+    const landed = git(holder, ["symbolic-ref", "-q", "HEAD"]).stdout;
+    if (git(worktree, ["rev-parse", `refs/heads/${base}`]).stdout !== to) {
+      throw domainError("MOVE_FAILED", `${holder} switched branches during the fast-forward, so ${base} did not move.`, {
+        resolution: `Ask the user to check ${landed || "the checkout's current branch"} in ${holder}: it may have been fast-forwarded to ${to} instead.`,
+      });
+    }
   } else {
     // The old-value argument makes the update refuse if another process moved the base meanwhile.
     const updated = git(worktree, ["update-ref", "-m", `sync-base: fast-forward to ${upstream.name}`, `refs/heads/${base}`, to, from]);
