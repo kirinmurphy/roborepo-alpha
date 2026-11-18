@@ -28,6 +28,18 @@ run() {
 }
 
 run bash scripts/doctor.sh --quiet
+
+# Dev dependencies (Playwright) go in before any suite that imports them: the unit group's browser
+# checks import @playwright/test, and a fresh worktree has no node_modules. The install is visible
+# here so a failure reads as an install failure, not as ERR_MODULE_NOT_FOUND in some later suite.
+# A failed install is fatal everywhere, not only in CI: `npm ci` removes node_modules before it
+# installs, so after a failure the unit suites cannot run either.
+if ! run node scripts/test/portal-ui/ensure-deps.mjs; then
+  echo "" >&2
+  echo "FAIL: dev dependencies could not be installed (npm ci failed; see the npm output above)" >&2
+  exit 1
+fi
+
 run bash scripts/test/test-cli.sh --quiet
 run bash scripts/test/test-install-collisions.sh
 
@@ -62,16 +74,8 @@ fi
 # run it when the Chromium browser is installed (it lives in the machine-local ms-playwright
 # cache, not in node_modules), otherwise print a visible skip line. The runner re-checks too, so
 # `npm run test:portal-ui` is safe to invoke directly on a machine without the browser.
-# Playwright itself is installed into this checkout first (a fresh worktree has no node_modules),
-# visibly here so a failed install is not mistaken for a missing browser below.
-if ! run node scripts/test/portal-ui/ensure-deps.mjs; then
-  if [[ "${CI:-}" == "true" ]]; then
-    echo "FAIL: portal UI browser suite cannot run: npm ci failed" >&2
-    exit 1
-  fi
-  echo ""
-  echo "skip: portal UI browser suite (npm ci failed; see the npm output above)"
-elif node scripts/test/portal-ui/has-browser.mjs >/dev/null 2>&1; then
+# Playwright itself was installed into this checkout at the top of the gate.
+if node scripts/test/portal-ui/has-browser.mjs >/dev/null 2>&1; then
   run npm run --silent test:portal-ui
 elif [[ "${CI:-}" == "true" ]]; then
   # CI installs Chromium before this gate. A skip there would report green with no UI coverage, so

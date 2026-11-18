@@ -58,7 +58,7 @@ export function installReason(repoRoot) {
 export function ensureDevDependencies(repoRoot) {
   const reason = installReason(repoRoot);
   if (!reason) return true;
-  console.error(`portal UI: ${reason}; running npm ci`);
+  console.error(`dev dependencies: ${reason}; running npm ci`);
   const result = spawnSync("npm", ["ci", "--prefer-offline", "--no-audit", "--no-fund"], {
     cwd: repoRoot,
     // npm output goes to stderr so callers that read this process's stdout see only their own.
@@ -66,7 +66,7 @@ export function ensureDevDependencies(repoRoot) {
     shell: process.platform === "win32",
   });
   if (result.status !== 0) {
-    console.error(`portal UI: npm ci failed (${result.error?.message ?? `exit ${result.status}`})`);
+    console.error(`dev dependencies: npm ci failed (${result.error?.message ?? `exit ${result.status}`})`);
     return false;
   }
   return true;
