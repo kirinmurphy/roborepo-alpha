@@ -580,3 +580,23 @@ None.
 - Decision: approved
 - Reviewed implementation commit: 9a063e9e0658d862ee383f6dad3fa66bc8b07627
 - Confirmed by: human (user answered 'Approve this commit' in chat, 2026-11-18)
+
+## Completion
+
+Closed 2026-11-18. When a plan reaches review, the agent has now already run every check it can,
+with the result written into the plan; the review asks the user only for checks a person must make
+(each with steps, expected result, and why an agent cannot) and for any command a tool blocked.
+A plan cannot be submitted for review while an open `## Not tested` entry lacks a
+`Needs a person:` or `Blocked:` reason, and `/plan-close` only confirms the entries are settled.
+Merged to `main` through kirinmurphy/roborepo-alpha#74.
+
+## Verification
+
+- Completion gate: CI run 44252896072 on `main` at 65658826 passed
+- Focused checks rerun on `main` at 65658826: `plan-suite-findings-check.mjs`, `plan-lifecycle-transitions-check.mjs`, and `plan-suite-skills-check.mjs` passed
+- Plan claims checked against `main`: every implementation task is checked; both `## Not tested` entries are cleared with recorded evidence; every `## Review` finding is checked off; the merge commit's tree is identical to the approved commit's tree
+- Docs of record checked against the landed code: `docs/user/guides/plan/lifecycle/plan-suite.md` (entry format with `Needs a person:`), `docs/user/reference/plans-portal.md` (`NOT_TESTED_UNEXPLAINED` and where it blocks), and `docs/internal/plan-suite-deferred-topics.md` (settled rows removed) match
+- Approval: fresh; approved commit 9a063e9e0658d862ee383f6dad3fa66bc8b07627, confirmed by a human
+- Landing: newly scanned; branch `claude/plans-agents-run-checks-before-handoff` absorbed into `main`
+- Absorbing commit: 65658826f0fbd5fde4095a8c9e87fd0dde64bf67
+- Not verified: Codex agents' ability to run UI checks (`network.allow_local_binding` not checked), as recorded in Risks
