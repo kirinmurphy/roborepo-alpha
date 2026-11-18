@@ -96,11 +96,12 @@ function ansiCEscape(text, i) {
 }
 
 // Splits a shell command into simple commands (word lists), honoring quotes, including `$'…'`
-// with its escapes, and `#` comments, whose apostrophes open no quote. Separators are ; & | && ||
-// and newlines; a backslash-newline joins lines.
+// with its escapes. Separators are ; & | && || and newlines; a backslash-newline joins lines. With
+// `parens`, an unquoted `(` or `)` is a word of its own, so `(true; git push origin main)` reads
+// `main` and not `main)`.
 // Expansion is not performed; a word that still holds $ or a backtick is reported so the caller can
 // decline to classify it.
-function splitCommands(text) {
+function splitCommands(text, { parens = false } = {}) {
   const commands = []
   let words = []
   let word = null
@@ -129,7 +130,9 @@ function splitCommands(text) {
     } else if (quote === '"') {
       if (ch === '"') quote = null
       else if (ch === '\\' && text[i + 1] === '\n') i += 1
-      else if (ch === '\\' && i + 1 < text.length) word += text[++i]
+      // Inside double quotes a backslash escapes only $, `, ", \, and newline; before anything else
+      // it stays, so `sh -c "echo a\ #b; …"` hands the inner shell an escaped blank, not a comment.
+      else if (ch === '\\' && i + 1 < text.length && '$`"\\'.includes(text[i + 1])) word += text[++i]
       else word += ch
     } else if (ch === '$' && (text[i + 1] === "'" || text[i + 1] === '"')) {
       // `$'…'` is a quoted string with escapes, and `$"…"` a double-quoted one.
@@ -139,9 +142,6 @@ function splitCommands(text) {
     } else if (ch === "'" || ch === '"') {
       quote = ch
       word ??= ''
-    } else if (ch === '#' && word === null && !commentsAsCode) {
-      const end = text.indexOf('\n', i)
-      i = (end === -1 ? text.length : end) - 1
     } else if (ch === '\\' && text[i + 1] === '\n') {
       i += 1
     } else if (ch === '\\' && i + 1 < text.length) {
@@ -152,12 +152,110 @@ function splitCommands(text) {
       endCommand()
     } else if (ch === ' ' || ch === '\t') {
       endWord()
+    } else if (parens && (ch === '(' || ch === ')')) {
+      endWord()
+      words.push(ch)
     } else {
       word = (word ?? '') + ch
     }
   }
   endCommand()
   return commands
+}
+
+// `text` without its comments, so an apostrophe in one opens no quote for the readers after it. A
+// `#` starts a comment where bash starts one: at the start of a word, after an unquoted, unescaped
+// blank or `;&|<>(`, or after a `)` that closes a subshell or case pattern (a `)` closing `$(…)`
+// continues the word). It is text inside quotes, `${…}`, and `$((…))`. A comment runs to the
+// newline, or to the backtick that closes the substitution it is in. When the quotes do not balance,
+// the text is returned as it is, so a misread can only leave a comment in, never cut code out.
+function withoutComments(text) {
+  if (!text.includes('#')) return text
+  let out = ''
+  const open = [] // ' $' " ${ $( $(( ( `
+  let wordStart = true
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    const top = open.at(-1)
+    if (top === "'" || top === "$'") {
+      if (top === "$'" && ch === '\\' && i + 1 < text.length) {
+        out += ch + text[++i]
+        continue
+      }
+      if (ch === "'") open.pop()
+      out += ch
+      continue
+    }
+    if (ch === '\\' && i + 1 < text.length) {
+      out += ch + text[++i]
+      wordStart = false
+      continue
+    }
+    if (ch === '#' && wordStart && top !== '"' && top !== '${' && top !== '$((') {
+      let end = text.indexOf('\n', i)
+      if (end === -1) end = text.length
+      const tick = top === '`' ? text.indexOf('`', i) : -1
+      if (tick !== -1 && tick < end) end = tick
+      i = end - 1
+      continue
+    }
+    if (ch === '$' && text.startsWith('$((', i)) {
+      open.push('$((')
+      out += '$(('
+      i += 2
+      wordStart = false
+      continue
+    }
+    if (ch === '$' && (text[i + 1] === '(' || text[i + 1] === '{' || (text[i + 1] === "'" && top !== '"'))) {
+      open.push(`$${text[i + 1]}`)
+      out += ch + text[i + 1]
+      i += 1
+      wordStart = text[i] === '('
+      continue
+    }
+    if (top === '$((' && ch === ')' && text[i + 1] === ')') {
+      open.pop()
+      out += '))'
+      i += 1
+      wordStart = false
+      continue
+    }
+    if (top === '"') {
+      if (ch === '"') open.pop()
+      else if (ch === '`') open.push('`')
+      out += ch
+      wordStart = false
+      continue
+    }
+    out += ch
+    if (ch === "'" || ch === '"') {
+      open.push(ch)
+      wordStart = false
+    } else if (ch === '`') {
+      if (top === '`') {
+        open.pop()
+        wordStart = false
+      } else {
+        open.push('`')
+        wordStart = true
+      }
+    } else if (ch === '}' && top === '${') {
+      open.pop()
+      wordStart = false
+    } else if (ch === ')' && top === '$(') {
+      open.pop()
+      wordStart = false
+    } else if (ch === ')') {
+      if (top === '(') open.pop()
+      wordStart = true
+    } else if (ch === '(') {
+      if (top !== '${' && top !== '$((') open.push('(')
+      wordStart = true
+    } else {
+      wordStart = /[\s;&|<>]/.test(ch)
+    }
+  }
+  return open.some((q) => q === "'" || q === "$'" || q === '"') ? text : out
 }
 
 function git(cwd, args) {
@@ -642,14 +740,6 @@ function exposeNestedCommands(text) {
         const escaped = ch === '\\' && i + 1 < text.length
         out += escaped ? ch + text[i + 1] : ch
         i += escaped ? 2 : 1
-      } else if (ch === '#' && quote === null && !commentsAsCode && (i === 0 || /[\s;&|()]/.test(text[i - 1]))) {
-        // A comment runs to the end of the line, or to the backtick that closes the substitution it
-        // is in. Nothing in it runs, and a backslash before its newline joins nothing.
-        let stop = text.indexOf('\n', i)
-        if (stop === -1) stop = text.length
-        if (end === '`' && text.indexOf('`', i) !== -1) stop = Math.min(stop, text.indexOf('`', i))
-        out += text.slice(i, stop)
-        i = stop
       } else if (ch === '\\' && text[i + 1] === '\n') {
         i += 2 // a backslash-newline joins the lines
       } else if (ch === '$' && text[i + 1] === "'" && quote === null) {
@@ -785,7 +875,7 @@ function classifyDeletes(text, startCwd) {
     previousOthers = others
     if (next !== null) cwd = next
   }
-  for (const words of splitCommands(exposeNestedCommands(text))) {
+  for (const words of splitCommands(exposeNestedCommands(withoutComments(text)))) {
     if (words[0] === SCOPE_OPEN) {
       scopes.push({ cwd, others, previous, previousOthers, stack: dirStack.slice() })
       continue
@@ -923,13 +1013,6 @@ function ask(detail) {
 // wrapper, in a subshell or substitution, through an alias) is caught by `unreadPushes`.
 let pushesRead = 0
 
-// Bash's comment rules have many corners (`${a:- #}`, `a\\ #x`, `$(true)#x`, `(true)#x`), so the
-// hook reads each command twice: once skipping what looks like a comment, and once with
-// `commentsAsCode` set, reading it as code. It keeps the stricter decision, so a misread comment can
-// only add a prompt, never hide a command: where `#` is not a comment the second reading is right,
-// and where it is, the first one is.
-let commentsAsCode = false
-
 // Walks every simple command, following `cd` so a later `git push` is resolved in the right
 // directory, and descending into `sh -c '...'` strings. A deny or ask from any push wins. A push with
 // a leading environment assignment or `git -c` asks: either can point git at another destination or
@@ -939,7 +1022,7 @@ function classifyCommand(text, startCwd) {
   let cwd = startCwd
   let result = null
   let onlyVerifiedPushes = true
-  for (const words of splitCommands(text)) {
+  for (const words of splitCommands(withoutComments(text), { parens: true })) {
     let i = 0
     while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
     const plain = i === 0
@@ -1005,7 +1088,6 @@ const INTERPRETERS = new Set(['awk', 'gawk', 'perl', 'ruby', 'node', 'dash', 'ks
 
 // `text` with operator characters inside quotes replaced by `_`, so `git commit -m "fix push; make
 // it clearer"` stays one command. A `$(…)` or backtick inside double quotes still runs, so it is kept.
-// Comments are dropped (unless `commentsAsCode`), so an apostrophe in one opens no quote.
 function maskQuotedOperators(text) {
   let out = ''
   const open = [] // ' $' " $( ( `
@@ -1045,14 +1127,6 @@ function maskQuotedOperators(text) {
       i += 1
       continue
     }
-    if (ch === '#' && !commentsAsCode && (i === 0 || /[\s;&|()]/.test(text[i - 1])
-      || (text[i - 1] === '`' && top === '`'))) {
-      let end = text.indexOf('\n', i)
-      if (end === -1) end = text.length
-      if (top === '`' && text.indexOf('`', i) !== -1) end = Math.min(end, text.indexOf('`', i))
-      i = end - 1
-      continue
-    }
     if (ch === "'" || ch === '"') open.push(ch)
     else if (ch === '`') top === '`' ? open.pop() : open.push('`')
     else if (ch === '(') open.push('(')
@@ -1068,7 +1142,7 @@ function maskQuotedOperators(text) {
 // and `bash`.
 function simpleCommands(text) {
   // `>|` is a redirect, not a pipe.
-  return maskQuotedOperators(text).replace(/>\|/g, '>').split(/[;&|()`\n]|\$\(/).map((part) => {
+  return maskQuotedOperators(withoutComments(text)).replace(/>\|/g, '>').split(/[;&|()`\n]|\$\(/).map((part) => {
     const words = []
     const raw = part.trim().split(/\s+/).filter(Boolean)
     for (let i = 0; i < raw.length; i += 1) {
@@ -1095,7 +1169,7 @@ const SUBSTITUTED_PROGRAM = /(?:^|[;&|\n]|(?<![(=$])\((?!\()|\$\((?!\())[ \t]*(?
 // a path (`./x.sh`), `env -S`, or a process substitution. It reads the command with heredoc bodies
 // taken out, so a body's prose does not count, and it errs toward keeping a body.
 function mayRunScripts(text) {
-  const masked = maskQuotedOperators(text)
+  const masked = maskQuotedOperators(withoutComments(text))
   if (/[<>]\(/.test(masked) || SUBSTITUTED_PROGRAM.test(masked)) return true
   return simpleCommands(text).some((words) => {
     const p = programIndex(words)
@@ -1342,7 +1416,7 @@ function scanPushes(text, found = { pushes: 0, environmentChanged: false }) {
   // A command that only mentions a push counts unless nothing here could run text as a script
   // (`echo git push | sh` counts; `echo git push` does not).
   const mentionsOnly = !mayRunScripts(withoutHeredocBodies(text, true))
-  for (const words of splitCommands(exposeNestedCommands(withoutHeredocBodies(text)))) {
+  for (const words of splitCommands(exposeNestedCommands(withoutComments(withoutHeredocBodies(text))))) {
     if (mayPush(words, mentionsOnly)) found.pushes += 1
     const p = programIndex(words)
     if (ENVIRONMENT_BUILTINS.has(words[p]) || (p === words.length && words.some((word) => PUSH_ENVIRONMENT.test(word)))) found.environmentChanged = true
@@ -1394,33 +1468,20 @@ if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string'
 const cwd = toolInput.workdir || input.cwd || process.cwd()
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
 
-// The decision for one reading of comments (see `commentsAsCode`).
-function decide(asCode) {
-  commentsAsCode = asCode
-  pushesRead = 0
-  // Every walk reads the command without the heredoc bodies that are plainly data.
-  const text = withoutHeredocBodies(command)
-  // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
-  let decision = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
-  // A push the walk could not read (wrapped, nested, aliased, or spelled by the shell) asks: no
-  // permission rule would.
-  const scanned = scanPushes(text)
-  if (scanned.pushes > pushesRead) {
-    decision = stricter(decision, ask('cannot check this `git push`: it runs behind a wrapper, in a subshell, substitution, or script string, through an alias, or with words the shell fills in'))
-  }
-  // The hook reads git's configuration and environment as they are before the command runs.
-  if (scanned.environmentChanged && (pushesRead > 0 || scanned.pushes > 0)) {
-    decision = stricter(decision, ask('this command changes the environment or git configuration a push reads (`export`, `unset`, `source`, a GIT_* or PATH assignment, `git config`, `git remote`, or `git branch -u`) before it pushes, so the hook cannot tell where the push lands'))
-  }
-  return decision
+// Every walk reads the command without the heredoc bodies that are plainly data.
+const text = withoutHeredocBodies(command)
+// A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
+let result = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
+// A push the walk could not read (wrapped, nested, aliased, or spelled by the shell) asks: no
+// permission rule would.
+const scanned = scanPushes(text)
+if (scanned.pushes > pushesRead) {
+  result = stricter(result, ask('cannot check this `git push`: it runs behind a wrapper, in a subshell, substitution, or script string, through an alias, or with words the shell fills in'))
 }
-
-const RANK = { allow: 1, ask: 2, deny: 3 }
-const skippingComments = decide(false)
-const readingComments = decide(true)
-const result = (RANK[readingComments?.decision] ?? 0) > (RANK[skippingComments?.decision] ?? 0)
-  ? readingComments
-  : skippingComments
+// The hook reads git's configuration and environment as they are before the command runs.
+if (scanned.environmentChanged && (pushesRead > 0 || scanned.pushes > 0)) {
+  result = stricter(result, ask('this command changes the environment or git configuration a push reads (`export`, `unset`, `source`, a GIT_* or PATH assignment, `git config`, `git remote`, or `git branch -u`) before it pushes, so the hook cannot tell where the push lands'))
+}
 if (!result) process.exit(0)
 
 process.stdout.write(JSON.stringify({

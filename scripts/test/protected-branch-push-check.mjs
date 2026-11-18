@@ -140,6 +140,16 @@ const cases = [
   ["echo a\\\\ #it's\necho git push origin main | sh", "ask"],
   ["(true)#it's\necho git push origin main | sh", "ask"],
   ["case a in a)#it's\necho git push origin main | sh;; esac", "ask"],
+  // A comment hides only itself, and its words are never refspecs.
+  ["git push origin feat # it's\nrm -rf src", "defer"],
+  ["git push origin feat # it's\necho git push origin main | sh", "ask"],
+  ["git push -u origin feat # PR targets main", "allow"],
+  ["git push origin feat # --force", "allow"],
+  ["# it's\nx=${a:- #}; git push origin main", "deny"],
+  // A push in a subshell reads its refspec without the closing parenthesis.
+  ["(true; git push origin main)", "deny"],
+  ["sh -c \"echo a\\ #b; git push origin main\"", "deny"],
+  ["echo $(true; git push origin feat:main)", "deny"],
   ["python3 -c 'import os; os.system(\"git push origin main\")'", "ask"],
   ["echo 'all: ; git push origin main' > Makefile; make", "ask"],
   ["python3 -c \"import subprocess; subprocess.run(['git','push','origin','main'])\"", "ask"],
