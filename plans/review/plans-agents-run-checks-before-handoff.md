@@ -578,5 +578,5 @@ None.
 
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: 750d1b29e198416f679fa3e5775aced2f56d4b78
+- Reviewed implementation commit: 9a063e9e0658d862ee383f6dad3fa66bc8b07627
 - Confirmed by: human (user answered 'Approve this commit' in chat, 2026-11-18)
