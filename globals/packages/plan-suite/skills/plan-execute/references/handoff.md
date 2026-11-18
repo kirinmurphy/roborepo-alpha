@@ -45,9 +45,11 @@ another); pass it to every command below.
    checks for the files it touched, at the tier their change needs, and fix a failure the merge
    caused before pushing. A failure the base branch has too is recorded, not fixed.
 5. **Push** the feature branch (Push, above).
-6. **Open or update the pull request** against the base, only once the remote branch holds the
-   commit just pushed (`git rev-parse @{upstream}` equals `HEAD`); when the push was refused, report
-   that instead and leave an existing pull request alone, since its checks describe older work.
+6. **Open or update the pull request** against the base, only once a fresh read of the remote
+   shows it holds the commit just pushed: `git ls-remote <remote> refs/heads/<branch>` prints
+   `HEAD`'s commit. A local tracking ref can be stale, so it does not count. When the push was
+   refused or this check fails, leave an existing pull request alone and report that its checks
+   apply to the commit GitHub has, not to the local work.
    An existing open pull request whose base is not `<base>` is not edited or readied; report the
    mismatch under Needs you. The body is written for a person: the plan's title and what it
    changes for them, the checks that ran, the open `## Not tested` entries, and the plan's store
@@ -55,9 +57,11 @@ another); pass it to every command below.
    request for the branch, run `gh pr create --base <base> --head <branch> --title "<plan title>"
    --body-file <file>`; otherwise run `roborepo delivery pr-body <file>`, and `roborepo delivery
    pr-ready` when the open pull request is a draft. Never merge it, enable auto-merge, or approve it.
-7. **Report its state:** read `gh pr view --json url,mergeable,mergeStateStatus,statusCheckRollup`
-   and give the pull request link, whether it merges cleanly, and CI's result so far. A CI run still
-   in progress is reported as running, not waited for.
+7. **Report its state:** read
+   `gh pr view --json url,headRefOid,mergeable,mergeStateStatus,statusCheckRollup` and give the pull
+   request link, whether it merges cleanly, and CI's result so far, naming `headRefOid` as the
+   commit they describe when it differs from `HEAD`. A CI run still in progress is reported as
+   running, not waited for.
 
 With no remote, or when GitHub is unreachable or refuses, the plan's lifecycle stands: report the
 exact command that did not run under Needs you.
