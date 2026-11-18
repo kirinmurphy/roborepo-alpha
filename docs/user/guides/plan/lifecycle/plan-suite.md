@@ -424,8 +424,9 @@ the agent runs every check it can, so you are asked only for what an agent canno
 | Cleared by you | `— Confirmed by the user`, the date, and what you reported | Already settled |
 
 An agent never checks off a check only a person can make, never clears an entry without recorded
-passing evidence, and never records your approval. A check that runs and fails is a defect the
-agent fixes, not an entry. Deleting an entry is your decision, with the reason in the plan's
+passing evidence, and never approves on your behalf or infers your approval; it records approval
+only from your explicit answer. A check that runs and fails is a defect the agent fixes, not an
+entry. Deleting an entry is your decision, with the reason in the plan's
 `## Decision Log`.
 
 An open entry that gives its reason does not block the move to review. One that gives no reason, or

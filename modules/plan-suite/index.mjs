@@ -382,7 +382,8 @@ function notTestedEntries(headings, tasks, lines) {
 // item, blank line, or unindented text.
 function continuationLines(lines, line) {
   const continued = [];
-  for (const next of lines.slice(line)) {
+  for (let index = line; index < lines.length; index += 1) {
+    const next = lines[index];
     if (!/^\s+\S/.test(next) || /^\s*[-*+]\s/.test(next)) break;
     continued.push(next.trim());
   }

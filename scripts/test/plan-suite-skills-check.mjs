@@ -270,7 +270,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "\"No time\" and \"no test exists\" are not reasons",
     "An agent never checks off a person-only entry on its own judgment",
     "An agent never clears an entry without a resolution that names the passing evidence",
-    "never records human approval",
+    "never grants or infers human approval",
     "`NOT_TESTED_UNEXPLAINED`",
     "`roborepo plans preflight` and the move into `review/` refuse it",
   ]);

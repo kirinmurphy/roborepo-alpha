@@ -287,8 +287,8 @@ Safety rules, for every agent and every plan command:
 
 - An agent never checks off a person-only entry on its own judgment.
 - An agent never clears an entry without a resolution that names the passing evidence.
-- An agent records a user's confirmation only from the user's explicit answer, and never records
-  human approval.
+- An agent records a user's confirmation or approval only from the user's explicit answer, and
+  never grants or infers human approval.
 
 How validation treats entries:
 
