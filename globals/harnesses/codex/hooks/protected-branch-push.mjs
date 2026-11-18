@@ -165,18 +165,58 @@ function splitCommands(text, { parens = false } = {}) {
 
 // `text` without its comments, so an apostrophe in one opens no quote for the readers after it. A
 // `#` starts a comment where bash starts one: at the start of a word, after an unquoted, unescaped
-// blank or `;&|<>(`, or after a `)` that closes a subshell or case pattern (a `)` closing `$(…)`
-// continues the word). It is text inside quotes, `${…}`, and `$((…))`. A comment runs to the
-// newline, or to the backtick that closes the substitution it is in. When the quotes do not balance,
-// the text is returned as it is, so a misread can only leave a comment in, never cut code out.
+// blank or `;&|<>(`, or after a `)` that closes a subshell or case pattern. A `)` closing `$(…)`,
+// `<(…)`, or a group inside a word (`@(x)`) continues the word. It is text inside quotes, `${…}`,
+// `$((…))`, and `[[ … ]]`. A comment runs to the newline, or to the backtick that closes the
+// substitution it is in. Heredoc bodies are copied unread: they are not shell to this reader. When the
+// quotes do not balance, the text is returned as it is, so a misread can only leave a comment in.
 function withoutComments(text) {
   if (!text.includes('#')) return text
   let out = ''
-  const open = [] // ' $' " ${ $( $(( ( `
+  const open = [] // ' $' " ${ $( $(( <( ( (g `
   let wordStart = true
+  let inBrackets = false
+  let heredocs = []
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i]
     const top = open.at(-1)
+    const quoted = top === "'" || top === "$'" || top === '"'
+    if (ch === '\n' && heredocs.length && !quoted) {
+      out += ch
+      const bodiesStart = out.length
+      let pos = i + 1
+      for (const [index, { delimiter, stripTabs }] of heredocs.entries()) {
+        let found = false
+        while (pos <= text.length) {
+          const next = text.indexOf('\n', pos)
+          const lineEnd = next === -1 ? text.length : next
+          const line = text.slice(pos, lineEnd)
+          out += line
+          pos = lineEnd
+          if ((stripTabs ? line.replace(/^\t+/, '') : line) === delimiter) {
+            found = true
+            break
+          }
+          if (lineEnd === text.length) break
+          out += '\n'
+          pos += 1
+        }
+        if (!found) {
+          // No closing line (a caller already took the body out): read on as ordinary text.
+          out = out.slice(0, bodiesStart)
+          pos = i + 1
+          break
+        }
+        if (index < heredocs.length - 1 && text[pos] === '\n') {
+          out += '\n'
+          pos += 1
+        }
+      }
+      heredocs = []
+      i = pos - 1
+      wordStart = true
+      continue
+    }
     if (top === "'" || top === "$'") {
       if (top === "$'" && ch === '\\' && i + 1 < text.length) {
         out += ch + text[++i]
@@ -191,7 +231,7 @@ function withoutComments(text) {
       wordStart = false
       continue
     }
-    if (ch === '#' && wordStart && top !== '"' && top !== '${' && top !== '$((') {
+    if (ch === '#' && wordStart && !inBrackets && top !== '"' && top !== '${' && top !== '$((') {
       let end = text.indexOf('\n', i)
       if (end === -1) end = text.length
       const tick = top === '`' ? text.indexOf('`', i) : -1
@@ -227,6 +267,37 @@ function withoutComments(text) {
       wordStart = false
       continue
     }
+    if (ch === '<' && text[i + 1] === '<' && text[i + 2] !== '<' && top !== '${' && top !== '$((') {
+      // A heredoc: its body starts after the next newline and is copied unread.
+      let k = i + 2
+      const stripTabs = text[k] === '-'
+      if (stripTabs) k += 1
+      while (text[k] === ' ' || text[k] === '\t') k += 1
+      let delimiter = ''
+      for (; k < text.length && !/[\s;&|<>()]/.test(text[k]); k += 1) {
+        if (text[k] === '\\' && k + 1 < text.length) delimiter += text[++k]
+        else if (text[k] !== "'" && text[k] !== '"') delimiter += text[k]
+      }
+      if (delimiter) heredocs.push({ delimiter, stripTabs })
+      out += text.slice(i, k)
+      i = k - 1
+      wordStart = false
+      continue
+    }
+    if (ch === '[' && wordStart && text.startsWith('[[', i) && /\s/.test(text[i + 2] ?? '')) {
+      inBrackets = true
+      out += '[['
+      i += 1
+      wordStart = false
+      continue
+    }
+    if (ch === ']' && inBrackets && wordStart && text[i + 1] === ']') {
+      inBrackets = false
+      out += ']]'
+      i += 1
+      wordStart = false
+      continue
+    }
     out += ch
     if (ch === "'" || ch === '"') {
       open.push(ch)
@@ -242,14 +313,17 @@ function withoutComments(text) {
     } else if (ch === '}' && top === '${') {
       open.pop()
       wordStart = false
-    } else if (ch === ')' && top === '$(') {
+    } else if (ch === ')' && (top === '$(' || top === '<(' || top === '(g')) {
       open.pop()
       wordStart = false
     } else if (ch === ')') {
       if (top === '(') open.pop()
-      wordStart = true
+      wordStart = !inBrackets
     } else if (ch === '(') {
-      if (top !== '${' && top !== '$((') open.push('(')
+      if (top === '${' || top === '$((') {
+        // arithmetic or expansion text
+      } else if (text[i - 1] === '<' || text[i - 1] === '>') open.push('<(')
+      else open.push(wordStart ? '(' : '(g')
       wordStart = true
     } else {
       wordStart = /[\s;&|<>]/.test(ch)
@@ -1443,6 +1517,22 @@ function withoutAllow(result) {
   return result === VERIFIED ? null : result
 }
 
+// Whether every quote in `text` closes, read as shell. Approximate: it is only compared between two
+// versions of one command.
+function quotesClose(text) {
+  let quote = null
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i]
+    if (quote === "'") {
+      if (ch === "'") quote = null
+    } else if (ch === '\\') i += 1
+    else if (quote === '"') {
+      if (ch === '"') quote = null
+    } else if (ch === "'" || ch === '"') quote = ch
+  }
+  return quote === null
+}
+
 function stricter(a, b) {
   if (!a) return b
   if (!b) return a
@@ -1472,6 +1562,14 @@ unsandboxed = toolInput.dangerouslyDisableSandbox === true
 const text = withoutHeredocBodies(command)
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
 let result = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
+// The walks read a body that a program reads (`node <<'EOF'`, `bash <<EOF`) as shell, so an
+// apostrophe in it can hide the commands after it. When the bodies alone unbalance the quotes and
+// the rest of the command could push, delete, or merge, ask.
+const skeleton = withoutHeredocBodies(command, true)
+if (text !== skeleton && !quotesClose(withoutComments(text)) && quotesClose(withoutComments(skeleton))
+  && KEYWORDS.test(skeleton)) {
+  result = stricter(result, ask('cannot tell which commands follow this heredoc: its body unbalances the quotes the hook reads'))
+}
 // A push the walk could not read (wrapped, nested, aliased, or spelled by the shell) asks: no
 // permission rule would.
 const scanned = scanPushes(text)
