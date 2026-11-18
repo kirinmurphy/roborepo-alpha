@@ -24,6 +24,8 @@ proc expect_fail {message} {
   exit 124
 }
 # Waits for a glob pattern; fails by name when it does not appear within $timeout seconds.
+# Patterns match anywhere already. Never wrap them in `*`: a trailing `*` matches, and so discards,
+# everything buffered after the text, including a prompt the next call is about to wait for.
 proc expect_prompt {pattern} {
   expect {
     -gl $pattern {}
@@ -297,17 +299,18 @@ process.exit(state.onboardedAt ? 0 : 1);
 }
 
 # Guards the guard: a prompt that never appears must fail within the timeout with a named error,
-# not hang. The spawned shell waits on input forever, as an installer at an unanswered prompt does.
+# not hang. The spawned process never prompts and outlives the pty: it ignores SIGHUP, so closing the
+# pty does not end it and only the helper's process-group kill does.
 test_expect_missed_prompt_fails_by_name() {
   local home_dir started elapsed status=0
   home_dir="$(make_home)"
   command -v expect >/dev/null 2>&1 || fail "expect is required for interactive installer tests"
   started="$(date +%s)"
-  HC_EXPECT_LIB="$expect_lib" expect <<'EOF' >"$home_dir/out" 2>&1 || status=$?
+  HC_EXPECT_LIB="$expect_lib" HC_PID_FILE="$home_dir/spawned.pid" expect <<'EOF' >"$home_dir/out" 2>&1 || status=$?
 set timeout 2
 source $env(HC_EXPECT_LIB)
-spawn sh -c "echo Welcome; read never"
-expect_prompt "*Selection*"
+spawn sh -c "trap '' HUP; echo \$\$ > $env(HC_PID_FILE); echo Welcome; exec sleep 600"
+expect_prompt "Selection"
 send "2\r"
 expect_exit
 EOF
@@ -315,8 +318,14 @@ EOF
   [[ "$status" -eq 124 && "$elapsed" -lt 30 ]] \
     && pass "a missed expect prompt fails within the timeout" \
     || fail "a missed expect prompt fails within the timeout (status $status after ${elapsed}s)" "$home_dir/out"
-  assert_file_contains "$home_dir/out" 'EXPECT FAILURE: timed out after 2s waiting for "\*Selection\*"' \
+  assert_file_contains "$home_dir/out" 'EXPECT FAILURE: timed out after 2s waiting for "Selection"' \
     "a missed expect prompt names the prompt it waited for"
+  # The process left at the prompt must be killed, or it outlives the suite waiting on its pty.
+  local spawned_pid
+  spawned_pid="$(cat "$home_dir/spawned.pid" 2>/dev/null || true)"
+  [[ -n "$spawned_pid" ]] && ! kill -0 "$spawned_pid" 2>/dev/null \
+    && pass "a missed expect prompt kills the waiting process" \
+    || fail "a missed expect prompt kills the waiting process (pid ${spawned_pid:-unknown} still running)" "$home_dir/out"
 }
 
 test_conflict_policy_prompt_on_clean_machine() {
@@ -325,8 +334,8 @@ test_conflict_policy_prompt_on_clean_machine() {
   expect_file="$home_dir/expect.tcl"
   # Covers the conflict-policy prompt only; onboarding is skipped (see run_expect_install).
   cat >"$expect_file" <<'EOF'
-expect_prompt "*Welcome to roborepo*"
-expect_prompt "*Selection*"
+expect_prompt "Welcome to roborepo"
+expect_prompt "Selection"
 send "2\r"
 EOF
 
@@ -363,7 +372,7 @@ test_onboarding_wizard_toggles_and_applies() {
 set timeout 90
 source $env(HC_EXPECT_LIB)
 spawn env HOME=$env(HC_HOME) ROBOREPO_STATE_ROOT=$env(HC_HOME)/.roborepo node $env(HC_REPO)/scripts/cli/main.mjs package manage
-expect_prompt "*Step 1*"
+expect_prompt "Step 1"
 send "\033\[B"
 send " "
 send "\r"
