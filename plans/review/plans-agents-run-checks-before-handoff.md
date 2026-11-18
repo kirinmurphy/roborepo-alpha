@@ -567,10 +567,12 @@ None.
 - Review round 4, 2026-11-18: `plans sync-base` merged `main` 4bccef88 (#73, test scripts only)
   cleanly as 9a063e9e; the branch's diff against `main` is identical to its diff at 4b1bd901
 
+- At 9a063e9e: CI run 44248992551 passed: the gate on Ubuntu and macOS and the Windows installer
+
 
 ### Result
 
-- Status: pending
+- Status: complete
 - Reviewed implementation commit: 9a063e9e0658d862ee383f6dad3fa66bc8b07627
 - Base commit: 4bccef886b84ceb7a1603822f299f4cb7fcb196e
 
