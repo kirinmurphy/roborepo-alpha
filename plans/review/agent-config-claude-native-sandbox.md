@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Review the finished work with /plan-review.
+next_action: Confirm the four desktop-app checks under Not tested, then approve 92f2b41f in /plan-review.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -560,6 +560,23 @@ Acceptance criteria:
   (rejected: it reopens `xargs git … push` and alias bodies). A `git -c alias.*` definition still
   asks, because the alias could be a push.
 
+- **2026-11-17 — User decision: interpreters count as able to run a push.** Review found that since
+  the "only mentions a push" change, a push mention piped or written to a program other than `sh`,
+  `bash`, or `zsh` ran with no prompt (`echo git push --no-verify origin HEAD:main | python3 -c
+  'os.system(…)'`, `perl -e`, `node -e`, `dash`, a written Makefile then `make`). The user chose to
+  treat python (any version), perl, ruby, node, awk, dash, ksh, fish, pwsh, busybox, and make as
+  script runners, so such a mention asks again; plain mentions still ask nothing. Alternative:
+  accept them as pushes "started by another program" (rejected by the user). The docs now list only
+  pushes from text the command never shows (an existing script, Makefile, or npm script) as unseen.
+- **2026-11-17 — Comments are removed once, by bash's rules, before every reader.** Review passes
+  found that the hook's readers disagreed with bash about comments: an apostrophe in `# it's` opened
+  a quote that hid a push to main on the next line, and treating every `#` after a blank as a
+  comment hid code after `${line%% #*}`. Chosen: one `withoutComments` pass that tracks quotes,
+  `${…}`, `$(…)`, `$((…))`, subshells, and backticks, and returns the text unchanged when its quotes
+  do not balance. Alternative tried and dropped: reading every command twice, with and without
+  comments, and keeping the stricter result (it let a push followed by `# it's` allow later lines,
+  and denied feature pushes whose comment named `main`).
+
 ## Not tested
 
 - [ ] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
@@ -769,6 +786,40 @@ Acceptance criteria:
       fixed (c90c5e7d)
 - [x] `source` and `.` did not count as environment changes, and `git config get` or
       `git config --file f x` over-asked — fixed (c90c5e7d)
+- [x] A shell glued to a bracket or redirect (`(sh)`, `bash>log`, `sh<&0`), a program from `$(…)`
+      or backticks, and `env -S sh` were not counted as able to run text, so piping or writing a
+      push to one asked nothing — fixed in review (c35b47bb)
+- [x] `docs/user/reference/claude-hooks.md` named only `git commit -F -` among git readers of a data
+      heredoc; the code also accepts `git tag` and `git notes` — fixed in review (c35b47bb)
+- [x] The heredoc reader repeated the script-runner split — fixed in review (c35b47bb), shared
+      `simpleCommands`
+- [x] A push mention piped or written to python, perl, ruby, node, awk, dash, ksh, fish, pwsh,
+      busybox, or make asked nothing — escalated; the user chose to count them (Decision Log
+      2026-11-17), fixed in review (278254bd, bc0da111)
+- [x] A quoted `"$(which sh)"` was not counted as a shell, `>|` and `{fd}>` redirects hid the program,
+      and `$(( $(…) ))` or `arr=( $(…) )` counted as a program — fixed in review (278254bd)
+- [x] The substituted-program pattern took quadratic time on long chains — fixed in review (278254bd,
+      bc0da111), with a timing test
+- [x] Operators inside quotes split commands, so `git commit -m "guard git push; make it clearer"`
+      asked — fixed in review (bc0da111)
+- [x] Interpreter code listing git's words (`['git','push','origin','main']`) was not read as a push —
+      fixed in review (bc0da111)
+- [x] An apostrophe in a `#` comment opened a quote that hid the next line, so `# it's` followed by
+      `git push origin main` was never checked; `$'…'` escapes flipped quoting — fixed in review
+      (3b681e73, 8187b418, 0e9f68a8)
+- [x] Later comment rules disagreed with bash (`${line%% #*}`, `a\\ #x`, `(true)#x`, a comment
+      inside backticks) and hid pushes, deletes, and merges after them — fixed in review (0e9f68a8),
+      one `withoutComments` pass
+- [x] A push in a subshell read `main)` as its branch, so `(true; git push origin main)` went
+      unchecked — fixed in review (0e9f68a8)
+- [x] A backslash inside double quotes was dropped before characters bash keeps it before, so
+      `sh -c "echo a\ #b; git push origin main"` hid the push — fixed in review (0e9f68a8)
+- [x] A `#` after the `)` of `<(…)`, `>(…)`, or a group inside a word or `[[ … ]]` was taken for a
+      comment and cut the code after it — fixed in review (d0617cdc)
+- [x] A heredoc body a program reads (`node <<'EOF'`, `bash <<EOF`) was parsed as shell, so an
+      apostrophe in it hid the commands after it — fixed in review (d0617cdc): the comment remover
+      copies bodies unread, and the hook asks when such a body unbalances the quotes and the rest of
+      the command could push, delete, or merge
 
 ### Verification
 
@@ -886,12 +937,40 @@ Acceptance criteria:
 - Full local gate (`npm run check`, run unsandboxed) at 4f4a15b4: 78 of 79 suites passed.
   `codex-command-permission-check.mjs` failed because it used `rm` as its ask-bucket example and
   `delete-files` now allows it; fixed in afd22abd (uses `git pull`) and the suite passes there
-
+- Human review, 2026-11-17: `roborepo plans sync-base` reported up-to-date at 638f0b39 on base
+  97f65fa4; GitHub CI on PR 66 passed at 638f0b39 (macOS, Ubuntu, Windows installer)
+- Plan checks passed at 638f0b39: `protected-branch-push-check`, `claude-sandbox-projection-check`,
+  `permissions-render-live-characterization-check`, `permission-harness-notes-check`,
+  `agent-permission-defaults-check`, `docs-reference-check`; hook copies byte-identical
+- Review validation passes 1 to 7 (fresh-context subagents, 638f0b39 through c55f4813): 2, 4, 4,
+  2, 4, 4, and 6 `fix` findings plus 1 escalation (interpreters); fixed in c35b47bb, 278254bd,
+  bc0da111, 3b681e73, 8187b418, c55f4813, and 0e9f68a8
+- After every review commit: `protected-branch-push-check.mjs` (a case for each fix) and
+  `docs-reference-check.mjs` passed, the hook copies were byte-identical, and a probe comparison
+  against 638f0b39 over every validator case file showed each loosened decision to be a real
+  comment, quoted prose, a data heredoc, or a command bash rejects
+- Review validation pass 8 at 0e9f68a8 (fresh-context subagent, checked against bash 3.2): 2 `fix`
+  findings, fixed in d0617cdc. This was the eighth and last pass of this review run, so the
+  d0617cdc fixes were not revalidated by a fresh Validator. They are covered by a case for each in
+  `protected-branch-push-check.mjs` (passed), byte-identical hook copies, and a probe comparison
+  against 638f0b39 over every validator case file (push, delete, and merge): each loosened decision
+  is a real comment, a command bash rejects, or a refspec git refuses (`"m\ain"`)
+- Outside this plan's changes, recorded in the review packet: the push walk misses a push on a
+  later line inside `$(…)`; `trap '…'` bodies are not read; long backtick runs are slow and deeply
+  nested `$(` crashes the hook (it then defers); a `cd` inside a subshell is followed past it
+- `git push` of d0617cdc ran the pre-push doctor (passed, 99 checks)
+- GitHub CI on PR 66 passed at d0617cdc (macOS, Ubuntu, Windows installer)
+- `main` moved to 7f4ee1e5 during review (PRs 69 and 72); `roborepo plans sync-base` merged it
+  cleanly at 92f2b41f. The plan's checks passed there (`claude-sandbox-projection-check`,
+  `permissions-render-live-characterization-check`, `permission-harness-notes-check`,
+  `agent-permission-defaults-check`, `docs-reference-check`, `orphan-test-check`,
+  `codex-command-permission-check`, `render-agent-permissions.mjs --check`), the pre-push doctor
+  passed (99 checks), and GitHub CI on PR 66 passed at 92f2b41f (macOS, Ubuntu, Windows installer)
 ### Result
 
-- Status: pending
-- Reviewed implementation commit: d50687c9 (superseded: reopened for the 2026-11-14 scope change)
-- Base commit: cedc1ebe403e2fd6cdb19beb2a0a97c8c17300d8
+- Status: pending — the four open `## Not tested` desktop-app checks need the user
+- Reviewed implementation commit: 92f2b41fe07dc748a847c78550d0792b303cb0da
+- Base commit: 7f4ee1e5a3f5a24cf48025bc76433ed5444b261e
 
 ## Open questions
 
