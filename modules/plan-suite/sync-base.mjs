@@ -161,23 +161,34 @@ async function refreshBase(worktree, base) {
         resolution: "Run sync-base again.",
       });
     }
-    const forwarded = git(holder, ["merge", "--ff-only", "--quiet", to]);
-    if (!forwarded.ok) throw domainError("MOVE_FAILED", `Fast-forwarding ${base} in ${holder} failed.`, { details: [forwarded.stderr] });
-    // Git cannot lock a checkout against a branch switch, and `merge` moves whatever branch HEAD
-    // names. Confirm it was the base that moved, so a switch in that instant is reported, never
-    // claimed as a fast-forward of the base.
-    const landed = git(holder, ["symbolic-ref", "-q", "HEAD"]).stdout;
-    if (git(worktree, ["rev-parse", `refs/heads/${base}`]).stdout !== to) {
-      throw domainError("MOVE_FAILED", `${holder} switched branches during the fast-forward, so ${base} did not move.`, {
-        resolution: `Ask the user to check ${landed || "the checkout's current branch"} in ${holder}: it may have been fast-forwarded to ${to} instead.`,
+    // Git cannot lock a checkout against a branch switch, and `merge --ff-only` moves whatever
+    // branch HEAD names at that instant. So the base ref moves on its own, guarded by its old
+    // value, and the checkout's files follow with a two-tree read-tree, which moves no ref and
+    // refuses to overwrite local changes. A switch in between can at worst leave uncommitted
+    // changes in the other checkout; it can never advance another branch.
+    moveRef(worktree, base, to, from, upstream.name);
+    if (git(holder, ["symbolic-ref", "-q", "HEAD"]).stdout !== `refs/heads/${base}`) {
+      throw domainError("MOVE_FAILED", `${base} was fast-forwarded to ${to}, but ${holder} switched branches meanwhile, so its files were not updated.`, {
+        resolution: `Ask the user to check out ${base} in ${holder} again; nothing else was changed.`,
       });
     }
+    const files = git(holder, ["read-tree", "-u", "-m", from, to]);
+    if (!files.ok) {
+      // Put the ref back so the checkout and its branch agree again.
+      git(worktree, ["update-ref", "-m", "sync-base: undo fast-forward", `refs/heads/${base}`, from, to]);
+      throw domainError("MOVE_FAILED", `Updating the files in ${holder} failed, so ${base} was left at ${from}.`, { details: [files.stderr] });
+    }
   } else {
-    // The old-value argument makes the update refuse if another process moved the base meanwhile.
-    const updated = git(worktree, ["update-ref", "-m", `sync-base: fast-forward to ${upstream.name}`, `refs/heads/${base}`, to, from]);
-    if (!updated.ok) throw domainError("MOVE_FAILED", `Fast-forwarding ${base} failed.`, { details: [updated.stderr] });
+    moveRef(worktree, base, to, from, upstream.name);
   }
   return { ...report, moved: true };
+}
+
+// Moves only refs/heads/<base>, and only from `from`: the old-value argument makes the update refuse
+// if another process moved the base meanwhile.
+function moveRef(worktree, base, to, from, upstreamName) {
+  const updated = git(worktree, ["update-ref", "-m", `sync-base: fast-forward to ${upstreamName}`, `refs/heads/${base}`, to, from]);
+  if (!updated.ok) throw domainError("MOVE_FAILED", `Fast-forwarding ${base} failed.`, { details: [updated.stderr] });
 }
 
 // The base's configured upstream, resolved to the ref the guarded fetch refreshes

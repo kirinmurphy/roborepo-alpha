@@ -80,6 +80,7 @@ try {
   );
   assert.equal(git(root, "rev-parse", "main"), upstreamOne, "main is fast-forwarded to its upstream");
   assert.equal(read(path.join(root, "src/upstream-one.txt")), "one\n", "the base checkout's files follow the fast-forward");
+  assert.equal(git(root, "status", "--porcelain", "--untracked-files=all"), "", "the base checkout's files and index match its branch");
   assert.equal(read(path.join(wt.path, "src/upstream-one.txt")), "one\n", "the branch takes the upstream commit");
 
   // main checked out nowhere: the ref itself is fast-forwarded and the detached checkout stays put.
