@@ -13,13 +13,13 @@ priority = 500
 [[rule]]
 toolName = "run_shell_command"
 commandPrefix = "rm"
-decision = "ask_user"
+decision = "allow"
 priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
 commandPrefix = "git rm"
-decision = "ask_user"
+decision = "allow"
 priority = 500
 
 [[rule]]

@@ -265,6 +265,46 @@ tilde.
 - `globals/packages/*/package.config.json` — built-in package configs.
 - workspace `packages/*/package.config.json` — imported or locally authored package configs.
 
+## Claude shell sandbox
+
+Three behaviors carry sandbox intent in provider-neutral kinds that only the Claude provider
+renders: `sandbox-shell` (kind `shell-sandbox`), and `reach-allowed-hosts` and
+`reach-claude-log-upload` (kind `network-hosts`, each with a `hosts` list). `read-secrets` adds
+`readableExceptions`, the public CA bundles its `*.pem` pattern would hide. All three set
+`claudeOnly`, which the permission rows pass through like `codexOnly`; the portal, the terminal
+printout, and onboarding label those rows "Claude only".
+
+`claudeSandboxSettings` in `scripts/harnesses/claude/sandbox-settings.mjs` projects them into the
+`sandbox` key, which `renderClaudeRootConfig` replaces whole on every render:
+
+| Intent | `sandbox` key |
+| --- | --- |
+| `sandbox-shell` allow / ask / deny | `enabled: true` with `autoAllowBashIfSandboxed` true / false; `deny` renders `{ enabled: false }` only |
+| `read-secrets` deny | `filesystem.allowRead` = `readableExceptions` |
+| Each `network-hosts` behavior, allow / ask / deny | its `hosts` joined to `network.allowedDomains` / nothing / `network.deniedDomains` |
+| Defaults | `reach-allowed-hosts` allow; `reach-claude-log-upload` deny, so a `claude` command run from a sandboxed shell does not prompt for the program's Datadog log address |
+| Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm"]`, `network.allowLocalBinding: false` |
+
+Writable temp folders and denied credentials are not repeated: Claude merges the `Edit` allow and
+`Read`/`Edit` deny rules from the `permissions` key into the sandbox. `go-online` never affects
+Claude. Codex and Gemini skip both kinds. See [testing](testing.md#claude-sandbox-verification) for
+the projection and enforcement checks.
+
+Three command behaviors changed alongside the sandbox. They are ordinary `commands` behaviors, so
+every provider renders them; `delete-files` and `switch-branches` depend on the Claude sandbox, while
+`merge-pull-requests` does not, since `gh` runs outside it either way:
+
+| Behavior | Change | Reason |
+| --- | --- | --- |
+| `delete-files` | Default `ask` → `allow` | Claude's shell sandbox confines deletes; `protected-branch-push.mjs` asks (Codex: denies) before deletes and discarded work in a checkout on a protected branch. Gemini has neither |
+| `merge-pull-requests` | New, default `deny` | Split from `change-github-directly` so it shows as its own row; agents never merge into the base branch. The protected-branch hook's `GH_DENIED` list also names `pr merge`, for the flag-first form |
+| `push-code` | Default stays `ask`; `askDecidedByHook` | Claude renders no rule for its ask (`permissions-render.mjs`), because an ask rule outranks the protected-branch hook's allow of a verified push; the hook asks about the rest. Codex and Gemini render it as before |
+| `switch-branches` | Default stays `ask` | `git checkout *` and `git switch *` are now in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
+
+`plan-store-commands` and `plan-lifecycle` (`roborepo plans sync-base` and `stop-servers`) together
+pre-approve every plans subcommand a plan workflow runs. A plans command that is piped or redirected stays sandboxed, cannot
+lock the plans store, and prompts when retried outside the sandbox.
+
 ## Codex credential profiles
 
 The resolved `read-secrets` behavior supplies the 15 native deny patterns. Codex preserves `~/`

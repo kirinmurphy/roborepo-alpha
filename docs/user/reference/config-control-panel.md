@@ -296,8 +296,73 @@ desktop session tools, structured file tools, browser, MCP, and escalated proces
 unverified. Linux and Windows enforcement is unverified. Gemini cannot enforce this path boundary;
 Claude retains its tool permission rules. A rendered profile alone does not certify protection.
 
+Three public certificate-authority bundles are exempt inside Claude's shell sandbox (see below):
+`/private/etc/ssl/cert.pem`, `/opt/homebrew/etc/ca-certificates/cert.pem`, and
+`/opt/homebrew/etc/openssl@4/cert.pem`. The `*.pem` pattern would otherwise hide them, and TLS
+clients such as `curl` and `npm` read them to verify servers. They hold no secrets. Claude's Read
+tool still cannot open them.
+
 A denylist only catches what it names. It cannot cover unknown-sensitive files — a tax PDF, a
 client repo under NDA — which is why it complements the scope perimeter instead of replacing it.
+
+### Shell sandbox (Claude)
+
+`sandbox-shell` runs each Claude shell command inside the operating system's sandbox (Seatbelt on
+macOS). Commands that stay inside the bounds below run without a permission prompt, whatever their
+shape: pipes, loops, and inline scripts all count. A command an `ask` or `deny` rule names still
+prompts or is refused when run through `claude -p`; the desktop app was seen to run sandboxed
+commands without consulting ask rules, which is why branch switches run outside the sandbox (below).
+
+Three command behaviors changed alongside the sandbox. `delete-files` and `switch-branches` depend
+on it; `merge-pull-requests` does not, since `gh` runs outside it either way:
+
+| Behavior | Change | Why |
+| --- | --- | --- |
+| `delete-files` (`rm`, `git rm`) | Default `ask` → `allow` | The sandbox limits deletes to the checkout and temp folders, and the protected-branch hook asks before any delete in a checkout on `main` ([Deletes on a protected branch](claude-hooks.md#deletes-on-a-protected-branch)). Set it to `ask` if you run agents in Gemini, which has neither |
+| `merge-pull-requests` (`gh pr merge`) | New, default `deny` (was part of `change-github-directly`) | Agents never merge a pull request; you merge on GitHub. With the protected-branch hook's merge guard, agents also never merge into `main` locally ([Merges into a protected branch](claude-hooks.md#merges-into-a-protected-branch)) |
+| `switch-branches` (`git checkout`, `git switch`) | Default stays `ask`; the commands now run outside the sandbox | So the prompt also appears in the desktop app. `git switch main` stays denied (`occupy-main`) |
+
+| Inside the sandbox | Bound |
+| --- | --- |
+| Writes | The session's checkout, the temp folders in `write-scope`, and the npm cache (`~/.npm`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
+| Reads | Everything except `read-secrets`, minus the certificate bundles above |
+| Network | Hosts in `reach-allowed-hosts` connect; the address in `reach-claude-log-upload` is refused; any other host prompts |
+
+| `sandbox-shell` | Result |
+| --- | --- |
+| `allow` (default) | Sandboxed commands run without prompting |
+| `ask` | The sandbox stays on, and commands prompt by the command rules |
+| `deny` | The sandbox is off; commands follow the command rules alone |
+
+`reach-allowed-hosts` lists `registry.npmjs.org`, `github.com`, and `*.githubusercontent.com`.
+`allow` lets them through, `ask` makes them prompt like any other host, and `deny` refuses them.
+It is separate from `go-online`, which stays Codex's on/off network switch.
+
+`reach-claude-log-upload` names `http-intake.logs.us5.datadoghq.com`, the Datadog address the
+`claude` program sends its own error logs to. It matters only when an agent runs `claude` from its
+shell: that copy is sandboxed, and without this row it would prompt for the address on every run.
+The Claude Code app's own uploads run outside the sandbox and are unaffected. `deny` (default)
+refuses the address without a prompt, `ask` prompts, and `allow` lets it through. Avoid `allow`:
+anyone with a Datadog account can receive data posted to that address, so allowing it gives every
+sandboxed command a way to send files out.
+
+**What runs outside the sandbox.** `docker`, `gh`, `git push`, `git pull`, `git fetch`,
+`roborepo`, and `./bin/roborepo` cannot work inside it, or would prompt on every call: Docker needs
+its daemon socket, `gh` calls `api.github.com`, which the host list leaves out, SSH cannot pass the
+sandbox proxy, and `roborepo plans` commands write the plans store, which `edit-plans-store` denies
+to every sandboxed write. `git checkout` and `git switch` run outside it so their `ask` rule
+applies in the desktop app. A call made only of those commands runs unsandboxed, under the ordinary
+allow, ask, and deny rules. A pipe, or most other commands added to the call, keeps it sandboxed; a
+leading `cd` was seen not to, so do not rely on it either way. A chained branch switch
+(`make x && git switch y`) therefore stays sandboxed and may run without its prompt in the desktop app.
+`roborepo plans show <id> --json | grep synchronized` cannot lock the plans store and reports
+`"synchronized": false`. Run plans commands on their own.
+
+Codex always sandboxes its commands, so `sandbox-shell`, `reach-allowed-hosts`, and
+`reach-claude-log-upload` are Claude-only. Enforcement was verified on
+macOS with Claude Code 2.1.309 through `claude -p`; Linux and Windows are unverified. A local
+`.claude/settings.local.json` can add entries, since Claude merges sandbox lists across settings
+files; RoboRepo replaces the `sandbox` key in `~/.claude/settings.json` on every render.
 
 ### Changing path scopes
 

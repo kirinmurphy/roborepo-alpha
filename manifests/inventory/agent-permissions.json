@@ -61,7 +61,7 @@
     {
       "id": "read-secrets",
       "label": "Read credential files",
-      "description": "Credential material that is never correct for an agent to read, denied everywhere including inside the current repository. This is the one layer the repository boundary cannot provide: a .env inside your checkout is in-bounds for repo-write-boundary, so only a deny rule stops it. Claude ranks deny above every allow, so these out-rank both the scope allows and the boundary hook. Deny is not a prompt — there is no in-session override; carve out a path here rather than working around it. The .env variants are enumerated rather than globbed as .env.* so that .env.example and .env.sample stay readable: they are committed template files carrying placeholder values, and are often the fastest way to learn what a project expects. Claude permission rules have no negation, so a readable exception must be expressed as a narrower deny, not an allow that would be out-ranked. A new secret-bearing variant therefore needs adding here explicitly.",
+      "description": "Credential material that is never correct for an agent to read, denied everywhere including inside the current repository. This is the one layer the repository boundary cannot provide: a .env inside your checkout is in-bounds for repo-write-boundary, so only a deny rule stops it. Claude ranks deny above every allow, so these out-rank both the scope allows and the boundary hook. Deny is not a prompt — there is no in-session override; carve out a path here rather than working around it. The .env variants are enumerated rather than globbed as .env.* so that .env.example and .env.sample stay readable: they are committed template files carrying placeholder values, and are often the fastest way to learn what a project expects. Claude permission rules have no negation, so a readable exception must be expressed as a narrower deny, not an allow that would be out-ranked. A new secret-bearing variant therefore needs adding here explicitly. readableExceptions are public certificate-authority bundles the *.pem pattern would otherwise hide: TLS clients such as curl and npm read them to verify servers, so a sandboxed shell command could reach no host without them. They hold no secrets. They are re-allowed only where a shell sandbox can carve a path out of a denied pattern (Claude's); file-tool deny rules still cover them.",
       "kind": "tools-scoped",
       "tools": [
         "Read"
@@ -82,6 +82,11 @@
         "//**/*.pem",
         "//**/id_rsa",
         "//**/id_ed25519"
+      ],
+      "readableExceptions": [
+        "/private/etc/ssl/cert.pem",
+        "/opt/homebrew/etc/ca-certificates/cert.pem",
+        "/opt/homebrew/etc/openssl@4/cert.pem"
       ],
       "bucket": "deny",
       "category": "files"
@@ -115,9 +120,18 @@
       "bucket": "ask"
     },
     {
+      "id": "sandbox-shell",
+      "label": "Sandboxed shell commands",
+      "description": "Run each shell command inside the OS sandbox, which confines writes to the current repository, the temp folders in Write scope, and the npm cache, keeps Read credential files unreadable, and sends network traffic through Reach allowed hosts. Allow runs sandboxed commands without prompting, whatever their shape (pipes, loops, inline scripts), unless an ask or deny rule names them; ask keeps the sandbox but prompts by the command rules; deny turns the sandbox off. Docker, the git network commands, and roborepo cannot work inside it, gh would prompt on every call, and git checkout and git switch run outside it so Switch branches prompts in the desktop app, which skips ask rules for sandboxed commands; a call made only of those runs outside it under the command rules. A pipe, or most other commands added to the call, keeps it sandboxed; a leading cd was seen not to, so do not rely on either. Codex always sandboxes its commands, so this applies to Claude only.",
+      "kind": "shell-sandbox",
+      "claudeOnly": true,
+      "bucket": "allow",
+      "category": "files"
+    },
+    {
       "id": "delete-files",
       "label": "Delete files",
-      "description": "Remove files from disk (rm, git rm).",
+      "description": "Remove files from disk (rm, git rm). Allowed because Claude's shell sandbox limits deletes to the session's checkout and the temp folders in Write scope, and the protected-branch hook asks before a delete in a checkout that has main or another protected branch checked out (Codex: denies). Temp folders and feature-branch checkouts never prompt. Gemini runs neither the sandbox nor the hook, and with Sandboxed shell commands set to deny an allowed rm can delete anywhere outside a protected checkout, so set this to ask there.",
       "kind": "commands",
       "commands": [
         [
@@ -128,15 +142,35 @@
           "rm"
         ]
       ],
-      "bucket": "ask",
+      "bucket": "allow",
       "category": "destructive"
     },
     {
       "id": "go-online",
       "label": "Go online",
-      "description": "Sandbox network access. Codex-only — Claude does not sandbox network egress.",
+      "description": "Codex's sandbox network switch: on or off for every host. Claude's shell sandbox reads the separate allowed-host list instead, so this switch never makes Claude network commands prompt.",
       "kind": "network",
       "codexOnly": true,
+      "bucket": "deny",
+      "category": "network"
+    },
+    {
+      "id": "reach-allowed-hosts",
+      "label": "Reach allowed hosts",
+      "description": "Hosts a sandboxed shell command may reach without prompting: the npm registry and GitHub over HTTPS. Allow lets them through; ask makes them prompt like any other host; deny refuses them. Hosts missing from the list prompt. Git over SSH cannot pass the sandbox proxy, so the git network commands run outside the sandbox (see Sandboxed shell commands).",
+      "kind": "network-hosts",
+      "claudeOnly": true,
+      "hosts": ["registry.npmjs.org", "github.com", "*.githubusercontent.com"],
+      "bucket": "allow",
+      "category": "network"
+    },
+    {
+      "id": "reach-claude-log-upload",
+      "label": "Reach Claude's log upload",
+      "description": "The Datadog address the claude program sends its own error logs to. It matters only when an agent runs claude from its shell: that copy is sandboxed and would prompt for the address on every run. The Claude Code app's own uploads run outside the sandbox and are unaffected. Deny blocks it without a prompt; ask prompts; allow lets it through, which also opens the address to any sandboxed command, and anyone with a Datadog account can receive data posted there.",
+      "kind": "network-hosts",
+      "claudeOnly": true,
+      "hosts": ["http-intake.logs.us5.datadoghq.com"],
       "bucket": "deny",
       "category": "network"
     },
@@ -161,7 +195,7 @@
     {
       "id": "push-code",
       "label": "Push code",
-      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history.",
+      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history. Under Claude, ask renders no rule: an ask rule outranks the hook's approval, so the hook alone asks about a push it cannot verify.",
       "kind": "commands",
       "commands": [
         [
@@ -170,6 +204,7 @@
         ]
       ],
       "bucket": "ask",
+      "askDecidedByHook": true,
       "category": "git"
     },
     {
@@ -189,7 +224,7 @@
     {
       "id": "switch-branches",
       "label": "Switch branches",
-      "description": "Change the checked-out branch (git checkout, git switch). Prompts because it moves the working tree out from under in-flight work.",
+      "description": "Change the checked-out branch (git checkout, git switch). Prompts because it moves the working tree out from under in-flight work. Under Claude these commands run outside the shell sandbox so the prompt also appears in the desktop app; chained after another command (make x && git switch y) they stay sandboxed and may skip it.",
       "kind": "commands",
       "commands": [
         [
@@ -308,7 +343,7 @@
     {
       "id": "open-prs",
       "label": "Open pull requests",
-      "description": "Open a pull request (gh pr create). Allowed because opening a PR changes no branch: merging is denied by change-github-directly. Push the branch first with git push and pass --head, so gh neither pushes nor forks on its own.",
+      "description": "Open a pull request (gh pr create). Allowed because opening a PR changes no branch; merging stays denied (merge-pull-requests). Push the branch first with git push and pass --head, so gh neither pushes nor forks on its own.",
       "kind": "commands",
       "commands": [
         [
@@ -371,16 +406,26 @@
       "category": "git"
     },
     {
-      "id": "change-github-directly",
-      "label": "Change GitHub directly",
-      "description": "Act on GitHub without git: merge a pull request, call the API (which can rewrite main), print the auth token, or change repository settings, secrets, variables, releases, or workflows. Denied, because none of it passes through the protected-branch hooks; only GitHub branch protection covers it.",
+      "id": "merge-pull-requests",
+      "label": "Merge pull requests",
+      "description": "Merge a pull request (gh pr merge). Denied, so agents never merge into the base branch: you merge on GitHub. The merge would not pass through the protected-branch hooks, so the hook also denies the flag-first form (gh -R owner/repo pr merge).",
       "kind": "commands",
       "commands": [
         [
           "gh",
           "pr",
           "merge"
-        ],
+        ]
+      ],
+      "bucket": "deny",
+      "category": "git"
+    },
+    {
+      "id": "change-github-directly",
+      "label": "Change GitHub directly",
+      "description": "Act on GitHub without git: call the API (which can rewrite main), print the auth token, or change repository settings, secrets, variables, releases, or workflows. Denied, because none of it passes through the protected-branch hooks; only GitHub branch protection covers it. Merging a pull request prompts instead (merge-pull-requests).",
+      "kind": "commands",
+      "commands": [
         [
           "gh",
           "api"

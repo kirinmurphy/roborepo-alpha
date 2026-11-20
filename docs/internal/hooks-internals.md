@@ -278,9 +278,10 @@ the 5 named behaviors as a direct toggle, `roborepo config status` is read-only.
 
 The renderer writes the generated permission block in `generated/codex/config.toml`
 (`approval_policy`, `sandbox_mode`, `network_access` — derived from the `write-files`
-and `go-online` behaviors, and from whether anything is `ask`), the generated shell
+and `go-online` behaviors, and from whether any behavior Codex renders is `ask`), the generated shell
 prefix rules in `generated/codex/rules/roborepo.rules`, and Claude
-`permissions.allow` / `permissions.deny` / `permissions.ask` in `generated/claude/settings.json`.
+`permissions.allow` / `permissions.deny` / `permissions.ask` plus the shell `sandbox` key in
+`generated/claude/settings.json`.
 
 Command behaviors and arbitrary entries map to Codex `forbidden`, `allow`, and `prompt` rules,
 and Claude's `deny`, `allow`, and `ask` arrays. An ask entry also selects Codex's `on-request`
@@ -340,11 +341,16 @@ descriptions. This check runs in the CI gate.
 
 Agent shells set `core.hooksPath` to RoboRepo's agent hooks (`~/.claude/git-hooks` or
 `~/.codex/git-hooks`, from `globals/system/git-hooks/`) in git's `command` config scope. An agent
-hook runs its own check, if it has one (only `pre-push` does), then calls `roborepo_chain_hook`
+hook runs its own check, if it has one, then calls `roborepo_chain_hook`
 (`globals/system/git-hooks/chain.sh`). The
 chain resolves the repository's own hooks directory from `core.hooksPath` in every scope except
 `command`, falling back to `<git-common-dir>/hooks`, and `exec`s that directory's hook of the same
 name, so the repository hook's exit status decides the operation.
+
+The checks: `pre-commit` and `pre-merge-commit` refuse a hand-made commit in the plans store
+(`plans-store.sh`); `pre-merge-commit`, `pre-commit` (while `MERGE_HEAD` exists), and `pre-rebase`
+refuse a merge commit on, finishing a merge on, or a rebase of, a protected branch (`protected-branch.sh`: main, master, each remote's recorded default branch, and
+`ROBOREPO_PROTECTED_BRANCHES`); and `pre-push` is described next.
 
 The agent `pre-push` refuses pushes to protected branches and force pushes, then pipes git's ref
 lines on stdin to the chain. In this repository the chained target is `scripts/git-hooks/pre-push`,

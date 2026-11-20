@@ -65,10 +65,9 @@ unreadable. Keep the surface boring so it can be approved once and stay approved
 - Put the temp-dir creation and its `trap 'rm -rf "$d"' EXIT` cleanup inside a script file rather
   than composing them inline. The trap still makes cleanup self-contained, and the script keeps the
   invoking command a stable, allowlistable prefix.
-- Do not run a standalone `rm`/`rm -rf` to clean up after the fact. Prefer the trap; if a manual
-  delete is unavoidable, target the exact `mktemp` path you created and surface it for approval
-  rather than widening permissions.
-- Never request or rely on a blanket `rm` allowlist entry. Permission matching is literal prefix
-  matching, not a path sandbox: `rm:*` authorizes every delete on any path, and `..`/variable
-  expansion can escape a narrow pattern. A `mktemp` + `trap` keeps deletion bounded by construction
-  instead.
+- Prefer the trap to a cleanup `rm` after the fact; when you do delete by hand, name the exact path
+  you created rather than a glob or a variable.
+- `rm` is already allowed where it is safe: Claude's shell sandbox keeps it to the checkout and temp
+  folders, and a hook asks before deletes in a checkout on `main` or another protected branch. Do
+  not retry a refused delete outside the sandbox, and do not request wider `rm` permissions; surface
+  the path for approval instead.

@@ -1,7 +1,9 @@
 #!/bin/sh
-# Refuses a hand-made commit in the plans store, then runs the repo's own hook of this name; see
-# chain.sh.
+# Refuses a hand-made commit in the plans store and a merge commit on a protected branch, then runs
+# the repo's own hook of this name; see chain.sh.
 . "$(dirname "$0")/chain.sh"
 . "$(dirname "$0")/plans-store.sh"
+. "$(dirname "$0")/protected-branch.sh"
 roborepo_refuse_plans_store
+roborepo_refuse_protected_merge "a merge"
 roborepo_chain_hook "$(basename "$0")" "$@"

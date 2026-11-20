@@ -1,4 +1,7 @@
 #!/bin/sh
-# Runs the repo's own hook of this name; see chain.sh.
+# Refuses rebasing a protected branch, then runs the repo's own hook of this name; see chain.sh.
+# git passes the upstream and, when it is not the checked-out branch, the branch being rebased.
 . "$(dirname "$0")/chain.sh"
+. "$(dirname "$0")/protected-branch.sh"
+roborepo_refuse_protected_merge "a rebase" "${2:-}"
 roborepo_chain_hook "$(basename "$0")" "$@"

@@ -86,7 +86,7 @@ the tool is what it is" prose below:
 | --- | --- | --- | --- |
 | Rules | `~/.claude/CLAUDE.md`, one always-on markdown file | `~/.codex/AGENTS.md`, same intent, different name + house style | `~/.gemini/GEMINI.md` is rendered live by the common rule renderer; there is no tracked Gemini rules snapshot, and the provider's `rules.render` adapter remains stubbed |
 | Root config | `~/.claude/settings.json` — permissions, hooks, MCP, plugin toggles in one JSON object | `~/.codex/config.toml` — TOML defaults, some behavior in separate files/runtime hooks | `~/.gemini/settings.json` — plain JSON object, closely shaped like Claude's (hooks and `mcpServers` as nested keys), merges with the same recursive-object-merge rule as Claude's settings.json rather than a re-port |
-| Permissions | `permissions.allow` / `deny` / `ask` arrays in `settings.json` (real 3-state `ask`) | `approval_policy` / `sandbox_mode` / `network_access` in `config.toml` + rules-layer allow/deny; per-command `ask` only via a runtime hook | Policy Engine: a directory of `*.toml` files under `~/.gemini/policies/`, each `[[rule]]` block carrying a real native `allow`/`deny`/`ask_user` decision — no approximation or session-wide fallback needed |
+| Permissions | `permissions.allow` / `deny` / `ask` arrays in `settings.json` (real 3-state `ask`), plus a `sandbox` key that confines shell commands | `approval_policy` / `sandbox_mode` / `network_access` in `config.toml` + rules-layer allow/deny; per-command `ask` only via a runtime hook | Policy Engine: a directory of `*.toml` files under `~/.gemini/policies/`, each `[[rule]]` block carrying a real native `allow`/`deny`/`ask_user` decision — no approximation or session-wide fallback needed |
 | Skills / commands | Skills + `commands/` under `~/.claude/` | Same structure under `~/.codex/` home paths | RoboRepo's common installer links skills under `~/.gemini/skills/` and writes Markdown wrappers under `~/.gemini/commands/`; Gemini CLI expects TOML custom commands, so those wrappers are not usable native commands. The Gemini provider's `skills.link` and `commands.render` adapters remain stubbed |
 | MCP servers | Registration in native config + tool registry, plus matching permission entries | Entries in TOML config, own native registry shape | `mcpServers` key inside `settings.json`, direct JSON read/write — no CLI shell-out needed, unlike Claude |
 | Plugins | `enabledPlugins` + `extraKnownMarketplaces` in `settings.json`, installed natively next launch | Own plugin/marketplace commands + native config; choice survives runs, harness installs later | Not yet modeled for this harness |
@@ -170,7 +170,8 @@ which shell commands, which tools, which external calls — plus session default
 Here the harnesses diverge harder. It's no longer just a name:
 
 - Claude expresses permissions as a JSON array of tool matchers inside `settings.json`, with a
-  real third `ask` state alongside allow/deny.
+  real third `ask` state alongside allow/deny, and confines shell commands with a separate
+  `sandbox` key in the same file.
 - Codex expresses them as TOML session defaults (`approval_policy`, `default_permissions`, a named
   permission profile, workspace roots, and network setting) _plus_ a separate binary
   (`forbidden`/`allow`-only) command-policy rules file — no native `ask` tier at the rules layer.

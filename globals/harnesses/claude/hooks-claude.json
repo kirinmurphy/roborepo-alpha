@@ -11,7 +11,7 @@
       ]
     },
     {
-      "_comment": "Denies pushes that land on a protected branch (main, master, the remote's default), so git push itself can be allowed. See globals/system/hooks/claude/protected-branch-push.mjs.",
+      "_comment": "Denies pushes that land on a protected branch (main, master, the remote's default), so git push itself can be allowed, and asks before deletes in a checkout on a protected branch, so rm itself can be allowed. See globals/system/hooks/claude/protected-branch-push.mjs.",
       "matcher": "Bash",
       "hooks": [
         {
