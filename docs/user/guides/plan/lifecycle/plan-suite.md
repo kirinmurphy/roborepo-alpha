@@ -226,7 +226,9 @@ any other's, and the run records that those fixes were not revalidated. The find
 - `blocked_by` is empty;
 - the worktree has no uncommitted changes;
 - the feature branch has at least one commit of its own;
-- the plan passes the Review requirements, apart from unconfirmed `## Not tested` entries.
+- the plan passes the Review requirements. An open `## Not tested` entry is allowed only when it
+  says why an agent cannot clear it, and a cleared entry must carry its evidence; the refusal names
+  each entry that does neither.
 
 If the loop has ended and the preflight passes, `/plan-execute` runs `roborepo plans submit`,
 which moves the plan to `review/`. That says the work is complete and checked, not that you
@@ -238,6 +240,16 @@ ends by pushing that branch, so the work is never only on your machine and CI ru
 result. Only the feature branch is pushed, never the base branch, and never with force. If the push
 is refused, the plan's lifecycle still stands and the report gives you the command to push it
 yourself.
+
+When `/plan-execute` moves a plan to `review/`, or fixes findings a review sent back, it hands the
+branch off without asking: it merges the base branch, freshly fetched, into the feature branch with
+`roborepo plans sync-base`, resolves conflicts within the plan's scope and reruns the checks the
+merge touched, pushes, and opens or updates the pull request with a written description. The
+report gives the pull request link, whether it merges cleanly, and CI's result so far. The merge
+only ever goes from the base into the plan's branch; merging the pull request stays yours. A
+conflict that needs a decision outside the plan, or a base it cannot fast-forward, is reported
+under Needs you. When the fetch fails, the merge uses the last fetched copy of the base, and the
+report's Base line says so.
 
 Worktrees go where you confirmed in `/plan-suite-init`. In Claude, each run also asks once for access to the worktree folder, then works inside it, so edits
 there do not prompt one file at a time.
@@ -265,9 +277,11 @@ A new review runs these steps:
    `- [x] … — fixed in review (<short commit>)`;
 6. records the Result as complete once findings and required manual checks are resolved, or pending
    while they remain open, then shows you the review in plain language: what the plan is for, what
-   changed for a person using it, each acceptance criterion as met or not, base failures, the manual
-   checks waiting on you, and each escalated finding as a decision with options and a
-   recommendation. The technical detail (commits, validator findings, and the evidence behind each
+   changed for a person using it, each acceptance criterion as met or not, base failures, the checks
+   only you can make (each with its steps, the expected result, and why an agent could not make
+   it), any command a tool blocked for you to allow, and each escalated finding as a decision with
+   options and a recommendation. A check an agent could run has already been run, here or in
+   `/plan-execute`, and appears as evidence, not as a request. The technical detail (commits, validator findings, and the evidence behind each
    criterion) is one request away in the chat; commits, findings, and checks run are also kept in
    the plan's `## Review` record.
 
@@ -343,7 +357,8 @@ accepts only a plan in `review/`. In order, it:
 2. checks every claim in the plan against the code;
 3. decides complete, incomplete, blocked, superseded, or abandoned; a superseded or abandoned plan
    is handed to `/plan-archive`;
-4. refuses while any `## Not tested` entry is unchecked;
+4. refuses while any `## Not tested` entry is unchecked, and sends you to `/plan-review`, which
+   settles it; close never runs or checks off an entry itself;
 5. refuses unless your approval is fresh for the landed branch tip;
 6. refuses until the work has landed in the base branch, including after a squash or rebase merge,
    with `roborepo plans landed <plan>`;
@@ -398,12 +413,36 @@ covers.
 ```markdown
 ## Not tested
 
-- [ ] The report line renders a per-skill tally. Requires a live session; no test can read agent output.
+- [ ] The dark theme reads well on the Plans page. Needs a person: judging contrast and look is a
+      human judgment.
+- [ ] The portal starts and lists plans in a browser. Blocked: `roborepo browser run --serve "npm run
+      portal"` failed with "listen EPERM 127.0.0.1:4310"; allow it to run outside the sandbox.
+- [x] `roborepo plans submit` refuses an entry with no reason. — Verified by agent 2026-11-20 at
+      a1b2c3d: `node scripts/test/plan-lifecycle-transitions-check.mjs` → passed.
+- [x] The approval question names the commit. — Confirmed by the user 2026-11-21: "saw the full
+      commit id in the question".
 ```
 
-`/plan-execute` and `/plan-write` add entries as gaps appear. Only you clear one: confirm it by hand
-and check it off, or delete it with the reason in the plan's `## Decision Log`. Open entries do not
-block the move to review; `/plan-close` refuses to close a plan while any entry is unchecked.
+`/plan-execute` and `/plan-write` add entries as gaps appear. Before a plan reaches you for review,
+the agent runs every check it can, so you are asked only for what an agent cannot do.
+
+| Entry | Ends with | Who settles it |
+| --- | --- | --- |
+| Open, needs a person | `Needs a person:` and why an agent cannot make the check | You, during `/plan-review`; the agent records your answer |
+| Open, blocked by a tool | `Blocked:`, the exact command, and its error | You allow the command; the agent then runs the check |
+| Cleared by an agent | `— Verified by agent`, the date, commit, command or method, and result | Already settled |
+| Cleared by you | `— Confirmed by the user`, the date, and what you reported | Already settled |
+
+An agent never checks off a check only a person can make, never clears an entry without recorded
+passing evidence, and never approves on your behalf or infers your approval; it records approval
+only from your explicit answer. A check that runs and fails is a defect the agent fixes, not an
+entry. Deleting an entry is your decision, with the reason in the plan's
+`## Decision Log`.
+
+An open entry that gives its reason does not block the move to review. One that gives no reason, or
+a checked entry with no evidence, does: `roborepo plans submit` refuses and names it. Every entry
+is settled before you approve, and `/plan-close` refuses to close a plan while any entry is
+unchecked.
 
 ## Paired Skills
 

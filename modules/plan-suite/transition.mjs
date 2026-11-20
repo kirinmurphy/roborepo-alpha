@@ -26,9 +26,14 @@ import { mutateStore, requireStore } from "./plan-store.mjs";
 import { TRANSITION_RULES } from "./transition-rules.mjs";
 import { validateTransition } from "./transition-checks.mjs";
 
-// Findings a destination tolerates. Built work no test covers accumulates while a plan is worked and
-// is resolved before completion, so it never blocks a move into Active or Review.
-const TOLERATED = { active: new Set(["UNCONFIRMED_NOT_TESTED"]), review: new Set(["UNCONFIRMED_NOT_TESTED"]) };
+// Findings a destination tolerates. Built work no test covers accumulates while a plan is worked, so
+// an open entry never blocks a move into Active or Review. Review is where each open entry must say
+// why an agent cannot clear it and each cleared one must carry evidence, so only Active tolerates an
+// entry that explains nothing: resuming work must not stall on it.
+const TOLERATED = {
+  active: new Set(["UNCONFIRMED_NOT_TESTED", "NOT_TESTED_UNEXPLAINED"]),
+  review: new Set(["UNCONFIRMED_NOT_TESTED"]),
+};
 // Archiving is explicit termination, not a claim that the plan is sound, so only the archived
 // destination's own rules gate it; the document-wide structure rules do not.
 const GATE_KINDS = { archived: new Set(["lifecycle"]) };

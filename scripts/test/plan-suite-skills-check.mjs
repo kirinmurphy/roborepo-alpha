@@ -50,7 +50,7 @@ const SKILLS = {
       "create a second implementation plan",
       "change lifecycle state, except the start transition",
       "perform `/plan-review`'s human review, or record approval",
-      "perform closeout or merge orchestration",
+      "perform closeout, or merge the feature branch or its pull request into the base",
       "invoke another plan command",
     ],
     // The root is confirmed once by /plan-suite-init; this skill only reads the result.
@@ -73,7 +73,7 @@ const SKILLS = {
     boundaryPhrases: [
       "fix agent-resolvable gaps before the verdict",
       "merge, push, delete branches, or remove worktrees",
-      "manual-only `## Not tested` entries",
+      "run, check off, or remove a `## Not tested` entry",
       "archive a plan; that is `/plan-archive`",
       "synchronize the base branch into the feature branch",
     ],
@@ -166,6 +166,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   includesAll("validation-loop.md", readPackageFile("plan-suite/skills/plan-execute/references/validation-loop.md"), [
     "## The loop",
     "## The rubric",
+    "a check an agent can run is run, not listed",
+    "A reason that does not hold is a `fix` finding",
     "never pass `isolation: \"worktree\"`",
     "Do not give it a summary of what was built",
     "record in the plan that the Validator ran in-session",
@@ -192,12 +194,41 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "`roborepo plans submit <plan> --json`",
   ]);
   // Every run that commits to the feature branch pushes it, not only the review handoff.
-  includesAll("plan-execute push", skill, [
+  const handoffReference = normalize(readPackageFile("plan-suite/skills/plan-execute/references/handoff.md"));
+  includesAll("plan-execute push", `${skill}\n${handoffReference}`, [
     "Every run that commits to the feature branch ends by pushing it",
     "when the plan stays in `active/`",
     "never the base branch or any other protected branch",
     "Never force-push",
   ]);
+  // The handoff merges the base in without asking, so a pull request never arrives with conflicts,
+  // and never merges the other way.
+  const handoff = handoffReference.slice(handoffReference.indexOf("## Hand off"));
+  includesAll("plan-execute handoff authorization", skill, [
+    "Invoking `/plan-execute` authorizes this merge of the base into the plan's own feature branch",
+    "Merging the feature branch into the base stays forbidden",
+    "[references/handoff.md](references/handoff.md)",
+  ]);
+  includesAll("plan-execute handoff", handoff, [
+    "After the submit transition, and after Review Findings commits its fixes",
+    "`roborepo plans sync-base --base <base> --json`",
+    "authorizes this merge of the base into the plan's own feature branch",
+    "Merging the feature branch into the base stays forbidden",
+    "Regenerate a generated file from its sources",
+    "`roborepo plans sync-base --continue --base <base> --json`",
+    "An existing open pull request whose base is not `<base>` is not edited or readied",
+    "`git ls-remote <remote> refs/heads/<branch>` prints `HEAD`'s commit",
+    "its checks apply to the commit GitHub has, not to the local work",
+    "report the conflicting paths and the choice under Needs you",
+    "run the checks for the files it touched",
+    "`roborepo delivery pr-body <file>`",
+    "Never merge it, enable auto-merge, or approve it",
+    "whether it merges cleanly, and CI's result so far",
+  ]);
+  const ordered = ["1. **Merge the base in.**", "4. **Recheck what the merge changed.**", "5. **Push**", "6. **Open or update the pull request**", "7. **Report its state:**"].map((step) => handoff.indexOf(step));
+  assert.ok(ordered.every((at, i) => at > 0 && (i === 0 || at > ordered[i - 1])), "plan-execute: merge, recheck, push, then the pull request and its state");
+  assert.ok(completion.includes("Then hand off the feature branch"), "plan-execute: submit hands the branch off");
+  assert.ok(skill.slice(order[5]).includes("Hand off the feature branch (see Push and hand off the feature branch)"), "plan-execute: review-findings fixes hand the branch off");
   assert.ok(skill.slice(order[5]).includes("then run the Validation Loop over the result"), "plan-execute: fixes made in review mode are validated too");
   includesAll("plan-execute review findings", skill.slice(order[5]), [
     "nothing else is in scope",
@@ -225,7 +256,16 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Never pass `isolation: \"worktree\"`",
     "reports it back instead of choosing",
     "## Not tested",
-    "Never check an entry off yourself",
+    // The agent runs what it can before the user is asked, and every entry it leaves says why.
+    "Run every check an agent can run before submitting",
+    "attempt every `## Not tested` entry",
+    "`— Verified by agent <date> at <commit>: <command or method> → <result>`",
+    "`Blocked: <exact command> failed with <error>`",
+    "`Needs a person: <why an agent cannot>`",
+    "Not an entry: a defect",
+    "as a bare call, with no pipe, `cd`, or chained command",
+    "Never check off a person-only entry on your own judgment",
+    "`roborepo plans submit` refuses while an open entry gives no reason or a cleared one has no evidence",
     // Entering the worktree is what stops per-file write prompts: the write-scope hook allows only the
     // checkout the session is in, so the skill must move the session there with one folder grant.
     "## Enter the Worktree",
@@ -249,6 +289,27 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 
   const schema = readPackageFile("plan-suite/skills/plan-write/references/plan-schema.md");
   includesAll("plan-schema.md", schema, ["## Plan store", "`roborepo plans save <file.md>`", "`synchronized: false`", "Never write to `repo_plans` directly"]);
+  // The entry format every plan skill reads: who may leave an entry open, who may clear it, and how.
+  includesAll("plan-schema.md Not tested", schema, [
+    "An agent runs every check it can before leaving an entry for the user",
+    "`Needs a person: <why an agent cannot>`",
+    "`Blocked: <exact command> failed with <error>`",
+    "`— Verified by agent <date> at <commit>: <command or method> → <result>`",
+    "`— Confirmed by the user <date>: <what they reported>`",
+    "\"No time\" and \"no test exists\" are not reasons",
+    "An agent never checks off a person-only entry on its own judgment",
+    "An agent never clears an entry without a resolution that names the passing evidence",
+    "never grants or infers human approval",
+    "`NOT_TESTED_UNEXPLAINED`",
+    "`roborepo plans preflight` and the move into `review/` refuse it",
+  ]);
+  assert.ok(!schema.includes("Only the user clears an entry"), "plan-schema.md: an agent clears what it can verify");
+  includesAll("workflow-validate.md", readPackageFile("plan-suite/skills/plan-write/references/workflow-validate.md"), [
+    "`NOT_TESTED_UNEXPLAINED`",
+    "`roborepo plans submit` and `plans preflight` refuse the second",
+  ]);
+  includesAll("session-close", readSkill("session-close"), ["Run a check an agent can run instead of listing it", "`Needs a person: <why>`"]);
+  includesAll("feature-verification", readSkill("feature-verification"), ["Run `roborepo browser run --serve` as a bare call"]);
   const write = readSkill("plan-write");
   assert.ok(write.includes("Change a plan only through `roborepo plans save`"), "plan-write: writes through the store, not before editing");
 
@@ -320,6 +381,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "`roborepo plans preflight <plan> --json`",
     "`roborepo plans submit <plan> --json`",
     "canonical base synchronization command",
+    "fast-forwards a stale local base",
+    "`/plan-execute` runs the same command when it hands the plan off",
     "never discard work and never pick a side blindly",
     "Never merge the feature branch into the base branch",
     "Do not fix anything while checking. Record every finding first",
@@ -333,6 +396,14 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "An agent cannot approve, and passing tests are not approval",
     "`roborepo plans approval <plan> --json`",
     "`roborepo plans approve <plan> --commit <full reviewed commit id> --confirmed-by <who>`",
+    // Review runs what an agent can and asks the human only for the rest.
+    "entries whose `Needs a person:` or `Blocked:` reason does not hold and cleared entries without evidence",
+    "run the check here and clear the entry with its evidence",
+    "Retry each `Blocked:` entry once",
+    "the checks only the human can make",
+    "the commands to allow",
+    "never a request to the human",
+    "Check a person-only entry off only from the human's explicit answer, quoting it",
     "`roborepo plans reopen <plan> --json`",
     "never returns to `ready/`",
     "Do not invoke either command yourself",
@@ -406,6 +477,11 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Before the completion report, read `references/completion-report.md`",
   ]);
   const executeReport = readPackageFile("plan-suite/skills/plan-execute/references/final-report.md");
+  includesAll("plan-execute final report asks only for what an agent cannot do", executeReport, [
+    "Only open `## Not tested` entries appear here",
+    "**Checks only you can make:**",
+    "**Commands to allow:**",
+  ]);
   includesAll("plan-execute final report builds on the shared reference", executeReport, [
     `read ${SHARED_REPORT}`,
     "This command runs the checker agent before delivering",
@@ -464,7 +540,9 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "never as passed",
     "add a missing regression test",
     "rerun the affected checks",
-    "manual-only `## Not tested` entries",
+    "This step only confirms",
+    "refuse, list them, and send the user to `/plan-review`",
+    "Never run a check, check off an entry, or remove one here",
     "canonical linked-worktree server cleanup command",
     "canonical worktree cleanup command scoped to this plan",
     "roborepo git worktrees discard --plan <id> --receipt <receipt> --apply --json",

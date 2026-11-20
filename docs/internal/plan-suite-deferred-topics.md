@@ -35,8 +35,6 @@ execute and spend more tokens per plan, so measure it on a real plan before tuni
 
 | Topic | Recommendation |
 | --- | --- |
-| Behavior checks | Drive each acceptance criterion with `feature-verification` evidence, and run every `## Not tested` entry an agent can run |
-| QA script | Write the few things only the user can judge, with steps and expected results |
 | Structured claims | Record what execute claims, so review confirms it from outside the code rather than repeating the code rubric |
 | Two gates | Separate implementation validation from delivery readiness in execute's contract |
 | Escaped defects | Count each defect review finds as one that escaped execute, to measure whether its checks are good enough |
@@ -46,7 +44,6 @@ execute and spend more tokens per plan, so measure it on a real plan before tuni
 
 | Topic | Issue | Recommendation |
 | --- | --- | --- |
-| Not tested timing | Required in prose at approval, tolerated by code through review, enforced only at close | Settle it before approval |
 | Close changing code | `/plan-close` may fix gaps with code or tests, which land on `main` with no CI and no push | Stop close from changing code. Depends on where close commits land |
 | Validator proof | The preflight cannot tell whether the validation loop actually ran | Make it prove the loop ran |
 | Approval across base merges | A clean base merge makes approval stale | Owned by `d9ywaa8d` |

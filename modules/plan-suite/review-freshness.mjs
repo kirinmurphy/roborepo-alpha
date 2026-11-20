@@ -1,5 +1,6 @@
 // Review completion describes checked implementation; it never supplies human approval.
 import { parsePlanMarkdown } from "./index.mjs";
+import { unexplainedNotTested } from "./lifecycle-policy.mjs";
 import { git } from "./plan-git.mjs";
 
 const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
@@ -13,6 +14,11 @@ export function reviewFreshness({ primary, markdown, tip, base, workingPath = pr
   if (result.status !== "complete") return verdict("incomplete", `the recorded review status is ${result.status || "empty"}`);
   if (parsed.review.findings.open || parsed.notTested.unchecked) {
     return verdict("incomplete", "review findings or required manual checks remain open");
+  }
+  // Open entries are refused above, so what remains is an entry checked off with no evidence: nobody
+  // can tell from the plan that the check was ever made, and approval must not rest on it.
+  if (unexplainedNotTested(parsed.notTested.entries).length) {
+    return verdict("incomplete", "a checked Not tested entry records no evidence");
   }
   const status = git(workingPath, ["status", "--porcelain=v1", "--untracked-files=all"]);
   const dirty = git(workingPath, ["diff", "--name-only", "HEAD"]);

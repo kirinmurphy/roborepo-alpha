@@ -93,7 +93,9 @@ say so explicitly rather than guessing from the working tree.
   work actually affects. Update those docs against the code, preserving their existing structure.
 - When the session worked on a repository plan, sync it with `plan-write`:
   tick only tasks the code proves done, add `## Not tested` entries for gaps the session left, and
-  update `next_action`. Then run the repository's canonical plan validator for `<plan>` and report its findings.
+  update `next_action`. Run a check an agent can run instead of listing it; each entry added ends
+  with the reason an agent cannot clear it, `Needs a person: <why>` or
+  `Blocked: <command> failed with <error>`. Then run the repository's canonical plan validator for `<plan>` and report its findings.
 - Do not restructure or rewrite docs wholesale. Small, targeted edits, preserving existing
   structure.
 - Report drift found but not fixed, separately from what was changed.

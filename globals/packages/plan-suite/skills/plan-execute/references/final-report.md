@@ -86,17 +86,30 @@ flake that now passes repeatedly.
 
 ## Needs you
 
-Unconfirmed `## Not tested` entries appear here as manual checks. Open Questions appear here too,
-each with its options, what each leads to, and a recommendation; this is the run's only question
-batch. The last row is the next command: `/plan-execute` again to resume, or `/plan-review`.
+Only open `## Not tested` entries appear here, in two groups; an entry an agent cleared is in the
+plan with its evidence and is not repeated.
+
+- **Checks only you can make:** each person-only entry with its steps, the expected result, and
+  its `Needs a person:` reason.
+- **Commands to allow:** each `Blocked:` entry as the exact command a tool refused, the error, and
+  what allowing it lets the agent check.
+
+Open Questions appear here too, each with its options, what each leads to, and a recommendation;
+this is the run's only question batch. The last row is the next command: `/plan-execute` again to
+resume, or `/plan-review`.
 
 | Do | Why | How |
 | --- | --- | --- |
+| Check the dark theme on the Plans page | Judging contrast needs a person | Open `/plans`, switch theme; text stays readable |
+| Allow the portal browser check | The sandbox refused the dev server's port | `roborepo browser run --serve "npm run portal"` |
 | Push the branch | The automatic push was refused; CI has not run | `git push -u origin <branch>` |
+| Merge main into the branch | `src/app.ts` conflicts on a choice outside the plan | `roborepo plans sync-base`, then resolve |
 | Run `/plan-review` | A person reviews and approves the work | `/plan-review` |
 
 Include the push row only when the feature-branch push failed or was skipped; say whether the
-session's permissions, a hook, or the remote refused it.
+session's permissions, a hook, or the remote refused it. Include a merge row only when the handoff's
+base merge refused or left a conflict outside the plan's scope, and a pull request row only when
+opening or updating it did not run.
 
 ## Record
 
@@ -108,6 +121,8 @@ Implementation result
 - Lifecycle: stays active | moved to review | stays review
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)
+- Base: merged <base> at <commit> | already up to date | not merged (<why>); compared with a fresh fetch | the last fetched copy (fetch failed) | a local branch
+- Pull request: <URL>, mergeable | conflicts | unknown; CI passed | failed | running | none (<why>)
 - Details: Decision Log, findings, and Not tested entries are in the plan document; ask here for any detail
 - Server: <URL> running from the worktree | isolated state at <URL> (<why>) | none (<why>)
 ```

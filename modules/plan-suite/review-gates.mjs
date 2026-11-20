@@ -14,7 +14,9 @@ import { LIFECYCLE_MODEL } from "./lifecycle-manifest.mjs";
 import { dirtyPaths, git, linkedWorktreeNamed } from "./plan-git.mjs";
 import { reviewFreshness } from "./review-freshness.mjs";
 
-// Built work no test covers stays open through review; /plan-close resolves it.
+// An open Not tested entry may reach review, where the user confirms the checks only a person can
+// make. One with no reason an agent cannot clear it, or cleared with no evidence, may not: that
+// finding stays out of this set.
 const PREFLIGHT_TOLERATED = new Set(["UNCONFIRMED_NOT_TESTED"]);
 const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
 
@@ -56,8 +58,8 @@ export function completionPreflight({ primary, record, base }) {
 
   const remaining = findings.filter((item) => !PREFLIGHT_TOLERATED.has(item.code));
   check(6, "the plan passes the review validator", remaining.length === 0,
-    remaining.length ? remaining.map((item) => item.code).join(", ") : "no findings apart from Not tested entries",
-    "resolve the listed findings in the plan with `roborepo plans save`");
+    remaining.length ? remaining.map(observedFinding).join(", ") : "no findings apart from open Not tested entries that give a reason",
+    `${remaining.map((item) => item.resolution).join(" ")} Save the plan with \`roborepo plans save\`.`);
 
   return {
     ok: checks.every((item) => item.ok),
@@ -111,6 +113,12 @@ export function readApproval(markdown) {
 function openTasks(parsed) {
   const notTested = new Set(parsed.notTested.entries.map((task) => task.line));
   return parsed.tasks.filter((task) => !task.done && !notTested.has(task.line));
+}
+
+// A finding as the validator check reports it. Most codes say what to fix on their own; the Not
+// tested one does not until it names its entries, which its message quotes.
+function observedFinding(item) {
+  return item.code === "NOT_TESTED_UNEXPLAINED" ? `${item.code}: ${item.message}` : item.code;
 }
 
 // Parsed task lines count from the start of the body, so a line shown to a reader needs the lines

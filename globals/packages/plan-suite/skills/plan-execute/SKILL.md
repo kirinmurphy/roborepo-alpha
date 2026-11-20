@@ -204,7 +204,8 @@ then the run proceeds without questions.
     Report the URL in the handoff. If the repository cannot expose a link, record what was started
     and why no link is available.
 12. Run completion-level verification, including manual verification against the started
-    environment when applicable. Apply the behavioral evidence handoff below before committing.
+    environment when applicable, and attempt every `## Not tested` entry (see Not Tested). Apply
+    the behavioral evidence handoff below before committing.
 13. Re-read Git status and the implementation diff in the target worktree, then commit the
     completed implementation changes there with a descriptive message, saving the run's plan
     updates with `roborepo plans save`. Do not leave completed code
@@ -259,34 +260,29 @@ human accepted it.
 2. Run the repository's canonical completion preflight command for `<plan>`. It checks that no
    task outside `## Not tested` is unchecked, `blocked_by` is empty, the worktree has no
    uncommitted changes, the feature branch has a commit of its own, and the plan passes the review
-   validator apart from unconfirmed Not tested entries.
+   validator. That validator tolerates an open Not tested entry only when it gives the reason an
+   agent cannot clear it, and refuses a cleared entry with no evidence, naming each entry to fix.
 3. **Incomplete, blocked, or not yet validated:** the plan stays in `active/`. This includes a
    Validation Loop that left `escalate` findings open; their unchecked findings fail the preflight.
    Record the remaining tasks, findings, or blockers, set an actionable `next_action` written for a
-   cold reader, and save the plan. Push the feature branch (below). A later `/plan-execute` resumes
-   from there.
+   cold reader, and save the plan. Push the feature branch (see Push and hand off the feature
+   branch). A later `/plan-execute` resumes from there.
 4. **Complete:** run `roborepo plans submit <plan> --json`. It reruns the preflight, then commits and
-   pushes the move from `active/` to `review/` on the plans branch. Then push the feature branch (below)
-   and report that the plan awaits `/plan-review`.
+   pushes the move from `active/` to `review/` on the plans branch. Then hand off the feature branch
+   (see Push and hand off the feature branch) and report that the plan awaits `/plan-review`.
 
-Genuinely unverified manual checks stay under `## Not tested`; they do not block completion, and
-they are resolved before `/plan-close`.
+A check only a person can make, or one a tool blocked, stays open under `## Not tested` with its
+reason. It does not block completion; the user settles it in `/plan-review`, before approval.
 
-### Push the feature branch
+### Push and hand off the feature branch
 
-Every run that commits to the feature branch ends by pushing it, so the work never lives only on
-this machine and CI runs the full gate on each step's result, including before `/plan-review`
-starts. Push as the run's last Git step, after its final commit: after the submit transition
-succeeds, when the plan stays in `active/`, or after Review Findings commits its fixes. A run that
-made no feature-branch commit and whose branch already matches its remote has nothing to push.
-
-1. Re-read the worktree's branch and Git status. Push only the plan's feature branch, never the base
-   branch or any other protected branch. Lifecycle commits are already on the plans branch.
-2. From the worktree, run `git push -u <remote> <branch>`, where `<remote>` is the branch's upstream
-   remote, or the repository's only remote when none is set. Never force-push.
-3. With no remote, or when the push is refused (a permission prompt declined, a hook, a rejected
-   non-fast-forward), do not retry, rebase, or work around it. The plan's lifecycle stands; report
-   the exact command under Needs you and whether the session's permissions or the remote refused it.
+Every run that commits to the feature branch ends by pushing it, only that branch and never with
+force, as [references/handoff.md](references/handoff.md) describes. After the submit transition,
+and after Review Findings commits its fixes, follow its handoff from the worktree, without asking:
+merge the base in with `roborepo plans sync-base --base <base> --json`, recheck what the merge
+changed, push, then open or update the pull request and report whether it merges cleanly and CI's
+result so far. Invoking `/plan-execute` authorizes this merge of the base into the plan's own
+feature branch. Merging the feature branch into the base stays forbidden.
 
 ## Review Findings
 
@@ -306,25 +302,48 @@ A plan in `review/` returns here only to fix what review recorded.
    Leave it unchecked, record why in Open Questions, and tell the user it needs `/plan-review`,
    which decides on the scope change.
 5. Commit the fixes in the worktree and save the plan update. The plan stays in `review/`; never run a
-   lifecycle transition in this mode. Push the feature branch (see Push the feature branch), then
-   report that `/plan-review` should run again.
+   lifecycle transition in this mode. Hand off the feature branch (see Push and hand off the
+   feature branch), then report that `/plan-review` should run again.
+6. With no unchecked finding, finish an incomplete handoff instead: one whose branch is ahead of its
+   remote or has no open pull request. Run the handoff, and never report it done without the PR.
 
 ## Not Tested
 
 Built work that no test covers goes in the plan's `## Not tested` section the moment the
 gap is known: a check that was skipped, an assumption never exercised, a claim resting on indirect
-evidence. Each entry is an unchecked checkbox stating what to check and why a test cannot:
+evidence. Each entry is a checkbox stating what to check.
 
-```markdown
-## Not tested
+Run every check an agent can run before submitting; the user is asked only for what an agent
+cannot do. Attempt each entry, using `feature-verification` for UI, server, API, CLI, or
+performance behavior, and write the missing test when a test can cover it. Then leave the entry in
+one of the states `/plan-write`'s `references/plan-schema.md` defines:
 
-- [ ] The user-facing setup action enables all required components. Needs a browser session against
-      the supported live environment.
-```
+| Outcome | Entry |
+| --- | --- |
+| The check passed | Checked, ending `— Verified by agent <date> at <commit>: <command or method> → <result>` |
+| The check ran and failed | Not an entry: a defect. Fix it, as with any failing test |
+| A tool blocked the check | Open, ending `Blocked: <exact command> failed with <error>`, and what would unblock it |
+| Only a person can make it | Open, ending `Needs a person: <why an agent cannot>` |
 
-Never check an entry off yourself; the user confirms it by hand. The plan validator reports
-unchecked entries, and `/plan-close` refuses to close a plan while any remain. List every entry in
-the final report, and say so explicitly when there are none.
+The schema lists the accepted `Needs a person:` reasons and shows an example entry in each state.
+
+A blocked check is retried through the harness's normal route before it is written down:
+
+1. Check against the environment step 11 left running, through the harness's preview tools or a
+   bare `roborepo browser run --url` call, rather than starting a second server on the same port.
+2. With nothing running, run `roborepo browser run --serve` as a bare call, with no pipe, `cd`, or
+   chained command. Where the harness sandboxes shell commands but excludes `roborepo`, only a bare
+   call is excluded.
+3. Otherwise rerun the command outside the sandbox, which goes through the permission prompt.
+
+Only then write the `Blocked:` reason. The final report lists the command under Commands to allow;
+it is not an Open Question and marks no task blocked under the Blocker Policy.
+
+Never check off a person-only entry on your own judgment, never clear an entry without a
+resolution naming the passing evidence, and record a user's confirmation only from their explicit
+answer. `roborepo plans submit` refuses while an open entry gives no reason or a cleared one has
+no evidence, and `/plan-close` refuses to close a plan while any entry is open. List every open
+entry in the final report, and say so explicitly when there are none.
 
 ## Decision Policy
 
@@ -359,8 +378,9 @@ trivial:
    - changes a public API or persistent schema;
    - affects security, privacy, permissions, migration, or compatibility;
    - pushes, merges, publishes, spends money, or affects an external system. The feature-branch
-     push at the end of each run (Push the feature branch) is a fixed step of this skill, not a
-     decision.
+     push at the end of each run, and the handoff's base merge into the feature branch and pull
+     request update (Push and hand off the feature branch), are fixed steps of this skill, not
+     decisions.
 7. A blocked decision becomes an Open Questions entry; see Blocker Policy.
 
 ### Decision Log
@@ -425,7 +445,7 @@ A run is complete when:
 - targeted verification has passed or failures are explained;
 - required broader verification has been run when practical;
 - autonomous decisions are in the Decision Log;
-- every known untested gap is a `## Not tested` entry;
+- every known untested gap is a `## Not tested` entry, cleared with evidence or open with its reason;
 - every blocked decision and external blocker is in Open Questions, with the tasks it blocks;
 - no unblocked task remains;
 - blockers and deferred scope are explicit;
@@ -438,6 +458,8 @@ A run is complete when:
   explicitly says that no implementation commit was needed;
 - the feature branch was pushed after the run's last commit, or the final report gives the exact
   push command and why it did not run;
+- after a submit or review-findings fixes, the handoff merged the base and opened or updated the
+  pull request, or the final report says which handoff step did not run and why;
 - the plan was moved to `review/` if and only if the Validation Loop ended and the completion
   preflight passed.
 
@@ -446,8 +468,9 @@ Completion does not authorize:
 - unrelated refactoring;
 - infinite retries around external blockers;
 - guessing through consequential product decisions;
-- pushing anything but the plan's feature branch, or merging, publishing, or
-  deleting worktrees, without explicit permission or repository policy;
+- pushing anything but the plan's feature branch, merging anything but the base into the plan's
+  feature branch, merging a pull request, publishing, or deleting worktrees, without explicit
+  permission or repository policy;
 - any commit on the base branch;
 - leaving completed implementation changes uncommitted in the target worktree.
 
@@ -475,7 +498,7 @@ Do not:
 - perform `/plan-review`'s human review, or record approval;
 - own user-interface behavior;
 - create integration branches;
-- perform closeout or merge orchestration;
+- perform closeout, or merge the feature branch or its pull request into the base;
 - invoke another plan command;
 - launch unrelated workflows;
 - hide failed verification or partial completion.

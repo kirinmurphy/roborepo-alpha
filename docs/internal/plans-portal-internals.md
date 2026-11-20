@@ -152,7 +152,8 @@ It runs from any checkout, inside one `mutateStore` operation, which it may re-r
    `archive` writes the reason and declares `clearsReferences`, which removes the plan's id from the
    `depends_on` and `blocked_by` of unfinished plans;
 3. validates the content it will commit against the destination (`ready` and `completed` tolerate no
-   findings, `active` and `review` tolerate `UNCONFIRMED_NOT_TESTED`, `archived` checks only its
+   findings, `active` and `review` tolerate `UNCONFIRMED_NOT_TESTED`, `active` alone also tolerates
+   `NOT_TESTED_UNEXPLAINED`, `archived` checks only its
    own rules), refusing with the findings and a repair prompt;
 4. returns the old and new paths plus any cleared dependents for the store to commit, then returns six
    post-commit checks from `transition-checks.mjs`. The store refuses when any of those paths has

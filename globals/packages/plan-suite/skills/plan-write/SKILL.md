@@ -61,7 +61,7 @@ non-applicable rows.
 | --- | --- | --- |
 | No existing plan owns the work | **Create** a backlog plan | The desired outcome |
 | An existing plan, to change scope or design | **Revise** it | The user's intent |
-| An existing plan, to bring up to date after work | **Sync** it: tick a task only when the code proves it done, add `## Not tested` entries for gaps, update `next_action` and `reviewed_commit` | Repository evidence |
+| An existing plan, to bring up to date after work | **Sync** it: tick a task only when the code proves it done, add a `## Not tested` entry for each gap, ending with the reason an agent cannot clear it (`Needs a person:` or `Blocked:`, see `references/plan-schema.md`), update `next_action` and `reviewed_commit` | Repository evidence |
 
 Revise and sync can happen in the same run; say which edits came from which.
 

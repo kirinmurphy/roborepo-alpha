@@ -114,12 +114,16 @@ Run `roborepo plans preflight <plan> --json`.
 
 ### 2. Synchronize the base branch into the feature branch
 
-From the plan's worktree, run the repository's canonical base synchronization command. It merges the
-base branch into the feature branch, and does nothing when there is nothing new, so every review
-round runs it.
+From the plan's worktree, run the repository's canonical base synchronization command,
+`roborepo plans sync-base --base <base> --json`. It fetches the base branch's upstream, fast-forwards a stale
+local base, and merges the base into the feature branch, or does nothing when there is nothing new,
+so every review round runs it. `/plan-execute` runs the same command when it hands the plan off, so
+this step merges only what the base gained since then. Invoking `/plan-review` authorizes this
+merge into the plan's own feature branch, as it does for `/plan-execute`.
 
-- It refuses a dirty worktree, a run outside the plan's worktree, and a local base branch that is
-  behind its upstream. A stale base is the user's to update; ask them, then rerun.
+- It refuses a dirty worktree and a run outside the plan's worktree. It also refuses a stale base it
+  cannot fast-forward: one with commits of its own, or one whose checkout has uncommitted changes.
+  That base is the user's to update; ask them, then rerun.
 - **Conflicts:** the merge pauses with both sides in place. Resolve each conflict by what both sides
   meant — read the base change and the branch change, never discard work and never pick a side
   blindly. Stage the resolution, run the repository's checks, then run the same command with its
@@ -152,7 +156,8 @@ of it. The human's review is the independent check; this step makes sure they re
   the gate output if the gate has finished, never an account of the work. It applies the same rubric as `/plan-execute`'s
   Validation Loop: every acceptance criterion against the code and test evidence (a checked task is a
   claim, not evidence), tests that assert observable outcomes for new behavior, docs of record that
-  match the code, `## Not tested` entries an agent could run instead, each gate failure, and the
+  match the code, `## Not tested` entries whose `Needs a person:` or `Blocked:` reason does not
+  hold and cleared entries without evidence, each gate failure, and the
   constraints of every loaded paired skill where the diff falls under them. Its three convention
   checks, Flow and cohesion, Data and state, and Comments and abstractions, apply to changed and
   directly affected code: a comment the diff adds that only restates the code is a fix, harmless
@@ -196,7 +201,7 @@ findings; earlier findings may stay for readable history.
 ### Verification
 - `npm run check` passed at <short commit>
 - Base failure: `<check>` fails on the base branch too
-- Manual: the setup dialog enables every component (confirmed by the user)
+- Manual: the setup dialog's wording reads clearly to a new user (confirmed by the user)
 
 ### Result
 - Status: pending
@@ -230,6 +235,13 @@ For each finding fixed here:
    review changed.
 3. Check the finding off with its commit: `- [x] Missing retry test — fixed in review (<short commit>)`.
 
+A `## Not tested` entry whose reason does not hold is a **fix**: run the check here and clear the
+entry with its evidence, `— Verified by agent <date> at <commit>: <command or method> → <result>`.
+A check that runs and fails is a finding to fix, not an entry. Retry each `Blocked:` entry once,
+since this session may run with different permissions; clear it when the check passes, and leave it
+open with its reason when the tool still refuses. Never check off a person-only entry on your own
+judgment.
+
 After code fixes, run another Validator pass over the result, as in step 3. Stop when a pass reports
 no **fix** findings, or after eight passes. The cap limits passes only: the eighth pass's findings are
 fixed like any other pass's, then the review continues without another pass. Record under
@@ -261,7 +273,10 @@ The first layer, always shown:
 - base failures, named as such, and issues outside this plan, each proposed as separate work when it
   is worth doing;
 - when the Validator reached its cap, the last pass's fixes, which were not revalidated;
-- the manual checks that need the human, from `## Not tested`;
+- the checks only the human can make: each open person-only `## Not tested` entry with its steps,
+  the expected result, and the reason an agent could not make it;
+- the commands to allow: each `Blocked:` entry as the exact command a tool refused, and its error.
+  A check an agent ran is evidence under its criterion, never a request to the human;
 - each escalated finding as a decision: the options, their consequences, and a recommendation.
 
 The second layer is offered in one line and given when the human asks. The plan's `## Review`
@@ -282,7 +297,9 @@ question. An agent cannot approve, and passing tests are not approval.
 
 #### 6a. The human approves
 
-Approval needs every finding resolved and every required manual check confirmed by the human.
+Approval needs every finding resolved and every `## Not tested` entry settled: person-only checks
+confirmed by the human, blocked ones run once allowed. Check a person-only entry off only from the
+human's explicit answer, quoting it: `— Confirmed by the user <date>: "<what they reported>"`.
 
 ```md
 ### Approval
@@ -301,7 +318,8 @@ Approval needs every finding resolved and every required manual check confirmed 
 3. Before landing, run `roborepo plans merge-readiness <plan> --json` after recording approval.
    Require a clean worktree and committed fresh Result/Approval against the current reviewed base.
    Report actionable failures and the assessed tips; a pass does not authorize a merge.
-   Tell the user to open and merge the pull request themselves, then run `/plan-close`. If the base
+   Tell the user to merge the pull request `/plan-execute` opened (or to open one, when none
+   exists) themselves, then run `/plan-close`. If the base
    branch moves before that merge, the user reruns `/plan-review`; `/plan-close` never
    synchronizes, and it refuses a stale approval.
 
