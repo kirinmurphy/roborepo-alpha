@@ -175,8 +175,14 @@ async function refreshBase(worktree, base) {
     const files = git(holder, ["read-tree", "-u", "-m", from, to]);
     if (!files.ok) {
       // Put the ref back so the checkout and its branch agree again.
-      git(worktree, ["update-ref", "-m", "sync-base: undo fast-forward", `refs/heads/${base}`, from, to]);
-      throw domainError("MOVE_FAILED", `Updating the files in ${holder} failed, so ${base} was left at ${from}.`, { details: [files.stderr] });
+      const undone = git(worktree, ["update-ref", "-m", "sync-base: undo fast-forward", `refs/heads/${base}`, from, to]);
+      if (!undone.ok) {
+        throw domainError("MOVE_FAILED", `Updating the files in ${holder} failed, and ${base} could not be put back: it is at ${to} while the checkout's files are still at ${from}.`, {
+          resolution: `Ask the user to run \`git -C ${holder} reset --keep ${from}\` (or check out ${base} again) so the branch and its files agree.`,
+          details: [files.stderr, undone.stderr],
+        });
+      }
+      throw domainError("MOVE_FAILED", `Updating the files in ${holder} failed, so ${base} was put back at ${from}.`, { details: [files.stderr] });
     }
   } else {
     moveRef(worktree, base, to, from, upstream.name);
