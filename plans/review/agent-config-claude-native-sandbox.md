@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Confirm the four desktop-app checks under Not tested, then approve 92f2b41f in /plan-review.
+next_action: Confirm the recorded desktop-app check results under Not tested and approve d9743e02 in /plan-review.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -583,18 +583,23 @@ Acceptance criteria:
       checkout file asks, and `rm` of a temp-folder file runs without a prompt. The hook decisions
       are asserted by `protected-branch-push-check.mjs`, and the desktop prompt path was observed
       with the push guard; this combination needs the installed hook and a person watching.
+      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); awaiting the user's confirmation: the `rm` on `main` asked, the temp-folder `rm` did not.
 - [ ] In a manual-mode desktop-app session in a feature-branch checkout or worktree, `rm` on a
       file in the checkout runs without a prompt. Needs a person watching for prompts after the
       merged settings are applied. A home-folder delete refused by the sandbox is the enforcement
       runner's home-write control and the 2026-11-13 desktop-app check.
+      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); awaiting the user's confirmation: no prompt.
 - [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks. Same reason. That
       `git switch main` stays denied is the rendered `occupy-main` deny rule, which
       `claude-sandbox-projection-check.mjs` asserts, applied to a command that now runs outside the
       sandbox under the ordinary rules.
+      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); awaiting the user's confirmation: `git switch feature` asked.
 - [ ] In a manual-mode desktop-app session, `roborepo plans show`, `roborepo plans save` of an
       edited copy in a temp folder, and `roborepo plans sync-base` run without a prompt and report
       `"synchronized": true` where they print it. Same reason; a bare `roborepo plans show 9njvfh5z
       --json` from this plan's worktree reported `"synchronized": true` on 2026-11-14.
+      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); awaiting the user's confirmation: `plans show` and `plans sync-base` ran with no prompt (`"synchronized": true`, up to
+      date). `plans save` was not run.
 - [x] After merge, `roborepo update` on this machine writes the `sandbox` key into
       `~/.claude/settings.json`, `roborepo doctor` passes, and a new session's shell commands run
       without prompts. Needs the merged code applied to the live home, which this branch must not do
@@ -966,11 +971,19 @@ Acceptance criteria:
   `agent-permission-defaults-check`, `docs-reference-check`, `orphan-test-check`,
   `codex-command-permission-check`, `render-agent-permissions.mjs --check`), the pre-push doctor
   passed (99 checks), and GitHub CI on PR 66 passed at 92f2b41f (macOS, Ubuntu, Windows installer)
+- `main` moved again (PRs 73 to 75); the user merged it at d9743e02 with no hand edits and no change
+  to this plan's files. The plan's checks passed there (the eight listed above plus
+  `protected-branch-push-check`, `render-agent-permissions.mjs --check`, and byte-identical hook
+  copies), and GitHub CI on PR 66 passed at d9743e02 (macOS, Ubuntu, Windows installer)
+- A first desktop-app check session (2026-11-18) ran `rm` on `main` without a prompt; it had started
+  before the branch settings were written. A fresh session then ran all checks as recorded under
+  `## Not tested`
+
 ### Result
 
-- Status: pending — the four open `## Not tested` desktop-app checks need the user
-- Reviewed implementation commit: 92f2b41fe07dc748a847c78550d0792b303cb0da
-- Base commit: 7f4ee1e5a3f5a24cf48025bc76433ed5444b261e
+- Status: pending — the user has not yet confirmed the recorded desktop-app check results
+- Reviewed implementation commit: d9743e02d4ed15ca411de405b9ad9c0d63225247
+- Base commit: cbd8fbdd53b705f19ddc7650373f163e22173996
 
 ## Open questions
 
