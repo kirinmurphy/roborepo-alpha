@@ -241,6 +241,16 @@ result. Only the feature branch is pushed, never the base branch, and never with
 is refused, the plan's lifecycle still stands and the report gives you the command to push it
 yourself.
 
+When `/plan-execute` moves a plan to `review/`, or fixes findings a review sent back, it hands the
+branch off without asking: it merges the base branch, freshly fetched, into the feature branch with
+`roborepo plans sync-base`, resolves conflicts within the plan's scope and reruns the checks the
+merge touched, pushes, and opens or updates the pull request with a written description. The
+report gives the pull request link, whether it merges cleanly, and CI's result so far. The merge
+only ever goes from the base into the plan's branch; merging the pull request stays yours. A
+conflict that needs a decision outside the plan, or a base it cannot fast-forward, is reported
+under Needs you. When the fetch fails, the merge uses the last fetched copy of the base, and the
+report's Base line says so.
+
 Worktrees go where you confirmed in `/plan-suite-init`. In Claude, each run also asks once for access to the worktree folder, then works inside it, so edits
 there do not prompt one file at a time.
 

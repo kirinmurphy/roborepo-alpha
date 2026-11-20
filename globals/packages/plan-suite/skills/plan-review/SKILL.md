@@ -114,12 +114,16 @@ Run `roborepo plans preflight <plan> --json`.
 
 ### 2. Synchronize the base branch into the feature branch
 
-From the plan's worktree, run the repository's canonical base synchronization command. It merges the
-base branch into the feature branch, and does nothing when there is nothing new, so every review
-round runs it.
+From the plan's worktree, run the repository's canonical base synchronization command,
+`roborepo plans sync-base --base <base> --json`. It fetches the base branch's upstream, fast-forwards a stale
+local base, and merges the base into the feature branch, or does nothing when there is nothing new,
+so every review round runs it. `/plan-execute` runs the same command when it hands the plan off, so
+this step merges only what the base gained since then. Invoking `/plan-review` authorizes this
+merge into the plan's own feature branch, as it does for `/plan-execute`.
 
-- It refuses a dirty worktree, a run outside the plan's worktree, and a local base branch that is
-  behind its upstream. A stale base is the user's to update; ask them, then rerun.
+- It refuses a dirty worktree and a run outside the plan's worktree. It also refuses a stale base it
+  cannot fast-forward: one with commits of its own, or one whose checkout has uncommitted changes.
+  That base is the user's to update; ask them, then rerun.
 - **Conflicts:** the merge pauses with both sides in place. Resolve each conflict by what both sides
   meant — read the base change and the branch change, never discard work and never pick a side
   blindly. Stage the resolution, run the repository's checks, then run the same command with its
@@ -314,7 +318,8 @@ human's explicit answer, quoting it: `— Confirmed by the user <date>: "<what t
 3. Before landing, run `roborepo plans merge-readiness <plan> --json` after recording approval.
    Require a clean worktree and committed fresh Result/Approval against the current reviewed base.
    Report actionable failures and the assessed tips; a pass does not authorize a merge.
-   Tell the user to open and merge the pull request themselves, then run `/plan-close`. If the base
+   Tell the user to merge the pull request `/plan-execute` opened (or to open one, when none
+   exists) themselves, then run `/plan-close`. If the base
    branch moves before that merge, the user reruns `/plan-review`; `/plan-close` never
    synchronizes, and it refuses a stale approval.
 

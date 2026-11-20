@@ -103,10 +103,13 @@ resume, or `/plan-review`.
 | Check the dark theme on the Plans page | Judging contrast needs a person | Open `/plans`, switch theme; text stays readable |
 | Allow the portal browser check | The sandbox refused the dev server's port | `roborepo browser run --serve "npm run portal"` |
 | Push the branch | The automatic push was refused; CI has not run | `git push -u origin <branch>` |
+| Merge main into the branch | `src/app.ts` conflicts on a choice outside the plan | `roborepo plans sync-base`, then resolve |
 | Run `/plan-review` | A person reviews and approves the work | `/plan-review` |
 
 Include the push row only when the feature-branch push failed or was skipped; say whether the
-session's permissions, a hook, or the remote refused it.
+session's permissions, a hook, or the remote refused it. Include a merge row only when the handoff's
+base merge refused or left a conflict outside the plan's scope, and a pull request row only when
+opening or updating it did not run.
 
 ## Record
 
@@ -118,6 +121,8 @@ Implementation result
 - Lifecycle: stays active | moved to review | stays review
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)
+- Base: merged <base> at <commit> | already up to date | not merged (<why>); compared with a fresh fetch | the last fetched copy (fetch failed) | a local branch
+- Pull request: <URL>, mergeable | conflicts | unknown; CI passed | failed | running | none (<why>)
 - Details: Decision Log, findings, and Not tested entries are in the plan document; ask here for any detail
 - Server: <URL> running from the worktree | isolated state at <URL> (<why>) | none (<why>)
 ```

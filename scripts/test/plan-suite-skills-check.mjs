@@ -50,7 +50,7 @@ const SKILLS = {
       "create a second implementation plan",
       "change lifecycle state, except the start transition",
       "perform `/plan-review`'s human review, or record approval",
-      "perform closeout or merge orchestration",
+      "perform closeout, or merge the feature branch or its pull request into the base",
       "invoke another plan command",
     ],
     // The root is confirmed once by /plan-suite-init; this skill only reads the result.
@@ -194,12 +194,41 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "`roborepo plans submit <plan> --json`",
   ]);
   // Every run that commits to the feature branch pushes it, not only the review handoff.
-  includesAll("plan-execute push", skill, [
+  const handoffReference = normalize(readPackageFile("plan-suite/skills/plan-execute/references/handoff.md"));
+  includesAll("plan-execute push", `${skill}\n${handoffReference}`, [
     "Every run that commits to the feature branch ends by pushing it",
     "when the plan stays in `active/`",
     "never the base branch or any other protected branch",
     "Never force-push",
   ]);
+  // The handoff merges the base in without asking, so a pull request never arrives with conflicts,
+  // and never merges the other way.
+  const handoff = handoffReference.slice(handoffReference.indexOf("## Hand off"));
+  includesAll("plan-execute handoff authorization", skill, [
+    "Invoking `/plan-execute` authorizes this merge of the base into the plan's own feature branch",
+    "Merging the feature branch into the base stays forbidden",
+    "[references/handoff.md](references/handoff.md)",
+  ]);
+  includesAll("plan-execute handoff", handoff, [
+    "After the submit transition, and after Review Findings commits its fixes",
+    "`roborepo plans sync-base --base <base> --json`",
+    "authorizes this merge of the base into the plan's own feature branch",
+    "Merging the feature branch into the base stays forbidden",
+    "Regenerate a generated file from its sources",
+    "`roborepo plans sync-base --continue --base <base> --json`",
+    "An existing open pull request whose base is not `<base>` is not edited or readied",
+    "`git ls-remote <remote> refs/heads/<branch>` prints `HEAD`'s commit",
+    "its checks apply to the commit GitHub has, not to the local work",
+    "report the conflicting paths and the choice under Needs you",
+    "run the checks for the files it touched",
+    "`roborepo delivery pr-body <file>`",
+    "Never merge it, enable auto-merge, or approve it",
+    "whether it merges cleanly, and CI's result so far",
+  ]);
+  const ordered = ["1. **Merge the base in.**", "4. **Recheck what the merge changed.**", "5. **Push**", "6. **Open or update the pull request**", "7. **Report its state:**"].map((step) => handoff.indexOf(step));
+  assert.ok(ordered.every((at, i) => at > 0 && (i === 0 || at > ordered[i - 1])), "plan-execute: merge, recheck, push, then the pull request and its state");
+  assert.ok(completion.includes("Then hand off the feature branch"), "plan-execute: submit hands the branch off");
+  assert.ok(skill.slice(order[5]).includes("Hand off the feature branch (see Push and hand off the feature branch)"), "plan-execute: review-findings fixes hand the branch off");
   assert.ok(skill.slice(order[5]).includes("then run the Validation Loop over the result"), "plan-execute: fixes made in review mode are validated too");
   includesAll("plan-execute review findings", skill.slice(order[5]), [
     "nothing else is in scope",
@@ -352,6 +381,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "`roborepo plans preflight <plan> --json`",
     "`roborepo plans submit <plan> --json`",
     "canonical base synchronization command",
+    "fast-forwards a stale local base",
+    "`/plan-execute` runs the same command when it hands the plan off",
     "never discard work and never pick a side blindly",
     "Never merge the feature branch into the base branch",
     "Do not fix anything while checking. Record every finding first",
