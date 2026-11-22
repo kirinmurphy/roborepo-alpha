@@ -17,7 +17,7 @@ import { hookRecordsFromFile, mergeRootConfigHooks, unmergeRootConfigHooks } fro
 import { resolveHarnessPath } from "../paths.mjs";
 import { mergeHooksMap } from "../hooks-merge.mjs";
 import { mergeClaudeSettings, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
-import { renderClaudeSettings, resolveBehaviors } from "../permissions-render.mjs";
+import { claudeManagedRules, renderClaudeSettings, resolveBehaviors } from "../permissions-render.mjs";
 import { claudeSandboxSettings } from "./sandbox-settings.mjs";
 import { mcpRemove, mcpAddServer, mcpRemoveServer, mcpList } from "./mcp.mjs";
 import { hooksWriteRemove } from "./hooks-withdraw.mjs";
@@ -136,6 +136,9 @@ export const claudeProvider = defineHarnessProvider({
     // the generated build render a deterministic home while live config renders keep using os.homedir().
     permissions: {
       render: (current, manifest, overrides, _target, options = {}) => renderClaudeRootConfig(current, manifest, overrides, options),
+      // Optional: the rules RoboRepo owns in the rendered `permissions` lists, so doctor can tell a
+      // stale managed rule from one the user added (scripts/cli/install-drift.mjs).
+      managedRules: (manifest, overrides) => claudeManagedRules(manifest, overrides),
     },
   },
 });
