@@ -52,12 +52,15 @@ function expectBehind(label, summary, detail) {
 }
 
 try {
-  // A home as `roborepo update` leaves it: the settings the live permission render writes, and the
-  // push hook copied from its source.
-  fs.mkdirSync(path.join(claude, "hooks"), { recursive: true });
+  // A home as `roborepo update` leaves it with the optional hooks bundle selected: the settings the
+  // live permission render writes, and the hook and git hook files copied from their sources.
+  const presetsState = path.join(root, "state", "presets", "state.json");
+  fs.mkdirSync(path.dirname(presetsState), { recursive: true });
+  fs.writeFileSync(presetsState, JSON.stringify({ selected: ["hooks"] }));
+  fs.cpSync(path.join(repoRoot, "globals", "system", "hooks", "claude"), path.join(claude, "hooks"), { recursive: true });
+  fs.cpSync(path.join(repoRoot, "globals", "system", "git-hooks"), path.join(claude, "git-hooks"), { recursive: true });
   fs.writeFileSync(path.join(claude, "MANAGED_BY_ROBOREPO.md"), "managed\n");
   fs.writeFileSync(settingsPath, "{}\n");
-  fs.copyFileSync(path.join(repoRoot, "globals", "system", "hooks", "claude", "protected-branch-push.mjs"), pushHook);
   const rendered = spawnSync(process.execPath, ["--input-type=module", "-e", `
     import fs from "node:fs";
     import os from "node:os";
@@ -119,6 +122,34 @@ try {
   fs.mkdirSync(path.dirname(stateFile), { recursive: true });
   fs.writeFileSync(stateFile, JSON.stringify({ [pushHook]: "0".repeat(64) }));
   expectBehind("a hand-edited managed hook file", "1 hook file", /was edited by hand .* update keeps your copy/);
+
+  // With the hooks bundle off, update neither installs nor refreshes hook files, so none count.
+  fs.writeFileSync(presetsState, JSON.stringify({ selected: [] }));
+  expectCurrent("a stale hook file whose bundle is off");
+  fs.writeFileSync(presetsState, JSON.stringify({ selected: ["hooks"] }));
+  fs.rmSync(stateFile);
+
+  // A hook file of a selected bundle that is not installed at all is one update would add.
+  fs.rmSync(pushHook);
+  expectBehind(
+    "a missing managed hook file",
+    "1 hook file",
+    /^ {2}~\/\.claude\/hooks\/protected-branch-push\.mjs is not installed \(from globals\/system\/hooks\/claude\/protected-branch-push\.mjs\)$/,
+  );
+  fs.copyFileSync(path.join(repoRoot, "globals", "system", "hooks", "claude", "protected-branch-push.mjs"), pushHook);
+  expectCurrent("the hook file restored");
+
+  // A settings file update would create is reported, not written.
+  fs.rmSync(settingsPath);
+  expectBehind("a missing settings file", "1 missing config file", /^ {2}~\/\.claude\/settings\.json is not installed$/);
+  assert.ok(!fs.existsSync(settingsPath), "the check does not create the settings file");
+
+  // A check that cannot read the home exits 2, never the 1 that means a difference.
+  fs.mkdirSync(settingsPath);
+  const broken = run();
+  assert.equal(broken.status, 2, broken.stdout + broken.stderr);
+  fs.rmSync(settingsPath, { recursive: true });
+  writeSettings(current);
 
   // With no RoboRepo install in the home there is nothing to compare.
   fs.rmSync(path.join(claude, "MANAGED_BY_ROBOREPO.md"));

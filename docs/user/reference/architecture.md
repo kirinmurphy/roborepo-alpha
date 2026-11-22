@@ -169,7 +169,9 @@ checks that source dirs exist in the repo.
 `roborepo doctor` also warns when the installed harness config is behind what `roborepo update` would
 install: permission rules, sandbox and hook settings RoboRepo renders into a harness's settings, and
 hook and other files it copies there. Only what RoboRepo owns is compared, so rules and files you
-added never count. Codex's `config.toml` permission block is not compared, because update widens
+added never count. The exception is a file RoboRepo owns whole, such as Gemini's
+`generated-permissions.toml`: any edit to it counts, and update overwrites it. Other files beside it
+are not compared. Codex's `config.toml` permission block is not compared, because update widens
 its sandbox for the folder it runs from.
 
 ### Project skills
