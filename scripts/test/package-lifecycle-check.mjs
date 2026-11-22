@@ -46,7 +46,9 @@ function writeOwnedCommand(home, harness, name, packageId) {
   return target;
 }
 
-const packageIds = loadPackageCatalog().map((pkg) => pkg.id);
+// A dependency-only package (`selectable: false`) cannot be enabled on its own; it is applied and
+// removed through the packages that require it, which this loop covers.
+const packageIds = loadPackageCatalog().filter((pkg) => pkg.selectable).map((pkg) => pkg.id);
 assert.ok(packageIds.length > 0, "expected at least one package in the catalog");
 
 for (const pkgId of packageIds) {

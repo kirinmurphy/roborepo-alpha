@@ -59,11 +59,15 @@ const sections = new Map(snapshot.behaviorView.map((section) => [section.categor
 // catches is a future reintroduction of per-category wiring anywhere between manifest and view.
 //
 // Categories with no packages are skipped: buildBehaviorView filters empty sections deliberately,
-// so an unused category is absent by design, not by failure.
+// so an unused category is absent by design, not by failure. A dependency-only or hidden package
+// has no row, so it does not populate a category on its own.
 const categories = JSON.parse(
   fs.readFileSync(path.join(moduleDir, "../../manifests/inventory/package-categories.json"), "utf8"),
 ).categories;
-const populated = new Set(catalog.map((pkg) => pkg.presentation?.category).filter(Boolean));
+const populated = new Set(catalog
+  .filter((pkg) => (pkg.presentation?.visibility || "catalog") === "catalog")
+  .map((pkg) => pkg.presentation?.category)
+  .filter(Boolean));
 for (const category of categories) {
   if (!populated.has(category.id)) continue;
   assert(

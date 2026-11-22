@@ -21,16 +21,18 @@ including applicable references. Read again only if the source changed, the task
 needed guidance is no longer available in context. A pairing does not invoke the paired skill's
 whole workflow or recursively load its dependencies; apply each trigger to the actual work.
 
-| Skill | Load when | Contributes |
-| --- | --- | --- |
-| `code-style` | The document specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints the guidance must respect |
-| `javascript-typescript` | The document prescribes JS/TS implementation choices — ESM, exports, types, framework-less DOM structure; not merely a JS/TS path | Language and markup conventions the guidance must not contradict |
-| `test-harness` | The document proposes tests, verification commands, or a regression strategy; not recording existing test results | Test selection and observable-behavior assertions |
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `code-style` | recommends | The document specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints the guidance must respect |
+| `javascript-typescript` | recommends | The document prescribes JS/TS implementation choices — ESM, exports, types, framework-less DOM structure; not merely a JS/TS path | Language and markup conventions the guidance must not contradict |
+| `test-harness` | recommends | The document proposes tests, verification commands, or a regression strategy; not recording existing test results | Test selection and observable-behavior assertions |
 
 This skill is agnostic to document-specific workflows. Apply content, structure, and ownership
 constraints supplied by the caller or repository without choosing or invoking a workflow based
 on the document's kind or location. Report skills actually used, including reused guidance,
-and applicable skills skipped or unavailable; non-applicable rows need no inventory.
+and applicable skills skipped or unavailable; non-applicable rows need no inventory. A row whose
+skill the session does not list is skipped and named once in the report; never ask the user to
+enable a package.
 
 This skill covers prose quality and the content constraints of applicable paired skills.
 

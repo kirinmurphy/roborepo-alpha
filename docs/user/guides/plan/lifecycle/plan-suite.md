@@ -208,8 +208,9 @@ end with every open question in one batch.
 
 When the work is finished it runs a validation loop. A validator with fresh context, a separate
 agent where the harness has one, reads the plan, the full diff, and the check results, never the
-implementing agent's account of the work, and reports findings. It never edits anything. Each
-finding gets one of three classes, by consequence rather than size:
+implementing agent's account of the work, and reports findings against the `implementation-review`
+rubric. It never edits anything. Each finding has a severity (`blocking`, `actionable`, or `note`;
+a `note` never holds up the loop) and one of three classes, by consequence rather than size:
 
 | Class | When | What happens |
 | --- | --- | --- |
@@ -217,8 +218,8 @@ finding gets one of three classes, by consequence rather than size:
 | `escalate` | The fix chooses between real alternatives, each with a compelling argument for it, changes requirements or an unspecified contract, or lands outside the plan | It becomes an open question in the run's final batch |
 | `base` | The base branch fails the same check | It is recorded as verification, and blocks nothing |
 
-The run never asks before fixing a `fix` finding. The loop repeats until a pass finds nothing to
-fix, for at most eight passes. The cap limits passes only: the last pass's findings are fixed like
+The run never asks before fixing a `fix` finding. The loop repeats until a pass finds no `blocking`
+or `actionable` finding to fix, for at most eight passes. The cap limits passes only: the last pass's findings are fixed like
 any other's, and the run records that those fixes were not revalidated. The findings and the passes are recorded in the plan's `## Review` section. Then it runs the completion preflight
 (`roborepo plans preflight`), which checks that:
 
@@ -401,9 +402,10 @@ Archiving never removes a worktree or branch; unmerged code stays where it is.
 
 ## `/session-close`
 
-Ends a chat: reviews the code the session changed, syncs docs and any plan the session touched,
-commits the session's work, and writes a handoff note for the next chat. It runs only when you ask,
-and never moves a plan.
+Ends a chat: reviews the code the session changed with `implementation-review`, syncs docs and any
+plan the session touched, commits the session's work, and writes a handoff note for the next chat.
+Review findings it cannot fix become items in the handoff. It runs only when you ask, and never
+moves a plan.
 
 ## Not Tested
 
@@ -446,9 +448,20 @@ unchecked.
 
 ## Paired Skills
 
-Suite commands load helper skills such as `technical-writing`, `code-style`, and `test-harness`.
-Each is its own optional package. When one a command needs is disabled, the command asks whether to
-enable it or skip it for that run, and names any skipped skill in its report.
+Suite commands load helper skills, each from its own package. The suite declares which ones it needs:
+
+| Package | Relationship | What it means for you |
+| --- | --- | --- |
+| `technical-writing`, `test-harness`, `implementation-review` | Required | Enabling `plan-suite` turns them on, and they stay on while it is on |
+| `code-style`, `javascript-typescript`, `feature-verification` | Recommended | Offered once when you enable `plan-suite`; never turned on for you |
+
+`implementation-review` holds the review rubric that `/plan-execute`, `/plan-review`, `/plan-close`,
+and `/session-close` share. It has no toggle or command of its own: the Agents page lists it under
+**Requires** when you open the Development Planning Lifecycle or `/session-close` card.
+
+A command loads a recommended skill when the work calls for it and it is on. When it is off, the
+command continues without it and names the skip once in its report ("Skipped
+`feature-verification`: not enabled"). No command asks you to enable a package while it runs.
 
 ## Open The Plans Page
 

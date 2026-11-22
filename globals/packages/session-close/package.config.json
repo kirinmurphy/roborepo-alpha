@@ -8,6 +8,13 @@
     "category": "skills-dev-lifecycle",
     "order": 50
   },
+  "requires": [
+    "implementation-review"
+  ],
+  "recommends": [
+    "test-harness",
+    "plan-suite"
+  ],
   "resources": [
     {
       "type": "skill",

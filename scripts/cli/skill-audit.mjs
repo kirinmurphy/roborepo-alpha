@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "./paths.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
+import { packageBoundaryFindings, pairedSkillRows } from "./skill-package-boundaries.mjs";
 
 const AUDIT_REL = "docs/internal/skill-invocation-audit.md";
 const AUDIT_PATH = path.join(repoRoot, AUDIT_REL);
@@ -124,13 +125,10 @@ function pairedSkillShape(skill, knownSkillNames = []) {
     out.push("Paired Skills table does not instruct the load");
   }
 
-  const rows = body.split("\n").filter((line) => /^\|/.test(line) && !/^\|\s*-+/.test(line)).slice(1);
   const vague = [];
   const requestGated = [];
-  for (const row of rows) {
-    const cells = row.split("|").map((cell) => cell.trim());
-    const [, name, when = ""] = cells;
-    if (!name || !when) continue;
+  for (const { skill: name, when } of pairedSkillRows(skill.body) || []) {
+    if (!when) continue;
     if (VAGUE_TRIGGERS.test(when)) vague.push(name);
     if (/\bthe user (asks|requests|requested|names)\b/i.test(when)) requestGated.push(name);
   }
@@ -202,6 +200,19 @@ function recommendation(policy, skillFindings) {
   return "Keep auto if trigger remains narrow.";
 }
 
+// Skills grouped by package, as packageBoundaryFindings reads them.
+function packageSkillGroups(skills) {
+  const byName = new Map(skills.map((skill) => [skill.name, skill]));
+  return loadPackageCatalog({ includeUnavailable: true }).map((pkg) => ({
+    id: pkg.id,
+    requires: pkg.requires || [],
+    recommends: pkg.recommends || [],
+    skills: (pkg.resources || [])
+      .filter((resource) => resource.type === "skill" && byName.has(resource.id))
+      .map((resource) => ({ name: resource.id, body: byName.get(resource.id).body })),
+  }));
+}
+
 function escapeCell(value) {
   return String(value ?? "").replaceAll("|", "\\|").replace(/\s+/g, " ").trim();
 }
@@ -225,6 +236,7 @@ export function renderSkillAudit() {
     };
   });
 
+  const boundaryWarnings = packageBoundaryFindings(packageSkillGroups(skills));
   const unknownPolicies = [...policies.keys()].filter((name) => !skills.some((skill) => skill.name === name));
   const dynamicCount = rows.filter((row) => row.findings !== "none").length;
 
@@ -271,6 +283,13 @@ export function renderSkillAudit() {
     "- mode/reference matrices that no longer parse",
     "- paired skills mentioned in prose but never declared, or declared without instructing the load",
     "- paired-skill triggers that are unresolvable (\"when relevant\") or gated on a user request",
+    "- package-boundary warnings: an unconditional cross-package load neither package requires, two packages that each unconditionally hand off to the other, a multi-skill package whose skills never reference each other, and manifests that disagree with Paired Skills tables",
+    "",
+    "## Package Boundary Warnings",
+    "",
+    "Warnings only. Each compares package manifests (`requires`, `recommends`) with the skills' `## Paired Skills` tables.",
+    "",
+    ...(boundaryWarnings.length ? boundaryWarnings.map((warning) => `- ${warning}`) : ["None."]),
     "",
     "## Next Actions",
     "",
@@ -285,6 +304,9 @@ export function skillAudit(args = []) {
   const checkOnly = args.includes("--check");
   const write = args.includes("--write") || !checkOnly;
   const content = renderSkillAudit();
+  const warnings = content.split("## Package Boundary Warnings")[1].split("\n## ")[0]
+    .split("\n").filter((line) => line.startsWith("- "));
+  for (const warning of warnings) console.warn(`warn: ${warning.slice(2)}`);
   const current = fs.existsSync(AUDIT_PATH) ? fs.readFileSync(AUDIT_PATH, "utf8").replace(/\r\n/g, "\n") : "";
 
   if (checkOnly) {

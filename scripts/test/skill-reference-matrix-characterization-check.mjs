@@ -38,6 +38,7 @@ testTechnicalWritingHasNoPlanDependencies();
 testPlanWriteNamesConditionalPairedSkillsAndTheirTriggers();
 testBothSkillsInstructPairedLoadingWithoutBeingAsked();
 testEveryReferencedFileExists();
+testNoSkillAsksToEnableAPackage();
 console.log("ok: skill reference matrix characterization passed");
 
 // --- matrix parsing ---------------------------------------------------------------------------
@@ -308,5 +309,26 @@ function testEveryReferencedFileExists() {
         assert.ok(fs.existsSync(full), `${skill} \`${mode}\` requires ${reference}, which does not exist`);
       }
     }
+  }
+}
+
+// Recommendations are offered once, when their parent package is enabled. At run time a skill skips
+// an unavailable recommendation and names the skip; it never asks the user to enable a package.
+function testNoSkillAsksToEnableAPackage() {
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".md") && full.includes(`${path.sep}skills${path.sep}`)) files.push(full);
+    }
+  };
+  walk(path.join(repoRoot, "globals/packages"));
+  assert.ok(files.length > 10, `expected the package skills and references, found ${files.length}`);
+  const prompt = /enable it,? or skip it|is not enabled\. enable|asks? the user to enable|host's skill\/package manager/i;
+  for (const file of files) {
+    const text = fs.readFileSync(file, "utf8").replace(/\s+/g, " ").replace(/never ask the user (?:mid-run )?to enable a package/gi, "");
+    const hit = prompt.exec(text);
+    assert.ok(!hit, `${path.relative(repoRoot, file)} asks the user to enable or skip a package: "${hit?.[0]}"`);
   }
 }

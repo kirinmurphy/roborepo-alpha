@@ -69,15 +69,16 @@ Examples:
   `plan-suite-init` is the one-time repo setup that `plan-write` runs first when
   `plans-config.json` is missing or has no `namespaces` key.
   `plan-execute` ends in a validation loop (`references/validation-loop.md`): a
-  fresh-context validator applies a rubric and classifies findings `fix`,
-  `escalate`, or `base`, and the run fixes `fix` findings until a pass is clean.
-  Besides acceptance criteria, tests, and docs, the rubric checks changed code
-  for flow and cohesion, data and state, and comments and abstractions; length
-  alone is never a finding.
-  `plan-review` applies the same rubric once more after syncing base, fixes in
-  the same session, and records human approval. The rubric is written to move
-  into a shared `implementation-review` skill once packages can declare
-  required skill dependencies.
+  fresh-context validator applies the `implementation-review` rubric, rating
+  each finding `blocking`, `actionable`, or `note` and classing it `fix`,
+  `escalate`, or `base`, and the run fixes `fix` findings until a pass has no
+  `blocking` or `actionable` one. Besides acceptance criteria, tests, and docs,
+  the rubric checks changed code for flow and cohesion, data and state, and
+  comments and abstractions, plus risk checkpoints; length alone is never a
+  finding. `plan-review` applies the same rubric once more after syncing base,
+  fixes in the same session, and records human approval; `plan-close` and
+  `session-close` use it too. `implementation-review` is a dependency-only
+  package that `plan-suite` and `session-close` require.
   Deterministic plan rules live in `roborepo plans validate`, the lifecycle
   transitions (`roborepo plans promote|start|submit|reopen|close|archive`),
   `roborepo plans init|show|save|approve|config namespaces`, and

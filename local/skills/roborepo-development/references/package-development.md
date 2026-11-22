@@ -67,6 +67,31 @@ which hands off to `/plan-review`, and so on. Code Conventions answers "yes, but
 together": `code-style` is useful without `react`. A package is all-or-nothing; there is no switch
 for one skill inside it, so skills that need their own switches belong in a collection.
 
+### Declaring a relationship between skills in different packages
+
+A skill that names a skill in another package gets one of three treatments, decided by one policy:
+
+| Relationship | Use when | Package behavior | Skill behavior |
+| --- | --- | --- | --- |
+| `requires` | The parent cannot meet its contract without the other package | Active whenever the parent is; cannot be turned off while the parent is on | Loaded whenever the parent's step needs it, without checking state |
+| `recommends` | The other skill improves the work, but the parent is correct without it | Offered once when the parent is enabled; never auto-enabled | Loaded when its `Load when` condition matches and the session lists it; otherwise skipped and named once in the final report |
+| prose-only reference | A fallback, an alternative, a boundary statement ("X does this instead"), or an inverse link | None | Stays in prose, never in a `## Paired Skills` row |
+
+The manifest says which packages are related; the skill's `## Paired Skills` table says when each
+applies. Task predicates ("when the plan touches JS/TS") stay in the table's `Load when` column and
+never go in the manifest. Each row names the skill and its `Relationship` (`requires` or
+`recommends`), which must match the parent package's manifest. A relationship is per package: in a
+multi-skill package such as `plan-suite`, the skills' needs combine in one manifest, and a package
+one skill requires is required by the package. References between skills in the same package are
+not relationships.
+
+`roborepo skill audit` warns (never errors) when the two disagree, or when the shape looks wrong: an
+unconditional cross-package load (a row whose `Load when` starts with "Always", or a prose
+instruction to load a skill the table does not declare) that neither package requires; two packages
+that each unconditionally hand off to the other; a multi-skill package whose skills never reference
+each other. A reference deliberately kept in prose goes in `PROSE_ONLY_REFERENCES`
+(`scripts/cli/skill-package-boundaries.mjs`).
+
 On the Agents page, a package with two or more skills shows its package label (never one of its
 commands) and an `<n> skills` badge. Clicking the label opens a contents view in the source dialog
 listing each skill, then its rules or hooks, with each entry's own cost; each entry opens the same
@@ -92,7 +117,7 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (including `token-optimization`, `monitoring`, `skills-dev-lifecycle`, `skills-writing`, `skills-code-quality`, `code-conventions`, `chat-time-output`, `additional-agents-md-rules`, and `integrations`) |
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; they join the effective set automatically. Cycle-checked, missing-id-checked, no self-reference |
-| `recommends` | no | array of package IDs; offered after an enable, never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
+| `recommends` | no | array of package IDs; offered once when the parent is enabled (portal and interactive CLI ask, scripts and the setup wizard print one line), never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
 | `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse, except that `disable` removes one still recorded as a root (an older registry, or a manifest that later set `selectable: false`). Cannot combine with `defaultEnabled: true`, and needs `presentation.visibility` `dependency` or `hidden` (a `catalog` row would have no switch) |
 | `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Requires** in the source popup of each package that requires it), or `hidden` (no UI row) |
 | `resources` | yes | array — see Resource types |

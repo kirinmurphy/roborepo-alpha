@@ -80,17 +80,17 @@ including applicable references. Read again only if the source changed, the task
 needed guidance is no longer available in context. A pairing does not invoke the paired skill's
 whole workflow or recursively load its dependencies; apply each trigger to the actual work.
 
-| Skill | Load when | Contributes |
-| --- | --- | --- |
-| `test-harness` | Judging test coverage, running checks, or deciding whether a gap needs a test | Test selection and observable-behavior assertions |
-| `code-style` | Reviewing where code was placed: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
-| `technical-writing` | Authoring or substantially revising explanatory documentation, requirements, or design prose during a fix | Section content and reader clarity |
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `implementation-review` | requires | **Always**: step 3's Validator pass | The review rubric, severities, finding classes, and report format |
+| `test-harness` | requires | Judging test coverage, running checks, or deciding whether a gap needs a test | Test selection and observable-behavior assertions |
+| `code-style` | recommends | Reviewing where code was placed: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
+| `technical-writing` | requires | Authoring or substantially revising explanatory documentation, requirements, or design prose during a fix | Section content and reader clarity |
 
-For a pairing whose trigger applies, use the host's advertised skill availability first. Consult
-the host's skill/package manager only if availability or activation is unclear; reuse a known
-state unless there is evidence it changed. If disabled, ask: "Enable it, or skip it for this run?"
-Enable only with permission. If missing, skip and report it. For inconsistent activation, offer
-reconciliation or skip; never describe a drifted package as loaded.
+A `requires` row's package is on whenever `plan-suite` is, so load it without checking its state. A
+`recommends` row loads when its condition matches and the session lists the skill; otherwise the run
+continues without it and names it once in the final report. Never ask the user to enable a package
+during a run.
 
 State which paired skills were used, including guidance reused from context, and any applicable
 skill skipped or unavailable. Do not load skills or check package state just to report
@@ -153,21 +153,15 @@ of it. The human's review is the independent check; this step makes sure they re
   finding nor a blocker.
 - Run one Validator pass over the merged result: a fresh-context subagent where the environment has
   one, otherwise a separate read-only step in this session. Give it the plan, the base branch, and
-  the gate output if the gate has finished, never an account of the work. It applies the same rubric as `/plan-execute`'s
-  Validation Loop: every acceptance criterion against the code and test evidence (a checked task is a
-  claim, not evidence), tests that assert observable outcomes for new behavior, docs of record that
-  match the code, `## Not tested` entries whose `Needs a person:` or `Blocked:` reason does not
-  hold and cleared entries without evidence, each gate failure, and the
-  constraints of every loaded paired skill where the diff falls under them. Its three convention
-  checks, Flow and cohesion, Data and state, and Comments and abstractions, apply to changed and
-  directly affected code: a comment the diff adds that only restates the code is a fix, harmless
-  narration that was already there is not a finding, and length alone is never a finding. Issues the
-  plan did not cause are not findings, whether they sit outside the diff or in general lifecycle,
-  tooling, or environment behavior: it lists each once under `Outside this plan` in its report.
-- Classify every finding by consequence, not size: **fix** when the right fix is clear and stays
-  within the plan's requirements and specified contracts, code included; **escalate** when it
-  chooses between real alternatives, each with a compelling argument for it, changes requirements or a contract the plan did not specify,
-  or lands outside the plan.
+  the gate output if the gate has finished, never an account of the work. It loads
+  `implementation-review` and applies its rubric, with the plan's acceptance criteria and
+  `## Documentation impact` as the requirements and `git diff <base>...HEAD` as the scope; issues
+  the plan did not cause go under `Outside this scope` in its report, never into the plan.
+- Each finding carries the rubric's severity and class. A `blocking` or `actionable` finding is
+  recorded with its class; a `note` stays in the pass's report. Class **fix** when the right fix is
+  clear and stays within the plan's requirements and specified contracts, code included; **escalate**
+  when it chooses between real alternatives, each with a compelling argument for it, changes
+  requirements or a contract the plan did not specify, or lands outside the plan.
 - Do not fix anything while checking. Record every finding first, so each fix answers a recorded
   finding.
 
@@ -210,7 +204,7 @@ findings; earlier findings may stay for readable history.
 
 ```
 
-Record only what is specific to this plan. `Outside this plan` items, and any general issue this
+Record only what is specific to this plan. `Outside this scope` items, and any general issue this
 review runs into, such as a lifecycle command refusing over an unrelated file, go in the review
 packet instead.
 

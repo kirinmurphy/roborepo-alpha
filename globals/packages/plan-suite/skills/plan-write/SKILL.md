@@ -33,21 +33,20 @@ including applicable references. Read again only if the source changed, the task
 needed guidance is no longer available in context. A pairing does not invoke the paired skill's
 whole workflow or recursively load its dependencies; apply each trigger to the actual work.
 
-| Skill | Load when | Contributes |
-| --- | --- | --- |
-| `technical-writing` | Creating a plan or substantively revising requirements, design, or explanatory prose; not sync-only evidence updates | Section ordering, representation, anti-patterns, reader clarity, and the Creator/Validator loop. Knows nothing about lifecycle or frontmatter, so it never overrides a rule from this skill |
-| `code-style` | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
-| `javascript-typescript` | The plan prescribes JS/TS implementation choices — ESM, exports, types, framework-less DOM; not merely a JS/TS path | Language and markup conventions the plan must not contradict |
-| `test-harness` | The plan proposes tests, verification commands, or a regression strategy; not recording existing test results | Test selection and observable-behavior assertions |
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `technical-writing` | requires | Creating a plan or substantively revising requirements, design, or explanatory prose; not sync-only evidence updates | Section ordering, representation, anti-patterns, reader clarity, and the Creator/Validator loop. Knows nothing about lifecycle or frontmatter, so it never overrides a rule from this skill |
+| `code-style` | recommends | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
+| `javascript-typescript` | recommends | The plan prescribes JS/TS implementation choices — ESM, exports, types, framework-less DOM; not merely a JS/TS path | Language and markup conventions the plan must not contradict |
+| `test-harness` | requires | The plan proposes tests, verification commands, or a regression strategy; not recording existing test results | Test selection and observable-behavior assertions |
 
 Conditional triggers are subject matter, never plan size: a one-phase plan that specifies module
 placement still needs `code-style`.
 
-For a pairing whose trigger applies, use the host's advertised skill availability first. Consult
-the host's skill/package manager only if availability or activation is unclear; reuse a known
-state unless there is evidence it changed. If disabled, ask: "Enable it, or skip it for this run?"
-Enable only with permission. If missing, skip and report it. For inconsistent activation, offer
-reconciliation or skip; never describe a drifted package as loaded.
+A `requires` row's package is on whenever `plan-suite` is, so load it without checking its state. A
+`recommends` row loads when its condition matches and the session lists the skill; otherwise the run
+continues without it and names it once in the final report. Never ask the user to enable a package
+during a run.
 
 State which paired skills were used, including guidance reused from context, and any applicable
 skill skipped or unavailable. Do not load skills or check package state just to report

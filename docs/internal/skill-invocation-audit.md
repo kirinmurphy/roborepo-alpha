@@ -4,8 +4,8 @@
 
 ## Summary
 
-- Shared skills: 18
-- Package skill resources: 18
+- Shared skills: 19
+- Package skill resources: 19
 - Static findings: 6
 - Unknown manifest entries: none
 
@@ -31,6 +31,7 @@ Keep shared `SKILL.md` frontmatter portable; use package-backed checks before ad
 | `supabase-integration-testing` | auto | medium | false | none | Keep trigger narrow; add near-miss tests. |
 | `tighten` | auto | medium | true | names a paired skill in prose but declares no Paired Skills table | Keep trigger narrow; add near-miss tests. |
 | `telemetry-marker` | manual | low | true | none | Keep manual-only or command-gated. |
+| `implementation-review` | auto | medium | false | none | Keep trigger narrow; add near-miss tests. |
 | `plan-suite-init` | manual | medium | true | none | Keep manual-only or command-gated. |
 | `plan-write` | manual | medium | true | none | Keep manual-only or command-gated. |
 | `plan-promote` | manual | medium | true | side-effect keyword | Keep manual-only or command-gated. |
@@ -55,6 +56,13 @@ The audit flags:
 - mode/reference matrices that no longer parse
 - paired skills mentioned in prose but never declared, or declared without instructing the load
 - paired-skill triggers that are unresolvable ("when relevant") or gated on a user request
+- package-boundary warnings: an unconditional cross-package load neither package requires, two packages that each unconditionally hand off to the other, a multi-skill package whose skills never reference each other, and manifests that disagree with Paired Skills tables
+
+## Package Boundary Warnings
+
+Warnings only. Each compares package manifests (`requires`, `recommends`) with the skills' `## Paired Skills` tables.
+
+None.
 
 ## Next Actions
 

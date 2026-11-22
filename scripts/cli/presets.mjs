@@ -18,6 +18,8 @@ import { pathExists, findSiblingArtifact, findSiblingArtifacts, copyTree, stageC
 import { checkDrift, recordWrite } from "./root-config-state.mjs";
 import { BUNDLE_STATE_SCHEMA_VERSION, bundleSelectionStates, effectiveBundleIds, selectedBundleRoots } from "./bundle-selection.mjs";
 import { requiresCycles } from "./package-graph.mjs";
+import { loadPackageCatalog } from "./package-catalog.mjs";
+import { effectiveEnabledIds } from "./package-state.mjs";
 import { SHARED_TARGET_KINDS, SharedTargetConflictAbort, applySharedTargetRow, removeSharedTargetRow, sharedTargetInstalled } from "./shared-target-rows.mjs";
 
 const PRESET_MANIFEST = path.join(repoRoot, "manifests", "platform", "presets.json");
@@ -246,6 +248,7 @@ export async function applyWizardChanges(steps) {
   }
   console.log("\nApplying changes…");
   let failed = 0;
+  const offered = new Map();
   for (const row of pending) {
     if (row.states) {
       const result = await applyBehaviorBucket(row.item.id, row.state);
@@ -259,8 +262,20 @@ export async function applyWizardChanges(steps) {
     const status = result.ok ? "ok" : `failed: ${result.message}`;
     if (!result.ok) failed += 1;
     console.log(`  ${verb} ${row.item.id ?? row.label} — ${status}`);
+    if (row.active && result.ok) for (const rec of result.recommendations || []) offered.set(rec.id, rec);
   }
+  printRecommendationsStillOff([...offered.keys()]);
   return { applied: true, changed: true, failed };
+}
+
+// The wizard never prompts for recommendations; it names the ones still off once, after every
+// toggle has applied, so a recommendation the user also selected in the wizard is not listed.
+// Same line as a non-interactive `roborepo package enable`.
+function printRecommendationsStillOff(recommendedIds) {
+  if (recommendedIds.length === 0) return;
+  const effective = new Set(effectiveEnabledIds(loadPackageCatalog()));
+  const off = recommendedIds.filter((id) => !effective.has(id));
+  if (off.length) console.log(`recommended (not enabled): ${off.join(", ")} — enable with: roborepo package enable <id>`);
 }
 
 async function runInteractiveOnboard({ launchPortal = false, source = "library" } = {}) {

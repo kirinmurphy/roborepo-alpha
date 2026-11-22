@@ -8,6 +8,10 @@
     "category": "code-conventions",
     "order": 20
   },
+  "recommends": [
+    "react",
+    "code-style"
+  ],
   "resources": [
     {
       "type": "skill",

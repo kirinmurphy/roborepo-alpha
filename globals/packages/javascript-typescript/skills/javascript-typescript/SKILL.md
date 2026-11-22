@@ -11,12 +11,14 @@ Apply this when the repo or touched files use JavaScript or TypeScript.
 
 **Load these as part of the work; do not wait to be asked for them by name.**
 
-| Skill | Load when | Contributes |
-| --- | --- | --- |
-| `react` | A touched file contains a component, a hook, JSX/TSX markup, or client state | Component and hook conventions, effect and state rules, and React-specific test shape |
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `code-style` | recommends | The work places a helper, module, or export: who owns it and where it lives | Ownership and placement rules this skill defers to |
+| `react` | recommends | A touched file contains a component, a hook, JSX/TSX markup, or client state | Component and hook conventions, effect and state rules, and React-specific test shape |
 
 Say which paired skills applied and which did not. A skipped skill and a forgotten one look the
-same otherwise.
+same otherwise. A row whose skill the session does not list is skipped and named once in the
+report; never ask the user to enable a package.
 
 ## Functions
 
