@@ -82,7 +82,9 @@ Claude's nor Codex's sandbox can read the macOS keychain. Any process you run, a
 read it, so the bot's limited role and the token's expiry are what bound the damage.
 
 If you decline, nothing changes: agents act as you, `gh api` stays denied, posting commands ask,
-and Codex hands pushes back to you. The identity does not cover Gemini. See
+and Codex hands pushes back to you. The identity does not cover Gemini: Gemini loads only the first
+`.env` it finds walking up from the working directory before `~/.gemini/.env`, so a repo's own
+`.env` would hide RoboRepo's settings. See
 [Claude Hooks](../reference/claude-hooks.md#acting-as-a-github-bot) for what it changes.
 
 ## Fix problems

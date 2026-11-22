@@ -298,7 +298,7 @@ every provider renders them; `delete-files` and `switch-branches` depend on the 
 | --- | --- | --- |
 | `delete-files` | Default `ask` → `allow` | Claude's shell sandbox confines deletes; `protected-branch-push.mjs` asks (Codex: denies) before deletes and discarded work in a checkout on a protected branch. Gemini has neither |
 | `merge-pull-requests` | New, default `deny` | Split from `change-github-directly` so it shows as its own row; agents never merge into the base branch. The protected-branch hook's `HOST_CLIS.github.denied` list also names `pr merge`, for the flag-first form |
-| `push-code` | Default stays `ask`; `askDecidedByHook` | Claude renders no rule for its ask (`permissions-render.mjs`), because an ask rule outranks the protected-branch hook's allow of a verified push; the hook asks about the rest. Codex and Gemini render it as before |
+| `push-code` | Default stays `ask`; `askDecidedByHook` | Claude renders no rule for its ask (`permissions-render.mjs`), because an ask rule outranks the protected-branch hook's allow of a verified push; the hook asks about the rest. Codex and Gemini render it as before. Under the GitHub agent identity, Claude keeps this default (no `git push` rule), while Codex renders its `agentIdentityBucket` (`allow`) |
 | `switch-branches` | Default stays `ask` | `git checkout *` and `git switch *` are now in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
 
 `plan-store-commands` and `plan-lifecycle` (`roborepo plans sync-base` and `stop-servers`) together

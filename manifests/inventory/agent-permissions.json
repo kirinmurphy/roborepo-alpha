@@ -195,7 +195,7 @@
     {
       "id": "push-code",
       "label": "Push code",
-      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history. Under Claude, ask renders no rule: an ask rule outranks the hook's approval, so the hook alone asks about a push it cannot verify. Under the GitHub agent identity, Codex pushes to non-protected branches without a prompt; the hooks still deny protected branches.",
+      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history. Under Claude, ask renders no rule: an ask rule outranks the hook's approval, so the hook alone asks about a push it cannot verify. Under the GitHub agent identity, Codex's git push rule becomes allow, so Codex pushes to non-protected branches without a prompt; Claude keeps its ask and gains no git push rule, so the hook still decides; the hooks still deny protected branches on both.",
       "kind": "commands",
       "commands": [
         [

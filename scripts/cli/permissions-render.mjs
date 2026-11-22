@@ -4,8 +4,7 @@ import os from "node:os";
 import { repoRoot } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
 import { recordAppRoot } from "./state-paths.mjs";
-import { loadPackageCatalog } from "./package-catalog.mjs";
-import { effectiveEnabledIds } from "./package-state.mjs";
+import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import {
   resolveBehaviors,
@@ -91,29 +90,42 @@ function ensureClaudePermissionHookAssets(baseDir) {
   }
 }
 
+// Codex's prefix-rule file, relative to the Codex home. Only RoboRepo writes it: the `owned` row in
+// manifests/platform/manifest.tsv installs the identity-off baseline from generated/codex/rules/,
+// and this module rewrites it for the live identity state.
+export const CODEX_RULES_HOME_SUB = "rules/roborepo.rules";
+
+// Writes Codex's rules/roborepo.rules for the live identity state, so with the GitHub agent identity
+// on, `gh api`, posting, and `git push` get the identity's buckets there too. Personal overrides are
+// not rendered into it; the Codex permission hook applies them. A `rules` folder that is a link (an
+// old install linked it into the checkout) is left alone, so this never writes into the repo; the
+// install step replaces that link. Returns whether the file changed.
+export function writeCodexRulesFile(codexHome, { manifest = loadPermissionManifest(), agentIdentity = agentIdentityPackageEnabled() } = {}) {
+  const file = path.join(codexHome, CODEX_RULES_HOME_SUB);
+  const dir = path.dirname(file);
+  if (fs.existsSync(dir) && fs.lstatSync(dir).isSymbolicLink()) return false;
+  const content = renderCodexRules(manifest, {}, { agentIdentity });
+  const isFile = fs.existsSync(file) && fs.lstatSync(file).isFile();
+  if (isFile && fs.readFileSync(file, "utf8") === content) return false;
+  fs.mkdirSync(dir, { recursive: true });
+  fs.rmSync(file, { recursive: true, force: true });
+  fs.writeFileSync(file, content);
+  return true;
+}
+
 // Render the manifest (+ overrides) into each present harness's live config under `baseDir`.
 // Always global scope — no project override. `createClaude` retained for callers that might target
 // a fresh directory (e.g. a scratch/test harness home); default global-only usage never needs it.
 // `overrides` is the FULL override-file shape: { behaviors: {id: bucket}, commands: {key: {tokens, bucket}} }.
+// `agentIdentity` defaults to whether the GitHub agent identity package is enabled; pass it
+// explicitly to override.
 //
 // Iterates the provider registry rather than a fixed provider list, so a newly registered harness
 // receives permissions without editing this function. A provider that does not declare the
 // "permissions" capability is skipped by contract, not by omission.
-export const AGENT_IDENTITY_PACKAGE_ID = "github-agent-identity";
-
-// Whether agent shells act as the GitHub bot: the identity package is in the effective set.
-export function agentIdentityEnabled() {
-  try {
-    return effectiveEnabledIds(loadPackageCatalog()).includes(AGENT_IDENTITY_PACKAGE_ID);
-  } catch {
-    return false;
-  }
-}
-
-// `agentIdentity` defaults to whether the identity package is enabled; pass it explicitly to override.
 export function renderPermissionsTo(
   baseDir,
-  { manifest = loadPermissionManifest(), overrides = {}, createClaude = false, workspaceRoots = [], cwd = process.cwd(), agentIdentity = agentIdentityEnabled() } = {},
+  { manifest = loadPermissionManifest(), overrides = {}, createClaude = false, workspaceRoots = [], cwd = process.cwd(), agentIdentity = agentIdentityPackageEnabled() } = {},
 ) {
   const touched = [];
 
@@ -135,6 +147,9 @@ export function renderPermissionsTo(
     writeRootConfig(provider.id, target.file, rendered);
     if (provider.id === "claude") ensureClaudePermissionHookAssets(baseDir);
     touched.push(target.file);
+    if (provider.id === "codex" && writeCodexRulesFile(target.homeDir, { manifest, agentIdentity })) {
+      touched.push(path.join(target.homeDir, CODEX_RULES_HOME_SUB));
+    }
   }
 
   return { touched };

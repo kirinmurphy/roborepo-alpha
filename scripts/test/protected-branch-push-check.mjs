@@ -43,6 +43,9 @@ for (const key of Object.keys(gitEnv)) {
   if (/^GIT_CONFIG_(?:COUNT|PARAMETERS|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnv[key];
 }
 delete gitEnv.ROBOREPO_PROTECTED_BRANCHES;
+// The machine's own GitHub agent identity must not lift the gh api denial in the default cases.
+delete gitEnv.GH_CONFIG_DIR;
+gitEnv.ROBOREPO_STATE_ROOT = path.join(tmp, "default-state");
 // An agent shell carries the core.hooksPath override itself; the "human" git here must not.
 for (const key of Object.keys(gitEnv)) if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnv[key];
 fs.writeFileSync(gitEnv.GIT_CONFIG_GLOBAL, "");
@@ -327,10 +330,18 @@ for (const command of manifest.behaviors.find((b) => b.id === "change-github-dir
 for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
 }
-// As the github-agent identity (GH_CONFIG_DIR is exactly its gh dir) `gh api` is allowed; every other
-// denied gh command stays denied, and any other GH_CONFIG_DIR keeps `gh api` denied.
+// As the github-agent identity `gh api` is allowed: the package's Git config file is installed, the
+// hook's GH_CONFIG_DIR is unset or exactly the identity's gh dir, and the command does not change
+// which account gh acts as. Every other denied gh command stays denied.
 {
+  const installIdentity = (root) => {
+    const file = path.join(root, "package-runtime", "github-agent-identity", "gitconfig");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "");
+  };
   const stateRoot = path.join(tmp, "agent-state");
+  const notInstalled = path.join(tmp, "agent-state-off");
+  installIdentity(stateRoot);
   const agentDir = path.join(stateRoot, "github-agent", "gh");
   const asAgent = { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: agentDir };
   const codexOptions = { toolName: "exec_command", hookPath: path.join(codexHooks, "protected-branch-push.mjs"), key: "cmd" };
@@ -338,15 +349,38 @@ for (const [command, expected] of cases) {
     const label = options.hookPath ? "Codex" : "Claude";
     for (const command of ["gh api repos/o/r", "gh api graphql -f query=x", "gh -R o/r api repos/o/r/pulls"]) {
       assert.equal(decide(command, { ...options, env: asAgent }), "defer", `${label} allows as agent: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "" } }), "defer", `${label} allows with the hook's GH_CONFIG_DIR unset: ${command}`);
       assert.equal(decide(command, { ...options, env: { ...asAgent, GH_CONFIG_DIR: path.join(tmp, "other-gh") } }), "deny", `${label} denies other GH_CONFIG_DIR: ${command}`);
-      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "" } }), "deny", `${label} denies unset GH_CONFIG_DIR: ${command}`);
-      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot } }), "deny", `${label} denies without identity: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled, GH_CONFIG_DIR: path.join(notInstalled, "github-agent", "gh") } }), "deny", `${label} denies without the installed identity: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled } }), "deny", `${label} denies without identity: ${command}`);
+    }
+    // The command itself must not change which account or host gh acts as.
+    for (const command of [
+      "GH_CONFIG_DIR=/x gh api repos/o/r",
+      "GH_TOKEN=abc gh api repos/o/r",
+      "GITHUB_TOKEN=abc gh api repos/o/r",
+      "GH_ENTERPRISE_TOKEN=abc gh api repos/o/r",
+      "GITHUB_ENTERPRISE_TOKEN=abc gh api repos/o/r",
+      "GH_HOST=example.com gh api repos/o/r",
+      "env -u GH_CONFIG_DIR gh api repos/o/r",
+      "env --unset=GH_CONFIG_DIR gh api repos/o/r",
+      "env gh api repos/o/r",
+      "env GH_TOKEN=abc gh api repos/o/r",
+      "unset GH_CONFIG_DIR; gh api repos/o/r",
+      "export GH_TOKEN=abc; gh api repos/o/r",
+      "export GH_CONFIG_DIR=/x && gh api repos/o/r",
+      "GH_CONFIG_DIR=/x; gh api repos/o/r",
+      "bash -c 'unset GH_CONFIG_DIR; gh api repos/o/r'",
+      "(export GH_TOKEN=abc; gh api repos/o/r)",
+    ]) {
+      assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} denies a command that changes gh's identity: ${command}`);
     }
     for (const command of ["gh auth token", "gh -R o/r pr merge 12", "gh secret set X", "gh release create v1", "gh workflow run x"]) {
       assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} still denies as agent: ${command}`);
     }
   }
   // The default state root is ~/.roborepo when ROBOREPO_STATE_ROOT is unset.
+  installIdentity(path.join(tmp, ".roborepo"));
   assert.equal(decide("gh api repos/o/r", { env: { HOME: tmp, ROBOREPO_STATE_ROOT: "", GH_CONFIG_DIR: path.join(tmp, ".roborepo", "github-agent", "gh") } }), "defer", "default state root");
 }
 // Each command start scans only its own command, so a long chain stays fast.

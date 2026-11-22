@@ -75,7 +75,7 @@ try {
   start();
   expectLine(0, /^GitHub agent identity: agents act as robo-bot on example\/project$/);
   start({ enabled: false });
-  expectLine(1, /problem for example\/project: A bot is signed in but the github-agent-identity package is off.* — run roborepo github setup$/);
+  expectLine(1, /problem for example\/project: A bot is signed in but the github-agent-identity package is off.* — run roborepo github setup in your own terminal$/);
   start({ collaborators: [{ login: BOT, permission: "admin" }] });
   expectLine(1, /robo-bot is an admin of example\/project/);
   start({ collaborators: [] });
@@ -93,7 +93,35 @@ try {
   start({ token: { scopes: ["repo"] } });
   expectLine(1, /lacks the read:org scope/);
   start({ rulesets: [] });
-  expectLine(1, /Branch protection for this repo is missing/);
+  expectLine(1, /Branch protection for this repo is missing.* — a repo admin should run roborepo protect/);
+  // Protection that exists but falls short is a problem too, and each one's hint names roborepo protect.
+  const withManaged = (edit) => {
+    const rulesets = structuredClone(managed);
+    edit(rulesets, (name) => rulesets.find((ruleset) => ruleset.name === name));
+    return rulesets;
+  };
+  const protectionCases = [
+    ["the merge ruleset does not require approval of the last push", withManaged((_, named) => {
+      const pullRequest = named("roborepo-main-merge").rules.find((rule) => rule.type === "pull_request");
+      pullRequest.parameters.require_last_push_approval = false;
+    }), /Branch protection for this repo is drifted/],
+    ["repo-plans is unprotected", withManaged((rulesets) => {
+      rulesets.splice(rulesets.findIndex((ruleset) => ruleset.name === "roborepo-plans"), 1);
+    }), /Branch protection for this repo is missing/],
+    ["the merge policy is skipped", withManaged((_, named) => {
+      named("roborepo-main-merge").enforcement = "disabled";
+    }), /The merge rule that requires approval of the last push is skipped for this repo/],
+  ];
+  for (const [label, rulesets, message] of protectionCases) {
+    start({ rulesets });
+    const result = line();
+    assert.equal(result.status, 1, `${label}: doctor hints\n${result.stdout}${result.stderr}`);
+    assert.match(result.stdout, message, label);
+    assert.match(result.stdout, /— a repo admin should run roborepo protect/, `${label}: the hint names roborepo protect`);
+    const report = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
+    assert.equal(report.state, "problem", label);
+    assert.ok(report.problems.some((entry) => entry.id === "protection" && /roborepo protect/.test(entry.fix)), `${label}: status names roborepo protect`);
+  }
   start({ hosts: "keychain" });
   expectLine(1, /token is in the keychain, which agent sandboxes cannot read/);
   start({ failure: "unreachable" });

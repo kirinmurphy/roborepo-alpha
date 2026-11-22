@@ -267,8 +267,14 @@ function scopedToolToClaude(tool, scopePath) {
 
 // Claude has a real 3-state permissions model (allow/deny/ask), so every resolved behavior and
 // arbitrary command maps directly to its native permission bucket.
+//
+// Under the GitHub agent identity, a behavior whose ask a hook decides (`askDecidedByHook`, the
+// protected-branch hook for `git push`) keeps its non-identity bucket here: that hook already
+// approves the pushes it verifies, so Claude gains no allow rule and the hook still decides the rest.
 export function claudePermissions(manifest, overrides = {}, { home: _home = os.homedir(), agentIdentity = false } = {}) {
-  const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity });
+  const identityBehaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity });
+  const defaultBehaviors = resolveBehaviors(manifest, overrides.behaviors);
+  const behaviors = identityBehaviors.map((b, i) => (b.askDecidedByHook ? defaultBehaviors[i] : b));
   const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
   const allow = [...(manifest.tools?.read ?? [])];
   const deny = [];

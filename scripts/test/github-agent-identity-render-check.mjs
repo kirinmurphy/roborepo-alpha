@@ -4,6 +4,7 @@
 // the credential or SSH boundaries moves. With it off the render is the shipped baseline.
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -13,6 +14,13 @@ import {
   resolveArbitraryCommands,
   resolveBehaviors,
 } from "../harnesses/permissions-render.mjs";
+
+// CLI modules resolve the state root when they load, so an isolated one is set before importing them.
+const stateRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-identity-render-"));
+process.env.ROBOREPO_STATE_ROOT = stateRoot;
+process.on("exit", () => fs.rmSync(stateRoot, { recursive: true, force: true }));
+const { CODEX_RULES_HOME_SUB, writeCodexRulesFile } = await import("../cli/permissions-render.mjs");
+const { effectivePermissions } = await import("../cli/config-mutate.mjs");
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifests", "inventory", "agent-permissions.json"), "utf8"));
@@ -72,9 +80,59 @@ for (const [label, rules] of [["off", claudeOff], ["on", claudeOn]]) {
   assert.ok(rules.allow.includes("Bash(roborepo github status:*)"), `${label}: status allowed`);
   assert.ok(rules.deny.includes("Bash(gh auth token:*)"), `${label}: gh auth token denied`);
 }
-// Claude's push-code ask renders no rule (the hook asks); the identity moves it to a plain allow.
-assert.ok(!claudeOff.ask.includes("Bash(git push:*)") && !claudeOff.allow.includes("Bash(git push:*)"));
-assert.ok(claudeOn.allow.includes("Bash(git push:*)"));
+// Claude's push-code ask renders no rule (the hook decides), and the identity leaves it that way:
+// a hook-decided ask keeps its default bucket for Claude, while Codex's rule above becomes allow.
+for (const [label, rules] of [["off", claudeOff], ["on", claudeOn]]) {
+  for (const bucket of ["allow", "ask", "deny"]) {
+    assert.ok(!rules[bucket].includes("Bash(git push:*)"), `${label}: Claude has no git push ${bucket} rule`);
+  }
+}
+// A personal push-code override still renders for Claude under the identity.
+assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { agentIdentity: true }).deny.includes("Bash(git push:*)"));
+
+// The live Codex rules file follows the identity, never writes through a linked rules folder, and
+// returns to the shipped baseline when the identity is off.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-codex-rules-"));
+  try {
+    const codexHome = path.join(tmp, ".codex");
+    const file = path.join(codexHome, CODEX_RULES_HOME_SUB);
+    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentity: true }), true);
+    assert.equal(fs.readFileSync(file, "utf8"), rulesOn);
+    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentity: true }), false, "an unchanged render writes nothing");
+    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentity: false }), true);
+    assert.equal(fs.readFileSync(file, "utf8"), fs.readFileSync(path.join(repoRoot, "generated", "codex", "rules", "roborepo.rules"), "utf8"));
+
+    const linkedHome = path.join(tmp, "linked");
+    const realRules = path.join(tmp, "checkout-rules");
+    fs.mkdirSync(realRules);
+    fs.writeFileSync(path.join(realRules, "roborepo.rules"), "repo copy\n");
+    fs.mkdirSync(linkedHome);
+    fs.symlinkSync(realRules, path.join(linkedHome, "rules"));
+    assert.equal(writeCodexRulesFile(linkedHome, { manifest, agentIdentity: true }), false);
+    assert.equal(fs.readFileSync(path.join(realRules, "roborepo.rules"), "utf8"), "repo copy\n", "a linked rules folder is left alone");
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// The config panel and `config status` read effectivePermissions, which must show the buckets the
+// render writes: the identity's buckets when it is on, personal overrides on top.
+{
+  fs.writeFileSync(path.join(stateRoot, "command-overrides.json"), JSON.stringify({ behaviors: { "post-to-github": "deny" }, commands: {} }));
+  const byId = (agentIdentity) => new Map(effectivePermissions({ agentIdentity }).behaviors.map((b) => [b.id, b]));
+  const on = byId(true);
+  const off = byId(false);
+  assert.equal(on.get("read-and-reply-on-github").bucket, "allow", "on: gh api shows allow");
+  assert.equal(on.get("read-and-reply-on-github").defaultBucket, "allow", "on: its default is the identity bucket");
+  assert.equal(on.get("push-code").bucket, "allow");
+  assert.equal(off.get("read-and-reply-on-github").bucket, "deny", "off: gh api shows deny");
+  assert.equal(off.get("push-code").bucket, "ask");
+  assert.equal(on.get("post-to-github").bucket, "deny", "a personal override beats the identity bucket");
+  assert.equal(on.get("post-to-github").overridden, true);
+  assert.equal(on.get("post-to-github").defaultBucket, "allow");
+  assert.equal(off.get("post-to-github").defaultBucket, "ask");
+}
 
 // Every gh behavior is tagged with its host.
 for (const behavior of manifest.behaviors) {

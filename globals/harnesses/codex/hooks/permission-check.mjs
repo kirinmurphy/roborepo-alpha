@@ -39,6 +39,14 @@ const manifestPath = path.join(repoRoot, 'manifests', 'inventory', 'agent-permis
 const overridesPath = path.join(stateDir, 'command-overrides.json')
 const permissionManifestFound = hasPermissionManifest(repoRoot)
 
+// Whether agent shells act on GitHub as the bot: the github-agent-identity package installed its Git
+// settings file. The file is the signal because Codex may not pass shell_environment_policy
+// variables (GH_CONFIG_DIR) to hooks, and the package removes the file when it is turned off. The
+// protected-branch-push hooks read the same file.
+function agentIdentityInstalled() {
+  return fs.existsSync(path.join(stateDir, 'package-runtime', 'github-agent-identity', 'gitconfig'))
+}
+
 function loadJson(p, fallback) {
   try {
     return JSON.parse(fs.readFileSync(p, 'utf8'))
@@ -69,10 +77,13 @@ function readHookInput() {
 // this hook can't import that module directly — it must run standalone with only Node builtins
 // (no repo-relative package resolution guaranteed from every Codex install layout). Duplicated
 // deliberately small and pure; keep in sync if the override-file shape changes.
+// With the GitHub agent identity on, a behavior's agentIdentityBucket replaces its default bucket,
+// as the render does; personal overrides still win over both.
 function resolveBehaviors() {
+  const agentIdentity = agentIdentityInstalled()
   return (manifest.behaviors ?? []).map((b) => ({
     ...b,
-    bucket: overrides.behaviors?.[b.id] ?? b.bucket,
+    bucket: overrides.behaviors?.[b.id] ?? (agentIdentity ? b.agentIdentityBucket : undefined) ?? b.bucket,
   }))
 }
 

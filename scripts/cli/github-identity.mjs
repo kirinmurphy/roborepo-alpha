@@ -1,20 +1,15 @@
 // `roborepo github status`: reads whether agents act on GitHub as a safe bot account. The guided
 // setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
 import { forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
-import { AGENT_IDENTITY_PACKAGE_ID, readAgentIdentity } from "../../modules/forge/agent-identity.mjs";
+import { readAgentIdentity } from "../../modules/forge/agent-identity.mjs";
+import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
-import { loadPackageCatalog } from "./package-catalog.mjs";
-import { effectiveEnabledIds } from "./package-state.mjs";
 import { isMainModule } from "./roots.mjs";
 import { stateDir } from "./state-paths.mjs";
 
 const USAGE = "Usage: roborepo github status [--json]";
 // Doctor waits on these reads, so each gives up sooner than an explicit `roborepo github status`.
 const DOCTOR_TIMEOUT_MS = 8000;
-
-export function agentIdentityPackageEnabled() {
-  return effectiveEnabledIds(loadPackageCatalog()).includes(AGENT_IDENTITY_PACKAGE_ID);
-}
 
 export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs } = {}) {
   const repositoryId = await currentRepositoryId(cwd);
@@ -54,7 +49,11 @@ export function formatReport(report) {
   }
 }
 
-// Doctor's one line for a report: `hint` when the user can act, `ok` otherwise.
+// A problem's own fix, as the tail of doctor's line: "Run roborepo protect." -> "run roborepo protect".
+const fixClause = (fix) => fix.replace(/\.$/, "").replace(/^[A-Z]/, (letter) => letter.toLowerCase());
+
+// Doctor's one line for a report: `hint` when the user can act, `ok` otherwise. A hint names the
+// first problem and that problem's fix, which is not always the setup command (`roborepo protect`).
 export function doctorLine(report) {
   const repo = report.repository;
   switch (report.state) {
@@ -62,11 +61,13 @@ export function doctorLine(report) {
       return { level: "ok", text: "GitHub agent identity not set up (optional) — run roborepo github setup in your own terminal" };
     case "healthy": {
       const warn = report.problems[0];
-      if (warn) return { level: "hint", text: `GitHub agent identity for ${repo}: ${warn.message} — run roborepo github setup` };
+      if (warn) return { level: "hint", text: `GitHub agent identity for ${repo}: ${warn.message} — ${fixClause(warn.fix)}` };
       return { level: "ok", text: `GitHub agent identity: agents act as ${report.botLogin} on ${repo}` };
     }
-    case "problem":
-      return { level: "hint", text: `GitHub agent identity problem for ${repo}: ${report.problems[0].message} — run roborepo github setup` };
+    case "problem": {
+      const first = report.problems.find((entry) => entry.severity === "problem");
+      return { level: "hint", text: `GitHub agent identity problem for ${repo}: ${first.message} — ${fixClause(first.fix)}` };
+    }
     default:
       return { level: "ok", text: `GitHub agent identity check skipped (${report.reason})` };
   }

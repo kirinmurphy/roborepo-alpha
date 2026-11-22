@@ -11,7 +11,7 @@ import {
 } from "../../modules/forge/agent-identity.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
-import { agentIdentityPackageEnabled } from "./github-identity.mjs";
+import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { stateDir } from "./state-paths.mjs";
 
 const SCRIPTED = process.env.ROBOREPO_GITHUB_SETUP_SCRIPTED === "1";

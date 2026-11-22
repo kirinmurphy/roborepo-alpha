@@ -146,7 +146,11 @@ deny protected branches), and the `gh` rules follow the identity as for Claude: 
 posting commands (`gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`,
 `gh issue create`, `issue comment`) are allowed; `gh pr merge`, `gh auth token`, and
 repo, secret, variable, release, and workflow commands stay denied. Without it, those commands
-keep their usual buckets and `gh api` is denied.
+keep their usual buckets and `gh api` is denied. `~/.codex/rules/roborepo.rules` is rendered for
+the identity's state whenever permissions render, and the permission hook applies the same buckets
+when the package's Git config file `~/.roborepo/package-runtime/github-agent-identity/gitconfig`
+exists. The protected-branch hook lifts its `gh api` denial under the
+[same conditions as for Claude](claude-hooks.md#opening-pull-requests-with-gh).
 
 Human versus automatic review is a separate [Codex setting](https://learn.chatgpt.com/docs/sandboxing).
 With `approvals_reviewer = "user"`, native approval requests go to the person; with `auto_review`,

@@ -44,7 +44,9 @@ approves the call, so with the rule in place every push prompted, verified or no
 hook decides: it allows a verified feature-branch push, asks about one it cannot check, and denies
 `main` and force pushes, which the `rewrite-history` deny rules also block. If the hook is missing,
 an unlisted `git push` still prompts in Claude's default permission mode. Setting `push-code` to
-`allow` or `deny` renders those rules as usual.
+`allow` or `deny` renders those rules as usual. The GitHub agent identity does not change this for
+Claude: `push-code` keeps its ask there, so Claude gains no `git push` rule and the hook still
+decides. Only Codex's `git push` rule becomes allow under the identity.
 
 Two checks enforce this, for Claude and Codex alike:
 
@@ -196,8 +198,12 @@ deny row stays denied, including `gh pr merge` and `gh auth token`.
 
 The protected-branch hook also denies the deny-bucket commands when global flags come first
 (`gh -R owner/repo api …`), a form the prefix rules miss. It lifts the `gh api` denial only when
-`GH_CONFIG_DIR` is exactly the agent identity's folder, `~/.roborepo/github-agent/gh`; a shell that
-unsets or changes it keeps `gh api` denied. Agents never merge a pull request
+all three hold: the agent identity is installed (its Git config file
+`~/.roborepo/package-runtime/github-agent-identity/gitconfig` exists); the hook's own
+`GH_CONFIG_DIR`, if set, is exactly the agent identity's folder, `~/.roborepo/github-agent/gh`; and
+the command does not change who `gh` acts as. A command that assigns, exports, or unsets
+`GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or
+`GH_HOST` anywhere in it, or runs `gh` through `env`, keeps `gh api` denied. Agents never merge a pull request
 (`merge-pull-requests`): you merge it on GitHub.
 
 The workflow an agent should follow:
@@ -221,7 +227,9 @@ That is the guard that holds if a local rule is too broad.
 
 The optional **GitHub Agent Identity** package (`github-agent-identity`, off by default) gives agents
 their own GitHub account instead. Claude and Codex shells then push, open pull requests, and post as
-a bot you create; Gemini is not covered. The bot is a plain collaborator with write access, not an
+a bot you create. Gemini is not covered: it loads only the first `.env` it finds walking up from
+the working directory before `~/.gemini/.env`, so a repo's own `.env` would hide RoboRepo's
+settings. The bot is a plain collaborator with write access, not an
 administrator, and is not on a ruleset's bypass list, so GitHub itself rejects an agent push to
 `main` and an agent merge without a person's approval. Your own terminal, `gh`, and SSH pushes keep
 your identity and your bypass. `roborepo github setup` creates it

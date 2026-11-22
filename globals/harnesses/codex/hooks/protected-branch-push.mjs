@@ -75,14 +75,37 @@ const HOST_CLIS = {
     allowedAsAgent: [['api']],
   },
 }
-// True when GH_CONFIG_DIR is exactly the github-agent identity's gh config dir. Acting as the bot,
-// GitHub's rulesets and the bot's collaborator role limit what `gh api` can do; as the user, `gh api`
-// could rewrite main. Any other value, unset, or a shell that unset it keeps `gh api` denied.
+// Variables that choose which account or host gh acts as.
+const GH_IDENTITY_VARIABLES = ['GH_CONFIG_DIR', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST']
+// Set from the whole command before it is walked (see changesGhIdentity).
+let ghIdentityChanged = false
+// True when gh in this shell acts as the github-agent identity. Acting as the bot, GitHub's rulesets
+// and the bot's collaborator role limit what `gh api` can do; as the user, `gh api` could rewrite
+// main. It takes all three: the package's Git config file is installed (Codex may not pass the
+// shell's GH_CONFIG_DIR to hooks, so the file is the signal that the identity is on), this hook's own
+// GH_CONFIG_DIR is unset or exactly the identity's gh config dir, and the command does not change
+// gh's identity itself.
 function agentIdentityActive() {
-  const dir = process.env.GH_CONFIG_DIR
-  if (!dir) return false
+  if (ghIdentityChanged) return false
   const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
-  return path.resolve(dir) === path.resolve(path.join(stateRoot, 'github-agent', 'gh'))
+  if (!fs.existsSync(path.join(stateRoot, 'package-runtime', 'github-agent-identity', 'gitconfig'))) return false
+  const dir = process.env.GH_CONFIG_DIR
+  return !dir || path.resolve(dir) === path.resolve(path.join(stateRoot, 'github-agent', 'gh'))
+}
+
+// Whether any command in `text`, nested ones included, could make gh act as someone other than the
+// identity: it assigns, exports, unsets, or otherwise names one of GH_IDENTITY_VARIABLES
+// (`GH_TOKEN=x gh api`, `unset GH_CONFIG_DIR`, `env -u GH_CONFIG_DIR`), or runs gh through `env`.
+function changesGhIdentity(text) {
+  const names = GH_IDENTITY_VARIABLES.join('|')
+  const namesVariable = new RegExp(`^(?:--unset=|-u)?(?:${names})(?:=|$)|\\$\\{(?:${names}):?=`)
+  for (const words of splitCommands(exposeNestedCommands(withoutComments(text)))) {
+    if (words.some((word) => namesVariable.test(word))) return true
+    const gh = words.findIndex((word) => path.basename(word) === 'gh')
+    if (gh > 0 && words.slice(0, gh).some((word) => path.basename(word) === 'env')) return true
+    if (nestedScripts(words).some((script) => changesGhIdentity(script))) return true
+  }
+  return false
 }
 // gh options that take their value as the next word, before or between subcommands.
 const GH_VALUE_OPTIONS = new Set(['-R', '--repo', '--hostname'])
@@ -1135,8 +1158,10 @@ function classifyCommand(text, startCwd) {
       return target !== '/dev/null' && !/^&\d$/.test(target)
     })
     if (writesFile) onlyVerifiedPushes = false
-    if (program === 'gh') {
-      result = stricter(result, classifyGh(words.slice(i + 1)))
+    // gh behind a wrapper (`env gh api`, `command gh api`) is still gh.
+    const ghAt = programIndex(words)
+    if (path.basename(words[ghAt] ?? '') === 'gh') {
+      result = stricter(result, classifyGh(words.slice(ghAt + 1)))
       continue
     }
     if (SHELLS.has(program)) {
@@ -1580,6 +1605,7 @@ unsandboxed = toolInput.dangerouslyDisableSandbox === true
 
 // Every walk reads the command without the heredoc bodies that are plainly data.
 const text = withoutHeredocBodies(command)
+ghIdentityChanged = changesGhIdentity(text)
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
 let result = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
 // The walks read a body that a program reads (`node <<'EOF'`, `bash <<EOF`) as shell, so an

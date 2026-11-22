@@ -9,6 +9,7 @@ import { recordConfigWrite } from "./write-log.mjs";
 import { installStatePath, presetsStatePath, recordAppRoot } from "./state-paths.mjs";
 import { readConfigSnapshot, buildBehaviorView } from "./config.mjs";
 import { mutatePackage, setBehaviorBucket } from "./config-mutate.mjs";
+import { CODEX_RULES_HOME_SUB, writeCodexRulesFile } from "./permissions-render.mjs";
 import { renderHomeRules, removeHomeRules, isRenderedRulesOutput } from "./rules-render.mjs";
 import { migrateCodexDefaultRules } from "./codex-rules-migration.mjs";
 import { listHarnessProviders, getHarnessProvider } from "../harnesses/registry.mjs";
@@ -662,7 +663,13 @@ function copyOwnedItem(row) {
   // Writing through an old parent link would write into the repo: replace it with a real dir.
   unlinkParentRepoLink(row.homeAbs);
   fs.mkdirSync(path.dirname(row.homeAbs), { recursive: true });
-  if (!readlink(row.homeAbs) && pathExists(row.homeAbs) && pathsEquivalentForCopy(source, row.homeAbs)) {
+  if (row.harness === "codex" && row.homeSub === CODEX_RULES_HOME_SUB) {
+    // The tracked source is the identity-off baseline; the live file follows the GitHub agent
+    // identity, rendered by the same writer the permission render uses so neither undoes the other.
+    if (readlink(row.homeAbs)) fs.unlinkSync(row.homeAbs);
+    const changed = writeCodexRulesFile(MANIFEST_HOME.codex);
+    console.log(changed ? `render: ${row.homeAbs}` : `ok: ${row.homeAbs}`);
+  } else if (!readlink(row.homeAbs) && pathExists(row.homeAbs) && pathsEquivalentForCopy(source, row.homeAbs)) {
     console.log(`ok: ${row.homeAbs}`);
   } else {
     fs.rmSync(row.homeAbs, { recursive: true, force: true });

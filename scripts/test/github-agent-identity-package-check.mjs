@@ -21,11 +21,21 @@ const stateRoot = path.join(home, ".roborepo");
 fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
 fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
 fs.writeFileSync(path.join(home, ".claude", "settings.json"), "{}");
-fs.copyFileSync(path.join(repoRoot, "generated", "codex", "config.toml"), path.join(home, ".codex", "config.toml"));
+// A domains table the user already has: the package adds the GitHub hosts beside it and removes only those.
+fs.writeFileSync(
+  path.join(home, ".codex", "config.toml"),
+  `${fs.readFileSync(path.join(repoRoot, "generated", "codex", "config.toml"), "utf8")}\n[permissions.managed-workspace.network.domains]\n"example.com" = "allow"\n`,
+);
+// The install step's identity-off baseline for Codex's prefix rules.
+const baselineRules = fs.readFileSync(path.join(repoRoot, "generated", "codex", "rules", "roborepo.rules"), "utf8");
+fs.mkdirSync(path.join(home, ".codex", "rules"), { recursive: true });
+fs.writeFileSync(path.join(home, ".codex", "rules", "roborepo.rules"), baselineRules);
 const env = { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: stateRoot, SKIP_MCP: "1" };
 const run = (...args) => spawnSync(process.execPath, [cli, ...args], { env, encoding: "utf8", cwd: repoRoot });
 const claudeSettings = () => JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
 const codexConfig = () => fs.readFileSync(path.join(home, ".codex", "config.toml"), "utf8");
+const codexRules = () => fs.readFileSync(path.join(home, ".codex", "rules", "roborepo.rules"), "utf8");
+const domain = (text, host) => new RegExp(`^"?${host.replace(/\./g, "\\.")}"? = "allow"$`, "m").test(text);
 const gitconfig = path.join(stateRoot, "package-runtime", ID, "gitconfig");
 const ghDir = path.join(stateRoot, "github-agent", "gh");
 
@@ -50,10 +60,17 @@ try {
   assert.ok(codexOn.includes(`GH_CONFIG_DIR = ${JSON.stringify(ghDir)}`), "Codex shell env points at the bot's gh directory");
   assert.match(codexOn, /network_proxy = true/);
   assert.match(codexOn, /\[permissions\.managed-workspace\.network\.domains\]/);
-  assert.match(codexOn, /"github\.com" = "allow"|^github\.com = "allow"/m);
-  assert.match(codexOn, /"api\.github\.com" = "allow"|^api\.github\.com = "allow"/m);
+  for (const host of ["github.com", "api.github.com", "example.com"]) assert.ok(domain(codexOn, host), `on: domains table allows ${host}`);
+  assert.equal(codexOn.match(/^\[permissions\.managed-workspace\.network\.domains\]$/gm).length, 1, "on: one domains table");
   assert.match(codexOn, /\[permissions\.managed-workspace\.network\]\nenabled = true/, "Codex network is on");
   assert.match(codexOn, /"\/etc\/ssl\/cert\.pem" = "read"/);
+
+  // Codex's prefix rules follow the identity: enable rewrites the live rules file.
+  const rulesOn = codexRules();
+  assert.match(rulesOn, /pattern=\["gh", "api"\], decision="allow"/, "on: Codex rules allow gh api");
+  assert.match(rulesOn, /pattern=\["git", "push"\], decision="allow"/, "on: Codex rules allow git push");
+  assert.match(rulesOn, /pattern=\["gh", "pr", "comment"\], decision="allow"/, "on: Codex rules allow posting");
+  assert.match(rulesOn, /pattern=\["git", "push", "--force"\], decision="forbidden"/, "on: force pushes stay forbidden");
 
   // The domains table is not part of the generated block, so every later render keeps it, including
   // the render `roborepo update` does after merging the shipped template into the live file.
@@ -72,6 +89,8 @@ try {
   assert.ok(claudeSettings().permissions.deny.includes("Bash(gh api:*)"), "disable restores the baseline Claude permissions");
   const codexOff = codexConfig();
   assert.doesNotMatch(codexOff, /GH_CONFIG_DIR|network_proxy|github\.com/, "Codex config is clean after disable");
+  assert.ok(domain(codexOff, "example.com"), "off: the user's own domain stays");
+  assert.equal(codexRules(), baselineRules, "off: Codex rules return to the identity-off baseline");
   assert.match(codexOff, /\[permissions\.managed-workspace\.network\]\nenabled = false/);
   assert.doesNotMatch(codexOff, /cert\.pem/);
 } finally {
