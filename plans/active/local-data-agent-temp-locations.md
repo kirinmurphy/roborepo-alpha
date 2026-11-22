@@ -356,6 +356,8 @@ as the system temp folders, so a Codex agent can write its pull request body the
       plans-store adapter and that the tracked Codex config has none — fixed (49972bde)
 - [x] `docs/user/reference/config-control-panel.md`'s Codex paragraph omitted the scratch folder —
       fixed (49972bde); `cli-internals.md` and `config-panel-internals.md` updated alongside
+- [x] `stores reset scratch --dry-run` read through a scratch root replaced by a link and listed
+      folders the real reset refuses to remove — fixed (6c327a8d)
 - [ ] Byte cap can remove a folder another session is using — escalated, see Open Questions
 - [ ] `roborepo scratch` is not classified in the agent permission manifest, failing
       `agent-run-coverage-check` — escalated, see Open Questions
@@ -367,6 +369,7 @@ as the system temp folders, so a Codex agent can write its pull request body the
 - Validation pass 2 at afdf7853 (fresh-context subagent): 4 `fix`, 0 `escalate`.
 - Validation pass 3 at fac86228 (fresh-context subagent): 1 `fix`, 0 `escalate`.
 - Validation pass 4 at 82718950 (fresh-context subagent): 3 `fix` (docs), 0 `escalate`.
+- Validation pass 5 at 49972bde (fresh-context subagent): 1 `fix`, 0 `escalate`.
 - Full local gate (`npm run check`) at d6f38f1c: 424 passed, 3 failed. `agent-run-coverage-check`
   is the open question above. The `generated/` guard and the add-skill
   `git diff --quiet -- globals/packages/plan-suite` check failed because the run started with
