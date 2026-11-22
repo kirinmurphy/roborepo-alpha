@@ -1,6 +1,6 @@
 ---
 id: gy8ncs9u
-next_action: "Review the implementation on branch local-data-agent-temp-locations with /plan-review; check the portal Local Stores label for a spared scratch store (open under Not tested)."
+next_action: "Review the implementation on branch local-data-agent-temp-locations with /plan-review."
 blocked_by: []
 depends_on: ["9njvfh5z"]
 related: ["9njvfh5z", "n8kw3rp2", "wu7h7gdp"]
@@ -315,11 +315,11 @@ None. Both earlier questions were answered by the user; see the Decision Log.
       with a fake home outside every temp root, scratch root absent and present → exit 0, path
       printed, `wrote-in-scratch`, `elsewhere-denied`.
 
-- [ ] The portal's Local Stores row shows "over cap, recent folders spared" for a scratch store
-      whose overage is all in recently changed folders — not seen in a browser: the browser pane
-      starts servers only from the primary checkout's launch configurations, which this worktree
-      session does not edit. The data it renders (`spared: true`) was checked with `storeHealth()`.
-      Open the portal against a state root holding a just-written 600 MB scratch folder.
+- [x] The portal's Local Stores row shows "over cap, recent folders spared" for a scratch store
+      whose overage is all in recently changed folders — Verified by agent 2026-11-22 at 5fe2a57b:
+      a new Agents page Playwright test (`node scripts/test/portal-ui/run.mjs portal-ui.spec.mjs -g
+      "labelled spared"`) passed, and failed against the template before the label; the data it
+      renders (`spared: true`) was checked with `storeHealth()` on a real 600 MB scratch folder.
 
 ## Review
 
