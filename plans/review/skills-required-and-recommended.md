@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: The review is complete and awaits the user's approval of commit 17519cd4; once approved and pull request 76 is merged, run `/plan-close`.
+next_action: Approved at commit 17519cd4, but main moved after the review; merge main into the branch and re-review before merging pull request 76 (run `/plan-review`).
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -436,6 +436,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
   skill-reference-matrix-characterization, package-relationships, package-catalog checks pass locally.
 - Plan review Validator pass at 17519cd4 (fresh-context subagent): clean.
 - CI run 45059404551 at 17519cd4 (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
+
+- Approval of 17519cd4: the user replied "Approve 17519cd4" in the /plan-review session on 2026-11-22.
 
 ### Result
 - Status: complete
