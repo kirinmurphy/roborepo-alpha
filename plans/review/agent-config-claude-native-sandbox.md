@@ -1004,3 +1004,26 @@ Acceptance criteria:
 
 None. The pass 25 question about commands that only name a push was answered by the user on
 2026-11-17 (Decision Log). The `delete-files` question was answered by the user on 2026-11-14 (Decision Log).
+
+## Completion
+
+Closed 2026-11-22. Claude sessions now run shell commands in Claude Code's native sandbox, rendered
+from the shared permission source into the generated `~/.claude/settings.json`: commands that stay
+in the checkout and temp folders run without a prompt, credentials stay unreadable, public CA
+bundles stay readable, and `docker`, `gh`, the git network and branch-switch commands, and
+`roborepo` run outside the sandbox under the ordinary rules. Deleting files no longer asks, except
+in a checkout with a protected branch checked out; agents can no longer merge a pull request, or
+merge, pull, rebase, or cherry-pick on a protected branch (fast-forward-only pulls and merges stay
+allowed). Merged to `main` through kirinmurphy/roborepo-alpha#66.
+
+## Verification
+
+- Completion gate: CI run 45028925854 on `main` at 46f37fbc passed
+- Focused checks rerun on `main` at 46f37fbc: `claude-sandbox-projection-check`, `permissions-render-live-characterization-check`, `permission-harness-notes-check`, `agent-permission-defaults-check`, `protected-branch-push-check`, `docs-reference-check`, `orphan-test-check`, `codex-command-permission-check`, and `scripts/build/render-agent-permissions.mjs --check` passed; the Claude and Codex protected-branch hook copies are byte-identical
+- Plan claims checked against `main`: every implementation task, acceptance criterion, `## Not tested` entry, and `## Review` finding is checked off; `generated/claude/settings.json` carries the `sandbox` key (excluded commands, CA `allowRead`, allowed hosts, `allowLocalBinding: false`), denies `gh pr merge`, and has no `git push` ask rule; the shared source has `sandbox-shell` (Claude only, allow), `delete-files` allow, `merge-pull-requests` deny, and `go-online` still Codex-only deny
+- Merge commit 46f37fbc has the same tree as the approved commit d9743e02
+- Docs of record checked against the landed code: `docs/user/reference/config-control-panel.md`, `docs/internal/harness-provider-interface.md` (Claude renders a sandbox but implements neither path method), `docs/internal/testing.md`, `docs/internal/config-panel-internals.md`, `docs/user/reference/claude-hooks.md`, and `docs/user/reference/codex-hooks.md` match
+- Approval: fresh; approved commit d9743e02d4ed15ca411de405b9ad9c0d63225247, confirmed by a human
+- Landing: newly scanned; branch `claude/agent-config-claude-native-sandbox` absorbed into `main`
+- Absorbing commit: 46f37fbc51d551f49999d757a328694c176555b8
+- Not verified: enforcement outside macOS (Linux needs extra packages; Windows runs unsandboxed), as recorded in Risks; headless `claude -p` started from a sandboxed command ("Not logged in") remains unexplained and is left to the plans that rely on it
