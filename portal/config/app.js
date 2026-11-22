@@ -82,25 +82,41 @@ async function applyBucket(payload, errSlot) {
   }
 }
 
-async function handleToggle(item, enabled) {
+// `offer: false` is for switches inside the recommendations dialog: a recommendation is offered
+// once, when its parent is turned on, so turning one on there opens no further offer.
+async function handleToggle(item, enabled, { offer = true } = {}) {
   const data = await api.toggleItem(item.toggle, item.id, enabled);
   if (data.config) applySnapshot(data.config); // re-render from the authoritative post-mutation snapshot
   void offerHookReview(data.hookHarnesses);
-  if (enabled && data.recommendations?.length) await offerRecommendations(item, data.recommendations);
+  if (offer && enabled && data.recommendations?.length) await offerRecommendations(item, data.recommendations);
 }
 
-// An enable that left recommended packages off asks which to enable too; each chosen one is an
-// ordinary package toggle, so it reports and re-renders the same way.
-async function offerRecommendations(item, recommendations) {
-  const chosen = await recommendationsDialog.ask(item.label, recommendations);
-  for (const id of chosen) {
-    try {
-      await handleToggle({ toggle: "package", id, label: id }, true);
-    } catch (err) {
-      showError(err);
-      return;
-    }
+// An enable that left recommended packages off lists them as ordinary rows, whose switches apply
+// at once and re-render the page the same way any toggle does.
+function offerRecommendations(item, recommendations) {
+  return recommendationsDialog.ask(item.label, recommendations, {
+    rowFor: packageRow,
+    renderRow: (row) => tmpl.configItemElement(row, {
+      onInspect: openSourceModal,
+      onToggle: (target, enabled) => handleToggle(target, enabled, { offer: false }),
+      onDependency: openDependency,
+      contextCost: lastSnapshot?.contextCost || null,
+    }),
+  });
+}
+
+// A package's row in the latest snapshot, wherever its section is.
+function packageRow(id) {
+  for (const section of lastSnapshot?.behaviorView || []) {
+    const row = section.categoryId && section.items.find((item) => item.id === id);
+    if (row) return row;
   }
+  return null;
+}
+
+// A package in a row's Package Dependencies opens its source, listing its own requirements.
+function openDependency(ref) {
+  return openSourceModal(ref.inspect, ref.contextCost, { builtIn: ref.builtIn, requires: ref.requires || [] });
 }
 
 // Section-level batch (bulkToggle sections): one request for the whole section, server applies
@@ -145,6 +161,7 @@ function renderStandardSection(section, contextCost) {
     onInspectClick: openSourceModal,
     onToggle: handleToggle,
     onBulkToggle: handleBulkToggle,
+    onDependency: openDependency,
     contextCost,
   });
 }
@@ -297,6 +314,7 @@ function applySnapshot(snap) {
   if (changed) {
     last = changed;
     render(snap);
+    recommendationsDialog.refresh();
   }
   portalSetUpdatedAt(new Date(), { cadenceMs: POLL_INTERVAL_MS });
 }

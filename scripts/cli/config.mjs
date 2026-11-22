@@ -336,11 +336,15 @@ export function buildBehaviorView(snap) {
   });
   for (const item of snap.packages) {
     // Dependency-only and hidden packages get no row of their own; a dependency-only package is
-    // listed under Requires in the source popup of each package that requires it.
+    // listed under Requires in the Package Dependencies of each package that requires it.
     if ((item.presentation?.visibility || "catalog") !== "catalog") continue;
     const section = byCategory.get(item.presentation?.category);
     if (!section) continue;
-    section.items.push({ ...presentationItem(item), requires: requiredReferences(item, snap.packages, presentationItem) });
+    section.items.push({
+      ...presentationItem(item),
+      requires: requiredReferences(item, snap.packages, presentationItem),
+      recommends: recommendedReferences(item, snap.packages, presentationItem),
+    });
   }
 
   const sections = categories
@@ -357,7 +361,6 @@ export function buildBehaviorView(snap) {
       footnote: section.footnote,
       items: section.items.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)),
       contextCost: sectionContextCost(section.items),
-      recommendedDependencies: recommendedDependencies(section.items, snap.packages, presentationItem),
     }));
 
   const permItems = permissionItems(perms);
@@ -546,36 +549,28 @@ function visibleRequiredPackages(item, packages) {
     .filter((pkg) => pkg && pkg.presentation?.visibility !== "hidden");
 }
 
-// The packages a section's rows recommend, as the section's Recommended dependencies list: each a
-// switchable row naming the rows that recommend it. A package already shown as a row in the
-// section, one a row requires (it turns on anyway), and a hidden or non-selectable one
-// are left out.
-function recommendedDependencies(sectionItems, packages, presentationItem) {
+// Each row's recommended packages, as references its Package Dependencies popover lists: the
+// package's direct `recommends`, minus packages it requires (they turn on anyway) and hidden or
+// non-selectable ones, which the enable-time offer never names either. Each reference carries its
+// own required references, so opening it shows the next link of the chain.
+function recommendedReferences(item, packages, presentationItem) {
   const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const shown = new Set(sectionItems.map((item) => item.id));
-  const required = new Set(sectionItems.flatMap((item) => requiredClosure(packages, [item.id])));
-  const recommended = new Map();
-  for (const item of sectionItems) {
-    const label = byId.get(item.id)?.label || item.label;
-    for (const id of byId.get(item.id)?.recommends || []) {
-      const pkg = byId.get(id);
-      if (!pkg || shown.has(id) || required.has(id) || !pkg.selectable) continue;
-      if (pkg.presentation?.visibility === "hidden") continue;
-      if (!recommended.has(id)) recommended.set(id, new Set());
-      recommended.get(id).add(label);
-    }
-  }
-  return [...recommended].map(([id, referencedBy]) => {
-    const pkg = byId.get(id);
-    return {
-      ...presentationItem(pkg),
-      label: pkg.label,
-      relationship: "recommended",
-      referencedBy: [...referencedBy],
-      relationText: `recommended by ${[...referencedBy].join(", ")}`,
-      requires: requiredReferences(pkg, packages, presentationItem),
-    };
-  }).sort((a, b) => a.label.localeCompare(b.label));
+  const required = new Set(requiredClosure(packages, [item.id]));
+  return (byId.get(item.id)?.recommends || [])
+    .map((id) => byId.get(id))
+    .filter((pkg) => pkg && pkg.selectable && !required.has(pkg.id) && pkg.presentation?.visibility !== "hidden")
+    .map((pkg) => {
+      const row = presentationItem(pkg);
+      return {
+        id: pkg.id,
+        label: pkg.label,
+        active: pkg.enabled,
+        inspect: row.inspect,
+        contextCost: row.contextCost,
+        builtIn: row.builtIn,
+        requires: requiredReferences(pkg, packages, presentationItem),
+      };
+    });
 }
 
 // A package with this many skills or more is a set: its card label opens a contents view listing

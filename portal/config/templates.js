@@ -290,7 +290,7 @@ function permissionRow(item, callbacks) {
   return row;
 }
 
-function configItemElement(item, actions) {
+export function configItemElement(item, actions) {
   const node = document.createElement("config-item");
   node.item = item;
   node.actions = actions;
@@ -306,7 +306,7 @@ function configItemElement(item, actions) {
 // render, so individual and group selections can never disagree (bidirectional by construction:
 // any mutation re-renders from the fresh server snapshot). All-on => on + "Deselect All";
 // anything else (mixed or all-off) => off + "Select All".
-export function standardSection(section, { onInspectClick, onToggle, onBulkToggle, contextCost }) {
+export function standardSection(section, { onInspectClick, onToggle, onBulkToggle, onDependency, contextCost }) {
   const panel = tpl("tpl-section-packages");
   panel.classList.toggle("wide", !!section.wide);
   toggleSlot(panel, "heading", true, section.category);
@@ -315,15 +315,8 @@ export function standardSection(section, { onInspectClick, onToggle, onBulkToggl
 
   const itemsSlot = panel.querySelector('[data-slot="items"]');
   itemsSlot.replaceChildren(
-    ...section.items.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, contextCost })),
+    ...section.items.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, onDependency, contextCost })),
   );
-
-  if (section.recommendedDependencies?.length) {
-    panel.querySelector('[data-slot="recommended-items"]').replaceChildren(
-      ...section.recommendedDependencies.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, contextCost })),
-    );
-    panel.querySelector('[data-slot="recommended-group"]').hidden = false;
-  }
 
   const bulkWrap = panel.querySelector('[data-slot="bulk"]');
   // Only rows the batch can act on count: a row on only because another selection requires it
@@ -386,11 +379,41 @@ export function requiredReference(ref, onSelect) {
   return button;
 }
 
-// One choosable recommendation in the post-enable recommendations dialog.
-export function recommendationOption(rec) {
-  const node = tpl("tpl-recommendation-option");
-  fill(node, { label: rec.label, description: rec.description || "" });
-  node.querySelector('[data-slot="check"]').value = rec.id;
+// A row's Package Dependencies popover: its required packages, then its recommended ones, each
+// with whether it is on. Selecting one hands onSelect a reference carrying its own required
+// references, so its detail can list them too. A required reference names its requirements by id
+// (requiredIds) within the row's closure; a recommended one already carries its own.
+export function packageDependencies(item, onSelect) {
+  const node = tpl("tpl-package-dependencies");
+  const requires = item.requires || [];
+  const recommends = item.recommends || [];
+  const withRequires = (ref) => ref.requires
+    ? ref
+    : { ...ref, requires: requires.filter((other) => ref.requiredIds?.includes(other.id)) };
+  node.querySelector('[data-slot="requires"]').replaceChildren(
+    ...requires.map((ref) => packageDependencyEntry(withRequires(ref), onSelect)),
+  );
+  node.querySelector('[data-slot="requires-group"]').hidden = requires.length === 0;
+  node.querySelector('[data-slot="recommends"]').replaceChildren(
+    ...recommends.map((ref) => packageDependencyEntry(ref, onSelect)),
+  );
+  node.querySelector('[data-slot="recommends-group"]').hidden = recommends.length === 0;
+  // The offer happens when the package is turned on, so the note only applies while it is off.
+  const note = node.querySelector('[data-slot="note"]');
+  if (!item.active && recommends.some((ref) => !ref.active)) {
+    note.textContent = `You will be prompted to add them when enabling ${item.label}.`;
+    note.hidden = false;
+  }
+  return node;
+}
+
+function packageDependencyEntry(ref, onSelect) {
+  const node = tpl("tpl-package-dependency-entry");
+  fill(node, { label: ref.label, state: ref.active ? "on" : "off" });
+  node.querySelector('[data-slot="dot"]').classList.add(ref.active ? "on" : "off");
+  const button = node.querySelector("button");
+  if (ref.inspect) button.addEventListener("click", () => onSelect(ref));
+  else button.disabled = true;
   return node;
 }
 

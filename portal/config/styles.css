@@ -709,22 +709,10 @@ main {
 .text-link:hover {
   color: var(--ink);
 }
-/* modal — chrome classes (.modal-head/.modal-title/.modal-path/.modal-body) and
- * <portal-close-button> live in base.css, shared with /plans' #skill-modal. dialog#config-modal
- * box styling and .modal-footer stay here — footer is Config-only (skill-modal has no footer
- * actions). */
+/* modal — the box, head, title, close, body, and footer come from base.css's .portal-dialog,
+ * shared by both Config dialogs. Only the source popup's own width lives here. */
 dialog#config-modal {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
   max-width: 900px;
-  width: 100%;
-  max-height: 85vh;
-  padding: 0;
-}
-dialog#config-modal[open] {
-  display: flex;
-  flex-direction: column;
 }
 /* Config modal header: "title [token chip]" on the first line, file path underneath. The shared
  * .modal-head base (base.css) is a single flex row for other pages' modals. */
@@ -824,13 +812,6 @@ dialog#config-modal .modal-path {
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
-dialog#config-modal::backdrop {
-  background: var(--backdrop);
-}
-.modal-footer {
-  padding: 10px 16px;
-  border-top: 1px solid var(--line);
-}
 /* Narrow screens drop the column header and stack each harness into two columns: the harness
  * name beside its four config cells, each cell naming its column via data-label. */
 @media (max-width: 640px) {
@@ -925,54 +906,97 @@ dialog#config-modal::backdrop {
   width: fit-content;
 }
 
-/* Recommended dependency list under a package section's own rows. */
-.dependency-group {
-  margin-top: 12px;
-  border-top: 1px solid var(--line);
-  padding-top: 8px;
-}
-.dependency-head {
+/* A row's Package Dependencies link and its popover: Required, then Recommended, each entry a
+ * button opening that package's detail. */
+.package-deps-trigger .menu-button-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--dim);
+  font: inherit;
   font-size: var(--text-2xs);
-  font-weight: 600;
-  color: var(--ink);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin: 0 0 4px;
-}
-.item-relation {
-  color: var(--desc-dim);
-  font-size: var(--text-2xs);
-  margin-top: 3px;
-}
-
-/* Post-enable recommendations dialog. */
-.recommendations-lead {
-  margin: 0 0 10px;
-  color: var(--desc-dim);
-}
-.recommendations-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.recommendation-option {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
   cursor: pointer;
 }
-.recommendation-text {
-  display: flex;
-  flex-direction: column;
+.package-deps-trigger .menu-button-trigger:hover,
+.package-deps-trigger .menu-button-trigger[aria-expanded="true"] {
+  color: var(--accent);
 }
-.recommendation-desc {
+.package-deps {
+  min-width: 240px;
+  max-width: 340px;
+  padding: 6px 0;
+}
+.package-deps-group + .package-deps-group {
+  border-top: 1px solid var(--line);
+  margin-top: 6px;
+  padding-top: 6px;
+}
+.package-deps-head {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+  padding: 2px 12px 4px;
+}
+.package-deps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.package-deps-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 12px;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.package-deps-entry:hover:not(:disabled),
+.package-deps-entry:focus-visible {
+  background: var(--popover-item-hover);
+  outline: none;
+}
+.package-deps-entry:disabled {
+  cursor: default;
+}
+.package-deps-entry .dot {
+  margin-top: 0;
+}
+.package-deps-label {
+  flex: 1;
+}
+.package-deps-state {
+  color: var(--dim);
+  font-size: var(--text-2xs);
+}
+.package-deps-note {
+  margin: 4px 0 0;
+  padding: 0 12px;
   color: var(--desc-dim);
   font-size: var(--text-2xs);
 }
-#recommendations-modal .modal-footer {
+
+/* Post-enable recommendations dialog: the page's own rows between the lead and the footer. */
+.recommendations-body {
+  padding: 18px 20px 20px;
+}
+.recommendations-lead {
+  margin: 0 0 12px;
+  color: var(--desc-dim);
+}
+.recommendations-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
 }
 
 /* Source popup: the inspected package's required packages. */

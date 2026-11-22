@@ -16,11 +16,12 @@ packages as references (`id`, `label`, `active`, and the `inspect` target and co
 would have). These references do not suppress a selectable catalog-visible package's own row.
 The source popup lists a row's references under **Requires**, each opening that package's source
 with **Back** to the row. `roborepo config status` prints them as a `requires:` line under the row.
-Each section also gets
-`recommendedDependencies[]` (its rows' direct `recommends`, minus rows it already shows and packages
-a row requires): ordinary switchable rows plus `relationship`, `referencedBy`, and `relationText`,
-rendered below the section's rows and printed by `config status`. Rows carry `selection` so the
-group switch counts only rows it can act on.
+Each row also
+carries `recommends[]`: its direct `recommends`, minus packages it requires and hidden or
+non-selectable ones, as references with the same fields plus their own `requires[]`. The row's
+Package Dependencies popover lists both, each opening that package's source; `config status`
+prints a `recommends:` line. Rows carry `selection` so the group switch counts only rows it can act
+on.
 
 Adding a feature of an existing resource shape is data, not code: declare its resources in the
 owning `package.config.json`. A new shape needs a new `case` in the enable/disable switch

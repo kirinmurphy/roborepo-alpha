@@ -40,7 +40,7 @@
         </section>
       </div>
     </main>
-    <dialog id="config-modal" aria-labelledby="modal-title">
+    <dialog id="config-modal" class="portal-dialog" aria-labelledby="modal-title">
       <div class="modal-head">
         <div class="modal-head-main">
           <button type="button" class="modal-back" id="modal-back" hidden>‹ Back</button>
@@ -61,22 +61,22 @@
       </div>
       <div class="modal-footer" id="modal-footer" hidden></div>
     </dialog>
-    <!-- Shown after a package enable that left some of its recommendations off: the user picks
-         which to enable too, or continues without them. Nothing is enabled without a choice here. -->
-    <dialog id="recommendations-modal" aria-labelledby="recommendations-title" data-dialog-size="sm">
+    <!-- Shown after a package enable that left some of its recommendations off. Each one is the
+         same row as on the page: its label opens its detail and its switch turns it on or off at
+         once. Nothing is enabled unless the user flips a switch here. -->
+    <dialog id="recommendations-modal" class="portal-dialog" aria-labelledby="recommendations-title" data-dialog-size="md">
       <div class="modal-head">
         <div class="modal-head-main">
           <span class="modal-title" id="recommendations-title"></span>
           <portal-close-button id="recommendations-close"></portal-close-button>
         </div>
       </div>
-      <div class="modal-body">
-        <p class="recommendations-lead">Recommended alongside it. Choose any to enable too:</p>
+      <div class="modal-body recommendations-body">
+        <p class="recommendations-lead" id="recommendations-lead"></p>
         <div class="recommendations-list" id="recommendations-list"></div>
       </div>
-      <div class="modal-footer">
-        <button type="button" data-btn="text" id="recommendations-skip">Continue without</button>
-        <button type="button" data-btn="cta" id="recommendations-enable">Enable selected</button>
+      <div class="modal-footer recommendations-footer">
+        <button type="button" data-btn="secondary" id="recommendations-done">No Thanks</button>
       </div>
     </dialog>
     <template id="tpl-required-reference">
@@ -85,14 +85,29 @@
     <template id="tpl-required-reference-text">
       <span class="modal-requires-item"></span>
     </template>
-    <template id="tpl-recommendation-option">
-      <label class="recommendation-option">
-        <input type="checkbox" data-slot="check" checked />
-        <span class="recommendation-text">
-          <span class="recommendation-label" data-slot="label"></span>
-          <span class="recommendation-desc" data-slot="description"></span>
-        </span>
-      </label>
+    <!-- A row's Package Dependencies popover: what it requires and what it recommends, each entry
+         opening that package's detail. The note says when recommendations will be offered. -->
+    <template id="tpl-package-dependencies">
+      <div class="package-deps">
+        <section class="package-deps-group" data-slot="requires-group" hidden>
+          <h4 class="package-deps-head">Required</h4>
+          <ul class="package-deps-list" data-slot="requires"></ul>
+        </section>
+        <section class="package-deps-group" data-slot="recommends-group" hidden>
+          <h4 class="package-deps-head">Recommended</h4>
+          <ul class="package-deps-list" data-slot="recommends"></ul>
+          <p class="package-deps-note" data-slot="note" hidden></p>
+        </section>
+      </div>
+    </template>
+    <template id="tpl-package-dependency-entry">
+      <li>
+        <button type="button" class="package-deps-entry">
+          <span class="dot" data-slot="dot"></span>
+          <span class="package-deps-label" data-slot="label"></span>
+          <span class="package-deps-state" data-slot="state"></span>
+        </button>
+      </li>
     </template>
     <!-- Repo inspector (a repo selected in Viewing): the repo's token use per active harness, then
          read-only lists of its own agent files from its primary checkout. templates.js's
@@ -335,13 +350,6 @@
         </div>
         <p class="panel-desc" data-slot="description" hidden></p>
         <div data-slot="items"></div>
-        <!-- Packages this section's rows recommend (buildBehaviorView's recommendedDependencies),
-             each row naming what recommends it. Required packages are not rows here: a package's
-             source popup lists what it requires. -->
-        <div class="dependency-group" data-slot="recommended-group" hidden>
-          <h3 class="dependency-head">Recommended dependencies</h3>
-          <div data-slot="recommended-items"></div>
-        </div>
         <p class="panel-footnote" data-slot="footnote" hidden></p>
       </section>
     </template>
@@ -419,9 +427,9 @@
               <portal-icon name="external-link" size="xl"></portal-icon>
             </a>
             <span data-slot="badges"></span>
+            <span data-slot="dependencies"></span>
           </div>
           <div class="item-desc" data-slot="description"></div>
-          <div class="item-relation" data-slot="relation"></div>
           <div class="item-note" data-slot="note"></div>
           <div class="item-hint" data-slot="hint"></div>
           <div class="item-status" data-slot="status"></div>

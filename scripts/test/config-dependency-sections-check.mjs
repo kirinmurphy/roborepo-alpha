@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Config page dependencies, as buildBehaviorView derives them and `roborepo config status` prints
 // them: each row references its transitive requirements for the source popup, independently of
-// whether they keep their own catalog rows; a section lists its direct `recommends` as switchable
-// rows, without repeating a row it already shows or a package a row requires; dependency-only and
-// hidden packages have no normal row. Workspace fixtures in a throwaway home.
+// whether they keep their own catalog rows; each row also references its direct `recommends`,
+// minus packages it requires and hidden ones; dependency-only and hidden packages have no normal
+// row. Workspace fixtures in a throwaway home.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -85,27 +85,32 @@ try {
   assert.deepEqual(byId.get("deps-sibling").requires, [], "a row with no requirements references none");
   assert.equal(section.requiredDependencies, undefined, "required packages get no page list of their own");
 
-  const recommended = section.recommendedDependencies.map((item) => item.id);
-  assert.deepEqual(recommended, ["deps-companion"],
-    "recommended skips rows already in the section and packages a row requires");
-  assert.equal(section.recommendedDependencies[0].toggle, "package", "an off recommendation can be switched on");
-  assert.equal(section.recommendedDependencies[0].relationText, "recommended by Deps deps-closer");
-  assert.deepEqual(section.recommendedDependencies[0].requires.map((ref) => ref.id), ["deps-leaf"],
-    "a recommended row references its requirements like any other row");
+  assert.equal(section.recommendedDependencies, undefined, "recommended packages get no section list of their own");
+  const closerRecommends = byId.get("deps-closer").recommends;
+  assert.deepEqual(closerRecommends.map((ref) => ref.id), ["deps-companion", "deps-sibling"],
+    "a row's recommendations skip packages it requires and hidden packages, in manifest order");
+  const companion = closerRecommends[0];
+  assert.equal(companion.label, "Deps deps-companion");
+  assert.equal(companion.active, false, "an off recommendation reads as off");
+  assert.ok(companion.inspect, "a recommendation carries the inspect target its detail opens");
+  assert.deepEqual(companion.requires.map((ref) => ref.id), ["deps-leaf"],
+    "a recommendation carries its own requirements, so its detail can list them");
+  assert.deepEqual(byId.get("deps-planner").recommends, [], "a row with no recommendations references none");
 
   const printed = run(cli, "config", "status");
   assert.doesNotMatch(printed, /Required dependencies/, "config status prints no required list");
   assert.match(printed, /\[x\] Deps deps-planner\n {6}Dependency section fixture\n {6}requires: Deps deps-leaf, Deps deps-review\n/,
     "config status names a row's requirements under it");
-  assert.match(printed, /\n {2}Recommended dependencies\n {4}\[ \] Deps deps-companion {2}\(recommended by Deps deps-closer\)/,
-    "config status prints the recommended list");
+  assert.doesNotMatch(printed, /Recommended dependencies/, "config status prints no section recommended list");
+  assert.match(printed, /\n {6}recommends: Deps deps-companion \(off\), Deps deps-sibling \(off\)\n/,
+    "config status names a row's recommendations under it, with the ones still off marked");
 
   const enabledCloser = run(cli, "package", "enable", "deps-closer");
   assert.match(enabledCloser, /recommended \(not enabled\): .*deps-companion/);
   assert.doesNotMatch(enabledCloser, /recommended \(not enabled\): .*deps-hidden/,
     "hidden recommendations stay out of the enable result shown by the terminal and portal dialog");
 
-  console.log("ok: config dependencies (row references, recommended list, terminal print)");
+  console.log("ok: config dependencies (row references, recommendations, terminal print)");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

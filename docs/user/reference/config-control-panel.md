@@ -95,7 +95,10 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 - A composite reports itself enabled only when every required package, and any resources of its
   own, are enabled.
 - A recommended package is never turned on for you. When an enable leaves recommendations off, the
-  panel asks which of them to enable too; **Continue without** enables none. The terminal setup
+  panel lists them as ordinary rows: each switch turns its package on or off at once, and the
+  label opens its detail. **No Thanks** closes the panel with nothing changed; once you turn one
+  on, the button reads **Done**. Turning a package on there opens no further list of its own
+  recommendations. The terminal setup
   wizard asks nothing: after it applies your choices it prints one line,
   `recommended (not enabled): code-style, javascript-typescript — enable with: roborepo package enable <id>`,
   naming what the packages you selected recommend that is still off.
@@ -119,10 +122,13 @@ package's source, and **Back** returns to the package that requires it. A packag
 of its own opens a contents view that lists only its requirements; if all of them are hidden, its
 name opens nothing.
 
-Below its own rows, a section lists **Recommended dependencies**: what its packages recommend, each
-with a toggle and naming the packages that recommend it. A package a row already requires, or one
-the section already shows, is not repeated there. **Select All** and the Plans banner act on
-packages you can switch directly, and the group switch is hidden when none are left.
+A row with required or recommended packages shows a **Package Dependencies** link. It opens a
+list of what the package requires and what it recommends, each marked on or off; clicking one opens
+that package's detail. While the package is off and some of its recommendations are too, a note
+says you will be offered them when you enable it. `roborepo config status` prints the same lists
+as `requires:` and `recommends:` lines under the row, marking recommendations still off.
+**Select All** and the Plans banner act on packages you can switch directly, and the group switch
+is hidden when none are left.
 
 A package may also hold several skills. They turn on and off together with the package's one
 toggle; there is no switch for a single skill inside it. Its card shows the package name, never one
