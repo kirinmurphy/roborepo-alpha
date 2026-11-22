@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Review renewed at commit 2efa3ecc after merging main; it awaits the user's approval of that commit, then merge pull request 76 and run `/plan-close`.
+next_action: Approved at commit 2efa3ecc; merge pull request 76 on GitHub, then run `/plan-close` on this plan (rerun `/plan-review` first if main moves before the merge).
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -444,6 +444,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - Validator pass at 2efa3ecc (fresh-context subagent): clean; install-drift detection does not read
   package manifests or skills, so the two changes do not interact.
 - CI run 45071990953 at 2efa3ecc (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
+
+- Approval of 2efa3ecc: the user replied "Approve 2efa3ecc" in the /plan-review session on 2026-11-22.
 
 ### Result
 - Status: complete
