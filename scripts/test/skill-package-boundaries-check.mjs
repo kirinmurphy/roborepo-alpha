@@ -93,7 +93,7 @@ only([
 only([
   pkg("writer", { writer: "# Writer\n\nLoad `helper` for conventions.\n" }),
   pkg("helper", { helper: "# Helper\n\nThen load `writer` and run it.\n" }),
-].map((p) => p), /helper unconditionally loads writer, and neither requires the other/, new Set(["writer -> helper"]));
+], /helper unconditionally loads writer, and neither requires the other/, new Set(["writer -> helper"]));
 
 // A reference classified prose-only is not reported.
 assert.deepEqual(packageBoundaryFindings([

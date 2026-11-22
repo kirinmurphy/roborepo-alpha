@@ -564,7 +564,7 @@ function warnUnavailableRequirements(order, catalog) {
 
 // Visible selectable recommendations of `pkg` that are not effective. Offered, never applied here: only
 // the portal and the interactive terminal command ask the user.
-function disabledRecommendations(pkg, catalog, effectiveIds) {
+export function disabledRecommendations(pkg, catalog, effectiveIds) {
   const effective = new Set(effectiveIds);
   return (pkg.recommends || [])
     .map((id) => catalog.find((p) => p.id === id))

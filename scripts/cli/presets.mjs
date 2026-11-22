@@ -20,6 +20,7 @@ import { BUNDLE_STATE_SCHEMA_VERSION, bundleSelectionStates, effectiveBundleIds,
 import { requiresCycles } from "./package-graph.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { effectiveEnabledIds } from "./package-state.mjs";
+import { disabledRecommendations } from "./packages.mjs";
 import { SHARED_TARGET_KINDS, SharedTargetConflictAbort, applySharedTargetRow, removeSharedTargetRow, sharedTargetInstalled } from "./shared-target-rows.mjs";
 
 const PRESET_MANIFEST = path.join(repoRoot, "manifests", "platform", "presets.json");
@@ -276,13 +277,11 @@ export async function applyWizardChanges(steps) {
 function printRecommendationsStillOff(enabledIds) {
   if (enabledIds.length === 0) return;
   const catalog = loadPackageCatalog();
-  const effective = new Set(effectiveEnabledIds(catalog));
-  const offerable = (id) => {
+  const effective = effectiveEnabledIds(catalog);
+  const off = [...new Set(enabledIds.flatMap((id) => {
     const pkg = catalog.find((entry) => entry.id === id);
-    return pkg && pkg.selectable && pkg.presentation?.visibility !== "hidden";
-  };
-  const off = [...new Set(enabledIds.flatMap((id) => catalog.find((pkg) => pkg.id === id)?.recommends || []))]
-    .filter((id) => offerable(id) && !effective.has(id));
+    return pkg ? disabledRecommendations(pkg, catalog, effective).map((dep) => dep.id) : [];
+  }))];
   if (off.length) console.log(`recommended (not enabled): ${off.join(", ")} — enable with: roborepo package enable <id>`);
 }
 
