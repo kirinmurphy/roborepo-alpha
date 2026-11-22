@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Read CI's result for the pull request of branch claude/skills-required-and-recommended, which runs `npm test` and `npm run check`, and clear the two matching `## Not tested` entries with it; then run `/plan-review`.
+next_action: Read CI's result for the pull request of branch claude/skills-required-and-recommended, which runs the full gate (`npm run check`), and clear the matching `## Not tested` entry with it; then run `/plan-review`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -337,8 +337,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - [x] `npm run test:unit` passes, including `package-catalog-check.mjs`, `package-graph-check.mjs`,
       `plan-suite-skills-check.mjs`, and `skill-reference-matrix-characterization-check.mjs`.
 - [x] `npm run test:portal-ui` passes the Requires and Recommended dependencies presentation.
-- [x] `npm test` passes the CLI package enable, disable, and status flows. — tracked under `## Not tested` until CI reports
-- [x] `npm run check` passes (manifests, package state, and skill sources are cross-cutting). — tracked under `## Not tested` until CI reports
+- [x] `npm test` passes the CLI package enable, disable, and status flows. — 426 passed, 0 failed at 76a693a
+- [x] `npm run check` passes (manifests, package state, and skill sources are cross-cutting). — tracked under `## Not tested` until CI reports on the pull request
 
 ## Documentation impact
 
@@ -372,11 +372,11 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 
 ## Not tested
 
-- [ ] `npm test` passes the CLI package enable, disable, and status flows. Blocked: `npm test`
-      runs `scripts/test/test-cli.sh`, which needs git worktree writes and local ports that the
-      session's sandbox refuses; CI runs it on the pull request, so read that result.
-- [ ] `npm run check` passes. Blocked: the full local CI parity gate needs Docker, local ports, and
-      git worktree writes the sandbox refuses; CI runs it on the pull request, so read that result.
+- [x] `npm test` passes the CLI package enable, disable, and status flows. — Verified by agent
+      2026-11-22 at 76a693a: `npm test` outside the sandbox → "roborepo tests: 426 passed, 0 failed".
+- [ ] `npm run check` passes. Blocked: the repository's gate rules run the full parity gate in CI
+      (`.github/workflows/ci.yml`), not locally, for a change outside CI and test orchestration; read
+      CI's result on the pull request for this branch.
 
 ## Review
 
@@ -388,9 +388,16 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - [x] Boundary test read the committed doc and lacked the reverse-requires case — fixed (76a693a)
 - [x] Plan record not synced; inverse links missing from the relationships table — fixed in this save
 - [x] Each skill restated the run-time rule — decided: one pointer per skill (Decision Log), fixed (76a693a)
+- [x] `npm test` Not tested entry was runnable by an agent — run outside the sandbox and cleared (426 passed)
+- [x] `npm run check` entry gave the wrong reason — reworded: CI runs the full gate
+- [x] Wizard comment misstated the shared line — fixed (13629d5)
+- [x] javascript-typescript and technical-writing restated the run-time rule — fixed (13629d5)
+- [x] Audit shape check and boundary warnings parsed the Paired Skills section differently — fixed (13629d5)
 
 ### Verification
 - Validator pass 1 at 40dae82 (fresh-context subagent): 3 actionable, 4 notes; all fixed in 76a693a.
+- Validator pass 2 at 76a693a (fresh-context subagent): 1 actionable, 4 notes; all fixed in 13629d5.
+- `npm test` outside the sandbox at 76a693a: 426 passed, 0 failed.
 - Local, inside the sandbox: plan-suite-skills, skill-reference-matrix-characterization,
   package-catalog, package-graph, package-lifecycle, config-dependency-sections,
   skill-package-boundaries, wizard-recommendations, package-relationships, orphan-test,
