@@ -350,6 +350,12 @@ as the system temp folders, so a Codex agent can write its pull request body the
       — fixed (fac86228)
 - [x] The new Scratch Folders section in `docs/user/reference/roborepo-cli.md` split the
       dev-checkout note from Command Output — fixed (82718950)
+- [x] `docs/user/reference/architecture.md`'s store table and reset commands lacked the scratch
+      store and `--dry-run` — fixed (49972bde)
+- [x] `docs/internal/harness-provider-interface.md` said Codex writable paths come only from the
+      plans-store adapter and that the tracked Codex config has none — fixed (49972bde)
+- [x] `docs/user/reference/config-control-panel.md`'s Codex paragraph omitted the scratch folder —
+      fixed (49972bde); `cli-internals.md` and `config-panel-internals.md` updated alongside
 - [ ] Byte cap can remove a folder another session is using — escalated, see Open Questions
 - [ ] `roborepo scratch` is not classified in the agent permission manifest, failing
       `agent-run-coverage-check` — escalated, see Open Questions
@@ -360,6 +366,7 @@ as the system temp folders, so a Codex agent can write its pull request body the
   finding, filed as `escalate`, was fixed as its remedy was clear.
 - Validation pass 2 at afdf7853 (fresh-context subagent): 4 `fix`, 0 `escalate`.
 - Validation pass 3 at fac86228 (fresh-context subagent): 1 `fix`, 0 `escalate`.
+- Validation pass 4 at 82718950 (fresh-context subagent): 3 `fix` (docs), 0 `escalate`.
 - Full local gate (`npm run check`) at d6f38f1c: 424 passed, 3 failed. `agent-run-coverage-check`
   is the open question above. The `generated/` guard and the add-skill
   `git diff --quiet -- globals/packages/plan-suite` check failed because the run started with
@@ -369,6 +376,10 @@ as the system temp folders, so a Codex agent can write its pull request body the
   list"), a PTY timing race in the remote-sync menu.
 
 ## Documentation impact
+
+Also updated, as the implementation newly affected them: `docs/user/reference/architecture.md`,
+`docs/internal/harness-provider-interface.md`, `docs/internal/cli-internals.md`,
+`docs/internal/config-panel-internals.md`, and `plan-execute/references/handoff.md`.
 
 - `docs/user/reference/roborepo-cli.md`: add `roborepo scratch`, `stores reset --dry-run`, and the
   wider `delivery pr-body` location.
