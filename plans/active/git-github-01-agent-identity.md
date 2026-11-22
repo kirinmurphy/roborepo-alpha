@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: The owner adds the `read:org` scope to the bot's classic token and logs it in under `~/.roborepo/github-agent/gh`; then run the remaining Phase 2 checks, including the Codex sandbox checks
+next_action: Decide where agent shells get the bot's token (Open questions: neither sandbox can read the keychain), then rerun /plan-execute to finish the Phase 2 checks and build Phases 3–6
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -421,23 +421,33 @@ phases build, so run them before Phase 3.
       and `roborepo-main-merge` all matching the policy.
 - [x] Create the bot account, `codethings-agents`. — 2026-11-22: the owner confirmed it through the
       collaborator permission API.
-- [ ] The bot is a collaborator on `kirinmurphy/roborepo-alpha` with write, not admin, and its
-      invitation is accepted. Where the invite is still pending, accept it through
-      `PATCH /user/repository_invitations/{id}` with the bot's token, which also checks setup step 7.
-- [ ] Create a classic token with `repo` and `read:org` only and an expiry, then log it in under the
-      agent `GH_CONFIG_DIR`. A `repo`-only token was refused by `gh auth login` on 2026-11-22.
-- [ ] `gh auth status` in the user's terminal still shows the user after the bot login.
-- [ ] A classic token for a collaborator on a personal-account repo can push a branch and call
-      `gh api` for that repo.
+- [x] The bot is a collaborator on `kirinmurphy/roborepo-alpha` with write, not admin, and its
+      invitation is accepted. — 2026-11-22: `gh repo view --json viewerPermission` as the bot →
+      `WRITE`. The owner accepted the invite by hand, so the API accept in setup step 7 is still
+      untested.
+- [x] Create a classic token with `repo` and `read:org` only and an expiry, then log it in under the
+      agent `GH_CONFIG_DIR`. — 2026-11-22: a `repo`-only token was refused by `gh auth login`; with
+      `read:org` added, `gh auth status` under the agent dir shows `codethings-agents`, scopes
+      `read:org`, `repo`, stored in the keyring.
+- [x] `gh auth status` in the user's terminal still shows the user after the bot login. —
+      2026-11-22: still `kirinmurphy`, its own token and scopes.
+- [x] A classic token for a collaborator on a personal-account repo can push a branch and call the
+      API for that repo. — 2026-11-22, outside any sandbox: pushed and deleted
+      `bot-identity-check-1795361542`; `GIT_TRACE` showed only `gh auth git-credential` answering;
+      `gh pr list` as the bot succeeded. `gh api` itself was not run, because the agent hook denies
+      it; it uses the same token.
 - [ ] The bot can reply to and resolve a review thread. GitHub's docs do not state which
       permission `resolveReviewThread` needs.
 - [ ] The bot can push `repo-plans` directly under the managed ruleset, and cannot delete or
       force-push it.
-- [ ] With `url.https://github.com/.insteadOf`, `git fetch` from an SSH remote succeeds as the bot.
-      If it fails, use `pushInsteadOf` (see "Delivering the identity to agent shells only").
+- [x] With `url.https://github.com/.insteadOf`, `git fetch` from an SSH remote succeeds as the bot.
+      — 2026-11-22: `git fetch origin main` from the `git@github.com:` remote went to
+      `https://github.com/kirinmurphy/roborepo-alpha` and succeeded. The settings were passed as
+      `git -c` flags; the app's worktree guard refuses `GIT_CONFIG_*` in agent commands.
 - [ ] From `codex exec`, with the agent environment and the network settings passed as run-only
       `-c` overrides, confirm these work inside the sandbox. If the keychain is unreachable, stop
-      and bring the options back; do not fall back to a token in a file:
+      and bring the options back; do not fall back to a token in a file. **Ran 2026-11-22; the
+      keychain is unreachable, and the run stopped here. See Open questions.**
   - `gh auth git-credential` reads the bot's token from the keychain.
   - `gh` reads its config from `~/.roborepo/github-agent/gh`.
   - `git fetch` and `git push` to a feature branch succeed as the bot.
@@ -591,8 +601,31 @@ Manual, on the real repo, after Phase 6:
 
 ## Open questions
 
-None. The decisions are in the Decision Log; the GitHub behaviors still unverified are checks in
-Phase 2.
+### Where agent shells get the bot's token, since neither sandbox can read the keychain
+
+Blocks Phases 3–6: the delivery design, package entries, and setup's token step all depend on it.
+
+Evidence, 2026-11-22:
+
+| Where | `gh auth status` as the bot | Other results |
+| --- | --- | --- |
+| User's terminal, no sandbox | Logged in, token from the keyring | Fetch, push, and API all pass |
+| `codex exec`, `managed-workspace` profile with the run-only overrides | "The token in default is invalid": `gh` reads `hosts.yml` but not the keyring | `gh pr list` → HTTP 401, so the proxy and TLS work. `git ls-remote` → `error setting certificate verify locations: CAfile: /etc/ssl/cert.pem`. `git push --dry-run` → "approval required by policy, but AskForApproval is set to Never" |
+| Claude's Bash sandbox | Same "token … is invalid" | `gh` as the user failed TLS verification (`x509: OSStatus -26276`) on an earlier sandboxed run |
+
+Both sandboxes deny `~/Library/Keychains/**`, which is the likely cause; not confirmed by lifting
+the deny. Two more blockers surfaced that any option has to fix: Codex's sandbox cannot read the
+CA file Git needs, and a Codex feature-branch push now needs approval, unlike the 2026-11-05 run.
+
+| Option | Pros | Cons |
+| --- | --- | --- |
+| **A. Token in a file** (recommended): `gh auth login --insecure-storage` under the agent dir, so the token sits in its `hosts.yml`, mode 0600 | Works in both sandboxes with no new path opened; one-line change to the setup; the doctor already checks expiry | Plaintext token on disk, readable by any process the user runs, agents included (`cat` is not blocked the way `gh auth token` is). Contradicts this plan's "never written to a file" goal. Limited by the bot's collaborator role and the token's expiry |
+| B. Let the sandboxes read the keychain | Token stays encrypted at rest | Also exposes the user's own credentials, including their `gh` token, which undoes the credential protection plan ([[4zyo2woj]]). Not recommended |
+| C. Run `gh` and GitHub Git commands outside the sandbox | No token on disk | Claude can exclude commands from its sandbox; Codex cannot without a prompt, so Codex's no-prompt goal is lost |
+| D. Claude only for now; Codex keeps handing pushes back | No token on disk, smallest change | Drops the Codex goals; Claude's sandbox still needs C for `gh` |
+
+Why blocked rather than decided: every option trades a stated goal (no token in a file, no prompt
+in Codex) or the credential protection plan's boundary, and that trade is the user's.
 
 ## Decision Log
 
