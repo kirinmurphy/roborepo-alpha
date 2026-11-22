@@ -129,7 +129,8 @@ export function retentionStores(stateRoot) {
       target: scratchRoot(stateRoot),
       // One folder per plan or topic, handed out by `roborepo scratch <name>`, which prunes this
       // store on every call. A folder untouched for 14 days is done with; work that must last
-      // longer belongs in the plan or the repo. The byte cap is the backstop.
+      // longer belongs in the plan or the repo. The byte cap is the backstop, and it spares folders
+      // changed in the last hour (FOLDER_SET_BYTE_CAP_SPARE_MS).
       policy: { maxAgeDays: 14, maxBytes: 500 * MB, floorBytes: 0, keepFraction: null },
       description: "Temporary folders agents share between sessions.",
     },

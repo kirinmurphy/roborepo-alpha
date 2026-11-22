@@ -53,6 +53,16 @@ try {
   assert.ok(fs.existsSync(path.join(scratch, "capped-topic")), "the printed folder exists after pruning");
   fs.rmSync(big, { recursive: true });
 
+  // ---- The byte cap removes quiet folders but spares one changed in the last hour ----
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const quiet = sparseFolder("over-cap-quiet", twoHoursAgo);
+  const busy = sparseFolder("over-cap-busy", new Date());
+  const overCap = run(["after-cap"]);
+  assert.equal(overCap.status, 0, overCap.stderr);
+  assert.ok(!fs.existsSync(quiet), "a folder quiet for two hours is removed by the byte cap");
+  assert.ok(fs.existsSync(busy), "a folder changed in the last hour is spared although the store is still over the cap");
+  fs.rmSync(busy, { recursive: true });
+
   // ---- Names that are not one path segment are refused, and nothing is created ----
   for (const bad of ["../escape", "a/b", "..", ".hidden", "", "with space"]) {
     const refused = run([bad]);
@@ -97,6 +107,18 @@ function ageFolder(name) {
   const folder = path.join(scratch, name);
   fs.mkdirSync(folder, { recursive: true });
   fs.utimesSync(folder, old, old);
+}
+
+// A folder holding one sparse 600 MB file (over the 500 MB cap on its own), last changed `at`.
+function sparseFolder(name, at) {
+  const folder = path.join(scratch, name);
+  fs.mkdirSync(folder);
+  const file = path.join(folder, "sparse.bin");
+  fs.writeFileSync(file, "");
+  fs.truncateSync(file, 600 * 1024 * 1024);
+  fs.utimesSync(file, at, at);
+  fs.utimesSync(folder, at, at);
+  return folder;
 }
 
 function run(args) {

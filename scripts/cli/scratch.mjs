@@ -64,9 +64,9 @@ export function openScratchFolder(root, name, { now = new Date() } = {}) {
   return folder;
 }
 
-// The folder being handed out is never removed. Touching it keeps it out of the age rule, but the
-// byte cap walks oldest first and another folder can carry a newer time (a concurrent call, a file
-// stamped in the future), so it is also excluded by name.
+// The folder being handed out is never removed. Touching it keeps it out of the age rule and inside
+// the byte cap's one-hour spare, but a clock change or a file stamped in the future can still move
+// it into the byte walk, so it is also excluded by name.
 function pruneScratch(store, keep) {
   const verdict = measureFolderSet({ dirPath: store.target, policy: store.policy });
   const paths = verdict.files.filter((entryPath) => entryPath !== keep);

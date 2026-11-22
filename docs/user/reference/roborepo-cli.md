@@ -255,7 +255,8 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 Agents write temporary files that are not throwaway files in Claude here: throwaway files in Codex,
 notes handed between sessions, a long investigation's intermediate results. Both harness sandboxes
 let shell commands write this folder. Each call removes scratch folders unchanged for 14 days, or
-the oldest ones once the store passes 500 MB, but never the folder it prints. A folder's age is
+the oldest ones once the store passes 500 MB, but never the folder it prints and never a folder
+changed in the last hour, which another session may still be writing. A folder's age is
 the newest change anywhere inside it. The store appears in `roborepo maintenance stores` as
 `scratch`.
 

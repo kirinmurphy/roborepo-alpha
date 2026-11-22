@@ -187,7 +187,7 @@ of it part of the portable profile.
 | Telemetry experiments | `telemetry/experiments/` | one file per id | 5MB total |
 | Dense bash capture | `capture/<harness>/dense-bash.jsonl` | append-only JSONL | 30 days, 10MB |
 | Browser evidence | `browser/evidence/` | one file per screenshot, video, or trace | 14 days, 250MB |
-| Agent scratch | `scratch/` | one folder per plan or topic, from `roborepo scratch <name>` | 14 days since the last change inside a folder, 500MB |
+| Agent scratch | `scratch/` | one folder per plan or topic, from `roborepo scratch <name>` | 14 days since the last change inside a folder, 500MB (folders changed in the last hour are spared) |
 | Worktree removal log | `worktree-cleanup/removals.jsonl` | append/compact JSONL | 30 days, 2 MiB |
 | Worktree transactions | `worktree-cleanup/transactions/` | one file per removal | 7 days, 5 MiB |
 | Usage snapshots | `usage/latest/<harness>.json` | overwritten per harness | self-bounding |

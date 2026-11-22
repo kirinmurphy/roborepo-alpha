@@ -15,7 +15,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { DAY_MS, cutoffMillis, dropCountForBytes, normalizePolicy, toMillis } from "./policy.mjs";
 
-export function measureFolderSet({ dirPath, policy, now = new Date(), fsApi = fs } = {}) {
+// The byte cap never removes a folder changed this recently: another session may be writing to it
+// right now. A writer that overruns the cap is stopped once its folder goes quiet for this long.
+export const FOLDER_SET_BYTE_CAP_SPARE_MS = 60 * 60 * 1000;
+
+export function measureFolderSet({
+  dirPath,
+  policy,
+  now = new Date(),
+  fsApi = fs,
+  spareRecentMs = FOLDER_SET_BYTE_CAP_SPARE_MS,
+} = {}) {
   const resolved = normalizePolicy(policy);
   const entries = folderSetEntries({ dirPath, fsApi });
   if (entries === null) return { act: false, dropCount: 0, reason: "absent", files: [], entries: [] };
@@ -36,7 +46,10 @@ export function measureFolderSet({ dirPath, policy, now = new Date(), fsApi = fs
   const survivors = entries.filter((entry) => !doomed.has(entry.path));
   const lengths = survivors.map((entry) => entry.bytes);
   const total = lengths.reduce((sum, length) => sum + length, 0);
-  const byBytes = dropCountForBytes(lengths, total, resolved);
+  // Survivors are oldest first, so the recently changed ones form the tail the walk must stop before.
+  const spareFrom = toMillis(now) - spareRecentMs;
+  const removable = survivors.filter((entry) => entry.mtimeMs < spareFrom).length;
+  const byBytes = Math.min(dropCountForBytes(lengths, total, resolved), removable);
   for (let i = 0; i < byBytes; i += 1) doomed.add(survivors[i].path);
 
   // Never empty the set entirely — the same final-entry guard the other shapes keep.

@@ -215,7 +215,7 @@ Personal changes are stored in `~/.roborepo/command-overrides.json` and layered 
 row to `default` removes the personal override and returns to the repo manifest default for that
 behavior or command.
 
-### Guarded delivery and plan steps
+### Guarded delivery, plan, and scratch steps
 
 These default-allow behaviors cover the named workflow operations.
 
@@ -224,8 +224,10 @@ These default-allow behaviors cover the named workflow operations.
 | `guarded-delivery` | `delivery fetch`, `delivery pr-body`, `delivery pr-ready`, `delivery retry-ci` |
 | `plan-lifecycle` | `plans sync-base`, `plans stop-servers` |
 | `plan-store-commands` | Named plan-store reads, writes, lifecycle transitions, and checks |
+| `scratch-folders` | `scratch <name>` |
 
-The guarded delivery commands validate their repository, branch, and head targets before acting.
+`roborepo scratch` checks the folder name, writes only under `~/.roborepo/scratch/`, and prunes
+scratch folders past the store's bounds without a prompt. The guarded delivery commands validate their repository, branch, and head targets before acting.
 The lifecycle commands retain their transition, synchronization, and process guards. The plan-store
 allow covers shell invocation. The archive and close skills still require their workflow approvals. Raw fetch and GitHub commands follow their
 existing policies, including the prompts for `gh pr edit` and `gh pr ready`, and the denials for
