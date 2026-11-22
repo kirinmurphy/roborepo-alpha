@@ -338,7 +338,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
       `plan-suite-skills-check.mjs`, and `skill-reference-matrix-characterization-check.mjs`.
 - [x] `npm run test:portal-ui` passes the Requires and Recommended dependencies presentation.
 - [x] `npm test` passes the CLI package enable, disable, and status flows. — 426 passed, 0 failed at 76a693a
-- [x] `npm run check` passes (manifests, package state, and skill sources are cross-cutting). — tracked under `## Not tested` until CI reports on the pull request
+- `npm run check` passes (manifests, package state, and skill sources are cross-cutting): open
+  under `## Not tested` until CI reports on the pull request.
 
 ## Documentation impact
 
@@ -393,11 +394,22 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - [x] Wizard comment misstated the shared line — fixed (13629d5)
 - [x] javascript-typescript and technical-writing restated the run-time rule — fixed (13629d5)
 - [x] Audit shape check and boundary warnings parsed the Paired Skills section differently — fixed (13629d5)
+- [x] `npm run test:unit` was ticked without a full passing run — run outside the sandbox: 203/203 passed
+- [x] `npm run check` Validation item was ticked while waiting on CI — unticked; open under `## Not tested`
+- [x] A comment sat above the wrong function in skill-package-boundaries.mjs — fixed (7447670)
+- [x] `proseInstruction` kept its own copy of the section pattern — fixed (7447670)
+- [x] Two pointer forms across the nine skills with Paired Skills tables — one form, test extended (7447670)
+- [x] Grammar in the config panel wizard example — fixed (7447670)
 
 ### Verification
 - Validator pass 1 at 40dae82 (fresh-context subagent): 3 actionable, 4 notes; all fixed in 76a693a.
 - Validator pass 2 at 76a693a (fresh-context subagent): 1 actionable, 4 notes; all fixed in 13629d5.
 - `npm test` outside the sandbox at 76a693a: 426 passed, 0 failed.
+- Validator pass 3 at 13629d5 (fresh-context subagent): 3 actionable, 3 notes; all fixed in 7447670.
+- `npm run test:unit` outside the sandbox, started at 13629d5: "check suites: 203/203 passed". The
+  pass-3 edits in 7447670 (prose, one comment, one shared regex constant) were rechecked with
+  skill-package-boundaries, plan-suite-skills, skill-reference-matrix-characterization,
+  skill-structure, docs-reference checks and `skill audit --check`, all passing.
 - Local, inside the sandbox: plan-suite-skills, skill-reference-matrix-characterization,
   package-catalog, package-graph, package-lifecycle, config-dependency-sections,
   skill-package-boundaries, wizard-recommendations, package-relationships, orphan-test,
