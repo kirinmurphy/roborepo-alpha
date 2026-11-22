@@ -406,6 +406,7 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - Validator pass 2 at 76a693a (fresh-context subagent): 1 actionable, 4 notes; all fixed in 13629d5.
 - `npm test` outside the sandbox at 76a693a: 426 passed, 0 failed.
 - Validator pass 3 at 13629d5 (fresh-context subagent): 3 actionable, 3 notes; all fixed in 7447670.
+- Validation: clean on pass 4 at 7447670 (fresh-context subagent).
 - `npm run test:unit` outside the sandbox, started at 13629d5: "check suites: 203/203 passed". The
   pass-3 edits in 7447670 (prose, one comment, one shared regex constant) were rechecked with
   skill-package-boundaries, plan-suite-skills, skill-reference-matrix-characterization,
