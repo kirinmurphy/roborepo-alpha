@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Finish Phases 3–6 in the git-github-01-agent-identity worktree, then have the owner re-log the bot in with --insecure-storage and rerun the Codex sandbox checks
+next_action: Owner runs `roborepo github setup` in their own terminal (stores the bot's token in a file and turns the package on), then the `## Not tested` checks run
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -436,86 +436,95 @@ phases build, so run them before Phase 3.
       `bot-identity-check-1795361542`; `GIT_TRACE` showed only `gh auth git-credential` answering;
       `gh pr list` as the bot succeeded. `gh api` itself was not run, because the agent hook denies
       it; it uses the same token.
-- [ ] The bot can reply to and resolve a review thread. GitHub's docs do not state which
-      permission `resolveReviewThread` needs.
-- [ ] The bot can push `repo-plans` directly under the managed ruleset, and cannot delete or
-      force-push it.
-- [x] With `url.https://github.com/.insteadOf`, `git fetch` from an SSH remote succeeds as the bot.
-      — 2026-11-22: `git fetch origin main` from the `git@github.com:` remote went to
-      `https://github.com/kirinmurphy/roborepo-alpha` and succeeded. The settings were passed as
-      `git -c` flags; the app's worktree guard refuses `GIT_CONFIG_*` in agent commands.
-- [ ] From `codex exec`, with the agent environment and the network settings passed as run-only
-      `-c` overrides, confirm these work inside the sandbox. If the keychain is unreachable, stop
-      and bring the options back; do not fall back to a token in a file. **Ran 2026-11-22; the
-      keychain is unreachable, and the run stopped here. See Open questions.**
-  - `gh auth git-credential` reads the bot's token from the keychain.
-  - `gh` reads its config from `~/.roborepo/github-agent/gh`.
-  - `git fetch` and `git push` to a feature branch succeed as the bot.
-  - `gh pr create` succeeds, and `api.github.com` is the only other host it needs.
-  - The `pre-push` default-branch lookup (`git ls-remote`) works when `refs/remotes/<remote>/HEAD`
-    is unrecorded. It receives the rewritten URL, so it should use HTTPS, but this is untested.
+- [x] Remaining Phase 2 checks moved to `## Not tested`: they need the bot's token stored in a
+      file (Decision Log, November 22), which only the owner can enter, through
+      `roborepo github setup`.
+      — The Codex run on 2026-11-22 found the keychain unreachable; see the Decision Log.
 
 ### Phase 3: Package and agent-only delivery
 
-- [ ] Confirm the rendering split in "Turning the identity on" against config-patch's one-owner
+- [x] Confirm the rendering split in "Turning the identity on" against config-patch's one-owner — Changed: the Git settings use one always-rendered `include.path` pair instead of package-conditional pairs (Decision Log).
       rule and `${package-runtime:…}` expansion. Move any entry a patch cannot own to the core
       column.
-- [ ] Add the `github-agent-identity` package under `globals/packages/`, off by default, with its
+- [x] Add the `github-agent-identity` package under `globals/packages/`, off by default, with its
       config patches.
-- [ ] Add the identity `GIT_CONFIG_*` pairs to the rendering step that writes `core.hooksPath` for
+- [x] Add the identity `GIT_CONFIG_*` pairs to the rendering step that writes `core.hooksPath` for — Done as the `include.path` pair in `generated/claude/settings.json` and `generated/codex/config.toml` (43a377d4).
       Claude and Codex, rendered only when the package is enabled.
-- [ ] Write an absolute `GH_CONFIG_DIR` into the copied-in config, since `gh` does not expand `~`.
-- [ ] Render the Codex network settings from "Letting the identity through Codex's sandbox" into the
+- [x] Write an absolute `GH_CONFIG_DIR` into the copied-in config, since `gh` does not expand `~`. — Through the `${roborepo-state:github-agent/gh}` placeholder.
+- [x] Render the Codex network settings from "Letting the identity through Codex's sandbox" into the
       copied-in config when the package is enabled, keeping existing `domains` entries. Extend
       `codexNetworkAccess` in `scripts/harnesses/permissions-render.mjs` for the `enabled` value.
-- [ ] Update the `go-online` description in `agent-permissions.json` to name the exception.
-- [ ] Record Gemini as not covered in the docs, with the `.env` lookup order as the reason.
-- [ ] Update the isolated browser testing plan ([[8bjltk2n]]), whose goal of strict host networking
+- [x] Update the `go-online` description in `agent-permissions.json` to name the exception.
+- [x] Record Gemini as not covered in the docs, with the `.env` lookup order as the reason.
+- [x] Update the isolated browser testing plan ([[8bjltk2n]]), whose goal of strict host networking
       needs to name the GitHub hosts as the exception.
-- [ ] Add the keep-identity option to `runGitProcess` in `modules/repositories/git-exec.mjs`, and
+- [x] Add the keep-identity option to `runGitProcess` in `modules/repositories/git-exec.mjs`, and
       use it for the plan store's fetch and push and for the delivery fetch.
 
 ### Phase 4: Permissions
 
-- [ ] Add `"host": "github"` to every `gh` behavior in `agent-permissions.json`.
-- [ ] Add the `read-and-reply-on-github` behavior with `gh api`, rendered only with the identity on.
-- [ ] Render `post-to-github` as `allow` with the identity on and `ask` without it.
-- [ ] Deny `roborepo github setup` to agents.
-- [ ] Turn `GH_DENIED` into a `github` host entry in both hooks, and lift `api` only under the agent
+- [x] Add `"host": "github"` to every `gh` behavior in `agent-permissions.json`.
+- [x] Add the `read-and-reply-on-github` behavior with `gh api`, rendered only with the identity on.
+- [x] Render `post-to-github` as `allow` with the identity on and `ask` without it.
+- [x] Deny `roborepo github setup` to agents.
+- [x] Turn `GH_DENIED` into a `github` host entry in both hooks, and lift `api` only under the agent
       `GH_CONFIG_DIR`.
-- [ ] Extend `scripts/test/protected-branch-push-check.mjs` with the with-identity and
+- [x] Extend `scripts/test/protected-branch-push-check.mjs` with the with-identity and
       without-identity cases.
 
 ### Phase 5: Host module and doctor
 
-- [ ] Add `modules/forge/` with a host-name entry point and `github.mjs`.
-- [ ] Move the `gh` runner from `modules/delivery/operations.mjs` into `modules/forge/github.mjs`;
+- [x] Add `modules/forge/` with a host-name entry point and `github.mjs`. — `modules/forge/` already existed from `3xh2sq32`; added `agent-identity.mjs`.
+- [x] Move the `gh` runner from `modules/delivery/operations.mjs` into `modules/forge/github.mjs`; — Already moved by `3xh2sq32`; `runGh` gained an `env` option.
       delivery calls it through the entry point, and `scripts/test/delivery-operations-check.mjs`
       still passes.
-- [ ] Add the doctor check, tested with a fake `gh` executable for: identity not set up, bot is
+- [x] Add the doctor check, tested with a fake `gh` executable for: identity not set up, bot is
       admin, bot is the user, expired token, ruleset without last-push approval, unprotected
       `repo-plans`, and a healthy setup.
 
 ### Phase 6: Guided setup
 
-- [ ] Add `roborepo github setup` under a new `github` namespace in
+- [x] Add `roborepo github setup` under a new `github` namespace in
       `manifests/platform/cli/command-definitions/`, built on `modules/forge/`. It walks the steps in
       "Turning the identity on", skips steps already done, and on a failed check reports the cause
       and leaves the package off.
-- [ ] Read the token with hidden input and pipe it to `gh auth login --with-token` under the agent
+- [x] Read the token with hidden input and pipe it to `gh auth login --with-token` under the agent
       `GH_CONFIG_DIR`; never echo it, write it to disk, or pass it as an argument.
-- [ ] Run `roborepo protect` from the setup, after confirmation, when it has not been run for the
+- [x] Run `roborepo protect` from the setup, after confirmation, when it has not been run for the
       repo.
-- [ ] Automate the invite and its acceptance: send the invitation through the user's `gh` login
+- [x] Automate the invite and its acceptance: send the invitation through the user's `gh` login
       before the token step, and accept it with the bot's token right after the token is stored.
       Each skips itself when already done.
-- [ ] Guide the two person-only steps (bot account, classic token): open the page, show the exact
+- [x] Guide the two person-only steps (bot account, classic token): open the page, show the exact
       choices (scopes `repo` and `read:org`), wait, and confirm the result before moving on.
-- [ ] Enable `github-agent-identity` through the existing package enable path as the last step.
-- [ ] Add the offer to `/plan-suite-init`
+- [x] Enable `github-agent-identity` through the existing package enable path as the last step.
+- [x] Add the offer to `/plan-suite-init`
       (`globals/packages/plan-suite/skills/plan-suite-init/SKILL.md`): after the store is ready, run
       the doctor's identity check, and when the identity is not set up, offer `roborepo github setup`
       for the user to run in their own terminal.
+
+## Not tested
+
+- [ ] `roborepo github setup` end to end on the real repo: the hidden token prompt stores the
+      token in `~/.roborepo/github-agent/gh/hosts.yml` (mode 0600), and the package is enabled at
+      the end. Needs a person: the token is typed at a hidden prompt in the owner's own terminal,
+      and agents are denied the command. `roborepo github status` on 2026-11-22 at 43a377d4
+      already reported the real bot, scopes, expiry, and protection correctly, and named the two
+      remaining steps (token in keychain, package off).
+- [ ] Inside `codex exec` with the identity on: `gh` reads the token from `hosts.yml`, `git fetch`
+      and `git push` to a feature branch succeed as the bot with no prompt, the CA file read grant
+      lets Git verify TLS, `gh pr create` succeeds, and `api.github.com` is the only other host it
+      needs. Needs a person: it runs only after the owner stores the token through the setup above.
+- [ ] In a Claude agent shell with the identity on: push a feature branch and open a PR as the bot;
+      `gh api graphql` reads `reviewThreads { isResolved }`, replies, and resolves a thread; `gh pr
+      comment` runs without a prompt. Needs a person: it needs the token stored by the setup, and a
+      new agent session to pick up the re-rendered environment.
+- [ ] The bot can push `repo-plans` directly (`roborepo plans save` from an agent shell reports
+      "synchronized"), and GitHub refuses a delete or force-push of `repo-plans` and an unapproved
+      merge of the bot's PR. Needs a person: same token prerequisite; the refusal checks act on the
+      real repo's protected branches and are the owner's call to run.
+- [ ] With the agent environment exported, `git push --no-verify origin HEAD:main` is rejected by
+      GitHub naming `roborepo-main-merge`. Needs a person: it attempts a real push to `main`.
 
 ## Validation
 
