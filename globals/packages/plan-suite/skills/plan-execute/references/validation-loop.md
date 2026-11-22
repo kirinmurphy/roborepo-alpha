@@ -129,7 +129,7 @@ Classify every finding by its consequence, not by the kind of change it needs:
 | --- | --- | --- |
 | `fix` | The right fix is clear, stays within the plan's requirements and acceptance criteria, and changes no public interface or contract the plan did not already specify. Code, tests, docs, and evidence alike | Fixed in the same session |
 | `escalate` | The fix chooses between real alternatives, changes requirements or acceptance criteria, changes a public interface or contract the plan did not specify, or lands outside the plan | Goes to the user as a decision |
-| `base` | A gate failure the base branch has too: the failing check also fails on the base branch, or its failing input exists there | Recorded as verification; not a finding, not a blocker |
+| `base` | A gate failure the base branch has too: the same check fails on the base branch, shown by the base branch's CI result for the base commit or by rerunning the check there. An input that merely exists on base is not evidence | Recorded as verification; not a finding, not a blocker |
 
 A real alternative has a compelling argument for choosing it. When one option clearly wins and the
 others exist only on paper, the fix is clear: class it `fix`, not `escalate`.
