@@ -141,6 +141,11 @@ try {
   const realScratch = path.join(tempRoot, "scratch-real");
   fs.renameSync(scratch, realScratch);
   fs.symlinkSync(linkedTarget, scratch);
+  const linkedPreview = run(["reset", "scratch", "--dry-run"]);
+  assert.match(linkedPreview.stdout, /is a link, not a real folder; a reset would refuse it/, "the preview matches the refusing reset");
+  assert.doesNotMatch(linkedPreview.stdout, /would remove 1/, "the preview does not list the link target's folders");
+  const linkedAllPreview = run(["reset", "scratch", "--all", "--dry-run"]);
+  assert.match(linkedAllPreview.stdout, /would remove only the link/, "--all --dry-run says only the link goes");
   const linkedReset = run(["reset", "scratch"]);
   assert.equal(linkedReset.status, 0);
   assert.match(linkedReset.stderr, /not a real folder/, "the refusal is reported");

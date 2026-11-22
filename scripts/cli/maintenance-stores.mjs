@@ -133,6 +133,10 @@ function trimStore(store) {
 // --dry-run: what trimStore would remove, with sizes and ages, removing nothing. A log's records
 // carry no per-record listing worth printing, so a log reports the count.
 function previewTrim(store) {
+  if (isLinkedFolderSet(store)) {
+    console.log(`${store.id}: ${store.target} is a link, not a real folder; a reset would refuse it and remove nothing`);
+    return 0;
+  }
   const verdict = measureStore(store);
   if (!verdict.act) {
     console.log(`${store.id}: already within policy (${verdict.reason}); nothing would be removed`);
@@ -155,10 +159,25 @@ function previewClear(store) {
     console.log(`${store.id}: would clear ${detail === "absent" ? "nothing (absent)" : formatBytes(bytes)}`);
     return 0;
   }
+  if (isLinkedFolderSet(store)) {
+    console.log(`${store.id}: would remove only the link at ${store.target}; its target is left alone`);
+    return 0;
+  }
   const entries = folderSetEntries({ dirPath: store.target }) ?? [];
   entries.sort((a, b) => a.mtimeMs - b.mtimeMs);
   printPreview(store, entries, `would clear ${entries.length} entr${entries.length === 1 ? "y" : "ies"}`);
   return 0;
+}
+
+// A folder set whose root was replaced by a link: the reset refuses it (removeFolderSetEntries) and
+// --all removes only the link, so a preview must not list the link target's contents.
+function isLinkedFolderSet(store) {
+  if (store.shape !== FOLDER_SET_SHAPE) return false;
+  try {
+    return fs.lstatSync(store.target).isSymbolicLink();
+  } catch {
+    return false;
+  }
 }
 
 function printPreview(store, entries, headline) {
