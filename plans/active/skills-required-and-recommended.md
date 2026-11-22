@@ -7,7 +7,7 @@ depends_on:
   - bysyzl1e
 related: ["age4cm7r", "gqzjlzgx", "7e21olcs", "skills-vs-commands-invocation-policy"]
 reviewed_commit: 46f37fbc51d551f49999d757a328694c176555b8
-worktree:
+worktree: skills-required-and-recommended
 ---
 
 # Declare Which Skills Need or Suggest Each Other
