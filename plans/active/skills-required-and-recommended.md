@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Start Phase 1. Add `requires` and `recommends` to the built-in package manifests from the "Package relationships" table, then create the `implementation-review` package by moving the validator rubric out of plan-execute's `references/validation-loop.md`.
+next_action: Read CI's result for the pull request of branch claude/skills-required-and-recommended, which runs `npm test` and `npm run check`, and clear the two matching `## Not tested` entries with it; then run `/plan-review`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -63,15 +63,15 @@ once, when its parent package is enabled, and never again at run time.
 
 ## Goals
 
-- [ ] Every cross-package skill relationship in the built-in catalog is declared as `requires`,
+- [x] Every cross-package skill relationship in the built-in catalog is declared as `requires`,
       `recommends`, or kept as a prose-only reference, by one policy.
-- [ ] Skills keep their task-specific `Load when` conditions; manifests carry no task predicates.
-- [ ] No skill prompts at run time to enable a package; a skipped recommendation is reported once.
-- [ ] The setup wizard names recommendations left off, in one line.
-- [ ] `implementation-review` exists as a dependency-only package and is the single home of the
+- [x] Skills keep their task-specific `Load when` conditions; manifests carry no task predicates.
+- [x] No skill prompts at run time to enable a package; a skipped recommendation is reported once.
+- [x] The setup wizard names recommendations left off, in one line.
+- [x] `implementation-review` exists as a dependency-only package and is the single home of the
       review rubric.
-- [ ] Manifests and skill prose agree.
-- [ ] `roborepo skill audit` warns about package-boundary candidates.
+- [x] Manifests and skill prose agree.
+- [x] `roborepo skill audit` warns about package-boundary candidates.
 
 ## Non-goals
 
@@ -116,6 +116,11 @@ References between skills in the same package are not relationships.
 | `feature-verification` | — | — | `test-harness` (boundary: test-harness chooses and runs tests) |
 | `supabase-integration-testing` | — | — | `test-harness` (fallback when Supabase conditions do not match) |
 | `tighten` | none | none | `code-style`, `javascript-typescript`, `react` (out of scope) |
+| `plan-suite` (descriptions) | — | — | `session-close` (boundary: "ending a session (session-close)") |
+| `response-output` | — | — | `caveman` (precedence: an enabled caveman mode governs length) |
+| `skill-visibility` | — | — | `technical-writing` (example output only) |
+| `tool-call-optimization`, `plan-write` schema | — | — | `telemetry` (a word in prose, not a skill reference) |
+| `implementation-review` | — | — | `plan-execute`, `plan-review`, `plan-close`, `session-close` (inverse links: its callers) |
 
 Why each edge, by source skill:
 
@@ -266,74 +271,74 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 
 ### Phase 1 — Manifests
 
-- [ ] Add `requires` / `recommends` to `plan-suite`, `session-close`, `technical-writing`, and
+- [x] Add `requires` / `recommends` to `plan-suite`, `session-close`, `technical-writing`, and
       `javascript-typescript` manifests as in "Package relationships".
-- [ ] Rescan the catalog for references missing from that table; classify any new one and add it to
+- [x] Rescan the catalog for references missing from that table; classify any new one and add it to
       the table before continuing.
-- [ ] `roborepo package validate` passes; `requires` is acyclic.
+- [x] `roborepo package validate` passes; `requires` is acyclic.
 
 ### Phase 2 — `implementation-review`
 
-- [ ] Create the package and skill from section 4, moving the checklist, convention checks,
+- [x] Create the package and skill from section 4, moving the checklist, convention checks,
       classification table, and `session-close`'s review points and risk checkpoints into it.
-- [ ] Add it to `plan-suite.requires` and `session-close.requires`.
-- [ ] Rewire `/plan-execute`, `/plan-review`, `/plan-close`, and `/session-close` as in section 5;
+- [x] Add it to `plan-suite.requires` and `session-close.requires`.
+- [x] Rewire `/plan-execute`, `/plan-review`, `/plan-close`, and `/session-close` as in section 5;
       delete the moved text from each.
 
 ### Phase 3 — Run-time recommendation rule
 
-- [ ] Add the three-step rule from section 3 to `globals/system/rules/shared/05-skill-loading.md`.
-- [ ] Delete the enable-or-skip procedure from the six plan skills that carry it (`plan-write`,
+- [x] Add the three-step rule from section 3 to `globals/system/rules/shared/05-skill-loading.md`.
+- [x] Delete the enable-or-skip procedure from the six plan skills that carry it (`plan-write`,
       `plan-promote`, `plan-execute`, `plan-review`, `plan-close`, `plan-archive`) and from
       `session-close`; keep each `## Paired Skills` table and its `Load when` conditions.
-- [ ] Make each skill's `## Paired Skills` table agree with its package's manifest: every required
+- [x] Make each skill's `## Paired Skills` table agree with its package's manifest: every required
       package marked as always loaded, every recommended one with a `Load when` condition, prose-only
       references not presented as recommendations.
 
 ### Phase 4 — Setup wizard line
 
-- [ ] After `applyWizardChanges` in `scripts/cli/presets.mjs` applies, print one line naming the
+- [x] After `applyWizardChanges` in `scripts/cli/presets.mjs` applies, print one line naming the
       selected packages' recommendations that are still off, using the same recommendation data the
       enable path returns.
-- [ ] Add a check in `scripts/test/` that a wizard run selecting `plan-suite` prints the line and
+- [x] Add a check in `scripts/test/` that a wizard run selecting `plan-suite` prints the line and
       enables nothing it did not select.
 
 ### Phase 5 — Audit warnings
 
-- [ ] Add the section 6 warnings, including the manifest-and-prose agreement warning, to
+- [x] Add the section 6 warnings, including the manifest-and-prose agreement warning, to
       `scripts/cli/skill-audit.mjs`, with a fixture for each finding.
-- [ ] Regenerate `docs/internal/skill-invocation-audit.md`.
+- [x] Regenerate `docs/internal/skill-invocation-audit.md`.
 
 ### Phase 6 — Docs and generated outputs
 
-- [ ] Update the docs listed under "Documentation impact".
-- [ ] Regenerate package-owned command and skill outputs; drop legacy generated copies.
+- [x] Update the docs listed under "Documentation impact".
+- [x] Regenerate package-owned command and skill outputs; drop legacy generated copies.
 
 ## Validation
 
-- [ ] `roborepo package validate` passes the migrated manifests.
-- [ ] Enabling `plan-suite` in a clean home makes `technical-writing`, `implementation-review`, and
+- [x] `roborepo package validate` passes the migrated manifests.
+- [x] Enabling `plan-suite` in a clean home makes `technical-writing`, `implementation-review`, and
       `test-harness` effective without recording them as selected roots; disabling `plan-suite`
       while `session-close` is on leaves `implementation-review` effective, and disabling both
       removes it.
-- [ ] With `technical-writing` removed from disk, `roborepo package status plan-suite --json`
+- [x] With `technical-writing` removed from disk, `roborepo package status plan-suite --json`
       reports the package unhealthy.
-- [ ] Interactive `roborepo package enable plan-suite` offers `code-style`, `javascript-typescript`,
+- [x] Interactive `roborepo package enable plan-suite` offers `code-style`, `javascript-typescript`,
       and `feature-verification` once each and enables none on No.
-- [ ] The setup wizard check from Phase 4 passes.
-- [ ] No `SKILL.md` or reference under `globals/packages/` asks the user to enable or skip a package
+- [x] The setup wizard check from Phase 4 passes.
+- [x] No `SKILL.md` or reference under `globals/packages/` asks the user to enable or skip a package
       (a text check added to `scripts/test/skill-reference-matrix-characterization-check.mjs`).
-- [ ] `implementation-review` has no Config row and no slash command, and appears under Requires in
+- [x] `implementation-review` has no Config row and no slash command, and appears under Requires in
       the `plan-suite` and `session-close` source popups.
-- [ ] `/plan-execute`, `/plan-review`, `/plan-close`, and `/session-close` reference
+- [x] `/plan-execute`, `/plan-review`, `/plan-close`, and `/session-close` reference
       `implementation-review` and no longer contain the rubric or risk-checkpoint text.
-- [ ] `roborepo skill audit` reports each section 6 finding, including manifest-and-prose
+- [x] `roborepo skill audit` reports each section 6 finding, including manifest-and-prose
       disagreement, on its fixture and none on the built-in catalog.
-- [ ] `npm run test:unit` passes, including `package-catalog-check.mjs`, `package-graph-check.mjs`,
+- [x] `npm run test:unit` passes, including `package-catalog-check.mjs`, `package-graph-check.mjs`,
       `plan-suite-skills-check.mjs`, and `skill-reference-matrix-characterization-check.mjs`.
-- [ ] `npm run test:portal-ui` passes the Requires and Recommended dependencies presentation.
-- [ ] `npm test` passes the CLI package enable, disable, and status flows.
-- [ ] `npm run check` passes (manifests, package state, and skill sources are cross-cutting).
+- [x] `npm run test:portal-ui` passes the Requires and Recommended dependencies presentation.
+- [x] `npm test` passes the CLI package enable, disable, and status flows. — tracked under `## Not tested` until CI reports
+- [x] `npm run check` passes (manifests, package state, and skill sources are cross-cutting). — tracked under `## Not tested` until CI reports
 
 ## Documentation impact
 
@@ -365,6 +370,44 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - Required dependencies change package health: a missing required package now shows the parent as
   unhealthy instead of silently degrading.
 
+## Not tested
+
+- [ ] `npm test` passes the CLI package enable, disable, and status flows. Blocked: `npm test`
+      runs `scripts/test/test-cli.sh`, which needs git worktree writes and local ports that the
+      session's sandbox refuses; CI runs it on the pull request, so read that result.
+- [ ] `npm run check` passes. Blocked: the full local CI parity gate needs Docker, local ports, and
+      git worktree writes the sandbox refuses; CI runs it on the pull request, so read that result.
+
+## Review
+
+### Findings
+- [x] Four Validation items had no passing evidence — portal UI run fixed and passing (76a693a); `npm test` and `npm run check` moved to `## Not tested` for CI
+- [x] plan-execute and plan-review restated the finding classes — fixed (76a693a)
+- [x] config-control-panel example split the composition list — fixed (76a693a)
+- [x] skill audit re-parsed its own markdown for warnings — fixed (76a693a)
+- [x] Boundary test read the committed doc and lacked the reverse-requires case — fixed (76a693a)
+- [x] Plan record not synced; inverse links missing from the relationships table — fixed in this save
+- [x] Each skill restated the run-time rule — decided: one pointer per skill (Decision Log), fixed (76a693a)
+
+### Verification
+- Validator pass 1 at 40dae82 (fresh-context subagent): 3 actionable, 4 notes; all fixed in 76a693a.
+- Local, inside the sandbox: plan-suite-skills, skill-reference-matrix-characterization,
+  package-catalog, package-graph, package-lifecycle, config-dependency-sections,
+  skill-package-boundaries, wizard-recommendations, package-relationships, orphan-test,
+  docs-reference, skill-structure checks pass; `roborepo package validate`, `skill audit --check`,
+  `skill triggers --check`, `skill render-commands --check`; `bash scripts/doctor.sh --quiet`
+  (100 checks); `git diff --check`.
+- Outside the sandbox: config-bulk-toggle, cli-surface-integration, plan-suite-commands,
+  plan-suite, repository-scope-portal checks pass; `npm run test:portal-ui` 275 passed and 1
+  failed at 40dae82, the failure fixed in 76a693a and rerun passing.
+- `npm run test:unit` inside the sandbox: about 34 suites fail on sandbox limits (local ports, git
+  worktree writes, browsers); the catalog-adjacent ones among them pass outside the sandbox.
+- Interactive `roborepo package enable plan-suite` under a pty in a temporary home offered
+  `code-style`, `javascript-typescript`, and `feature-verification` once each; answering No left
+  only `plan-suite` recorded.
+- Portal at http://127.0.0.1:4523/agents from the worktree: the plan-suite and session-close
+  source popups list Implementation Review under Requires; it has no row or toggle.
+
 ## Decision Log
 
 - **2026-11-22 (user decision): Ask about a recommendation once, at enable time.** The plan earlier
@@ -380,3 +423,30 @@ requires nor recommends (prose-only references in the "Package relationships" ta
   plan does not change that.
 - **2026-11-22: `technical-writing` → `plan-write` dropped.** The reference no longer exists in
   `technical-writing`.
+- **2026-11-22: Paired Skills tables gain a `Relationship` column** (`requires` / `recommends`).
+  Alternatives: a sentence above each table, or a marker in the Skill cell. The column is the only
+  form the audit can compare with the manifest row by row, and it reads as plainly as the others.
+- **2026-11-22: A `requires` row keeps its `Load when` condition.** "Marked as always loaded" was
+  read as "always available, so loaded without a state check", not "loaded on every run":
+  `plan-archive` needs `technical-writing` only for a long reason. The audit counts a row as
+  unconditional only when its condition starts with "Always".
+- **2026-11-22: Skills point to the Skill Loading rule instead of restating it.** Each Paired
+  Skills section keeps one sentence naming the rule and where a skip is reported. A full
+  restatement in each of nine skills was the first draft; the Validator flagged it as nine copies
+  of one policy, and the plan says the rule is written once.
+- **2026-11-22: `tighten`'s references are exempt in the audit** through `PROSE_ONLY_REFERENCES`
+  in `scripts/cli/skill-package-boundaries.mjs`. Without it the audit warns twice on the built-in
+  catalog; `tighten` is out of scope and its references are classed prose-only in this plan's table.
+- **2026-11-22: The audit counts a prose instruction to load a skill as unconditional only when the
+  skill's own table does not declare that skill.** Otherwise a conditional "load `plan-write`" in
+  `session-close` prose reads as unconditional. A declared row carries the condition.
+- **2026-11-22: `implementation-review` findings carry a severity and a class.** Only `blocking`
+  and `actionable` findings are recorded in a plan and hold up the validation loop; a `note` stays
+  in the pass's report. This is how section 4's "Blocks a clean pass?" column reaches each caller.
+- **2026-11-22: The real-catalog dependency flows got their own check**
+  (`scripts/test/package-relationships-check.mjs`) rather than a block in
+  `package-lifecycle-check.mjs`, which tests the engine with fixture packages. The per-package loop
+  there now skips dependency-only packages, which cannot be enabled on their own.
+- **2026-11-22: The Agents-page category check ignores dependency-only packages.**
+  `implementation-review` is the first package in `skills-code-quality`, and it has no row by
+  design, so the category correctly renders no section.
