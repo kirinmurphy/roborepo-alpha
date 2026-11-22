@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: ["9njvfh5z"]
 related: ["9njvfh5z", "n8kw3rp2", "wu7h7gdp"]
 reviewed_commit: 26dad21f
-worktree:
+worktree: local-data-agent-temp-locations
 ---
 
 # Give agents two places for temporary files, cleaned up automatically
