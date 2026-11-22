@@ -21,8 +21,8 @@ const pkg = (id, skills, { requires = [], recommends = [] } = {}) => ({
   id, requires, recommends,
   skills: Object.entries(skills).map(([name, body]) => ({ name, body })),
 });
-const only = (packages, pattern) => {
-  const findings = packageBoundaryFindings(packages, { proseOnly: new Set() });
+const only = (packages, pattern, proseOnly = new Set()) => {
+  const findings = packageBoundaryFindings(packages, { proseOnly });
   assert.equal(findings.length, 1, `expected one finding, got:\n${findings.join("\n")}`);
   assert.match(findings[0], pattern);
 };
@@ -44,6 +44,12 @@ only([
   pkg("writer", { writer: "# Writer\n\nThen load `helper` and run it.\n" }),
   pkg("helper", { helper: "# Helper\n" }),
 ], /writer unconditionally loads helper/);
+
+// A prohibition is not a load.
+assert.deepEqual(packageBoundaryFindings([
+  pkg("writer", { writer: "# Writer\n\nDo not load `helper` here; never hand off to `helper` either.\n" }),
+  pkg("helper", { helper: "# Helper\n" }),
+], { proseOnly: new Set() }), []);
 
 // The same load is fine once the manifest requires it.
 assert.deepEqual(packageBoundaryFindings([
@@ -82,6 +88,12 @@ only([
   pkg("parent", { parent: table(["helper", "requires", "The work touches helpers"]) }, { recommends: ["helper"] }),
   pkg("helper", { helper: "# Helper\n" }),
 ], /parent marks `helper` as requires, but parent recommends helper/);
+
+// An exempt edge does not make the reverse edge look mutual: only the real edge is reported.
+only([
+  pkg("writer", { writer: "# Writer\n\nLoad `helper` for conventions.\n" }),
+  pkg("helper", { helper: "# Helper\n\nThen load `writer` and run it.\n" }),
+].map((p) => p), /helper unconditionally loads writer, and neither requires the other/, new Set(["writer -> helper"]));
 
 // A reference classified prose-only is not reported.
 assert.deepEqual(packageBoundaryFindings([

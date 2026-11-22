@@ -52,17 +52,19 @@ export const PROSE_ONLY_REFERENCES = new Set([
   "tighten -> react",
 ]);
 
-// Prose outside the table that tells the reader to load or hand off to `name`.
+// Prose outside the table that tells the reader to load or hand off to `name`. A prohibition
+// ("do not load `x`", "never hand off to `x`") is not an instruction to load it.
 function proseInstruction(body, name) {
   const outside = body.replace(PAIRED_SKILLS_SECTION, "");
   const escaped = name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
-  return new RegExp(`\\b(?:load|loads|hand(?:s)? off to|hand it to)\\s+\`/?${escaped}\``, "i").test(outside);
+  const instruction = new RegExp(`(\\b(?:not|never|don't|do not)\\s+)?\\b(?:load|loads|hand(?:s)? off to|hand it to)\\s+\`/?${escaped}\``, "gi");
+  return [...outside.matchAll(instruction)].some((match) => !match[1]);
 }
 
 // Package ids each package references unconditionally. A table row is unconditional when its
 // `Load when` starts with "Always". A prose instruction outside the table counts only when the
 // skill's table does not declare that skill: a declared row carries the condition.
-function unconditionalTargets(pkg, skillPackage) {
+function unconditionalTargets(pkg, skillPackage, proseOnly) {
   const targets = new Set();
   for (const skill of pkg.skills) {
     const rows = pairedSkillRows(skill.body) || [];
@@ -76,6 +78,9 @@ function unconditionalTargets(pkg, skillPackage) {
       if (proseInstruction(skill.body, name)) targets.add(target);
     }
   }
+  for (const target of [...targets]) {
+    if (proseOnly.has(`${pkg.id} -> ${target}`)) targets.delete(target);
+  }
   return targets;
 }
 
@@ -84,11 +89,11 @@ export function packageBoundaryFindings(packages, { proseOnly = PROSE_ONLY_REFER
   const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
   const skillPackage = new Map(packages.flatMap((pkg) => pkg.skills.map((skill) => [skill.name, pkg.id])));
   const requires = (a, b) => (byId.get(a)?.requires || []).includes(b);
-  const unconditional = new Map(packages.map((pkg) => [pkg.id, unconditionalTargets(pkg, skillPackage)]));
+  // Prose-only edges leave the graph here, so an exempt edge never makes a real one look mutual.
+  const unconditional = new Map(packages.map((pkg) => [pkg.id, unconditionalTargets(pkg, skillPackage, proseOnly)]));
 
   for (const pkg of packages) {
     for (const target of unconditional.get(pkg.id)) {
-      if (proseOnly.has(`${pkg.id} -> ${target}`)) continue;
       if (unconditional.get(target)?.has(pkg.id)) {
         if (pkg.id < target) findings.push(`${pkg.id} and ${target} each unconditionally hand off to the other: merge them`);
         continue;

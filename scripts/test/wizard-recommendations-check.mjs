@@ -19,7 +19,15 @@ if (process.env.WIZARD_RECOMMENDATIONS_CHILD) {
     title: "Development Workflows",
     items: [{ label: id, active: true, wasActive: false, toggleable: true, section: { category: "Development Workflows" }, item: { id, toggle: "package" } }],
   });
-  const result = await applyWizardChanges([step("plan-suite")]);
+  // A recommendation the wizard turns off after enabling its parent is still named as off.
+  const steps = [step("plan-suite")];
+  if (process.env.WIZARD_DISABLE_AFTER) {
+    steps.push({
+      title: "Code Conventions",
+      items: [{ label: "code-style", active: false, wasActive: true, toggleable: true, section: { category: "Code Conventions" }, item: { id: "code-style", toggle: "package" } }],
+    });
+  }
+  const result = await applyWizardChanges(steps);
   console.log(`RESULT ${JSON.stringify(result)}`);
 } else {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-wizard-recommendations-"));
@@ -29,7 +37,10 @@ if (process.env.WIZARD_RECOMMENDATIONS_CHILD) {
   fs.writeFileSync(path.join(home, ".codex", "config.toml"), "");
   const env = { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), SKIP_MCP: "1", WIZARD_RECOMMENDATIONS_CHILD: "1" };
   try {
-    const run = spawnSync(process.execPath, [self], { env, encoding: "utf8" });
+    // code-style starts on, so plan-suite's enable result leaves it out; the wizard then turns it off.
+    const seed = spawnSync(process.execPath, [path.join(path.dirname(self), "../cli/main.mjs"), "package", "enable", "code-style"], { env: { ...env, WIZARD_RECOMMENDATIONS_CHILD: "" }, encoding: "utf8" });
+    assert.equal(seed.status, 0, `seed enable should succeed\n${seed.stderr}`);
+    const run = spawnSync(process.execPath, [self], { env: { ...env, WIZARD_DISABLE_AFTER: "1" }, encoding: "utf8" });
     assert.equal(run.status, 0, `wizard apply should succeed\n${run.stdout}\n${run.stderr}`);
     assert.match(run.stdout, /enable plan-suite — ok/, "the plan-suite toggle applies");
 
@@ -41,6 +52,7 @@ if (process.env.WIZARD_RECOMMENDATIONS_CHILD) {
 
     const registry = JSON.parse(fs.readFileSync(path.join(home, ".roborepo", "enabled-packages.json"), "utf8"));
     assert.deepEqual(registry.packages, ["plan-suite"], "only the selected package is recorded as a root");
+    assert.ok(registry.disabled.includes("code-style"), "the wizard's disable of code-style applied");
     const applied = JSON.parse(fs.readFileSync(path.join(home, ".roborepo", "applied-packages.json"), "utf8"));
     const appliedIds = (applied.packages || applied).slice().sort();
     assert.deepEqual(appliedIds, ["implementation-review", "plan-suite", "technical-writing", "test-harness"], "applies plan-suite and its requirements, and no recommendation");

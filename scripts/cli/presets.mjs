@@ -248,7 +248,7 @@ export async function applyWizardChanges(steps) {
   }
   console.log("\nApplying changes…");
   let failed = 0;
-  const offered = new Map();
+  const enabled = [];
   for (const row of pending) {
     if (row.states) {
       const result = await applyBehaviorBucket(row.item.id, row.state);
@@ -262,20 +262,27 @@ export async function applyWizardChanges(steps) {
     const status = result.ok ? "ok" : `failed: ${result.message}`;
     if (!result.ok) failed += 1;
     console.log(`  ${verb} ${row.item.id ?? row.label} — ${status}`);
-    if (row.active && result.ok) for (const rec of result.recommendations || []) offered.set(rec.id, rec);
+    if (row.active && result.ok) enabled.push(row.item.id);
   }
-  printRecommendationsStillOff([...offered.keys()]);
+  printRecommendationsStillOff(enabled);
   return { applied: true, changed: true, failed };
 }
 
 // The wizard never prompts for recommendations; it names the ones still off once, after every
-// toggle has applied, so a recommendation the user also selected in the wizard is not listed.
-// Same `recommended (not enabled):` prefix as a non-interactive `roborepo package enable`, plus the
-// command that turns one on.
-function printRecommendationsStillOff(recommendedIds) {
-  if (recommendedIds.length === 0) return;
-  const effective = new Set(effectiveEnabledIds(loadPackageCatalog()));
-  const off = recommendedIds.filter((id) => !effective.has(id));
+// toggle has applied. Recommendations come from the manifests of the packages the wizard enabled,
+// not from each enable's result, which leaves out anything on at that moment that a later toggle
+// in the same run turned off. Same `recommended (not enabled):` prefix as a non-interactive
+// `roborepo package enable`, plus the command that turns one on.
+function printRecommendationsStillOff(enabledIds) {
+  if (enabledIds.length === 0) return;
+  const catalog = loadPackageCatalog();
+  const effective = new Set(effectiveEnabledIds(catalog));
+  const offerable = (id) => {
+    const pkg = catalog.find((entry) => entry.id === id);
+    return pkg && pkg.selectable && pkg.presentation?.visibility !== "hidden";
+  };
+  const off = [...new Set(enabledIds.flatMap((id) => catalog.find((pkg) => pkg.id === id)?.recommends || []))]
+    .filter((id) => offerable(id) && !effective.has(id));
   if (off.length) console.log(`recommended (not enabled): ${off.join(", ")} — enable with: roborepo package enable <id>`);
 }
 

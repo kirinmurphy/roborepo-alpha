@@ -93,6 +93,8 @@ say so explicitly rather than guessing from the working tree.
   update `next_action`. Run a check an agent can run instead of listing it; each entry added ends
   with the reason an agent cannot clear it, `Needs a person: <why>` or
   `Blocked: <command> failed with <error>`. Then run the repository's canonical plan validator for `<plan>` and report its findings.
+  When the session does not list `plan-write`, leave the plan unchanged, say so in the status
+  summary, and put the plan's open tasks in the handoff note instead.
 - Do not restructure or rewrite docs wholesale. Small, targeted edits, preserving existing
   structure.
 - Report drift found but not fixed, separately from what was changed.
@@ -163,7 +165,8 @@ deliverable of a session close.
   - Add every must-fix / clear continuation item to the handoff note.
   - For ambiguous priority items, ask the user what to do with each item before including it.
     Offer exactly these choices: **include details in the handoff note**, **add it to the
-    backlog as a new task**, or **forget about it**.
+    backlog as a new task**, or **forget about it**. When the session does not list `plan-write`,
+    leave out the backlog choice and say once that backlog plans need the plan suite.
   - If the user chooses backlog, load `plan-write` and create a backlog plan for that issue. It
     saves to the plans branch, so it is no part of the session commit. Include the new plan path in
     the status summary.
