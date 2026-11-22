@@ -503,6 +503,24 @@ phases build, so run them before Phase 3.
       the doctor's identity check, and when the identity is not set up, offer `roborepo github setup`
       for the user to run in their own terminal.
 
+## Review
+
+### Findings
+- [ ] Codex never follows the identity: its rules file is a copy of the identity-off render and its permission hook ignores `agentIdentityBucket`, so `gh api` stays forbidden and pushes and posts prompt
+- [ ] Claude gets a `git push` allow rule with the identity on, which lets a verified push chained to another command run without the prompt `askDecidedByHook` relies on
+- [ ] The push hooks lift `gh api` from the hook's own environment, so a command that sets or unsets `GH_CONFIG_DIR`, sets `GH_TOKEN`/`GITHUB_TOKEN`/`GH_HOST`, or wraps `gh` in `env` is not denied
+- [ ] `keepAgentGitConfig` keeps every numbered `GIT_CONFIG_*` pair, so any key (such as `core.sshCommand` or a credential helper) would reach RoboRepo's own Git; keep only the pairs RoboRepo renders
+- [ ] `scripts/cli/permissions-render.mjs` duplicates the package id and enabled check that `modules/forge/agent-identity.mjs` and `scripts/cli/github-identity.mjs` hold, and splits `renderPermissionsTo` from its comment
+- [ ] `effectivePermissions` in `scripts/cli/config-mutate.mjs` (config panel, `config status`) ignores the identity, so it shows `gh api` denied and posting at ask while they render allowed
+- [ ] No test asserts that existing Codex `network.domains` entries survive enabling the package
+- [ ] The status check lacks doctor cases for a ruleset without last-push approval, an unprotected `repo-plans`, and a skipped merge policy
+- [ ] The docs say Gemini is not covered but not why (its `.env` lookup order)
+- [ ] `## Not tested` omits manual Validation rows an agent can or a person must check, and its Codex entry claims person-only for parts that need no token
+
+### Verification
+- Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
+- Validation pass 1 at 43a377d4 (fresh-context subagent): 10 findings above
+
 ## Not tested
 
 - [ ] `roborepo github setup` end to end on the real repo: the hidden token prompt stores the
