@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Read CI's result for the pull request of branch claude/skills-required-and-recommended, which runs the full gate (`npm run check`), and clear the matching `## Not tested` entry with it; then run `/plan-review`.
+next_action: The review is complete and awaits the user's approval of commit 17519cd4; once approved and pull request 76 is merged, run `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -338,8 +338,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
       `plan-suite-skills-check.mjs`, and `skill-reference-matrix-characterization-check.mjs`.
 - [x] `npm run test:portal-ui` passes the Requires and Recommended dependencies presentation.
 - [x] `npm test` passes the CLI package enable, disable, and status flows. — 426 passed, 0 failed at 76a693a
-- `npm run check` passes (manifests, package state, and skill sources are cross-cutting): open
-  under `## Not tested` until CI reports on the pull request.
+- [x] `npm run check` passes (manifests, package state, and skill sources are cross-cutting). — CI
+      on the pull request passed at b9bac966 (macOS and Ubuntu `check`, `windows-installer`).
 
 ## Documentation impact
 
@@ -375,9 +375,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 
 - [x] `npm test` passes the CLI package enable, disable, and status flows. — Verified by agent
       2026-11-22 at 76a693a: `npm test` outside the sandbox → "roborepo tests: 426 passed, 0 failed".
-- [ ] `npm run check` passes. Blocked: the repository's gate rules run the full parity gate in CI
-      (`.github/workflows/ci.yml`), not locally, for a change outside CI and test orchestration; read
-      CI's result on the pull request for this branch.
+- [x] `npm run check` passes. — Verified by agent 2026-11-22 at b9bac966: CI run 45039912600 on
+      pull request 76 → `check (macos-latest)`, `check (ubuntu-latest)`, and `windows-installer` passed.
 
 ## Review
 
@@ -400,6 +399,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - [x] `proseInstruction` kept its own copy of the section pattern — fixed (7447670)
 - [x] Two pointer forms across the nine skills with Paired Skills tables — one form, test extended (7447670)
 - [x] Grammar in the config panel wizard example — fixed (7447670)
+- [x] Wizard restated the enable path's recommendation filter in presets.mjs — reuses `disabledRecommendations` (17519cd4)
+- [x] No-op `.map((p) => p)` in skill-package-boundaries-check.mjs — removed (17519cd4)
 
 ### Verification
 - Validator pass 1 at 40dae82 (fresh-context subagent): 3 actionable, 4 notes; all fixed in 76a693a.
@@ -427,6 +428,19 @@ requires nor recommends (prose-only references in the "Package relationships" ta
   only `plan-suite` recorded.
 - Portal at http://127.0.0.1:4523/agents from the worktree: the plan-suite and session-close
   source popups list Implementation Review under Requires; it has no row or toggle.
+- Plan review 2026-11-22: base `main` at 46f37fbc already merged (sync-base: up to date).
+- CI run 45039912600 at b9bac966 (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
+- Plan review Validator pass at b9bac966 (fresh-context subagent): 2 actionable, 1 note; fixed in
+  17519cd4 and in this record.
+- At 17519cd4: wizard-recommendations, skill-package-boundaries, plan-suite-skills,
+  skill-reference-matrix-characterization, package-relationships, package-catalog checks pass locally.
+- Plan review Validator pass at 17519cd4 (fresh-context subagent): clean.
+- CI run 45059404551 at 17519cd4 (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
+
+### Result
+- Status: complete
+- Reviewed implementation commit: 17519cd44b384eba2d762960b7781e6d76eef53d
+- Base commit: 46f37fbc51d551f49999d757a328694c176555b8
 
 ## Decision Log
 
