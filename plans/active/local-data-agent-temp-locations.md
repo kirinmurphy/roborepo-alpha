@@ -272,8 +272,9 @@ as the system temp folders, so a Codex agent can write its pull request body the
   only.** `$HOME` and `ROBOREPO_STATE_ROOT` are environment variables, and the command already
   refuses to let `$TMPDIR` widen what it reads. The first version also read `$HOME`, as the denylist
   does; the validator showed a fake `$HOME` whose scratch folder links elsewhere let any file pass,
-  so only the account home counts, and a scratch folder replaced by a link is ignored. A state root
-  moved elsewhere still has temp folders available.
+  so only the home the account database names (`os.userInfo()`) counts, and a scratch folder
+  replaced by a link is ignored. An account with no database entry gets no scratch root. A state
+  root moved elsewhere still has temp folders available.
 - **2026-11-22 — `maintenance stores reset --dry-run` on a log reports a record count.** Log
   records have no per-record listing worth printing; file and folder sets list each entry with size
   and age. `--all --dry-run` lists every entry in the directory, since `--all` removes the whole
@@ -339,6 +340,14 @@ as the system temp folders, so a Codex agent can write its pull request body the
       location — fixed (afdf7853)
 - [x] `plan-execute/references/handoff.md` still told agents to write the PR body in the system
       temp directory — fixed (afdf7853)
+- [x] `roborepo scratch` and `stores reset scratch` followed a scratch store replaced by a link,
+      handing out and pruning folders in the link's target — fixed (fac86228)
+- [x] The test-run sweep chmodded the target tree of a dead run entry that is a link — fixed
+      (fac86228)
+- [x] `pr-body` still took its home from `USERPROFILE` on Windows and from `$HOME` in the container
+      fallback — fixed (fac86228)
+- [x] No test read a scratch-folder body end to end or refused a body elsewhere in `~/.roborepo/`
+      — fixed (fac86228)
 - [ ] Byte cap can remove a folder another session is using — escalated, see Open Questions
 - [ ] `roborepo scratch` is not classified in the agent permission manifest, failing
       `agent-run-coverage-check` — escalated, see Open Questions
@@ -347,6 +356,7 @@ as the system temp folders, so a Codex agent can write its pull request body the
 
 - Validation pass 1 at d6f38f1c (fresh-context subagent): 3 `fix`, 2 `escalate`; the `$HOME`
   finding, filed as `escalate`, was fixed as its remedy was clear.
+- Validation pass 2 at afdf7853 (fresh-context subagent): 4 `fix`, 0 `escalate`.
 - Full local gate (`npm run check`) at d6f38f1c: 424 passed, 3 failed. `agent-run-coverage-check`
   is the open question above. The `generated/` guard and the add-skill
   `git diff --quiet -- globals/packages/plan-suite` check failed because the run started with
