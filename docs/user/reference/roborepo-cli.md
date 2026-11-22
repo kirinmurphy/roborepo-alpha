@@ -243,6 +243,9 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 | --- | --- |
 | `roborepo run <cmd> [args...]` | Runs a command and prints a trimmed output tail so noisy checks stay readable. |
 
+> `roborepo dev …` exists only in a Git checkout of RoboRepo itself; the scripts it drives are not
+> published to npm, so an installed copy reports that it requires a development checkout.
+
 ## Scratch Folders
 
 | Command | What it does |
@@ -255,9 +258,6 @@ let shell commands write this folder. Each call removes scratch folders unchange
 the oldest ones once the store passes 500 MB, but never the folder it prints. A folder's age is
 the newest change anywhere inside it. The store appears in `roborepo maintenance stores` as
 `scratch`.
-
-> `roborepo dev …` exists only in a Git checkout of RoboRepo itself; the scripts it drives are not
-> published to npm, so an installed copy reports that it requires a development checkout.
 
 ## Worktree preservation and recovery
 
