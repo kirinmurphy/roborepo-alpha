@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Decide where agent shells get the bot's token (Open questions: neither sandbox can read the keychain), then rerun /plan-execute to finish the Phase 2 checks and build Phases 3–6
+next_action: Finish Phases 3–6 in the git-github-01-agent-identity worktree, then have the owner re-log the bot in with --insecure-storage and rerun the Codex sandbox checks
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -601,31 +601,7 @@ Manual, on the real repo, after Phase 6:
 
 ## Open questions
 
-### Where agent shells get the bot's token, since neither sandbox can read the keychain
-
-Blocks Phases 3–6: the delivery design, package entries, and setup's token step all depend on it.
-
-Evidence, 2026-11-22:
-
-| Where | `gh auth status` as the bot | Other results |
-| --- | --- | --- |
-| User's terminal, no sandbox | Logged in, token from the keyring | Fetch, push, and API all pass |
-| `codex exec`, `managed-workspace` profile with the run-only overrides | "The token in default is invalid": `gh` reads `hosts.yml` but not the keyring | `gh pr list` → HTTP 401, so the proxy and TLS work. `git ls-remote` → `error setting certificate verify locations: CAfile: /etc/ssl/cert.pem`. `git push --dry-run` → "approval required by policy, but AskForApproval is set to Never" |
-| Claude's Bash sandbox | Same "token … is invalid" | `gh` as the user failed TLS verification (`x509: OSStatus -26276`) on an earlier sandboxed run |
-
-Both sandboxes deny `~/Library/Keychains/**`, which is the likely cause; not confirmed by lifting
-the deny. Two more blockers surfaced that any option has to fix: Codex's sandbox cannot read the
-CA file Git needs, and a Codex feature-branch push now needs approval, unlike the 2026-11-05 run.
-
-| Option | Pros | Cons |
-| --- | --- | --- |
-| **A. Token in a file** (recommended): `gh auth login --insecure-storage` under the agent dir, so the token sits in its `hosts.yml`, mode 0600 | Works in both sandboxes with no new path opened; one-line change to the setup; the doctor already checks expiry | Plaintext token on disk, readable by any process the user runs, agents included (`cat` is not blocked the way `gh auth token` is). Contradicts this plan's "never written to a file" goal. Limited by the bot's collaborator role and the token's expiry |
-| B. Let the sandboxes read the keychain | Token stays encrypted at rest | Also exposes the user's own credentials, including their `gh` token, which undoes the credential protection plan ([[4zyo2woj]]). Not recommended |
-| C. Run `gh` and GitHub Git commands outside the sandbox | No token on disk | Claude can exclude commands from its sandbox; Codex cannot without a prompt, so Codex's no-prompt goal is lost |
-| D. Claude only for now; Codex keeps handing pushes back | No token on disk, smallest change | Drops the Codex goals; Claude's sandbox still needs C for `gh` |
-
-Why blocked rather than decided: every option trades a stated goal (no token in a file, no prompt
-in Codex) or the credential protection plan's boundary, and that trade is the user's.
+None open. The token-location question is decided below (Decision Log, November 22, 2026).
 
 ## Decision Log
 
@@ -648,6 +624,28 @@ in Codex) or the credential protection plan's boundary, and that trade is the us
   package as the underlying switch so turning it off reverts cleanly. Declining keeps today's
   behavior.
 - November 14, 2026: with the identity on, `post-to-github` commands move from ask to allow.
+- November 22, 2026 (user decision): neither Claude's nor Codex's sandbox can read the macOS
+  keychain (`gh` reports the bot's token invalid in both; both deny `~/Library/Keychains/**`), so the
+  bot's token is stored in a file: `gh auth login --insecure-storage` under the agent config dir, which
+  keeps it in that dir's `hosts.yml`. Rejected: opening the keychain to the sandboxes (exposes the
+  user's own credentials), running `gh` outside the sandbox (Codex would prompt), Claude only. This
+  replaces the "never written to a file" rule for the token; it still never appears in a tracked or
+  rendered file, an argument, or a transcript.
+- November 22, 2026: the Git settings reach agent shells through one `include.path` pair that core
+  always renders, pointing at `~/.roborepo/package-runtime/github-agent-identity/gitconfig`, a file the
+  package installs. Chosen over rendering four more `GIT_CONFIG_*` pairs only when the package is on:
+  Git honors `include.path` at command scope, expands `~`, and ignores a missing file (checked
+  locally), so core needs no package-conditional rendering and `GIT_CONFIG_COUNT` stays one owner's.
+- November 22, 2026: `GH_CONFIG_DIR` is a package config patch using a new
+  `${roborepo-state:<path>}` placeholder that expands to an absolute path under the state root,
+  since `gh` does not expand `~`. Rejected: pointing it at the package-runtime folder, which every
+  apply replaces wholesale and would delete the token.
+- November 22, 2026: permission changes are declared in the manifest as `agentIdentityBucket` on
+  `read-and-reply-on-github`, `post-to-github`, and `push-code`, applied before user overrides when
+  the package is on. `push-code` is included because a Codex feature-branch push needed approval in
+  the November 22 run. A package field `permissionsRender: true` re-renders permissions when the
+  package is turned on or off. With the identity on, the Codex profile also enables the network and
+  grants read access to Git's CA file, which its sandbox could not read in that run.
 - November 22, 2026: the user asked that the setup automate every step GitHub allows and guide the
   rest, so another user can set this up without help. The setup now sends the collaborator invite
   as the user and accepts it as the bot; only the bot account and the token stay manual. Pre-filling
