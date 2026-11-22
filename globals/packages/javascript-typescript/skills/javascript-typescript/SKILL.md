@@ -17,8 +17,7 @@ Apply this when the repo or touched files use JavaScript or TypeScript.
 | `react` | recommends | A touched file contains a component, a hook, JSX/TSX markup, or client state | Component and hook conventions, effect and state rules, and React-specific test shape |
 
 Say which paired skills applied and which did not. A skipped skill and a forgotten one look the
-same otherwise. A row whose skill the session does not list is skipped and named once in the
-report; never ask the user to enable a package.
+same otherwise. Each row follows the paired-skill rule in Skill Loading.
 
 ## Functions
 

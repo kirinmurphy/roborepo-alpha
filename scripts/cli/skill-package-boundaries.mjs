@@ -10,10 +10,16 @@
 
 // Rows of a skill's `## Paired Skills` table, read by header so a table with or without the
 // Relationship column parses the same way.
+// The text of a skill's `## Paired Skills` section, up to the next heading or the end of the file;
+// null when it has none.
+export function pairedSkillSection(body) {
+  return /## Paired Skills\n([\s\S]*?)(?=\n## |$)/.exec(body)?.[1] ?? null;
+}
+
 export function pairedSkillRows(body) {
-  const table = /## Paired Skills\n([\s\S]*?)(?=\n## |$)/.exec(body);
-  if (!table) return null;
-  const lines = table[1].split("\n").filter((line) => /^\|/.test(line));
+  const table = pairedSkillSection(body);
+  if (table === null) return null;
+  const lines = table.split("\n").filter((line) => /^\|/.test(line));
   if (lines.length < 2) return [];
   const cells = (line) => line.split("|").slice(1, -1).map((cell) => cell.trim());
   const header = cells(lines[0]).map((cell) => cell.toLowerCase());

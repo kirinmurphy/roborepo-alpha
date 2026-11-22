@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "./paths.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
-import { packageBoundaryFindings, pairedSkillRows } from "./skill-package-boundaries.mjs";
+import { packageBoundaryFindings, pairedSkillRows, pairedSkillSection } from "./skill-package-boundaries.mjs";
 
 const AUDIT_REL = "docs/internal/skill-invocation-audit.md";
 const AUDIT_PATH = path.join(repoRoot, AUDIT_REL);
@@ -101,8 +101,8 @@ const VAGUE_TRIGGERS = /\b(when relevant|if relevant|as needed|when appropriate|
 // What is NOT judged: whether a given pairing is the right one. That is a claim about the skills'
 // subject matter, not about the shape of the declaration.
 function pairedSkillShape(skill, knownSkillNames = []) {
-  const table = /## Paired Skills\n([\s\S]*?)(?=\n## |\n$)/.exec(skill.body);
-  if (!table) {
+  const body = pairedSkillSection(skill.body);
+  if (body === null) {
     // Only flag skills that already tell the reader to pair with something; a skill with no
     // cross-skill relationship is not missing a table.
     //
@@ -120,7 +120,6 @@ function pairedSkillShape(skill, knownSkillNames = []) {
   }
 
   const out = [];
-  const body = table[1];
   if (!/do not wait to be asked for them by name/i.test(body)) {
     out.push("Paired Skills table does not instruct the load");
   }

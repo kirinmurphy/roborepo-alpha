@@ -270,7 +270,8 @@ export async function applyWizardChanges(steps) {
 
 // The wizard never prompts for recommendations; it names the ones still off once, after every
 // toggle has applied, so a recommendation the user also selected in the wizard is not listed.
-// Same line as a non-interactive `roborepo package enable`.
+// Same `recommended (not enabled):` prefix as a non-interactive `roborepo package enable`, plus the
+// command that turns one on.
 function printRecommendationsStillOff(recommendedIds) {
   if (recommendedIds.length === 0) return;
   const effective = new Set(effectiveEnabledIds(loadPackageCatalog()));
