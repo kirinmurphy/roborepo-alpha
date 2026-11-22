@@ -62,6 +62,26 @@ try {
   assert.ok(!fs.existsSync(path.join(stateRoot, "escape")), "a refused name creates nothing outside the store");
   assert.equal(run([]).status, 2, "a missing name is refused");
 
+  // ---- A store root replaced by a link is refused, and the link's target is left alone ----
+  const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-scratch-elsewhere-"));
+  const swappedState = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-scratch-swapped-"));
+  try {
+    const victim = path.join(elsewhere, "old-folder");
+    fs.mkdirSync(victim);
+    fs.utimesSync(victim, old, old);
+    fs.symlinkSync(elsewhere, path.join(swappedState, "scratch"));
+    const swapped = spawnSync(process.execPath, [cli, "scratch", "probe"], {
+      env: { ...process.env, ROBOREPO_STATE_ROOT: swappedState }, encoding: "utf8",
+    });
+    assert.equal(swapped.status, 1, "a linked store root is refused");
+    assert.match(swapped.stderr, /is not a folder; refusing to use it/);
+    assert.ok(fs.existsSync(victim), "nothing in the link's target is pruned");
+    assert.ok(!fs.existsSync(path.join(elsewhere, "probe")), "nothing is created in the link's target");
+  } finally {
+    fs.rmSync(elsewhere, { recursive: true, force: true });
+    fs.rmSync(swappedState, { recursive: true, force: true });
+  }
+
   // ---- A link under the name is not handed out ----
   fs.symlinkSync(stateRoot, path.join(scratch, "linked"));
   const linked = run(["linked"]);

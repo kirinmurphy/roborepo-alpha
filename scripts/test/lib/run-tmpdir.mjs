@@ -69,9 +69,11 @@ export function processAlive(pid) {
 }
 
 // Some suites chmod folders to 000 to test permission handling; restore access so removal works.
+// chmod and readdir follow links, so a link is skipped: rmSync removes it as a link.
 function makeWritable(dir) {
   let entries;
   try {
+    if (!fs.lstatSync(dir).isDirectory()) return;
     fs.chmodSync(dir, 0o700);
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {

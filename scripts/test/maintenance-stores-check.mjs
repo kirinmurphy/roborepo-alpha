@@ -133,6 +133,21 @@ try {
   const scratchListed = run([]);
   assert.match(scratchListed.stdout.slice(scratchListed.stdout.indexOf("Agent scratch") - 200), /3 folder\(s\)/, "list counts scratch folders");
 
+  // A store root replaced by a link is never pruned through.
+  const linkedTarget = path.join(tempRoot, "linked-target");
+  fs.mkdirSync(path.join(linkedTarget, "old"), { recursive: true });
+  fs.utimesSync(path.join(linkedTarget, "old"), old, old);
+  fs.mkdirSync(path.join(linkedTarget, "new"));
+  const realScratch = path.join(tempRoot, "scratch-real");
+  fs.renameSync(scratch, realScratch);
+  fs.symlinkSync(linkedTarget, scratch);
+  const linkedReset = run(["reset", "scratch"]);
+  assert.equal(linkedReset.status, 0);
+  assert.match(linkedReset.stderr, /not a real folder/, "the refusal is reported");
+  assert.ok(fs.existsSync(path.join(linkedTarget, "old")), "a linked store root's target is not pruned");
+  fs.unlinkSync(scratch);
+  fs.renameSync(realScratch, scratch);
+
   assert.equal(run(["reset", "scratch", "--all"]).status, 0);
   assert.ok(!fs.existsSync(scratch), "--all clears the scratch store");
   assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "must survive", "--all removes the link, not its target");

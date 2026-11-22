@@ -62,18 +62,30 @@ function temporaryRoots() {
 }
 
 // The agent scratch store, where the Temporary Files rule sends agents instead of /tmp, so a body
-// written there must be accepted. Only the account's own home counts: $HOME and ROBOREPO_STATE_ROOT
-// are environment variables, and like $TMPDIR above they must not widen what this command reads.
-// (The denylist reads both homes because there a union only refuses more; here it would allow
-// more.) A sandboxed shell can write the scratch folder, so one replaced by a link is ignored rather
-// than followed.
-export function scratchBodyRoots(home = accountHome()) {
+// written there must be accepted. Only the home the account database names counts: $HOME,
+// USERPROFILE, and ROBOREPO_STATE_ROOT are environment variables, and like $TMPDIR above they must
+// not widen what this command reads. (The denylist reads both homes because there a union only
+// refuses more; here it would allow more.) An account with no database entry gets no scratch root.
+// A sandboxed shell can write the scratch folder, so one replaced by a link is ignored rather than
+// followed.
+export function scratchBodyRoots(home = databaseHome()) {
+  if (!home) return [];
   const root = path.join(home, ".roborepo", "scratch");
   try {
     if (!fs.lstatSync(root).isDirectory()) return [];
     return [fs.realpathSync(root)];
   } catch {
     return [];
+  }
+}
+
+// os.userInfo() reads the account database (getpwuid; the profile directory on Windows), never the
+// environment.
+function databaseHome() {
+  try {
+    return os.userInfo().homedir || null;
+  } catch {
+    return null;
   }
 }
 
@@ -91,8 +103,7 @@ const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.
 // Node has no descriptor-path lookup, so a fresh resolution's device and inode are compared, which
 // narrows that window but cannot close it against repeated timed swaps. Refusals and read errors
 // never print the path.
-function readBodyFile(file) {
-  const roots = bodyRoots();
+export function readBodyFile(file, roots = bodyRoots()) {
   let resolved;
   try {
     resolved = fs.realpathSync(file);

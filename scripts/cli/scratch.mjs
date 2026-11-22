@@ -48,6 +48,9 @@ function runScratch(args) {
 
 export function openScratchFolder(root, name, { now = new Date() } = {}) {
   fs.mkdirSync(root, { recursive: true });
+  // A sandboxed shell can write the scratch folder, so it could replace the store with a link;
+  // handing out and pruning folders through that link would reach wherever it points.
+  if (!fs.lstatSync(root).isDirectory()) throw new Error(`${root} is not a folder; refusing to use it`);
   const folder = path.join(root, name);
   try {
     fs.mkdirSync(folder);

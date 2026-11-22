@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
-import { scratchBodyRoots } from "../cli/delivery.mjs";
+import { readBodyFile, scratchBodyRoots } from "../cli/delivery.mjs";
 
 // pr-body accepts only fixed system temp roots, so on POSIX the fixture uses /tmp rather than a
 // $TMPDIR that may point elsewhere.
@@ -159,7 +159,16 @@ try {
       const scratchBody = path.join(scratchRoot, "gy8ncs9u", "body.md");
       fs.mkdirSync(path.dirname(scratchBody), { recursive: true });
       fs.writeFileSync(scratchBody, body);
-      assert.deepEqual(scratchBodyRoots(outsideHome), [fs.realpathSync(scratchRoot)], "a home's real scratch folder is a body root");
+      const scratchRoots = scratchBodyRoots(outsideHome);
+      assert.deepEqual(scratchRoots, [fs.realpathSync(scratchRoot)], "a home's real scratch folder is a body root");
+      // The read itself, through the location check, with that home's scratch folder as the only
+      // root: a scratch body is read, and a file elsewhere in the state root is refused.
+      assert.equal(readBodyFile(scratchBody, scratchRoots), body, "a body in the scratch folder is read");
+      const stateBody = path.join(outsideHome, ".roborepo", "telemetry", "body.md");
+      fs.mkdirSync(path.dirname(stateBody), { recursive: true });
+      fs.writeFileSync(stateBody, body);
+      assert.throws(() => readBodyFile(stateBody, scratchRoots), /inside a system temp directory or the scratch folder/,
+        "a body elsewhere in ~/.roborepo/ is refused");
       const homeEnv = { HOME: outsideHome, USERPROFILE: outsideHome };
       refused(runDelivery(["pr-body", scratchBody], [pr], run, null, repository, homeEnv), /inside a system temp directory or the scratch folder/);
       assert.deepEqual(calls(), [], "an overridden $HOME does not widen the body locations");

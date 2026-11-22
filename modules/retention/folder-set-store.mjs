@@ -88,18 +88,20 @@ export function folderAgeDays(entry, now = new Date()) {
   return (toMillis(now) - entry.mtimeMs) / DAY_MS;
 }
 
-// Remove top-level entries of the store. Each entry must sit directly inside dirPath and, once
-// resolved, stay inside the resolved store: a link is unlinked as a link, and a folder that resolves
-// anywhere else (a swapped parent, a mount) is refused rather than removed. fs.rmSync never follows
+// Remove top-level entries of the store. The store itself must be a real folder: one replaced by a
+// link is refused outright, so removal never reaches the link's target. Each entry must sit directly
+// inside dirPath and, once resolved, stay inside the resolved store: a link is unlinked as a link,
+// and a folder that resolves anywhere else is refused rather than removed. fs.rmSync never follows
 // links inside the tree it removes. Returns the paths removed and the ones refused or failed.
 export function removeFolderSetEntries({ dirPath, paths, fsApi = fs }) {
   const removed = [];
   const refused = [];
   let root;
   try {
+    if (!fsApi.lstatSync(dirPath).isDirectory()) throw new Error("not a folder");
     root = fsApi.realpathSync(dirPath);
   } catch {
-    return { removed, refused: paths.map((entryPath) => ({ path: entryPath, reason: "store missing" })) };
+    return { removed, refused: paths.map((entryPath) => ({ path: entryPath, reason: "store is missing or not a real folder" })) };
   }
   for (const entryPath of paths) {
     if (path.dirname(path.resolve(entryPath)) !== path.resolve(dirPath)) {
