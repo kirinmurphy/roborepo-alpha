@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // With the GitHub agent identity on, permissions render differently: gh api and posting to GitHub
-// open up, Codex's sandbox gets network access plus a CA bundle read grant, and nothing else about
+// open up, Codex's sandbox gets network access, and nothing else about
 // the credential or SSH boundaries moves. With it off the render is the shipped baseline.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -38,8 +38,7 @@ assert.doesNotMatch(off, /github\.com/, "off: no GitHub domains");
 // Codex: on.
 const on = codexConfig(true);
 assert.match(on, /\[permissions\.managed-workspace\.network\]\nenabled = true/, "on: Codex network is on");
-assert.match(on, /^"\/etc\/ssl\/cert\.pem" = "read"$/m, "on: reads the CA bundle");
-assert.match(on, /^"\/private\/etc\/ssl\/cert\.pem" = "read"$/m, "on: reads the macOS CA bundle");
+assert.doesNotMatch(on, /cert\.pem/, "on: no CA bundle grants (setup copies the bundle instead)");
 assert.match(on, /^"~\/\.ssh\/\*\*" = "deny"$/m, "on: SSH keys stay denied");
 assert.doesNotMatch(on, /allow_local_binding\s*=\s*true/, "on: no local binding");
 assert.equal(codexConfig(true), on, "on: rendering is stable");

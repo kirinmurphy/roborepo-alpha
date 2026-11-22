@@ -63,7 +63,8 @@ try {
   for (const host of ["github.com", "api.github.com", "example.com"]) assert.ok(domain(codexOn, host), `on: domains table allows ${host}`);
   assert.equal(codexOn.match(/^\[permissions\.managed-workspace\.network\.domains\]$/gm).length, 1, "on: one domains table");
   assert.match(codexOn, /\[permissions\.managed-workspace\.network\]\nenabled = true/, "Codex network is on");
-  assert.match(codexOn, /"\/etc\/ssl\/cert\.pem" = "read"/);
+  assert.doesNotMatch(codexOn, /cert\.pem/);
+  assert.match(fs.readFileSync(gitconfig, "utf8"), /^\[include\]\n\tpath = ~\/\.roborepo\/github-agent\/gitconfig\.local$/m, "the gitconfig includes the setup-written CA config");
 
   // Codex's prefix rules follow the identity: enable rewrites the live rules file.
   const rulesOn = codexRules();

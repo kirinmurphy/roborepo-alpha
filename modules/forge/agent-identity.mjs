@@ -15,6 +15,62 @@ const REQUIRED_SCOPES = ["repo", "read:org"];
 const SETUP_FIX = "Run roborepo github setup in your own terminal.";
 
 export const agentGhConfigDir = (stateDir) => path.join(stateDir, "github-agent", "gh");
+export const agentCaBundleFile = (stateDir) => path.join(stateDir, "github-agent", "ca-bundle.crt");
+export const agentCaGitconfigFile = (stateDir) => path.join(stateDir, "github-agent", "gitconfig.local");
+
+// Where the system's CA bundle usually lives. ROBOREPO_SYSTEM_CA_BUNDLE replaces the list with one
+// path, so tests can point at a fixture instead of the machine's real bundle.
+const CA_BUNDLE_CANDIDATES = ["/etc/ssl/cert.pem", "/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt"];
+
+export function findSystemCaBundle() {
+  const override = process.env.ROBOREPO_SYSTEM_CA_BUNDLE;
+  return (override ? [override] : CA_BUNDLE_CANDIDATES).find((file) => fs.existsSync(file)) || null;
+}
+
+function writeIfChanged(file, content, mode) {
+  try {
+    if (Buffer.compare(fs.readFileSync(file), Buffer.from(content)) === 0) return false;
+  } catch {}
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content, { mode });
+  fs.chmodSync(file, mode);
+  return true;
+}
+
+// Codex's sandbox denies *.pem files, so Git and curl cannot read the system CA bundle there. Setup
+// copies it under a name the sandbox allows and points Git at the copy for github.com through a
+// gitconfig the package's gitconfig includes. Returns `{ copied, changed }`; `copied: false` means
+// the system has no bundle file (Windows, where Git uses the OS store), and any old copy is removed.
+export function refreshCaBundle({ stateDir }) {
+  const source = findSystemCaBundle();
+  const copy = agentCaBundleFile(stateDir);
+  const local = agentCaGitconfigFile(stateDir);
+  if (!source) {
+    let changed = false;
+    for (const file of [local, copy]) {
+      if (fs.existsSync(file)) { fs.rmSync(file); changed = true; }
+    }
+    return { copied: false, changed };
+  }
+  const changedCopy = writeIfChanged(copy, fs.readFileSync(source), 0o644);
+  const changedConfig = writeIfChanged(
+    local,
+    `# Codex's sandbox denies *.pem files, so Git reads a copy of the system CA bundle.\n[http "https://github.com/"]\n\tsslCAInfo = ${copy}\n`,
+    0o644,
+  );
+  return { copied: true, changed: changedCopy || changedConfig };
+}
+
+function caBundleStale(stateDir) {
+  const source = findSystemCaBundle();
+  if (!source) return false;
+  try {
+    return Buffer.compare(fs.readFileSync(source), fs.readFileSync(agentCaBundleFile(stateDir))) !== 0;
+  } catch {
+    return true;
+  }
+}
+
 export const agentHostsFile = (stateDir) => path.join(agentGhConfigDir(stateDir), "hosts.yml");
 
 // What the bot's hosts.yml says, without ever returning the token: `loggedIn` when it has a
@@ -69,6 +125,9 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
     if (!packageEnabled) problems.push(problem("package-off", "A bot is signed in but the github-agent-identity package is off, so agents still act as you.", SETUP_FIX));
     if (!hosts.hasToken) {
       problems.push(problem("token-in-keychain", "The bot's token is in the keychain, which agent sandboxes cannot read.", SETUP_FIX));
+    }
+    if (caBundleStale(stateDir)) {
+      problems.push(problem("ca-bundle-stale", "The certificate bundle copy Codex's sandbox uses for Git is missing or out of date.", "Run roborepo github setup to refresh it.", "warn"));
     }
     let info;
     try {

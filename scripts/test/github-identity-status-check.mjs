@@ -23,12 +23,15 @@ const stateRoot = path.join(root, "state");
 const ghDir = path.join(stateRoot, "github-agent", "gh");
 const TOKEN = "ghp_statuscheck0123456789";
 const BOT = "robo-bot";
+// ROBOREPO_SYSTEM_CA_BUNDLE replaces the system CA bundle search with one fixture file.
+const systemCa = path.join(root, "system-ca.pem");
+fs.writeFileSync(systemCa, "fixture bundle\n");
 
 try {
   const gh = createFakeGh(root);
   const checkout = clone("checkout", "git@github.com:example/project.git");
   const env = {
-    ...process.env, ...gh.env, HOME: path.join(root, "home"), ROBOREPO_STATE_ROOT: stateRoot,
+    ...process.env, ...gh.env, HOME: path.join(root, "home"), ROBOREPO_STATE_ROOT: stateRoot, ROBOREPO_SYSTEM_CA_BUNDLE: systemCa,
     PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`, ROBOREPO_SKIP_NODE_RELEASE_CHECK: "1", ROBOREPO_SKIP_PROTECTION_CHECK: "1",
   };
   delete env.ROBOREPO_SKIP_AGENT_IDENTITY_CHECK;
@@ -43,7 +46,7 @@ try {
   assert.equal(protectRun.status, 0, protectRun.stdout + protectRun.stderr);
   const managed = gh.readState().rulesets;
 
-  const start = ({ token = {}, hosts = "token", enabled = true, ...overrides } = {}) => {
+  const start = ({ token = {}, hosts = "token", enabled = true, ca = "current", ...overrides } = {}) => {
     fs.rmSync(stateRoot, { recursive: true, force: true });
     fs.mkdirSync(ghDir, { recursive: true });
     if (hosts === "token") fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    oauth_token: ${TOKEN}\n    user: ${BOT}\n`);
@@ -51,6 +54,8 @@ try {
       fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    user: ${BOT}\n`);
       fs.writeFileSync(path.join(ghDir, ".fake-token"), `${TOKEN}\n`);
     }
+    if (ca === "current") fs.copyFileSync(systemCa, path.join(stateRoot, "github-agent", "ca-bundle.crt"));
+    if (ca === "stale") fs.writeFileSync(path.join(stateRoot, "github-agent", "ca-bundle.crt"), "an older bundle\n");
     if (enabled) fs.writeFileSync(path.join(stateRoot, "enabled-packages.json"), JSON.stringify({ schemaVersion: 2, packages: ["github-agent-identity"], disabled: [] }));
     gh.setState(fakeGitHubState({
       rulesets: structuredClone(managed),
@@ -134,6 +139,17 @@ try {
   let status = node("scripts/cli/main.mjs", ["github", "status"]);
   assert.equal(status.status, 0, status.stdout + status.stderr);
   assert.match(status.stdout, /healthy for example\/project: agents act as robo-bot\.\n {2}Note: .*expires in 3 days/);
+  // The CA bundle copy Codex's sandbox reads: missing or different from the system's is a warning.
+  for (const ca of ["stale", "missing"]) {
+    start({ ca });
+    const report = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
+    const entry = report.problems.find((item) => item.id === "ca-bundle-stale");
+    assert.ok(entry && entry.severity === "warn" && /roborepo github setup/.test(entry.fix), `${ca} copy is reported`);
+    assert.equal(report.state, "healthy", "a stale copy is advice, not a problem");
+  }
+  start();
+  assert.ok(!JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout).problems.some((item) => item.id === "ca-bundle-stale"), "a matching copy is not reported");
+  console.log("✓ ca-bundle-stale is reported when the copy is missing or differs, and not when it matches.");
   console.log("✓ Each identity state maps to its doctor line; a warning is a hint, a problem is a hint, never a failure.");
 
   // The status command: exit codes and JSON.

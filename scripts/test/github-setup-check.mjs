@@ -31,7 +31,11 @@ const BOT = "robo-bot";
 try {
   const gh = createFakeGh(root);
   const checkout = clone("checkout", "git@github.com:example/project.git");
+  // ROBOREPO_SYSTEM_CA_BUNDLE replaces the system CA bundle search with one fixture file.
+  const systemCa = path.join(root, "system-ca.pem");
+  fs.writeFileSync(systemCa, "-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n");
   const env = {
+    ROBOREPO_SYSTEM_CA_BUNDLE: systemCa,
     ...process.env, ...gh.env, HOME: home, ROBOREPO_STATE_ROOT: stateRoot, SKIP_MCP: "1",
     PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`, ROBOREPO_GITHUB_SETUP_SCRIPTED: "1",
   };
@@ -71,6 +75,11 @@ try {
   assert.ok(packageOn(), "the package is on");
   assert.equal(fs.statSync(path.join(ghDir, "hosts.yml")).mode & 0o777, 0o600, "hosts.yml is private even when gh leaves it wider");
   assert.equal(fs.statSync(ghDir).mode & 0o777, 0o700);
+  assert.match(result.stdout, /✓ certificate bundle: copied for Codex's sandbox/);
+  const caCopy = path.join(stateRoot, "github-agent", "ca-bundle.crt");
+  assert.deepEqual(fs.readFileSync(caCopy), fs.readFileSync(systemCa), "the CA copy is identical to the system bundle");
+  const localConfig = fs.readFileSync(path.join(stateRoot, "github-agent", "gitconfig.local"), "utf8");
+  assert.equal(localConfig.split("\n").filter((line) => !line.startsWith("#")).join("\n"), `[http "https://github.com/"]\n\tsslCAInfo = ${caCopy}\n`);
 
   const calls = gh.calls();
   const invite = calls.find((call) => call.method === "PUT" && /collaborators\/robo-bot$/.test(call.endpoint));
@@ -97,6 +106,7 @@ try {
   for (const step of ["Bot account \\(robo-bot\\)", "Invitation", "Token", "Invitation accepted", "Branch protection", "Package on"]) {
     assert.match(result.stdout, new RegExp(`✓ ${step}.*: already done`), step);
   }
+  assert.match(result.stdout, /✓ certificate bundle: already current/);
   assert.doesNotMatch(result.stdout, /Bot account login:|Paste the token|Protect the plans/);
   assert.ok(!gh.calls().some((call) => call.method === "PUT" || call.method === "PATCH" || call.method === "POST" || call.argv[0] === "auth"), "a rerun changes nothing");
   console.log("✓ A rerun prints every step as already done and makes no change.");

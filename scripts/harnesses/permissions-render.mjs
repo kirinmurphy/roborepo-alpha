@@ -82,10 +82,6 @@ function codexNetworkAccess(behaviors) {
   return findBehavior(behaviors, "go-online")?.bucket === "allow";
 }
 
-// Git's CA bundle. Codex's sandbox could not read it in a test, which breaks HTTPS to GitHub.
-// UNVERIFIED: this read grant is not confirmed to fix that until a `codex exec` run does.
-const CODEX_CA_BUNDLE_READS = ["/etc/ssl/cert.pem", "/private/etc/ssl/cert.pem"];
-
 function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], credentials = { paths: [] }, readOnly = false, agentIdentity = false) {
   const roots = [...new Set(workspaceRoots.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))];
   const writable = readOnly ? [] : [...new Set(writablePaths)];
@@ -102,11 +98,9 @@ function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], 
     for (const root of roots) lines.push(`${quoteToml(root)} = true`);
   }
 
-  const certReads = !readOnly && agentIdentity ? CODEX_CA_BUNDLE_READS : [];
-  if (writable.length || credentials.paths.length || certReads.length) {
+  if (writable.length || credentials.paths.length) {
     lines.push("", `[permissions.${profile}.filesystem]`);
     for (const item of writable) lines.push(`${quoteToml(item)} = "write"`);
-    for (const cert of certReads) lines.push(`${quoteToml(cert)} = "read"`);
     for (const credential of credentials.paths) lines.push(`${quoteToml(credential)} = "deny"`);
   }
 

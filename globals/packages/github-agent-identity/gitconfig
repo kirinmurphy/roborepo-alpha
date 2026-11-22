@@ -8,3 +8,6 @@
 [url "https://github.com/"]
 	insteadOf = git@github.com:
 	insteadOf = ssh://git@github.com/
+# Setup writes this file (a Git-readable copy of the system CA bundle); Git ignores it until then.
+[include]
+	path = ~/.roborepo/github-agent/gitconfig.local

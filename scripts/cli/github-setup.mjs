@@ -7,7 +7,7 @@ import readline from "node:readline";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient, runGh } from "../../modules/forge/github.mjs";
 import {
-  AGENT_IDENTITY_PACKAGE_ID, agentGhConfigDir, agentHostsFile, readAgentHosts, readAgentIdentity,
+  AGENT_IDENTITY_PACKAGE_ID, agentGhConfigDir, agentHostsFile, readAgentHosts, readAgentIdentity, refreshCaBundle,
 } from "../../modules/forge/agent-identity.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
@@ -114,7 +114,11 @@ async function runSetup(input) {
     }
   }
 
-  // 7. Check everything before agents switch over.
+  // 7. The certificate bundle copy Codex's sandbox reads (it denies *.pem), refreshed before the check.
+  const ca = refreshCaBundle({ stateDir });
+  if (ca.copied) console.log(ca.changed ? "✓ certificate bundle: copied for Codex's sandbox" : "✓ certificate bundle: already current");
+
+  // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });
   const blocking = report.problems.filter((entry) => entry.severity === "problem");
   for (const entry of report.problems.filter((item) => item.severity === "warn")) console.log(`Note: ${entry.message}`);
@@ -126,7 +130,7 @@ async function runSetup(input) {
   }
   console.log("✓ Check: the bot account, its access and the branch protection all look right.");
 
-  // 8. Turn the package on.
+  // 9. Turn the package on.
   if (agentIdentityPackageEnabled()) {
     done("Package on");
   } else {
