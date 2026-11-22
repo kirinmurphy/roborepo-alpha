@@ -1,12 +1,12 @@
 ---
 id: ejsc769o
-next_action: After the desired-state contract lands, extract the current conventions-aware review rubric into implementation-review and declare required/recommended skill relationships.
+next_action: Start Phase 1. Add `requires` and `recommends` to the built-in package manifests from the "Package relationships" table, then create the `implementation-review` package by moving the validator rubric out of plan-execute's `references/validation-loop.md`.
 blocked_by: []
 depends_on:
   - o9zwxuav
   - bysyzl1e
-related: ["age4cm7r", "gqzjlzgx", "skills-vs-commands-invocation-policy"]
-reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
+related: ["age4cm7r", "gqzjlzgx", "7e21olcs", "skills-vs-commands-invocation-policy"]
+reviewed_commit: 46f37fbc51d551f49999d757a328694c176555b8
 worktree:
 ---
 
@@ -14,164 +14,169 @@ worktree:
 
 ## Summary
 
-RoboRepo skills already reference other skills in prose through `## Paired Skills` tables and ad hoc loading instructions. Those relationships are useful but invisible to the package system: users cannot see them from the Config/Skills page, required helpers can be disabled independently, and every workflow repeats its own package-status/prompt logic.
+RoboRepo skills already name other skills in prose, through `## Paired Skills` tables and ad hoc
+loading instructions. The package system cannot see those relationships: the Config page does not
+show them, a skill another one always needs can be turned off on its own, and several skills repeat
+the same "check the package, then ask the user to enable it or skip it" procedure on every run.
 
-This plan adopts the dependency mechanism from [[o9zwxuav]] across the built-in skill catalog. It classifies existing cross-skill relationships as **required**, **recommended**, or **runtime-conditional**, updates package manifests to express the durable relationships, and keeps the skill body as the source of task-specific activation conditions.
-
-The same rollout creates the new non-selectable `implementation-review` skill and rewires `/session-close`, `/plan-close`, `/plan-execute`'s validation loop, and `/plan-review` to share it. This is the first concrete consumer of dependency-only skills, but the plan applies the model consistently across `plan-write`, `plan-promote`, `plan-execute`, `technical-writing`, `javascript-typescript`, and the other built-in skills that already reference one another.
+[[o9zwxuav]] shipped the package-level mechanism: `requires`, `recommends`, dependency-only
+packages, and the Config page's Requires and Recommended dependencies lists. No built-in package
+uses it yet. This plan declares the real relationships across the built-in catalog, creates the
+dependency-only `implementation-review` package that the plan suite and `/session-close` share, and
+replaces the per-run enable-or-skip prompts with one rule: the user is asked about a recommendation
+once, when its parent package is enabled, and never again at run time.
 
 ## Context
 
-Today the dependency model lives mostly in prose. For example:
+### Current behavior
 
-- `plan-write` and `plan-promote` always load `technical-writing`, but the package manifests do not require it;
-- `plan-write`, `plan-promote`, `plan-execute`, and `technical-writing` conditionally load `code-style`, `javascript-typescript`, and `test-harness` based on the work;
-- `javascript-typescript` conditionally loads `react`;
-- `session-close` conditionally loads `plan-write` when the session touched a plan;
-- `plan-close` pairs with `technical-writing` and `test-harness`;
-- each workflow repeats the same package-state check and enable-or-skip prompt.
+- Package manifests support `requires` and `recommends` (`scripts/cli/package-catalog.mjs`,
+  `scripts/cli/package-graph.mjs`), but no file under `globals/packages/*/package.config.json`
+  declares either.
+- Enabling a package with disabled recommendations offers each one once: the interactive CLI asks
+  "Also enable recommended package …?" (default No, `offerRecommendations` in
+  `scripts/cli/packages.mjs`), the portal lists them, and scripts or `--dry-run` print one
+  `recommended (not enabled): …` line. The terminal setup wizard (`buildOnboardSteps` /
+  `applyWizardChanges` in `scripts/cli/presets.mjs`) shows nothing; [[o9zwxuav]] left that choice
+  to this plan.
+- [[bysyzl1e]] merged `plan-write`, `plan-promote`, `plan-execute`, `plan-review`, `plan-close`,
+  `plan-archive`, and `plan-suite-init` into one package, `plan-suite`. A relationship is declared
+  per package, so the plan skills' needs combine into `plan-suite`'s manifest.
+- Several skills tell the agent to check a paired package's state and ask "Enable it, or skip it for
+  this run?" when it is off. A skipped recommendation is asked about again on the next run.
+- The plan-suite validator rubric lives in `plan-suite/skills/plan-execute/references/validation-loop.md`
+  (checklist, three convention checks, and the `fix` / `escalate` / `base` classes; eight-pass cap).
+  `plan-suite/skills/plan-review/SKILL.md` restates the checklist, convention checks, and classes inline. `session-close` has its own short
+  review list and a `## Risk Checkpoints` section, and loads "a dedicated code-quality review skill"
+  only if one happens to exist.
 
-The result is two overlapping systems: package manifests control what is installed, while skill prose independently describes what another skill expects to be available. [[o9zwxuav]] supplies the package-level mechanics needed to bring those systems together.
+### Proposed behavior
+
+- Each built-in package's manifest declares what it requires and recommends.
+- Enabling a package keeps the one-time recommendation offer that ships today. The setup wizard
+  prints one line naming recommendations still off.
+- At run time a skill loads an applicable recommended skill when it is available and skips it
+  silently when it is not, naming the skip in one line of its final report. No skill asks the user
+  to enable a package.
+- `implementation-review` holds the one review rubric that `/plan-execute`, `/plan-review`,
+  `/plan-close`, and `/session-close` all use.
 
 ## Goals
 
-- [ ] Audit every built-in package skill that names, loads, or falls back to another skill.
-- [ ] Classify each relationship as `requires`, `recommends`, or runtime-only reference using one consistent rule.
-- [ ] Move unconditional foundational relationships into package `requires`.
-- [ ] Move optional but useful cross-skill relationships into package `recommends` while preserving their task-specific `Load when` conditions in the skill body.
-- [ ] Remove repeated generic package-status/enable/skip procedures from individual skills once the shared dependency workflow can provide them.
-- [ ] Keep conditional activation decisions in the skill that understands the task; package metadata must not pretend that every recommendation applies on every invocation.
-- [ ] Create `implementation-review` as a non-selectable dependency-visible package.
-- [ ] Make `session-close` and `plan-close` consume the same implementation-review contract and the same `test-harness` verification contract where appropriate.
-- [ ] Make required and recommended relationships visible and inspectable from the Config/Skills dependency sections supplied by [[o9zwxuav]].
-- [ ] Keep package metadata and skill prose consistent: the manifest declares the relationship; the skill explains when and why it is used.
+- [ ] Every cross-package skill relationship in the built-in catalog is declared as `requires`,
+      `recommends`, or kept as a prose-only reference, by one policy.
+- [ ] Skills keep their task-specific `Load when` conditions; manifests carry no task predicates.
+- [ ] No skill prompts at run time to enable a package; a skipped recommendation is reported once.
+- [ ] The setup wizard names recommendations left off, in one line.
+- [ ] `implementation-review` exists as a dependency-only package and is the single home of the
+      review rubric.
+- [ ] Manifests and skill prose agree.
+- [ ] `roborepo skill audit` warns about package-boundary candidates.
 
 ## Non-goals
 
-- Backward compatibility with old package state, generated wrappers, or manifests. Wipe/rebuild local generated and desired state after the new manifests land; do not add migration branches for legacy builds.
-- Making every named skill relationship required.
-- Automatically enabling recommended packages merely because the parent package is enabled.
-- Encoding natural-language task predicates such as "when the plan touches JS/TS" into the package graph. Those conditions stay in the owning skill.
-- Creating a second skill-level enablement registry underneath packages.
-- Finishing or promoting `tighten`; its relationship model can be revisited after the skill itself is stable.
+- Backward compatibility with old package state, generated wrappers, or manifests. Wipe and rebuild
+  local generated and desired state after the new manifests land; no migration branches.
+- Making every named relationship required.
+- Enabling recommended packages automatically.
+- Encoding predicates such as "when the plan touches JS/TS" in the package graph.
+- A second, skill-level enablement registry under packages.
+- Changing `tighten`, which is still unstable.
+- Changing the enable-time offer that [[o9zwxuav]] shipped.
 
 ## Relationship policy
 
-Use these definitions consistently:
+Terms used below: the **Config page** is the portal page for turning packages on and off; each
+package there has a **row** with a toggle and a **source popup** that shows its files and the
+packages it requires. A **dependency-only** package (`selectable: false`) has no row and turns on
+and off only with the packages that require it.
+
 
 | Relationship | Use when | Package behavior | Skill behavior |
 | --- | --- | --- | --- |
-| `requires` | The parent cannot satisfy its advertised contract without the other package | Dependency is active automatically and cannot be declined while the parent is active | Load it whenever the parent runs |
-| `recommends` | The other skill improves or specializes the workflow, but the parent remains correct without it | Visible as a recommendation; never auto-enabled | When the skill's `Load when` condition matches, prompt to enable or skip if unavailable |
-| runtime reference only | The relationship is a fallback, alternative, inverse integration, or too context-specific to represent as a durable package recommendation | No package activation relationship | Keep the relationship in skill prose only |
+| `requires` | The parent cannot meet its contract without the other package | Active whenever the parent is; cannot be turned off while the parent is on | Loaded whenever the parent's step needs it |
+| `recommends` | The other skill improves the work, but the parent is correct without it | Offered once when the parent is enabled; never auto-enabled | Loaded when its `Load when` condition matches and it is available; otherwise skipped and named once in the final report |
+| prose-only reference | A fallback, an alternative, a boundary statement ("X does this instead"), or an inverse link | None | Stays in prose |
 
-A recommendation is **declarative metadata, not an installation-time prompt**. The package UI may show it before use, but the enable/skip prompt happens when the parent skill reaches a matching `Load when` condition. This avoids asking a user to enable React just because they enabled a JavaScript skill before any React work exists.
+Prompting happens in one place only: the enable-time offer (user decision 2026-11-22). Run-time
+skips are not package problems: they never mark the parent `partial` or blocked.
 
-## Current relationship audit
+## Package relationships
 
-The initial migration target is the current built-in skill catalog under `globals/packages/*/skills/*/SKILL.md`.
+Rescanned on 2026-11-22 across `globals/packages/*/skills/*/SKILL.md` and their `references/`.
+References between skills in the same package are not relationships.
 
-| Parent package | Referenced skill | Current condition | Target relationship | Reason |
-| --- | --- | --- | --- | --- |
-| `plan-write` | `technical-writing` | Always | **requires** | Creator/Validator writing rules are part of plan-write's completion contract |
-| `plan-write` | `code-style` | Plan specifies code ownership/placement | **recommends** | Relevant only for some plans; plan-write can still produce a valid plan without it |
-| `plan-write` | `javascript-typescript` | Plan touches JS/TS | **recommends** | Language-specific guidance is conditional |
-| `plan-write` | `test-harness` | Plan specifies tests/verification | **recommends** | Verification design improves when applicable but is not universal |
-| `plan-promote` | `technical-writing` | Always | **requires** | Promotion rewrites and validates plan prose as part of its core contract |
-| `plan-promote` | `code-style` | Plan specifies code ownership/placement | **recommends** | Conditional implementation guidance |
-| `plan-promote` | `javascript-typescript` | Plan touches JS/TS | **recommends** | Conditional implementation guidance |
-| `plan-promote` | `test-harness` | Plan proposes tests/verification | **recommends** | Conditional verification guidance |
-| `plan-execute` | `implementation-review` | Every validation loop pass | **requires** | The validation loop's rubric is the shared implementation-quality rubric |
-| `plan-review` | `implementation-review` | Every review's validator pass | **requires** | The human review rechecks the synced work with the same rubric |
-| `plan-execute` | `code-style` | Work places/organizes code | **recommends** | Useful for implementation but not every plan contains code changes |
-| `plan-execute` | `javascript-typescript` | Work touches JS/TS | **recommends** | Language-specific and conditional |
-| `plan-execute` | `test-harness` | Work changes tests/verification/fixtures | **recommends** | Conditional verification guidance |
-| `technical-writing` | `plan-write` | Document lives under `docs/plans` | runtime reference only | Avoid a reciprocal package dependency with `plan-write`; `plan-write` owns plan schema/lifecycle when that document type is actually in scope |
-| `technical-writing` | `code-style` | Document specifies code ownership/placement | **recommends** | Conditional subject-matter constraint |
-| `technical-writing` | `javascript-typescript` | Document covers JS/TS | **recommends** | Conditional subject-matter constraint |
-| `technical-writing` | `test-harness` | Document proposes tests/verification | **recommends** | Conditional subject-matter constraint |
-| `javascript-typescript` | `react` | Touched files use React/JSX/hooks/client state | **recommends** | React is a conditional specialization, not a prerequisite for JS/TS guidance |
-| `session-close` | `implementation-review` | Every code-bearing close | **requires** | Shared review is foundational to the close contract; docs-only sessions can explicitly skip the review step because there is no implementation scope |
-| `session-close` | `test-harness` | Verification is useful for the changed behavior | **recommends** | Session closure remains valid if the user declines additional verification |
-| `session-close` | `plan-write` | Session touched a plan or sends work to backlog | **recommends** | Optional and task-specific plan integration |
-| `plan-close` | `implementation-review` | Every implementation close | **requires** | Plan closure should use the canonical implementation-quality rubric |
-| `plan-close` | `test-harness` | Every complete-plan verdict | **requires** | A complete verdict must use repository-native verification/test-selection rules |
-| `plan-close` | `technical-writing` | Completion summary and Verification prose | **recommends** | Improves durable completion prose but must not block an otherwise provable close |
-| `implementation-review` | `code-style` | General implementation review | **recommends** | Supplies canonical language-agnostic conventions without making review impossible when absent |
-| `implementation-review` | `javascript-typescript` | Reviewed scope is JS/TS | **recommends** | Conditional language specialization; `javascript-typescript` can in turn recommend `react` |
-| `supabase-integration-testing` | `test-harness` | Supabase-specific conditions do not match | runtime reference only | This is a fallback/alternative workflow, not a dependency of the Supabase skill |
+| Package | `requires` | `recommends` | Prose-only references |
+| --- | --- | --- | --- |
+| `plan-suite` | `technical-writing`, `implementation-review`, `test-harness` | `code-style`, `javascript-typescript`, `feature-verification` | — |
+| `session-close` | `implementation-review` | `test-harness`, `plan-suite` | — |
+| `implementation-review` (new) | — | `code-style`, `javascript-typescript` | — |
+| `technical-writing` | — | `code-style`, `javascript-typescript`, `test-harness` | — |
+| `javascript-typescript` | — | `react`, `code-style` | — |
+| `feature-verification` | — | — | `test-harness` (boundary: test-harness chooses and runs tests) |
+| `supabase-integration-testing` | — | — | `test-harness` (fallback when Supabase conditions do not match) |
+| `tighten` | none | none | `code-style`, `javascript-typescript`, `react` (out of scope) |
 
-During implementation, repeat the audit across the full catalog rather than assuming this table is exhaustive. Any newly discovered relationship must be classified by the same policy and added to the plan before the rollout is called complete.
+Why each edge, by source skill:
+
+| Edge | Source in the skills | Reason |
+| --- | --- | --- |
+| `plan-suite` → `technical-writing` (requires) | `plan-write` and `plan-promote` load it always; `plan-archive`, `plan-close`, `plan-review` pair it | Plan prose is part of the suite's contract |
+| `plan-suite` → `implementation-review` (requires) | Validator passes in `plan-execute` and `plan-review`; `plan-close`'s quality pass | One rubric for every pass |
+| `plan-suite` → `test-harness` (requires) | `plan-close` needs repository-native verification for a complete verdict; the other plan skills pair it | Required by one skill, so required by the package. Enabling `plan-suite` now turns `test-harness` on |
+| `plan-suite` → `code-style`, `javascript-typescript` (recommends) | `code-style` pairs in `plan-write`, `plan-promote`, `plan-execute`, `plan-review`; `javascript-typescript` in the first three | Apply only to plans and diffs with code or JS/TS |
+| `plan-suite` → `feature-verification` (recommends) | `plan-execute` pairing; `plan-write`'s `references/completion-report.md` reuses its captures | Only for behavior that needs a demonstration |
+| `session-close` → `implementation-review` (requires) | Its "Review the code" step | Replaces "load a code-quality review skill if one exists" |
+| `session-close` → `test-harness` (recommends) | New: verification of the session's changes | Useful, not required to close a session |
+| `session-close` → `plan-suite` (recommends) | `plan-write` pairing for plan sync and backlog hand-off | Only when the session touched a plan |
+| `implementation-review` → `code-style`, `javascript-typescript` (recommends) | New skill | `javascript-typescript` brings `react` through its own recommendation |
+| `technical-writing` → three packages (recommends) | Its `## Paired Skills` table and `references/review-loop.md` | Subject-matter constraints, conditional |
+| `javascript-typescript` → `react` (recommends) | Its `## Paired Skills` table | React is a specialization |
+| `javascript-typescript` → `code-style` (recommends) | "as `code-style` describes" for helper placement | Its placement rule defers to code-style |
+
+`requires` stays acyclic: no required package requires anything back. `recommends` may form
+cycles, which the catalog allows.
 
 ## Proposed design
 
-### 1. Package manifests own durable relationships
+### 1. Manifests own the relationships
 
-After [[o9zwxuav]], a package can declare both strong and weak relationships:
+Each manifest in the table gains `requires` / `recommends` arrays of package IDs. The skill body
+keeps its `## Paired Skills` table, with the `Load when` condition for each recommended skill. The
+manifest says which packages are related; the skill says when each one applies.
 
-```json
-{
-  "requires": ["technical-writing"],
-  "recommends": ["code-style", "javascript-typescript", "test-harness"]
-}
-```
+### 2. Required dependencies
 
-The manifest answers **which packages are related**. It does not encode invocation predicates.
+A required package is on whenever its parent is. The parent skill loads it without checking its
+state or asking. If it cannot materialize, the parent package is unhealthy (`roborepo package status`
+reports it, through the `requires` component [[o9zwxuav]] added), and the workflow reports that
+problem instead of running on duplicated or missing rules.
 
-The corresponding skill body keeps a concise table explaining **when** each recommended skill applies:
+### 3. Recommended dependencies
 
-```text
-Skill                  Load when
-code-style             plan specifies module boundaries or code placement
-javascript-typescript  plan touches JS/TS
- test-harness           plan proposes tests or verification
-```
+At enable time, the [[o9zwxuav]] offer is unchanged. After the setup wizard applies its changes, it
+prints one line listing the recommendations of the selected packages that are still off, with the
+command to enable them, in the same form as the non-interactive `recommended (not enabled): …` line.
 
-Do not duplicate the package-manager algorithm in every skill. Skills should ask the shared package/dependency layer for recommendation state rather than spelling out `available/enabled/status` reconciliation steps independently.
+At run time, a parent skill:
 
-### 2. Required dependencies are automatic and non-negotiable
+1. evaluates its `Load when` condition; if it does not match, does nothing;
+2. if it matches and the skill is available in the session, loads it;
+3. if it matches and the skill is not available, continues without it and names it once in the
+   final report ("Skipped `react`: not enabled").
 
-A required package is part of the parent's contract. The parent skill should not ask the user whether to enable it at invocation time.
-
-Examples:
-
-```text
-plan-write   -> requires technical-writing
-plan-promote -> requires technical-writing
-plan-close   -> requires implementation-review, test-harness
-plan-execute -> requires implementation-review
-plan-review  -> requires implementation-review
-session-close -> requires implementation-review
-```
-
-If a required dependency cannot materialize or is drifted/broken, the parent package is not healthy and the workflow reports that package-state problem rather than silently running a degraded substitute.
-
-### 3. Recommended dependencies are prompted only when relevant
-
-A package-level recommendation makes the relationship visible in Config/Skills and available to the parent workflow. It does **not** mean "prompt when this package is enabled."
-
-At invocation time:
-
-1. the parent evaluates its existing `Load when` condition;
-2. if the recommendation is irrelevant, do nothing;
-3. if relevant and enabled/healthy, load it;
-4. if relevant and disabled, ask to **enable** or **skip for this run**;
-5. if relevant but partial/external/drifted, offer reconciliation or skip;
-6. report skipped applicable recommendations in the workflow's final status.
-
-This becomes one shared recommendation-resolution convention rather than repeated prose in every skill.
+The skill decides availability from the skills the session lists, not by calling the package
+manager. This rule is written once, in the always-loaded skill-loading rule
+(`globals/system/rules/shared/05-skill-loading.md`), and the per-skill enable-or-skip procedures are
+deleted: six plan skills and `session-close` carry one today.
 
 ### 4. Create `implementation-review`
-
-Create:
 
 ```text
 globals/packages/implementation-review/
   package.config.json
   skills/implementation-review/SKILL.md
 ```
-
-Manifest intent:
 
 ```json
 {
@@ -199,171 +204,179 @@ Manifest intent:
 }
 ```
 
-No slash command. Users reach it through dependency details or source inspection, not through a standalone toggle/command.
+No slash command and no Config row: it appears under **Requires** in the source popup of
+`plan-suite` and `session-close`.
 
-`implementation-review` receives scope from its caller and owns the shared rubric:
+The caller supplies the scope (files or plan-owned implementation) and the requirements. The skill
+owns the rubric:
 
-- correctness and functionality gaps;
-- project-pattern and ownership-boundary conformance;
-- naming/readability/API shape;
-- avoidable duplication and misplaced responsibilities;
-- appropriate failure/error handling;
-- risk checkpoints for auth, ownership/admin, migrations/schema, API mutations, environment/deploy config, storage/uploads, and external integrations.
+- the checklist now in `validation-loop.md`: acceptance criteria against code and test evidence,
+  observable-outcome tests, docs of record, `## Not tested` entries, gate failures, constraints of
+  loaded paired skills;
+- the three convention checks: flow and cohesion, data and state, comments and abstractions;
+- `session-close`'s current points: functionality gaps, naming, project-pattern conformance;
+- the risk checkpoints from `session-close`: authentication; authorization, ownership, and admin;
+  schema and migrations; API mutations; environment and deploy config; uploads and storage;
+  external integrations;
+- one finding format. Severity says how much a finding matters; class says who resolves it:
 
-Use one severity model:
-
-| Finding | Meaning | Pass? |
+| Severity | Meaning | Blocks a clean pass? |
 | --- | --- | --- |
-| `blocking` | Incorrect/missing/unsafe required behavior or project-invariant violation | No |
-| `actionable` | Concrete quality issue worth fixing before the work is clean | No |
-| `note` | Low-risk/cosmetic/optional improvement | Yes |
+| `blocking` | Incorrect, missing, or unsafe required behavior, or a project-invariant violation | Yes |
+| `actionable` | A concrete quality issue worth fixing before the work is clean | Yes |
+| `note` | Low-risk or optional | No |
 
-Every finding names the concrete location, violated rule/pattern, fix, and risk. Generic cleanup advice is invalid.
+| Class | Meaning |
+| --- | --- |
+| `fix` | The right fix is clear and stays within the caller's scope and contracts |
+| `escalate` | The fix chooses between real alternatives, changes requirements or a contract, or lands outside the scope |
+| `base` | A gate failure the base branch has too; recorded, not a finding |
 
-`/plan-execute` already carries a validator rubric in `references/validation-loop.md`, written in two
-parts so its rubric can move here unchanged: a checklist (acceptance criteria against code and
-tests, observable-outcome tests, docs of record, `## Not tested` entries, gate failures, paired-skill
-constraints) and a classification by consequence, `fix` / `escalate` / `base`, that decides who
-resolves a finding. Merge both into this skill: the checklist joins the rubric above, and the
-severity model and the consequence classes combine into one finding format, severity saying how much
-a finding matters and class saying who resolves it. The loop itself (roles, the five-pass cap, the
-`## Review` record) stays with each caller. `/plan-review` carries a short inline copy of the rubric
-until then; remove it in favor of the required dependency.
+Every finding names its location, the violated rule, the fix, and the risk. Generic cleanup advice
+is not a finding. Loops, roles, pass caps, and where findings are recorded stay with each caller.
 
-### 5. Refactor close workflows around shared contracts
+### 5. Callers
 
-#### `/session-close`
+| Caller | Keeps | Changes |
+| --- | --- | --- |
+| `/plan-execute` | The validation loop, its eight-pass cap, the `## Review` record, the submit gate | `references/validation-loop.md` loses its `## The rubric` section and points to `implementation-review` |
+| `/plan-review` | Base sync, its fixes, the review packet, approval | The inline rubric copy is replaced by a reference to `implementation-review` |
+| `/plan-close` | Verdicts, `## Not tested`, landing checks, the plan move, cleanup, and its current rule that it fixes agent-resolvable in-scope gaps before the verdict | Runs `implementation-review` over the plan-owned implementation. A `blocking` or `actionable` finding it cannot fix within the plan's scope makes the plan incomplete. Its test-selection prose defers to `test-harness`, keeping only how it reads verification evidence |
+| `/session-close` | Session-file scoping, doc and plan sync, staging, commit, stray work, handoff | Step 1 runs `implementation-review` on the session's files; docs-only sessions skip it and say so. Its review list and `## Risk Checkpoints` move into `implementation-review` (`tighten`'s own copy stays, out of scope). Unresolved `blocking` / `actionable` findings become handoff items |
 
-- Keep session-file scoping, doc/plan sync, staging, commit, stray-work handling, and handoff ownership.
-- Run `implementation-review` only when the session contains implementation code; explicitly report the review step as skipped for docs/planning-only sessions.
-- Apply safe behavior-preserving fixes within session scope; unresolved blocking/actionable findings become handoff work rather than being silently ignored.
-- Resolve `test-harness` as a recommendation when verification is relevant.
-- Resolve `plan-write` as a recommendation only when the session touched a plan or the user sends an open thread to backlog.
+### 6. Package-boundary warnings
 
-#### `/plan-execute` and `/plan-review`
-
-- Require `implementation-review` for every validator pass. `/plan-execute` keeps its loop and the
-  submit gate; `/plan-review` keeps base synchronization, its fixes, the review packet, and approval.
-- Delete the rubric from `plan-execute/references/validation-loop.md` and the inline copy in
-  `plan-review`, keeping only how each caller runs and records a pass.
-
-#### `/plan-close`
-
-- Keep lifecycle validation, complete/incomplete/blocked/superseded/abandoned verdicts, `## Not tested`, landing checks, plan move, and server cleanup.
-- Require `test-harness` for repository-native completion verification.
-- Require `implementation-review` for the implementation-quality pass across the whole plan-owned implementation.
-- Recommend `technical-writing` for completion summary and `## Verification` prose.
-- A blocking/actionable implementation-review finding makes the plan incomplete; `/plan-close` reports it and leaves implementation to `/plan-execute` rather than fixing missing product work itself.
-
-### 6. Keep package relationships and skill references in sync
-
-The manifest and `Paired Skills`/loading prose serve different purposes but must not contradict each other.
-
-For each migrated skill:
-
-- every `requires` package appears as an unconditional foundational relationship in the skill body;
-- every `recommends` package appears in the relevant `Load when` table or equivalent guidance;
-- runtime-only references are clearly described as fallback/inverse/conditional integrations and are not presented as package recommendations;
-- remove hand-copied generic package-state resolution instructions once a shared resolution mechanism exists;
-- do not duplicate another skill's actual rules inside the parent skill.
-
-### 7. Report package-boundary candidates
-
-The same audit that classifies references also checks package boundaries. [[bysyzl1e]] defines
-package, collection, category, and dependency, and leaves the choice to the author; this check makes
-a wrong choice visible.
+`roborepo skill audit` (`scripts/cli/skill-audit.mjs`) gains warnings, never errors:
 
 | Audit finding | Suggests |
 | --- | --- |
-| A skill unconditionally hands off to, or loads, a skill in another package, and neither package `requires` the other | Merge them into one package, or add `requires` |
-| Two packages each unconditionally hand off to the other | Merge them into one package: neither is correct alone |
-| A package holds several skills and none of them references another | Split them into separate packages, in a collection if users want them together |
+| A skill unconditionally hands off to, or loads, a skill in another package, and neither package requires the other | Merge the packages, or add `requires` |
+| Two packages each unconditionally hand off to the other | Merge them |
+| A package holds several skills and none references another | Split them, in a collection if users want them together |
 
-Findings are warnings from `roborepo skill audit`, never validation errors: whether skills are
-correct apart is the author's call. After [[bysyzl1e]] lands, the `plan-execute`, `plan-review`, and
-`plan-close` rows in the audit table above become one `plan-suite` row, and handoffs between plan
-skills are references inside one package, which this check does not report.
+An **unconditional** reference is a `## Paired Skills` row whose `Load when` is `Always`, or an
+instruction outside that table to load or hand off to another skill. References inside one package,
+such as between plan skills in `plan-suite`, are not reported.
+
+The audit also warns when manifest and prose disagree: a `recommends` or `requires` package with no
+`## Paired Skills` row in any of the parent's skills, or a row naming a package the manifest neither
+requires nor recommends (prose-only references in the "Package relationships" table excepted).
 
 ## Implementation plan
 
-### Phase 1 — Audit and manifest classification
+### Phase 1 — Manifests
 
-- [ ] Re-scan every `globals/packages/*/skills/*/SKILL.md` for named skill/package references and loading instructions.
-- [ ] Classify each relationship using the policy in this plan and update the audit table for anything not already listed.
-- [ ] Add `requires` / `recommends` to the applicable built-in `package.config.json` files.
-- [ ] Validate that required relationships remain acyclic; keep reciprocal/contextual relationships such as `technical-writing -> plan-write` runtime-only where a static edge would create the wrong ownership or a cycle.
-- [ ] Add the package-boundary warnings from section 7 to `roborepo skill audit`, with fixtures for each finding.
+- [ ] Add `requires` / `recommends` to `plan-suite`, `session-close`, `technical-writing`, and
+      `javascript-typescript` manifests as in "Package relationships".
+- [ ] Rescan the catalog for references missing from that table; classify any new one and add it to
+      the table before continuing.
+- [ ] `roborepo package validate` passes; `requires` is acyclic.
 
-### Phase 2 — Shared recommendation resolution
+### Phase 2 — `implementation-review`
 
-- [ ] Add/reuse one package-layer helper that returns relationship state for a parent package: required/recommended IDs, availability, desired/effective/live status, and inspect metadata.
-- [ ] Replace repeated five-step package-status logic in skill prose with one concise shared convention/reference that workflows invoke when a recommendation's `Load when` condition matches.
-- [ ] Ensure recommendation resolution never prompts for irrelevant task-conditional recommendations.
-- [ ] Ensure skipped recommendations are reportable without turning the parent package into partial/blocked state.
+- [ ] Create the package and skill from section 4, moving the checklist, convention checks,
+      classification table, and `session-close`'s review points and risk checkpoints into it.
+- [ ] Add it to `plan-suite.requires` and `session-close.requires`.
+- [ ] Rewire `/plan-execute`, `/plan-review`, `/plan-close`, and `/session-close` as in section 5;
+      delete the moved text from each.
 
-### Phase 3 — `implementation-review`
+### Phase 3 — Run-time recommendation rule
 
-- [ ] Add the non-selectable dependency-visible `implementation-review` package and skill.
-- [ ] Move the shared review rubric, severity threshold, and risk checkpoints into it.
-- [ ] Add `code-style` and `javascript-typescript` recommendations to its manifest; rely on `javascript-typescript -> react` for React specialization rather than duplicating React as another direct relationship.
-- [ ] Keep lifecycle scope decisions out of the skill: callers supply the files/implementation area and requirements context.
+- [ ] Add the three-step rule from section 3 to `globals/system/rules/shared/05-skill-loading.md`.
+- [ ] Delete the enable-or-skip procedure from the six plan skills that carry it (`plan-write`,
+      `plan-promote`, `plan-execute`, `plan-review`, `plan-close`, `plan-archive`) and from
+      `session-close`; keep each `## Paired Skills` table and its `Load when` conditions.
+- [ ] Make each skill's `## Paired Skills` table agree with its package's manifest: every required
+      package marked as always loaded, every recommended one with a `Load when` condition, prose-only
+      references not presented as recommendations.
 
-### Phase 4 — Close workflow adoption
+### Phase 4 — Setup wizard line
 
-- [ ] Add `implementation-review` to `session-close.requires`, `plan-close.requires`, `plan-execute.requires`, and `plan-review.requires`.
-- [ ] Move the validator rubric out of `plan-execute/references/validation-loop.md` and `plan-review`'s inline copy into `implementation-review`.
-- [ ] Add `test-harness` to `plan-close.requires` and `session-close.recommends`.
-- [ ] Add `technical-writing` to `plan-close.recommends` and `plan-write` to `session-close.recommends`.
-- [ ] Remove the duplicated review rubric and risk-checkpoint list from `session-close`.
-- [ ] Remove duplicated test-selection guidance from `plan-close`; keep only plan-close's interpretation of verification evidence and closure blockers.
-- [ ] Preserve the distinct session-vs-plan review scopes.
+- [ ] After `applyWizardChanges` in `scripts/cli/presets.mjs` applies, print one line naming the
+      selected packages' recommendations that are still off, using the same recommendation data the
+      enable path returns.
+- [ ] Add a check in `scripts/test/` that a wizard run selecting `plan-suite` prints the line and
+      enables nothing it did not select.
 
-### Phase 5 — Remaining built-in skill adoption
+### Phase 5 — Audit warnings
 
-- [ ] `plan-write`: require `technical-writing`; recommend `code-style`, `javascript-typescript`, `test-harness`.
-- [ ] `plan-promote`: require `technical-writing`; recommend `code-style`, `javascript-typescript`, `test-harness`.
-- [ ] `plan-execute`: recommend `code-style`, `javascript-typescript`, `test-harness`.
-- [ ] `technical-writing`: recommend `code-style`, `javascript-typescript`, `test-harness`; keep `plan-write` as a runtime-only reference for `docs/plans` to avoid inverted ownership/cycles.
-- [ ] `javascript-typescript`: recommend `react`.
-- [ ] Preserve `supabase-integration-testing -> test-harness` as fallback prose, not a package dependency.
-- [ ] Leave `tighten` unchanged in this plan.
+- [ ] Add the section 6 warnings, including the manifest-and-prose agreement warning, to
+      `scripts/cli/skill-audit.mjs`, with a fixture for each finding.
+- [ ] Regenerate `docs/internal/skill-invocation-audit.md`.
 
-### Phase 6 — Presentation and documentation
+### Phase 6 — Docs and generated outputs
 
-- [ ] Verify the Config/Skills dependency sections from [[o9zwxuav]] show the new required/recommended relationships under their owning package/category.
-- [ ] Verify non-selectable `implementation-review` is absent from normal toggle rows but opens in the existing source popup from Required dependencies.
-- [ ] Verify recommended dependency rows remain independently toggleable when the recommended package is selectable.
-- [ ] Update package-development and skill-authoring guidance with the relationship-classification policy and the rule that task predicates remain in skill prose.
-- [ ] Regenerate package-owned command/skill outputs from current source; do not preserve legacy generated copies.
+- [ ] Update the docs listed under "Documentation impact".
+- [ ] Regenerate package-owned command and skill outputs; drop legacy generated copies.
 
 ## Validation
 
-- [ ] `roborepo package validate` passes all migrated manifests and catches missing/cyclic required relationships.
-- [ ] Enabling `plan-write` or `plan-promote` derives `technical-writing` as required without recording it as an independent root selection unless the user separately selected it.
-- [ ] Disabling the last requiring parent removes a dependency-only effective package; disabling one of several parents leaves it active.
-- [ ] `/plan-write` and `/plan-promote` cannot run as healthy workflows when required `technical-writing` cannot materialize.
-- [ ] Conditional recommendations do not prompt merely because a parent package is enabled.
-- [ ] A relevant disabled recommendation prompts once at workflow runtime with enable/skip choices; skipping does not block the parent.
-- [ ] `implementation-review` has no independent toggle or slash command and is inspectable through dependency presentation.
-- [ ] `session-close`, `plan-close`, `plan-execute`, and `plan-review` use the same implementation-review severity/risk contract while preserving different scope and lifecycle behavior.
-- [ ] `plan-close` uses `test-harness` as required verification guidance; `session-close` can proceed after an explicit skip of its recommended verification.
-- [ ] The built-in skill audit has no remaining duplicated generic package-status prompt procedure where the shared relationship resolver applies.
-- [ ] `roborepo skill audit` reports each package-boundary finding from section 7 on its fixture and reports none on the built-in catalog once relationships are declared.
-- [ ] `npm run test:unit` passes package-catalog, dependency, skill/reference, and plan-suite characterization checks.
-- [ ] `npm run test:portal-ui` passes required/recommended dependency presentation and source-popup behavior.
-- [ ] `npm test` passes CLI package enable/disable/status/reconcile and plan-suite command flows.
-- [ ] `npm run check` passes after the cross-cutting manifest, package-state, portal, and skill-source changes.
+- [ ] `roborepo package validate` passes the migrated manifests.
+- [ ] Enabling `plan-suite` in a clean home makes `technical-writing`, `implementation-review`, and
+      `test-harness` effective without recording them as selected roots; disabling `plan-suite`
+      while `session-close` is on leaves `implementation-review` effective, and disabling both
+      removes it.
+- [ ] With `technical-writing` removed from disk, `roborepo package status plan-suite --json`
+      reports the package unhealthy.
+- [ ] Interactive `roborepo package enable plan-suite` offers `code-style`, `javascript-typescript`,
+      and `feature-verification` once each and enables none on No.
+- [ ] The setup wizard check from Phase 4 passes.
+- [ ] No `SKILL.md` or reference under `globals/packages/` asks the user to enable or skip a package
+      (a text check added to `scripts/test/skill-reference-matrix-characterization-check.mjs`).
+- [ ] `implementation-review` has no Config row and no slash command, and appears under Requires in
+      the `plan-suite` and `session-close` source popups.
+- [ ] `/plan-execute`, `/plan-review`, `/plan-close`, and `/session-close` reference
+      `implementation-review` and no longer contain the rubric or risk-checkpoint text.
+- [ ] `roborepo skill audit` reports each section 6 finding, including manifest-and-prose
+      disagreement, on its fixture and none on the built-in catalog.
+- [ ] `npm run test:unit` passes, including `package-catalog-check.mjs`, `package-graph-check.mjs`,
+      `plan-suite-skills-check.mjs`, and `skill-reference-matrix-characterization-check.mjs`.
+- [ ] `npm run test:portal-ui` passes the Requires and Recommended dependencies presentation.
+- [ ] `npm test` passes the CLI package enable, disable, and status flows.
+- [ ] `npm run check` passes (manifests, package state, and skill sources are cross-cutting).
+
+## Documentation impact
+
+| Doc | Update |
+| --- | --- |
+| `local/skills/roborepo-development/references/package-development.md` | The relationship policy table, and that task predicates stay in skill prose. Fix "offered after an enable" wording if the wizard line changes it |
+| `globals/system/skills/roborepo-support/SKILL.md` | "Pairing another skill": manifests declare the relationship; skills never prompt to enable; how to classify a new reference |
+| `globals/system/rules/shared/05-skill-loading.md` | The run-time recommendation rule (section 3) |
+| `docs/user/reference/config-control-panel.md` | Example of Requires and Recommended dependencies using the real `plan-suite` / `session-close` edges; the wizard line |
+| `docs/user/guides/plan/lifecycle/plan-suite.md` | `## Paired Skills`: which packages the suite now turns on, which it recommends, and that skipped ones are named in reports |
+| `docs/internal/skill-invocation-audit.md` | Regenerated by `roborepo skill audit` |
+
+## Related plans
+
+| Plan | Relationship |
+| --- | --- |
+| [[o9zwxuav]] Package Management: Part 02 | Landed dependency. Supplies `requires`, `recommends`, dependency-only packages, the enable-time offer, and the Config page lists. Its deferred decision on onboarding recommendations is settled here (wizard prints one line) |
+| [[bysyzl1e]] Package Management: Part 01 | Landed dependency. Made `plan-suite` one package, so plan-skill edges are declared on `plan-suite` |
+| [[7e21olcs]] Make Coding Conventions Clearer | Landed. Its convention checks are the current rubric text this plan moves unchanged |
+| [[age4cm7r]], [[gqzjlzgx]] | Landed plan-lifecycle commands this plan edits; no conflict |
+| [[skills-vs-commands-invocation-policy]] | Backlog. Overlaps on `roborepo skill audit`; no conflict, since this plan adds warnings only |
 
 ## Risks
 
-- A static recommendation can become noisy if its skill body no longer has a precise `Load when` condition. The migration must preserve those conditions rather than treating `recommends` as "always prompt."
-- Reciprocal conceptual relationships can create bad package graphs. The parent that owns the foundational contract should carry `requires`; inverse or document-type-specific relationships stay runtime-only when necessary.
-- Required dependencies change package health semantics. A parent whose required dependency is missing or drifted must surface that as a real package problem rather than silently falling back to duplicated rules.
+- Requiring `test-harness` from `plan-suite` turns it on for every plan-suite user. It already pairs
+  with five of the seven plan skills, so the added surface is small.
+- A recommendation whose skill body loses its precise `Load when` condition would load too often.
+  The Phase 3 consistency pass guards against that.
+- Required dependencies change package health: a missing required package now shows the parent as
+  unhealthy instead of silently degrading.
 
-## Current review-rubric baseline
+## Decision Log
 
-[[7e21olcs]] completed cohesion/data-flow/comment improvements in the existing plan-execute
-validation rubric and plan-review's inline copy. `globals/packages/implementation-review/` remains
-unbuilt. Extract that current rubric into the proposed shared skill instead of recreating its
-pre-conventions version. Preserve semantic finding classes and existing review behavior while
-changing ownership. [[o9zwxuav]] remains the unresolved dependency-model prerequisite.
+- **2026-11-22 (user decision): Ask about a recommendation once, at enable time.** The plan earlier
+  said recommendations never prompt at enable time and skills prompt at run time. The user does not
+  want repeated questions: keep the shipped enable-time offer, and at run time skip unavailable
+  recommendations silently and report the skip once.
+- **2026-11-22 (user decision): The setup wizard prints one line** naming recommendations still
+  off after it applies. Settles the question [[o9zwxuav]] deferred to this plan.
+- **2026-11-22: Relationships are per package.** After [[bysyzl1e]], the plan skills share
+  `plan-suite`, so their edges combine there and `test-harness` becomes required by the suite.
+- **2026-11-22: `/plan-close` keeps fixing agent-resolvable gaps.** The earlier draft said it would
+  leave findings to `/plan-execute`; the landed skill fixes in-scope gaps before its verdict, and this
+  plan does not change that.
+- **2026-11-22: `technical-writing` → `plan-write` dropped.** The reference no longer exists in
+  `technical-writing`.
