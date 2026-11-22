@@ -1,6 +1,6 @@
 ---
 id: gy8ncs9u
-next_action: "Implementation is committed and validated on branch local-data-agent-temp-locations; run /plan-review to review it."
+next_action: "Answer the two Open Questions (whether `roborepo scratch` runs without a permission prompt, and whether the 500 MB cap spares recently changed folders), then rerun /plan-execute on this plan to apply the answers and submit it for review."
 blocked_by: []
 depends_on: ["9njvfh5z"]
 related: ["9njvfh5z", "n8kw3rp2", "wu7h7gdp"]
@@ -370,6 +370,11 @@ as the system temp folders, so a Codex agent can write its pull request body the
 - Validation pass 3 at fac86228 (fresh-context subagent): 1 `fix`, 0 `escalate`.
 - Validation pass 4 at 82718950 (fresh-context subagent): 3 `fix` (docs), 0 `escalate`.
 - Validation pass 5 at 49972bde (fresh-context subagent): 1 `fix`, 0 `escalate`.
+- Validation: clean on pass 6 at 6c327a8d (fresh-context subagent); the loop ended.
+- At 6c327a8d: `bash scripts/doctor.sh --quiet` passed (99 checks); `orphan-test-check` passed;
+  `agent-run-coverage-check` still names `roborepo scratch`, the open permission question.
+- No development server: the change is CLI, retention, rule, and test-runner behavior, exercised
+  through the checks above; nothing renders in a browser.
 - Full local gate (`npm run check`) at d6f38f1c: 424 passed, 3 failed. `agent-run-coverage-check`
   is the open question above. The `generated/` guard and the add-skill
   `git diff --quiet -- globals/packages/plan-suite` check failed because the run started with
