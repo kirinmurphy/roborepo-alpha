@@ -1,6 +1,6 @@
 ---
 id: gy8ncs9u
-next_action: "Answer the two Open Questions (whether `roborepo scratch` runs without a permission prompt, and whether the 500 MB cap spares recently changed folders), then rerun /plan-execute on this plan to apply the answers and submit it for review."
+next_action: "Review the implementation on branch local-data-agent-temp-locations with /plan-review; check the portal Local Stores label for a spared scratch store (open under Not tested)."
 blocked_by: []
 depends_on: ["9njvfh5z"]
 related: ["9njvfh5z", "n8kw3rp2", "wu7h7gdp"]
@@ -289,31 +289,18 @@ as the system temp folders, so a Codex agent can write its pull request body the
   leftovers (oldest 2026-10-31 to 2026-11-03) were already gone. The remaining test-named entries
   were all created that day, several by other sessions' test runs that may still be live; the
   automatic sweeps this plan adds reach those once their runs end.
+- **2026-11-22 — User decision: `roborepo scratch` runs without a permission prompt.** A new
+  default-allow behavior, `scratch-folders`, classifies it, so agents call it as the Temporary
+  Files rule intends; it prunes scratch folders without asking. Ask-first and unclassified were
+  rejected: both prompt on every call.
+- **2026-11-22 — User decision: the byte cap spares folders changed in the last hour.** The 500 MB
+  walk stops before any folder changed within the hour (`FOLDER_SET_BYTE_CAP_SPARE_MS`), so it never
+  deletes work another session is writing; a runaway writer is stopped once its folder goes quiet.
+  Report-only and the uncapped original were rejected.
 
 ## Open Questions
 
-- **Should `roborepo scratch` run without a permission prompt?** The full gate's
-  `agent-run-coverage-check` requires every `roborepo` command to be classified in
-  `manifests/inventory/agent-permissions.json`, and `scratch` is not. Options:
-  - Allow it, as a new allow behavior like `guarded-delivery` and `plan-store-commands`. For: the
-    rule tells agents to call it routinely, and it writes only inside its own store with a
-    validated name. Against: it deletes (prunes old scratch folders) without asking.
-  - Ask-bucket it with `mutate-harness-config`. For: every prune is approved. Against: a prompt on
-    every call in Claude, where `roborepo` runs outside the sandbox under ordinary rules, which
-    works against "temporary content disappears on its own".
-  - Leave it unclassified (`INTENTIONALLY_UNCLASSIFIED`), which prompts the same as ask.
-  Recommendation: allow. Blocked because it changes agent permissions, which the run may not decide.
-  Blocks: the CI gate (agent-run-coverage-check fails until it is classified) and submission.
-- **Should the byte cap spare folders changed recently?** The cap removes the oldest folders with
-  no minimum age, so when the store passes 500 MB a folder another session touched minutes ago can
-  go. The command never removes the folder it prints. Options:
-  - Exempt folders changed within the last hour from the byte cap. For: never deletes work in use.
-    Against: a runaway writer is by definition recent, so the cap stops nothing during that hour.
-  - Make the cap report-only: doctor already flags a store over its cap. For: no surprise deletes.
-    Against: nothing bounds the store between age expiries.
-  - Keep it as designed ("byte cap as a backstop"). For: a hard bound. Against: the risk above.
-  Recommendation: exempt folders changed within the last hour. Blocked because each option has a
-  real argument and the plan specified the cap without a floor. Blocks: submission only.
+None. Both earlier questions were answered by the user; see the Decision Log.
 
 ## Not tested
 
@@ -327,6 +314,12 @@ as the system temp folders, so a Codex agent can write its pull request body the
       (codex-cli 0.166.0) running `node scripts/cli/main.mjs scratch e2e-topic` and `sh -c` writes,
       with a fake home outside every temp root, scratch root absent and present → exit 0, path
       printed, `wrote-in-scratch`, `elsewhere-denied`.
+
+- [ ] The portal's Local Stores row shows "over cap, recent folders spared" for a scratch store
+      whose overage is all in recently changed folders — not seen in a browser: the browser pane
+      starts servers only from the primary checkout's launch configurations, which this worktree
+      session does not edit. The data it renders (`spared: true`) was checked with `storeHealth()`.
+      Open the portal against a state root holding a just-written 600 MB scratch folder.
 
 ## Review
 
@@ -358,9 +351,20 @@ as the system temp folders, so a Codex agent can write its pull request body the
       fixed (49972bde); `cli-internals.md` and `config-panel-internals.md` updated alongside
 - [x] `stores reset scratch --dry-run` read through a scratch root replaced by a link and listed
       folders the real reset refuses to remove — fixed (6c327a8d)
-- [ ] Byte cap can remove a folder another session is using — escalated, see Open Questions
-- [ ] `roborepo scratch` is not classified in the agent permission manifest, failing
-      `agent-run-coverage-check` — escalated, see Open Questions
+- [x] Byte cap can remove a folder another session is using — user chose to spare folders changed
+      in the last hour; implemented with a regression test (9876a2dd)
+- [x] `roborepo scratch` is not classified in the agent permission manifest, failing
+      `agent-run-coverage-check` — user chose allow; `scratch-folders` behavior added (9876a2dd)
+- [x] Doctor's store check and the portal counted bytes the cap now spares, flagging an overage and
+      suggesting a reset that could not act — fixed (e7b6c6a6, 5fe2a57b)
+- [x] `scratch.mjs` comment misdescribed when the printed folder can enter the byte walk — fixed
+      (5fe2a57b)
+- [x] No unit or CLI test of the spare in `--check`, dry run, and reset — added (e7b6c6a6, 5fe2a57b)
+- [x] doctor's new hint loop returned 1 on a non-hint last line, stopping `doctor --installed`
+      under `set -e` on a healthy store — fixed (5fe2a57b)
+- [x] `--check` hinted while a reset could still remove a quiet folder (mixed quiet and busy
+      folders) — fixed: it fails whenever something is removable (5fe2a57b)
+- [x] The portal showed a spared over-cap store with no label — fixed (5fe2a57b)
 
 ### Verification
 
@@ -373,6 +377,20 @@ as the system temp folders, so a Codex agent can write its pull request body the
 - Validation: clean on pass 6 at 6c327a8d (fresh-context subagent); the loop ended.
 - At 6c327a8d: `bash scripts/doctor.sh --quiet` passed (99 checks); `orphan-test-check` passed;
   `agent-run-coverage-check` still names `roborepo scratch`, the open permission question.
+- At 9876a2dd: `agent-run-coverage-check` passed (30 of 30 classified);
+  `agent-permission-defaults-check`, `scratch-command-check` (new byte-cap spare case, shown to fail
+  with the spare set to 0), `maintenance-stores-check`, `retention-policy-check`, and
+  `docs-reference-check` passed; `bash scripts/doctor.sh --quiet` passed (99 checks).
+- Validation pass 7 at 9876a2dd (fresh-context subagent): 2 `fix`, 1 `escalate`. The escalated
+  doctor mismatch was fixed within the user's spare decision: the hint keeps the overage visible.
+- Validation pass 8 at e7b6c6a6 (fresh-context subagent): 4 `fix`, 0 `escalate`. The loop ended at
+  the eight-pass cap; the pass-8 fixes in 5fe2a57b were not revalidated.
+- At 5fe2a57b: `maintenance-stores-check` (mixed quiet and busy case), `retention-policy-check`,
+  `scratch-command-check`, `docs-reference-check` passed; `bash scripts/doctor.sh --quiet` passed
+  (99 checks); `doctor --installed` against an empty state root ran to its summary (108 checks
+  passed; its 4 failures are this worktree's installed links and home rules pointing at the
+  primary checkout); `storeHealth()` for a 600 MB just-written scratch folder returned
+  `over: false, spared: true`.
 - No development server: the change is CLI, retention, rule, and test-runner behavior, exercised
   through the checks above; nothing renders in a browser.
 - Full local gate (`npm run check`) at d6f38f1c: 424 passed, 3 failed. `agent-run-coverage-check`
