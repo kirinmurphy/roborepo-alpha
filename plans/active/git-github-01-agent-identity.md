@@ -506,43 +506,65 @@ phases build, so run them before Phase 3.
 ## Review
 
 ### Findings
-- [ ] Codex never follows the identity: its rules file is a copy of the identity-off render and its permission hook ignores `agentIdentityBucket`, so `gh api` stays forbidden and pushes and posts prompt
-- [ ] Claude gets a `git push` allow rule with the identity on, which lets a verified push chained to another command run without the prompt `askDecidedByHook` relies on
-- [ ] The push hooks lift `gh api` from the hook's own environment, so a command that sets or unsets `GH_CONFIG_DIR`, sets `GH_TOKEN`/`GITHUB_TOKEN`/`GH_HOST`, or wraps `gh` in `env` is not denied
-- [ ] `keepAgentGitConfig` keeps every numbered `GIT_CONFIG_*` pair, so any key (such as `core.sshCommand` or a credential helper) would reach RoboRepo's own Git; keep only the pairs RoboRepo renders
-- [ ] `scripts/cli/permissions-render.mjs` duplicates the package id and enabled check that `modules/forge/agent-identity.mjs` and `scripts/cli/github-identity.mjs` hold, and splits `renderPermissionsTo` from its comment
-- [ ] `effectivePermissions` in `scripts/cli/config-mutate.mjs` (config panel, `config status`) ignores the identity, so it shows `gh api` denied and posting at ask while they render allowed
-- [ ] No test asserts that existing Codex `network.domains` entries survive enabling the package
-- [ ] The status check lacks doctor cases for a ruleset without last-push approval, an unprotected `repo-plans`, and a skipped merge policy
-- [ ] The docs say Gemini is not covered but not why (its `.env` lookup order)
-- [ ] `## Not tested` omits manual Validation rows an agent can or a person must check, and its Codex entry claims person-only for parts that need no token
+- [x] Codex never follows the identity: its rules file is a copy of the identity-off render and its permission hook ignores `agentIdentityBucket`, so `gh api` stays forbidden and pushes and posts prompt — fixed (35f1b186)
+- [x] Claude gets a `git push` allow rule with the identity on, which lets a verified push chained to another command run without the prompt `askDecidedByHook` relies on — fixed (35f1b186)
+- [x] The push hooks lift `gh api` from the hook's own environment, so a command that sets or unsets `GH_CONFIG_DIR`, sets `GH_TOKEN`/`GITHUB_TOKEN`/`GH_HOST`, or wraps `gh` in `env` is not denied — fixed (35f1b186)
+- [x] `keepAgentGitConfig` keeps every numbered `GIT_CONFIG_*` pair, so any key (such as `core.sshCommand` or a credential helper) would reach RoboRepo's own Git; keep only the pairs RoboRepo renders — fixed (35f1b186)
+- [x] `scripts/cli/permissions-render.mjs` duplicates the package id and enabled check that `modules/forge/agent-identity.mjs` and `scripts/cli/github-identity.mjs` hold, and splits `renderPermissionsTo` from its comment — fixed (35f1b186)
+- [x] `effectivePermissions` in `scripts/cli/config-mutate.mjs` (config panel, `config status`) ignores the identity, so it shows `gh api` denied and posting at ask while they render allowed — fixed (35f1b186)
+- [x] No test asserts that existing Codex `network.domains` entries survive enabling the package — fixed (35f1b186)
+- [x] The status check lacks doctor cases for a ruleset without last-push approval, an unprotected `repo-plans`, and a skipped merge policy — fixed (35f1b186)
+- [x] The docs say Gemini is not covered but not why (its `.env` lookup order) — fixed (35f1b186)
+- [x] `## Not tested` omits manual Validation rows an agent can or a person must check, and its Codex entry claims person-only for parts that need no token — fixed: entries rewritten, agent-runnable checks run (plan record, November 22)
 
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
-- Validation pass 1 at 43a377d4 (fresh-context subagent): 10 findings above
+- Validation pass 1 at 43a377d4 (fresh-context subagent): 10 findings above, all fixed
+- Codex TLS: the CA read grants added in 35f1b186 did not work (`/**/*.pem` deny wins); replaced by the CA bundle copy in 8565a475
 
 ## Not tested
 
+- [x] Codex with the identity off still cannot reach GitHub. — Verified by agent 2026-11-22 at
+      35f1b186: `codex exec` running `git ls-remote origin HEAD` → "Could not resolve hostname
+      github.com", exit 128.
+- [x] Codex with the identity's network settings still refuses other hosts and wildcard listeners.
+      — Verified by agent 2026-11-22 at 35f1b186: `codex exec` with run-only overrides
+      (`network.enabled=true`, `features.network_proxy=true`): `curl https://example.com` → "domain is
+      not on the allowlist"; a Python bind on `0.0.0.0` → "Operation not permitted". The `~/.ssh/**`
+      deny is unchanged by this plan and asserted by `github-agent-identity-render-check.mjs`.
+- [x] Git and curl verify GitHub's TLS inside Codex's sandbox through a non-`.pem` CA bundle copy. —
+      Verified by agent 2026-11-22 for 8565a475's design: `codex exec` running
+      `git -c http.sslCAInfo=<copy>.crt ls-remote https://github.com/kirinmurphy/roborepo-alpha.git HEAD`
+      → the HEAD commit, exit 0; `curl --cacert <copy>.crt https://api.github.com/zen` → 200. The copy
+      sat in a temporary folder, not the setup's `~/.roborepo/github-agent/ca-bundle.crt`.
+- [x] Codex's permission hook follows the identity. — Verified by agent 2026-11-22 at 35f1b186:
+      `codex-command-permission-check.mjs` and a direct hook probe with an isolated state root:
+      `gh api repos/o/r` → deny without the package asset, allow with it.
 - [ ] `roborepo github setup` end to end on the real repo: the hidden token prompt stores the
-      token in `~/.roborepo/github-agent/gh/hosts.yml` (mode 0600), and the package is enabled at
-      the end. Needs a person: the token is typed at a hidden prompt in the owner's own terminal,
-      and agents are denied the command. `roborepo github status` on 2026-11-22 at 43a377d4
-      already reported the real bot, scopes, expiry, and protection correctly, and named the two
-      remaining steps (token in keychain, package off).
-- [ ] Inside `codex exec` with the identity on: `gh` reads the token from `hosts.yml`, `git fetch`
-      and `git push` to a feature branch succeed as the bot with no prompt, the CA file read grant
-      lets Git verify TLS, `gh pr create` succeeds, and `api.github.com` is the only other host it
-      needs. Needs a person: it runs only after the owner stores the token through the setup above.
+      token in `~/.roborepo/github-agent/gh/hosts.yml` (mode 0600), the CA bundle copy and
+      `gitconfig.local` are written, and the package is enabled. Needs a person: the token is typed
+      at a hidden prompt in the owner's own terminal, and agents are denied the command.
+      `roborepo github status` on 2026-11-22 at 43a377d4 already reported the real bot, scopes,
+      expiry, and protection correctly.
+- [ ] Inside Codex with the identity on, as the bot: `gh` reads the token from `hosts.yml`;
+      `git fetch`, `git push` to a feature branch, `roborepo delivery fetch origin`, and
+      `gh pr create` succeed with no prompt; a `roborepo plans save` made before the identity was on
+      is pushed by the next save. Needs a person: every step needs the token the setup stores.
 - [ ] In a Claude agent shell with the identity on: push a feature branch and open a PR as the bot;
-      `gh api graphql` reads `reviewThreads { isResolved }`, replies, and resolves a thread; `gh pr
-      comment` runs without a prompt. Needs a person: it needs the token stored by the setup, and a
-      new agent session to pick up the re-rendered environment.
+      `gh api graphql` reads `reviewThreads { isResolved }`, replies, and resolves a thread;
+      `gh pr comment` runs without a prompt. Needs a person: it needs the token stored by the setup,
+      and a new agent session to pick up the re-rendered environment.
 - [ ] The bot can push `repo-plans` directly (`roborepo plans save` from an agent shell reports
       "synchronized"), and GitHub refuses a delete or force-push of `repo-plans` and an unapproved
       merge of the bot's PR. Needs a person: same token prerequisite; the refusal checks act on the
       real repo's protected branches and are the owner's call to run.
 - [ ] With the agent environment exported, `git push --no-verify origin HEAD:main` is rejected by
-      GitHub naming `roborepo-main-merge`. Needs a person: it attempts a real push to `main`.
+      GitHub naming `roborepo-main-merge`, and the owner's own push to `main` still succeeds through
+      the admin bypass. Needs a person: both attempt real pushes to `main`.
+- [ ] `/plan-suite-init` in a repo without a plan store ends by offering `roborepo github setup`.
+      Needs a person: initializing a store creates a remote branch on a real GitHub repo, which is
+      the owner's call; `github-identity-status-check.mjs` covers the `not-set-up` answer the offer
+      reads.
 
 ## Validation
 
@@ -677,6 +699,12 @@ None open. The token-location question is decided below (Decision Log, November 
   rest, so another user can set this up without help. The setup now sends the collaborator invite
   as the user and accepts it as the bot; only the bot account and the token stay manual. Pre-filling
   the classic token page was considered and dropped because GitHub does not document it.
+- November 22, 2026: Codex's sandbox denies `/**/*.pem` (credential protection), which includes
+  the system CA bundle, and a read grant does not override it. The setup copies the bundle to
+  `~/.roborepo/github-agent/ca-bundle.crt` and a second include, written by the setup, points Git's
+  `sslCAInfo` for github.com at it. Chosen over narrowing the credential deny, which would weaken the
+  credential protection plan ([[4zyo2woj]]). Cost: the copy can go stale after a system update, so
+  status and doctor warn and rerunning the setup refreshes it.
 - November 14, 2026: the user's priority is no agent push to `main` and no merge without a human.
   The user's SSH agent stays visible to agent shells for now; hiding it is future hardening.
   Agent fetches move to HTTPS as the bot (`insteadOf`), gated on the Phase 2 fetch check.
