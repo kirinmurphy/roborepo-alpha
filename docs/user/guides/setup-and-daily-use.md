@@ -81,6 +81,12 @@ The token is stored in plaintext, mode 0600, under `~/.roborepo/github-agent/gh`
 Claude's nor Codex's sandbox can read the macOS keychain. Any process you run, agents included, can
 read it, so the bot's limited role and the token's expiry are what bound the damage.
 
+Turning the package off stops agents using the bot but leaves its files behind: the plaintext token
+in `~/.roborepo/github-agent/gh/hosts.yml`, plus `ca-bundle.crt` and `gitconfig.local` next to it.
+To remove the token, run `GH_CONFIG_DIR="$HOME/.roborepo/github-agent/gh" gh auth logout --hostname github.com`
+(gh needs an absolute path) and revoke the token on GitHub. Delete the `github-agent` folder to
+remove the rest.
+
 If you decline, nothing changes: agents act as you, `gh api` stays denied, posting commands ask,
 and Codex hands pushes back to you. The identity does not cover Gemini: Gemini loads only the first
 `.env` it finds walking up from the working directory before `~/.gemini/.env`, so a repo's own

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// `roborepo github setup` in scripted mode against a fake `gh`, with an isolated home and state
-// root: a full run invites as the user, signs the bot in, accepts as the bot, protects the repo and
+// `roborepo github setup` (`runSetup`, driven in process with injected answers) against a fake
+// `gh`, with an isolated home and state root: a full run invites as the user, signs the bot in, accepts as the bot, protects the repo and
 // turns the package on; a rerun finds every step done; a failed final check leaves the package off;
-// and the token never appears in any output, argument log, or file except where gh stores it.
+// and the token never appears in any output, argument log, or file except where gh stores it. The
+// CLI entry itself refuses without a real terminal, however it is invoked.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -37,10 +38,26 @@ try {
   const env = {
     ROBOREPO_SYSTEM_CA_BUNDLE: systemCa,
     ...process.env, ...gh.env, HOME: home, ROBOREPO_STATE_ROOT: stateRoot, SKIP_MCP: "1",
-    PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`, ROBOREPO_GITHUB_SETUP_SCRIPTED: "1",
+    PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`,
   };
   delete env.GH_CONFIG_DIR;
-  const setup = (answers) => spawnSync(process.execPath, [cli, "github", "setup"], { cwd: checkout, env, encoding: "utf8", input: answers });
+  // The setup module reads its state root at import, so the environment is set before importing it.
+  Object.assign(process.env, env);
+  delete process.env.GH_CONFIG_DIR;
+  const { runSetup } = await import("../cli/github-setup.mjs");
+  const opened = [];
+  // Answers come from a list, one per question, like the lines a person would type.
+  const setup = async (answers) => {
+    const lines = answers === "" ? [] : answers.replace(/\n$/, "").split("\n");
+    const out = [];
+    const err = [];
+    const io = { log: (text) => out.push(text), error: (text) => err.push(text) };
+    const next = (question) => { out.push(question); return lines.shift() ?? ""; };
+    const input = { ask: async (question) => next(question), askHidden: async (question) => next(question) };
+    opened.length = 0;
+    const status = await runSetup({ input, open: (url) => opened.push(url), io, cwd: checkout });
+    return { status, stdout: out.join("\n"), stderr: err.join("\n") };
+  };
   const claudeSettings = () => JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
   const packageOn = () => claudeSettings().env?.GH_CONFIG_DIR === ghDir;
 
@@ -59,7 +76,7 @@ try {
 
   // A full run.
   fresh();
-  let result = setup(`${BOT}\n${TOKEN}\ny\n`);
+  let result = await setup(`${BOT}\n${TOKEN}\ny\n`);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /You are octo-admin, setting up example\/project/);
   assert.match(result.stdout, /Invited robo-bot to example\/project/);
@@ -67,6 +84,7 @@ try {
   assert.match(result.stdout, /Invitation accepted as robo-bot/);
   assert.match(result.stdout, /Branch protection is now protected/);
   assert.match(result.stdout, /Agents now act on GitHub as robo-bot\. New agent sessions pick this up\./);
+  assert.deepEqual(opened, ["https://github.com/signup", "https://github.com/settings/tokens/new"], "both pages are opened for the user");
   assert.match(result.stdout, /cannot read the keychain, so the token is stored in .*hosts\.yml/);
   const state = gh.readState();
   assert.deepEqual(state.collaborators, [{ login: BOT, permission: "push" }]);
@@ -101,7 +119,7 @@ try {
 
   // A rerun finds every step done and asks nothing.
   gh.clearCalls();
-  result = setup("");
+  result = await setup("");
   assert.equal(result.status, 0, result.stdout + result.stderr);
   for (const step of ["Bot account \\(robo-bot\\)", "Invitation", "Token", "Invitation accepted", "Branch protection", "Package on"]) {
     assert.match(result.stdout, new RegExp(`✓ ${step}.*: already done`), step);
@@ -114,7 +132,7 @@ try {
   // A token kept only in the keychain is not done: setup asks again and stores it in hosts.yml.
   fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    user: ${BOT}\n`);
   fs.writeFileSync(path.join(ghDir, ".fake-token"), `${TOKEN}\n`);
-  result = setup(`${TOKEN}\n`);
+  result = await setup(`${TOKEN}\n`);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /Paste the token/);
   assert.match(result.stdout, /keeps its token in the keychain/);
@@ -124,7 +142,7 @@ try {
 
   // A token for another account is refused and signed out again.
   fresh();
-  result = setup(`${BOT}\n${OTHER_TOKEN}\n`);
+  result = await setup(`${BOT}\n${OTHER_TOKEN}\n`);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /belongs to someone-else, not robo-bot/);
   assert.ok(!fs.existsSync(path.join(ghDir, "hosts.yml")), "the wrong login was removed");
@@ -133,21 +151,21 @@ try {
 
   // The bot's own login, a missing account, and a refused invitation stop the run.
   fresh();
-  result = setup("octo-admin\n");
+  result = await setup("octo-admin\n");
   assert.equal(result.status, 1);
   assert.match(result.stderr, /different account from your own/);
   fresh();
-  result = setup("nobody-here\n");
+  result = await setup("nobody-here\n");
   assert.equal(result.status, 1);
   assert.match(result.stderr, /no account named nobody-here/);
   fresh({ refuseInvite: true });
-  result = setup(`${BOT}\n`);
+  result = await setup(`${BOT}\n`);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /refused the invitation: Must have admin rights/);
 
   // A failing final check leaves the package off.
   fresh({ invitePermission: "admin" });
-  result = setup(`${BOT}\n${TOKEN}\ny\n`);
+  result = await setup(`${BOT}\n${TOKEN}\ny\n`);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /The bot is not ready/);
   assert.match(result.stderr, /robo-bot is an admin of example\/project/);
@@ -157,11 +175,31 @@ try {
   assert.doesNotMatch(result.stdout, /Agents now act/);
   console.log("✓ A failing check prints each problem with its fix, exits 1, and leaves the package off.");
 
-  // Without a terminal and without the test hook, setup refuses.
-  const noTty = spawnSync(process.execPath, [cli, "github", "setup"], { cwd: checkout, env: { ...env, ROBOREPO_GITHUB_SETUP_SCRIPTED: "" }, encoding: "utf8", input: "" });
-  assert.equal(noTty.status, 1);
-  assert.match(noTty.stderr, /needs your own terminal/);
-  console.log("✓ Without a terminal, setup refuses.");
+  // A login typed in another case is accepted, and the token check uses GitHub's own spelling.
+  fresh();
+  result = await setup(`ROBO-Bot\n${TOKEN}\ny\n`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Bot account: robo-bot/);
+  assert.match(result.stdout, /Token stored; signed in as robo-bot/);
+  assert.match(result.stdout, /Agents now act on GitHub as robo-bot/);
+  assert.deepEqual(gh.readState().collaborators, [{ login: BOT, permission: "push" }]);
+  assert.ok(packageOn());
+  console.log("✓ A login typed in a different case completes setup.");
+
+  // The CLI refuses without a real terminal, even with the old scripting switch set: nothing is
+  // asked, written, or sent to GitHub.
+  fresh();
+  const before = fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8");
+  const piped = spawnSync(process.execPath, [cli, "github", "setup"], {
+    cwd: checkout, env: { ...env, ROBOREPO_GITHUB_SETUP_SCRIPTED: "1" }, encoding: "utf8", input: `${BOT}\n${TOKEN}\ny\n`,
+  });
+  assert.notEqual(piped.status, 0);
+  assert.match(piped.stderr, /needs your own terminal/);
+  assert.deepEqual(gh.calls(), [], "no gh call was made");
+  assert.ok(!fs.existsSync(path.join(stateRoot, "github-agent")), "nothing was written");
+  assert.equal(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"), before);
+  assert.ok(!(piped.stdout + piped.stderr).includes(TOKEN));
+  console.log("✓ Without a terminal the CLI refuses, whatever the environment says.");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }

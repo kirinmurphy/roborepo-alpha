@@ -18,7 +18,6 @@ function mergedEnv(extra) {
 export async function runGh(cwd, args, input = "", { timeoutMs = GIT_NETWORK_TIMEOUT_MS, env = null } = {}) {
   const pending = execFileAsync("gh", args, {
     cwd, encoding: "utf8", timeout: timeoutMs, maxBuffer: 1024 * 1024,
-    // `env` lets a caller run gh as another account, e.g. with GH_CONFIG_DIR set.
     env: mergedEnv(env),
   });
   pending.child.stdin.on("error", () => {});
@@ -141,13 +140,12 @@ export const githubClient = {
 
   tokenInfo,
 
-  // Whether an account exists on GitHub.
-  async userExists(context, login) {
+  // GitHub's own spelling of an account's login, or null when there is no such account.
+  async accountLogin(context, login) {
     try {
-      await api(context, `users/${encodeURIComponent(login)}`);
-      return true;
+      return (await api(context, `users/${encodeURIComponent(login)}`)).login;
     } catch (error) {
-      if (error instanceof GitHubError && error.status === 404) return false;
+      if (error instanceof GitHubError && error.status === 404) return null;
       throw error;
     }
   },

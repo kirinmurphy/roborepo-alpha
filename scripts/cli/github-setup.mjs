@@ -2,6 +2,7 @@
 // checks first and skips itself when already done, so rerunning is safe. It runs in the user's own
 // terminal: it reads the bot's token without echo and hands it to `gh` on stdin, never through an
 // argument, a file RoboRepo writes, or the output.
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import readline from "node:readline";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
@@ -14,36 +15,58 @@ import { currentRepositoryId } from "./current-repository.mjs";
 import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { stateDir } from "./state-paths.mjs";
 
-const SCRIPTED = process.env.ROBOREPO_GITHUB_SETUP_SCRIPTED === "1";
-const done = (step) => console.log(`✓ ${step}: already done`);
+const sameLogin = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 
 class Stop extends Error {}
 const stop = (message) => { throw new Stop(message); };
 
+// The CLI entry. Setup reads a token and asks questions, so it only ever runs with a real terminal
+// on both ends; there is no switch around that. Tests call `runSetup` with their own input source.
 export async function githubSetupCommand() {
-  if (!SCRIPTED && !process.stdin.isTTY) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
     console.error("roborepo github setup asks questions and reads a token, so it needs your own terminal. Run it there.");
     process.exitCode = 1;
     return;
   }
-  const input = SCRIPTED ? scriptedInput() : interactiveInput();
+  const input = interactiveInput();
   try {
-    process.exitCode = await runSetup(input);
-  } catch (error) {
-    if (error instanceof Stop) {
-      console.error(error.message);
-      process.exitCode = 1;
-    } else if (error instanceof GitHubError) {
-      console.error(`GitHub: ${error.message}`);
-      process.exitCode = 1;
-    } else throw error;
+    process.exitCode = await runSetup({ input, open: openInBrowser });
   } finally {
     input.close();
   }
 }
 
-async function runSetup(input) {
-  const cwd = process.cwd();
+// Opens a page with the platform opener; the URL is always printed too, so a failure costs nothing.
+function openInBrowser(url) {
+  const win = process.platform === "win32";
+  const command = process.platform === "darwin" ? "open" : win ? "cmd" : "xdg-open";
+  try {
+    const child = spawn(command, win ? ["/c", "start", "", url] : [url], { detached: true, stdio: "ignore" });
+    child.on("error", () => {});
+    child.unref();
+  } catch {}
+}
+
+// Runs the guided setup and returns the exit code. `input` supplies answers (ask, askHidden),
+// `open` opens a URL, `io` receives the output.
+export async function runSetup({ input, open = () => {}, io = { log: console.log, error: console.error }, cwd = process.cwd() }) {
+  try {
+    return await guidedSetup({ input, open, io, cwd });
+  } catch (error) {
+    if (error instanceof Stop) {
+      io.error(error.message);
+      return 1;
+    }
+    if (error instanceof GitHubError) {
+      io.error(`GitHub: ${error.message}`);
+      return 1;
+    }
+    throw error;
+  }
+}
+
+async function guidedSetup({ input, open, io, cwd }) {
+  const done = (step) => io.log(`✓ ${step}: already done`);
   const dir = agentGhConfigDir(stateDir);
   const user = { cwd, env: { GH_CONFIG_DIR: null } };
   const bot = { cwd, env: { GH_CONFIG_DIR: dir } };
@@ -59,7 +82,7 @@ async function runSetup(input) {
   } catch {
     stop("GitHub CLI is not signed in as you. Run gh auth login, then rerun this.");
   }
-  console.log(`✓ You are ${userLogin}, setting up ${repo}.`);
+  io.log(`✓ You are ${userLogin}, setting up ${repo}.`);
 
   // 2. The bot account.
   const hosts = readAgentHosts(stateDir);
@@ -68,33 +91,36 @@ async function runSetup(input) {
   if (botLogin) {
     done(`Bot account (${botLogin})`);
   } else {
-    console.log("Agents act as a separate GitHub account, not as you.");
-    console.log("Create one at https://github.com/signup, in a private browser window so your own session stays signed in.");
-    console.log("Pick any name; it will show on every pull request and comment an agent makes.");
-    botLogin = (await input.ask("Bot account login: ")).trim();
-    if (!botLogin) stop("No bot account login given.");
-    if (botLogin.toLowerCase() === userLogin.toLowerCase()) stop("The bot must be a different account from your own.");
-    if (!(await githubClient.userExists(user, botLogin))) stop(`GitHub has no account named ${botLogin}. Create it first, then rerun this.`);
-    console.log(`✓ Bot account: ${botLogin}`);
+    io.log("Agents act as a separate GitHub account, not as you.");
+    io.log("Create one at https://github.com/signup, in a private browser window so your own session stays signed in.");
+    open("https://github.com/signup");
+    io.log("Pick any name; it will show on every pull request and comment an agent makes.");
+    const typed = (await input.ask("Bot account login: ")).trim();
+    if (!typed) stop("No bot account login given.");
+    if (sameLogin(typed, userLogin)) stop("The bot must be a different account from your own.");
+    // GitHub's own spelling of the login is the one every later comparison uses.
+    botLogin = await githubClient.accountLogin(user, typed);
+    if (!botLogin) stop(`GitHub has no account named ${typed}. Create it first, then rerun this.`);
+    io.log(`✓ Bot account: ${botLogin}`);
   }
-  if (botLogin.toLowerCase() === userLogin.toLowerCase()) stop("The signed-in bot is your own account. Sign out of it with gh auth logout, then rerun this.");
+  if (sameLogin(botLogin, userLogin)) stop("The signed-in bot is your own account. Sign out of it with gh auth logout, then rerun this.");
 
   // 3. Invite the bot to the repo, as the user.
-  await inviteBot({ user, repo, botLogin });
+  await inviteBot({ user, repo, botLogin, io, done });
 
   // 4. The bot's token, stored in the agent directory.
-  const tokenOk = botLogin && hosts.loggedIn && hosts.hasToken && await githubClient.login(bot).then((login) => login === botLogin, () => false);
+  const tokenOk = botLogin && hosts.loggedIn && hosts.hasToken && await githubClient.login(bot).then((login) => sameLogin(login, botLogin), () => false);
   if (tokenOk) {
     done("Token");
   } else {
-    await storeToken({ input, dir, botLogin, bot, hadLogin: hosts.loggedIn });
+    await storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin: hosts.loggedIn });
   }
 
   // 5. The bot accepts the invitation.
   const pending = (await githubClient.userInvitations(bot)).find((invitation) => invitation.repository?.full_name?.toLowerCase() === repo.toLowerCase());
   if (pending) {
     await githubClient.acceptInvitation(bot, pending.id);
-    console.log(`✓ Invitation accepted as ${botLogin}.`);
+    io.log(`✓ Invitation accepted as ${botLogin}.`);
   } else {
     done("Invitation accepted");
   }
@@ -108,27 +134,27 @@ async function runSetup(input) {
     const answer = (await input.ask("Protect the plans and default branches now? [Y/n] ")).trim().toLowerCase();
     if (answer === "" || answer === "y" || answer === "yes") {
       const result = await applyProtection(protectTarget);
-      console.log(result.refusal ? `Branch protection: ${result.refusal}.` : `✓ Branch protection is now ${result.report.state}.`);
+      io.log(result.refusal ? `Branch protection: ${result.refusal}.` : `✓ Branch protection is now ${result.report.state}.`);
     } else {
-      console.log("Skipping branch protection; the final check will report it.");
+      io.log("Skipping branch protection; the final check will report it.");
     }
   }
 
   // 7. The certificate bundle copy Codex's sandbox reads (it denies *.pem), refreshed before the check.
   const ca = refreshCaBundle({ stateDir });
-  if (ca.copied) console.log(ca.changed ? "✓ certificate bundle: copied for Codex's sandbox" : "✓ certificate bundle: already current");
+  if (ca.copied) io.log(ca.changed ? "✓ certificate bundle: copied for Codex's sandbox" : "✓ certificate bundle: already current");
 
   // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });
   const blocking = report.problems.filter((entry) => entry.severity === "problem");
-  for (const entry of report.problems.filter((item) => item.severity === "warn")) console.log(`Note: ${entry.message}`);
+  for (const entry of report.problems.filter((item) => item.severity === "warn")) io.log(`Note: ${entry.message}`);
   if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. The package stays off.`);
   if (blocking.length > 0) {
-    console.error("The bot is not ready, so agents keep acting as you:");
-    for (const entry of blocking) console.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
+    io.error("The bot is not ready, so agents keep acting as you:");
+    for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     return 1;
   }
-  console.log("✓ Check: the bot account, its access and the branch protection all look right.");
+  io.log("✓ Check: the bot account, its access and the branch protection all look right.");
 
   // 9. Turn the package on.
   if (agentIdentityPackageEnabled()) {
@@ -143,18 +169,18 @@ async function runSetup(input) {
       throw error;
     }
   }
-  console.log(`Agents now act on GitHub as ${botLogin}. New agent sessions pick this up.`);
+  io.log(`Agents now act on GitHub as ${botLogin}. New agent sessions pick this up.`);
   return 0;
 }
 
-async function inviteBot({ user, repo, botLogin }) {
+async function inviteBot({ user, repo, botLogin, io, done }) {
   if (await githubClient.isCollaborator(user, repo, botLogin).catch(refused("check collaborators"))) {
     done(`Invitation (${botLogin} is a collaborator)`);
     return;
   }
   const invited = (await githubClient.repoInvitations(user, repo)).some((invitation) => invitation.invitee?.login?.toLowerCase() === botLogin.toLowerCase());
   if (invited) {
-    console.log(`✓ Invitation: ${botLogin} already has a pending invitation.`);
+    io.log(`✓ Invitation: ${botLogin} already has a pending invitation.`);
     return;
   }
   try {
@@ -163,7 +189,7 @@ async function inviteBot({ user, repo, botLogin }) {
     if (error instanceof GitHubError) stop(`GitHub refused the invitation: ${error.message}. You must be an admin of ${repo}.`);
     throw error;
   }
-  console.log(`✓ Invited ${botLogin} to ${repo}.`);
+  io.log(`✓ Invited ${botLogin} to ${repo}.`);
 }
 
 function refused(what) {
@@ -173,22 +199,23 @@ function refused(what) {
   };
 }
 
-async function storeToken({ input, dir, botLogin, bot, hadLogin }) {
+async function storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin }) {
   const hosts = readAgentHosts(stateDir);
   if (hadLogin && !hosts.hasToken) {
-    console.log("The saved login keeps its token in the keychain, so it is replaced.");
+    io.log("The saved login keeps its token in the keychain, so it is replaced.");
   }
-  console.log(`Sign in as ${botLogin} in the private window, then open https://github.com/settings/tokens/new (a classic token).`);
-  console.log('Note: "RoboRepo agents". Expiry: your choice. Scopes: repo and read:org only (not workflow).');
-  console.log("Do not paste the token into an agent chat.");
-  console.log(`Agents' sandboxes cannot read the keychain, so the token is stored in ${agentHostsFile(stateDir)}.`);
+  io.log(`Sign in as ${botLogin} in the private window, then open https://github.com/settings/tokens/new (a classic token).`);
+  open("https://github.com/settings/tokens/new");
+  io.log('Note: "RoboRepo agents". Expiry: your choice. Scopes: repo and read:org only (not workflow).');
+  io.log("Do not paste the token into an agent chat.");
+  io.log(`Agents' sandboxes cannot read the keychain, so the token is stored in ${agentHostsFile(stateDir)}.`);
   const token = (await input.askHidden("Paste the token (input hidden): ")).trim();
   if (!token) stop("No token given.");
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   fs.chmodSync(dir, 0o700);
   const env = { GH_CONFIG_DIR: dir };
   try {
-    await runGh(process.cwd(), ["auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--with-token", "--insecure-storage"], `${token}\n`, { env });
+    await runGh(cwd, ["auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--with-token", "--insecure-storage"], `${token}\n`, { env });
   } catch (error) {
     const detail = String(error?.stderr || error?.message || "").split(token).join("***").trim();
     stop(`gh could not sign the bot in${detail ? `: ${detail}` : ""}`);
@@ -197,23 +224,13 @@ async function storeToken({ input, dir, botLogin, bot, hadLogin }) {
     fs.chmodSync(agentHostsFile(stateDir), 0o600);
   } catch {}
   const signedInAs = await githubClient.login(bot).catch(() => null);
-  if (signedInAs !== botLogin) {
-    await runGh(process.cwd(), ["auth", "logout", "--hostname", "github.com"], "", { env }).catch(() => {});
+  if (!signedInAs || !sameLogin(signedInAs, botLogin)) {
+    await runGh(cwd, ["auth", "logout", "--hostname", "github.com"], "", { env }).catch(() => {});
     stop(signedInAs
       ? `That token belongs to ${signedInAs}, not ${botLogin}. It was signed out again; rerun with the right token.`
       : "GitHub did not accept that token. It was signed out again; rerun with a new token.");
   }
-  console.log(`✓ Token stored; signed in as ${botLogin}.`);
-}
-
-// Answers come from stdin, one per line, with no echo.
-function scriptedInput() {
-  const lines = fs.readFileSync(0, "utf8").split(/\r?\n/);
-  const next = (question) => {
-    console.log(question);
-    return lines.shift() ?? "";
-  };
-  return { ask: async (question) => next(question), askHidden: async (question) => next(question), close() {} };
+  io.log(`✓ Token stored; signed in as ${botLogin}.`);
 }
 
 function interactiveInput() {

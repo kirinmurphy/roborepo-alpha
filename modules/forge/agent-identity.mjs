@@ -1,7 +1,8 @@
 // Whether agents in a GitHub repo can act as the bot account safely: the bot is signed in with a
 // token stored where agent sandboxes can read it, it is a different person from the user, it can
 // push but not administer the repo, its token is not broader than it needs, and the repo's
-// branches are protected. Reads only; the guided setup in scripts/cli/github-setup.mjs changes things.
+// branches are protected. It only reads, except `refreshCaBundle`, which writes the CA bundle copy;
+// the guided setup in scripts/cli/github-setup.mjs makes every other change.
 import fs from "node:fs";
 import path from "node:path";
 import { GitHubError, forgeTargetForRepositoryId } from "./index.mjs";
