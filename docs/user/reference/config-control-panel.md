@@ -98,7 +98,7 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
   panel asks which of them to enable too; **Continue without** enables none. The terminal setup
   wizard asks nothing: after it applies your choices it prints one line,
   `recommended (not enabled): code-style, javascript-typescript — enable with: roborepo package enable <id>`,
-  naming what the packages you selected recommend and is still off.
+  naming what the packages you selected recommend that is still off.
 
 - A **dependency-only** package has no toggle of its own (`selectable: false`) and no row either
   (`presentation.visibility: "dependency"`); it turns on and off with the packages that require it.

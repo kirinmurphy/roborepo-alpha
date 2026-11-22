@@ -475,6 +475,9 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     if (id !== "plan-promote") assert.ok(!report.includes("```text"), `${id}: report has no fixed status template`);
     assert.ok(!report.includes("where it applies"), `${id}: visual evidence is required, not optional`);
   }
+  for (const id of ["javascript-typescript", "technical-writing"]) {
+    includesAll(`${id} paired skills`, readSkill(id), ["| Skill | Relationship | Load when | Contributes |", "the paired-skill rule in Skill Loading", "Never ask the user to enable a package"]);
+  }
   includesAll("plan-write lists the shared report reference", readSkill("plan-write"), [
     "Before the completion report, read `references/completion-report.md`",
   ]);

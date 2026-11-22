@@ -31,7 +31,8 @@ This skill is agnostic to document-specific workflows. Apply content, structure,
 constraints supplied by the caller or repository without choosing or invoking a workflow based
 on the document's kind or location. Report skills actually used, including reused guidance,
 and applicable skills skipped or unavailable; non-applicable rows need no inventory. Each row
-follows the paired-skill rule in Skill Loading.
+follows the paired-skill rule in Skill Loading: a `recommends` row whose skill the session does not
+list is skipped and named once in the report. Never ask the user to enable a package.
 
 This skill covers prose quality and the content constraints of applicable paired skills.
 

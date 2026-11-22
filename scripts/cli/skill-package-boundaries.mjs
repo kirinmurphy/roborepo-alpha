@@ -8,14 +8,16 @@
 // Input is plain data, so tests can build fixtures without a catalog on disk:
 //   [{ id, requires: [], recommends: [], skills: [{ name, body }] }]
 
-// Rows of a skill's `## Paired Skills` table, read by header so a table with or without the
-// Relationship column parses the same way.
+const PAIRED_SKILLS_SECTION = /## Paired Skills\n([\s\S]*?)(?=\n## |$)/;
+
 // The text of a skill's `## Paired Skills` section, up to the next heading or the end of the file;
 // null when it has none.
 export function pairedSkillSection(body) {
-  return /## Paired Skills\n([\s\S]*?)(?=\n## |$)/.exec(body)?.[1] ?? null;
+  return PAIRED_SKILLS_SECTION.exec(body)?.[1] ?? null;
 }
 
+// Rows of a skill's `## Paired Skills` table, read by header so a table with or without the
+// Relationship column parses the same way.
 export function pairedSkillRows(body) {
   const table = pairedSkillSection(body);
   if (table === null) return null;
@@ -52,7 +54,7 @@ export const PROSE_ONLY_REFERENCES = new Set([
 
 // Prose outside the table that tells the reader to load or hand off to `name`.
 function proseInstruction(body, name) {
-  const outside = body.replace(/## Paired Skills\n[\s\S]*?(?=\n## |$)/, "");
+  const outside = body.replace(PAIRED_SKILLS_SECTION, "");
   const escaped = name.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
   return new RegExp(`\\b(?:load|loads|hand(?:s)? off to|hand it to)\\s+\`/?${escaped}\``, "i").test(outside);
 }
