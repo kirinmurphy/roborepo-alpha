@@ -265,7 +265,9 @@ function storeRow(item) {
   const size = item.maxBytes
     ? `${formatBytes(item.bytes)} of ${formatBytes(item.maxBytes)}`
     : formatBytes(item.bytes);
-  row.querySelector('[data-slot="size"]').textContent = item.over ? `${size} — over cap` : size;
+  // A spared store is over its cap only through folders changed in the last hour; it is not a fault.
+  const suffix = item.over ? " — over cap" : item.spared ? " — over cap, recent folders spared" : "";
+  row.querySelector('[data-slot="size"]').textContent = `${size}${suffix}`;
   // Only an over-cap store is worth colouring; a store at 3% and one at 80% are both fine, and
   // shading the difference would imply an action the user does not need to take.
   row.querySelector('[data-slot="dot"]').classList.add(item.over ? "off" : "on");

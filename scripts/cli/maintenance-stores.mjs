@@ -289,14 +289,14 @@ function describeBound(policy) {
 // Only the byte cap is checked. Age is enforced on the write path and a store that has not been
 // written to lately is legitimately holding old records — flagging that would report normal
 // behavior as a fault.
-// A store over its cap only because of recently changed folders the byte cap spares is reported as a
-// hint, not a failure: a reset cannot act on it yet, and it is capped once those folders go quiet.
+// A store over its cap with every byte in recently changed folders the byte cap spares is reported
+// as a hint, not a failure: a reset cannot act on it yet, and it is capped once those folders go quiet.
 export function checkStoreBounds() {
   const health = storeHealth();
   for (const store of health.filter((entry) => entry.spared)) {
     console.log(
       `hint: ${store.id} is ${formatBytes(store.bytes)}, over its ${formatBytes(store.maxBytes)} cap, but`
-      + ` ${formatBytes(store.sparedBytes)} is in folders changed in the last hour; the cap applies once they go quiet`,
+      + ` all of it is in folders changed in the last hour; the cap applies once they go quiet`,
     );
   }
   const over = health.filter((store) => store.over);
@@ -310,14 +310,14 @@ export function checkStoreBounds() {
 }
 
 // Registry-backed store list for doctor, which needs sizes and bounds without the CLI formatting.
-// `over` counts only bytes a reset could remove; `spared` marks a store over its cap because of
-// folders the byte cap spares for now.
+// `over`: over the cap with something a reset can remove (the byte walk removes quiet folders
+// first). `spared`: over the cap, but every byte is in folders the cap spares for now.
 export function storeHealth() {
   return retentionStores(stateDir).map((store) => {
     const policy = policyFor(store);
     const { bytes, sparedBytes = 0 } = inspect(store);
     const capped = policy.maxBytes !== null && bytes > policy.maxBytes;
-    const over = policy.maxBytes !== null && bytes - sparedBytes > policy.maxBytes;
+    const over = capped && bytes - sparedBytes > 0;
     return {
       id: store.id,
       bytes,

@@ -335,7 +335,8 @@ check_store_bounds() {
     ok "local stores within their bounds"
     # A store over its cap only because of folders the byte cap spares prints a hint line.
     while IFS= read -r line; do
-      [[ "${line}" == hint:* ]] && echo "${line}"
+      # An `if`, not `&&`: a non-matching last line would return 1 and stop doctor under set -e.
+      if [[ "${line}" == hint:* ]]; then echo "${line}"; fi
     done <<< "${output}"
   else
     failed=1

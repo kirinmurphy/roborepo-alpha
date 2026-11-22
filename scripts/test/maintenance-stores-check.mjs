@@ -164,7 +164,24 @@ try {
   assert.match(run(["reset", "scratch", "--dry-run"]).stdout, /recent folders spared\); nothing would be removed/, "the preview says the overage is spared");
   assert.equal(run(["reset", "scratch"]).status, 0);
   assert.ok(fs.existsSync(busy), "a reset leaves the recently changed folder");
+
+  // Mixed: a quiet folder beside the busy one is removable, so --check fails and names the reset,
+  // which removes the quiet folder; what remains is all spared and is a hint again.
   const quietAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const quietSibling = path.join(scratch, "quiet-sibling");
+  fs.mkdirSync(quietSibling);
+  fs.writeFileSync(path.join(quietSibling, "notes.md"), "done");
+  fs.utimesSync(path.join(quietSibling, "notes.md"), quietAt, quietAt);
+  fs.utimesSync(quietSibling, quietAt, quietAt);
+  const mixedCheck = run(["--check"]);
+  assert.equal(mixedCheck.status, 1, "--check fails while a reset could remove a quiet folder");
+  assert.match(mixedCheck.stderr, /run: roborepo maintenance stores reset scratch/);
+  assert.equal(run(["reset", "scratch"]).status, 0);
+  assert.ok(!fs.existsSync(quietSibling) && fs.existsSync(busy), "the reset removes the quiet folder and spares the busy one");
+  const afterMixed = run(["--check"]);
+  assert.equal(afterMixed.status, 0);
+  assert.match(afterMixed.stdout, /hint: scratch .* all of it is in folders changed in the last hour/);
+
   fs.utimesSync(path.join(busy, "sparse.bin"), quietAt, quietAt);
   fs.utimesSync(busy, quietAt, quietAt);
   const quietCheck = run(["--check"]);
