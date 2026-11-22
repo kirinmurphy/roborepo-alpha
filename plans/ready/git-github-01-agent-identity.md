@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: After `roborepo protect` (3xh2sq32) lands, the owner creates the bot account and classic token (Phase 2); then run the checks that need them, including the Codex sandbox checks
+next_action: The owner adds the `read:org` scope to the bot's classic token and logs it in under `~/.roborepo/github-agent/gh`; then run the remaining Phase 2 checks, including the Codex sandbox checks
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -171,6 +171,10 @@ on, both callers run inside agent shells and need it.
 | Listing review comments needs **Pull requests** read; replying needs **Pull requests** write | Verified | Same page |
 | **Fine-grained tokens cannot contribute to repos where the user is an outside or repository collaborator** | Verified as a listed limitation | [Managing your personal access tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) |
 | Classic tokens work for a collaborator on a personal-account repo | **Unverified.** The page says so only for organization repos. Phase 2 checks it | Same page |
+| `gh auth login --with-token` refuses a classic token without `read:org` | Verified 2026-11-22: a `repo`-only bot token failed with "missing required scope 'read:org'" | Owner's run of the Phase 2 login |
+| Adding a collaborator to a personal-account repo sends an invitation the invitee must accept | Verified | [Collaborators REST API](https://docs.github.com/en/rest/collaborators/collaborators) |
+| The invitee can list and accept invitations through the API; the `repo` scope covers invitations | Verified that the endpoints exist and that `repo` grants invitation access. The page names no required scope per endpoint. Phase 2 checks the accept with the bot's token | [Repository invitations REST API](https://docs.github.com/en/rest/collaborators/invitations) |
+| The classic token page can be pre-filled through URL parameters | **Not documented.** GitHub documents pre-filling only for fine-grained tokens, which cannot be used here, so the setup does not rely on it | [Managing your personal access tokens](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens) |
 | GitHub App installation tokens last one hour, are minted from a JWT signed by the App's private key, and can be narrowed to repos and permissions | Verified | [Generating an installation access token](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app) |
 | "Require approval of the most recent reviewable push" requires approval from someone other than the last pusher | Verified | [Available rules for rulesets](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets) |
 | GraphQL `PullRequestReviewThread.isResolved`, `viewerCanResolve`, and `addPullRequestReviewThreadReply` exist | Verified | [GraphQL pulls reference](https://docs.github.com/en/graphql/reference/pulls) |
@@ -189,7 +193,7 @@ role is not on the bypass list.
 | --- | --- | --- |
 | Setup | Second account, invite as collaborator, create a token | Create an App, install it on the repo, store its private key |
 | What limits it | Collaborator role: no settings, no rulesets, not on bypass | App permissions: grant Contents, Pull requests, Issues write; omit Administration |
-| Token scope | Classic `repo`, covering every repo the bot is invited to. Omit `workflow` so pushes cannot change `.github/workflows/` | Narrowed per repo and per permission |
+| Token scope | Classic `repo` and `read:org` (which `gh` requires to log in), covering every repo the bot is invited to. Omit `workflow` so pushes cannot change `.github/workflows/` | Narrowed per repo and per permission |
 | Token lifetime | Long-lived. Set an expiry and rotate | One hour |
 | Getting a token into `gh` and `git` | `gh auth login --with-token` once; `gh` keeps it in the keychain | Needs a helper that signs a JWT and mints a token at least hourly. `gh` has no built-in App login |
 | Attribution | Commits and comments show the bot login | Commits and comments show `<app>[bot]` |
@@ -230,21 +234,25 @@ pushes and merges directly through the bypass. `gh pr merge` stays on the local 
 The switch is an optional package, `github-agent-identity`, off by default. Turning it off reverts
 everything it added. A user does not enable it by hand: the guided setup enables it as its last step.
 
-The happy path:
+The setup automates every step GitHub lets a program do, and guides the user through the rest.
+GitHub requires a person, signed in as the bot, to create the account and the token; everything
+else runs from the setup:
 
-1. `/plan-suite-init` finishes and offers to let agents work on GitHub as a bot.
-2. The user runs `roborepo github setup` in their own terminal.
-3. The user creates the bot account on GitHub.
-4. The user invites it as a collaborator on the repo and accepts the invite as the bot.
-5. The user creates a classic token with `repo` scope and an expiry.
-6. The user pastes the token at the setup's hidden prompt; the setup hands it straight to `gh` under
-   the agent config dir.
-7. The setup checks the bot login, write-not-admin permission, token scopes, and the merge and
-   `repo-plans` rules.
-8. The setup enables `github-agent-identity`, which re-renders Claude and Codex config.
+| Step | Done by | How |
+| --- | --- | --- |
+| 1. Offer the setup | `/plan-suite-init` | Ends by running the doctor's identity check and naming `roborepo github setup` when it is not set up |
+| 2. Start the setup | The user, in their own terminal | `roborepo github setup` |
+| 3. Create the bot account | **The user (guided)** | The setup opens GitHub's sign-up page, tells the user to use a private window so their own session stays signed in, and asks for the bot's login. It confirms the account exists with a public `gh api users/<login>` lookup |
+| 4. Invite the bot | The setup, as the user | `PUT /repos/{owner}/{repo}/collaborators/{bot}` through the user's own `gh` login, which sends the invitation. Skipped when the bot is already a collaborator |
+| 5. Create a classic token | **The user (guided)** | The setup opens the classic token page and shows the exact choices: scopes `repo` and `read:org` only, a note naming the repo, and an expiry. The classic page has no documented way to pre-fill these |
+| 6. Hand over the token | The user pastes; the setup stores it | Hidden prompt, piped to `gh auth login --with-token` under the agent config dir (see "Token entry") |
+| 7. Accept the invite | The setup, as the bot | `GET /user/repository_invitations`, then `PATCH /user/repository_invitations/{id}` with the bot's new token. Skipped when there is no pending invite |
+| 8. Protect the branches | The setup, as the user | Runs `roborepo protect` after the user confirms, when `roborepo protect --check` reports it missing |
+| 9. Check the result | The setup | Bot login differs from the user's, write-not-admin permission, token scopes, and the merge and `repo-plans` rules |
+| 10. Turn the identity on | The setup | Enables `github-agent-identity`, which re-renders Claude and Codex config |
 
-If a check in step 7 fails, the setup reports what failed and how to fix it, and the package stays
-off. A user who declines the offer keeps today's behavior: agents act as the user, `gh api` stays
+If a check fails at any step, the setup reports what failed and how to fix it, and the package
+stays off. A user who declines the offer keeps today's behavior: agents act as the user, `gh api` stays
 denied, and Codex hands pushes back to the user.
 
 | Piece | Behavior |
@@ -390,7 +398,8 @@ settings, so its pushes keep the user's identity.
 - the bot's permission on the current repo is write, not admin;
 - the default branch's effective rules require an approval of the last push (`roborepo-main-merge`);
 - `repo-plans` is protected from deletion and force pushes;
-- the token's scopes do not include `workflow`, `admin:org`, or `delete_repo`.
+- the token's scopes do not include `workflow`, `admin:org`, or `delete_repo`. `read:org` is
+  expected, because `gh` requires it to log in.
 
 ## Implementation plan
 
@@ -406,11 +415,17 @@ settings, so its pushes keep the user's identity.
 These checks need the bot account, which only a person can create. They decide details the later
 phases build, so run them before Phase 3.
 
-- [ ] Run `roborepo protect` (`3xh2sq32`) so `roborepo-main-merge` requires one approval of the
-      most recent push, with the admin bypass kept, and `repo-plans` is protected.
-- [ ] Create the bot account and invite it as a collaborator on `kirinmurphy/roborepo-alpha`.
-- [ ] Create a classic token with `repo` only and an expiry, then log it in under the agent
-      `GH_CONFIG_DIR`.
+- [x] Run `roborepo protect` (`3xh2sq32`) so `roborepo-main-merge` requires one approval of the
+      most recent push, with the admin bypass kept, and `repo-plans` is protected. — 2026-11-22:
+      the owner's `roborepo protect --check` reported `roborepo-plans`, `roborepo-main-integrity`,
+      and `roborepo-main-merge` all matching the policy.
+- [x] Create the bot account, `codethings-agents`. — 2026-11-22: the owner confirmed it through the
+      collaborator permission API.
+- [ ] The bot is a collaborator on `kirinmurphy/roborepo-alpha` with write, not admin, and its
+      invitation is accepted. Where the invite is still pending, accept it through
+      `PATCH /user/repository_invitations/{id}` with the bot's token, which also checks setup step 7.
+- [ ] Create a classic token with `repo` and `read:org` only and an expiry, then log it in under the
+      agent `GH_CONFIG_DIR`. A `repo`-only token was refused by `gh auth login` on 2026-11-22.
 - [ ] `gh auth status` in the user's terminal still shows the user after the bot login.
 - [ ] A classic token for a collaborator on a personal-account repo can push a branch and call
       `gh api` for that repo.
@@ -481,6 +496,11 @@ phases build, so run them before Phase 3.
       `GH_CONFIG_DIR`; never echo it, write it to disk, or pass it as an argument.
 - [ ] Run `roborepo protect` from the setup, after confirmation, when it has not been run for the
       repo.
+- [ ] Automate the invite and its acceptance: send the invitation through the user's `gh` login
+      before the token step, and accept it with the bot's token right after the token is stored.
+      Each skips itself when already done.
+- [ ] Guide the two person-only steps (bot account, classic token): open the page, show the exact
+      choices (scopes `repo` and `read:org`), wait, and confirm the result before moving on.
 - [ ] Enable `github-agent-identity` through the existing package enable path as the last step.
 - [ ] Add the offer to `/plan-suite-init`
       (`globals/packages/plan-suite/skills/plan-suite-init/SKILL.md`): after the store is ready, run
@@ -494,7 +514,8 @@ Automated:
 - `node scripts/test/protected-branch-push-check.mjs` passes, covering `gh api` with and without the
   identity, and `roborepo github setup` denied to agents.
 - The doctor check's fake-`gh` test passes for each failure case and the healthy case.
-- A setup test with a fake `gh` and scripted input shows: a rerun skips finished steps; a failed
+- A setup test with a fake `gh` and scripted input shows: the setup sends the invite as the user
+  and accepts it as the bot; a rerun skips finished steps, including an accepted invite; a failed
   check leaves the package off; a passing run enables it; the token never appears in output, argv,
   or files under the test home.
 - A rendering test, added beside `scripts/test/codex-permissions-foreign-lines-check.mjs`, shows the
@@ -594,6 +615,10 @@ Phase 2.
   package as the underlying switch so turning it off reverts cleanly. Declining keeps today's
   behavior.
 - November 14, 2026: with the identity on, `post-to-github` commands move from ask to allow.
+- November 22, 2026: the user asked that the setup automate every step GitHub allows and guide the
+  rest, so another user can set this up without help. The setup now sends the collaborator invite
+  as the user and accepts it as the bot; only the bot account and the token stay manual. Pre-filling
+  the classic token page was considered and dropped because GitHub does not document it.
 - November 14, 2026: the user's priority is no agent push to `main` and no merge without a human.
   The user's SSH agent stays visible to agent shells for now; hiding it is future hardening.
   Agent fetches move to HTTPS as the bot (`insteadOf`), gated on the Phase 2 fetch check.
