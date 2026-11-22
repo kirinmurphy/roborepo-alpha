@@ -1,10 +1,10 @@
 ---
 id: jdsobwn
-next_action: Characterize current bundled/workspace catalog behavior and agree source-qualified provenance with desired-state and profile owners before adding source adapters.
+next_action: Start Stage 0 with /plan-execute: write characterization tests for today's built-in and workspace package catalog, including the replace-override collision rule, before adding source adapters.
 blocked_by: []
 depends_on: ["bysyzl1e"]
-related: ["user-managed-packages-and-add-workflows"]
-reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
+related: ["user-managed-packages-and-add-workflows", "f5exs0bd", "o9zwxuav", "74h2tlim"]
+reviewed_commit: 46f37fbc51d551f49999d757a328694c176555b8
 ---
 
 # Package Management: Part 04 - Get Packages From GitHub, Catalogs, and Local Folders
@@ -43,7 +43,17 @@ The separation is both a product decision and an ownership boundary:
 - A platform update must not overwrite user-authored packages.
 - Removing RoboRepo-managed state must not recursively delete an arbitrary user-owned workspace path.
 
-The first implementation should preserve today's package behavior while introducing the source abstraction. Remote package distribution can then be added behind that abstraction, followed by moving optional official packages out of the npm application artifact.
+
+### Scope of this plan
+
+This plan delivers the local half of the model: the source abstraction, durable provenance, a
+managed install store, the public GitHub (`git`) source with its trusted catalog, and the shared
+service and CLI surface for sources. It changes nothing about how RoboRepo itself is distributed.
+
+[[f5exs0bd]] owns the remote half: the official `registry` source and its hosting, removing optional
+packages from the npm artifact, and source-aware uninstall and reset scopes. Sections below that
+describe those parts stay here because they are the shared product model; each names [[f5exs0bd]]
+where that plan delivers it.
 
 ## Why This Change
 
@@ -51,11 +61,32 @@ The first implementation should preserve today's package behavior while introduc
 
 RoboRepo already has the architectural roots needed for this separation:
 
-- `scripts/cli/roots.mjs` distinguishes immutable application code, machine-local mutable state, and the portable workspace.
+- `scripts/cli/roots.mjs` distinguishes immutable application code, machine-local mutable state, and
+  the portable workspace. `scripts/cli/state-paths.mjs` names many files under `stateRoot`, including
+  the package state files.
 - `docs/architecture/config-code-separation.md` documents the same ownership boundary.
-- `scripts/cli/package-catalog.mjs` currently discovers packages from two hard-coded origins: built-in packages and workspace packages.
-- `package.json` currently publishes `globals/` as part of the npm package, so the application distribution contains the available global package library.
-- Existing package lifecycle and catalog tests already provide characterization coverage around package discovery, harness compatibility, defaults, and application.
+- `scripts/cli/package-catalog.mjs` discovers packages from two hard-coded origins: `globals/packages`
+  (`origin: "built-in"`) and the workspace packages folder (`origin: "workspace"`). Consumers branch
+  on that field, for example `scripts/cli/packages.mjs` and `scripts/cli/config.mjs`.
+- A workspace package with the same ID as a built-in one is a hard error today, unless the workspace
+  `overrides/resources.json` holds a typed `replace` override for that ID; with the override the
+  workspace package replaces the built-in one. `scripts/cli/workspace-resources.mjs` reads the
+  overrides and repeats the same conflict rule for workspace packages and MCP servers.
+- Selection and installation state landed with [[o9zwxuav]]: `scripts/cli/package-state.mjs` owns
+  `enabled-packages.json` (selected roots plus explicit deselections) and `applied-packages.json`
+  (what RoboRepo installed). Both record bare package IDs. `scripts/cli/update-report.mjs` also reads
+  the first, and `scripts/install/uninstall-lib.sh` deletes both.
+- Package `requires` edges are resolved by bare ID in `scripts/cli/package-graph.mjs`.
+- [[bysyzl1e]] defined collections as categories with `bulkToggle: true`, a field `package-catalog.mjs`
+  reads from `manifests/inventory/package-categories.json`. No category sets it today, and there is
+  no collection record outside categories.
+- `package.json` publishes `globals/` in its `files` list, so the npm package carries the whole
+  global package library.
+- `roborepo uninstall` (`scripts/cli/uninstall.mjs`) already exists, with `--dry-run`, `--yes`, and
+  `--delete-workspace`, and in package mode also removes the npm package. It is not source-aware.
+- `scripts/test/package-catalog-check.mjs`, `package-catalog-harness-check.mjs`,
+  `package-lifecycle-check.mjs`, and `package-default-enabled-check.mjs` cover discovery, harness
+  compatibility, defaults, and apply. New checks are registered in `scripts/test/check-groups.json`.
 
 The architectural problem is therefore not that RoboRepo lacks separation concepts. It is that package **discovery and distribution** have not yet been generalized around them.
 
@@ -72,23 +103,23 @@ Keeping every optional package inside the platform artifact creates several long
 
 The goal is not to reproduce npm. The goal is to establish a small, stable package-source boundary that can start with simple infrastructure and support richer distribution later without changing the package model again.
 
+
 ## Goals
 
 This plan must produce a package system in which:
 
 - RoboRepo can use packages from multiple configured sources.
-- The official RoboRepo library is a source, not a privileged package format.
 - Local user-authored packages use the same normalized package contract as remote packages.
 - A workspace can remain a convenient authoring location while becoming a `path` source internally.
 - Package identity includes provenance strongly enough to prevent silent source switching.
 - Discovery, installation, and activation are distinct operations.
-- Optional packages can be omitted from the npm application artifact.
-- Platform upgrades can replace application code without replacing user-authored packages or unrelated package state.
-- Remote package installation can be deterministic and integrity-checked.
+- A public GitHub skill can be added by URL or from a trusted catalog, pinned to a commit.
 - The same domain/service layer can serve CLI and portal experiences.
-- Offline behavior is predictable once catalogs or package artifacts have been cached.
-- Reset and uninstall flows communicate exactly what RoboRepo owns and what will be preserved.
-- Current built-in/workspace behavior can migrate incrementally rather than requiring a single large rewrite.
+- Installed packages stay usable offline.
+- Current built-in/workspace behavior migrates incrementally rather than in one large rewrite.
+
+The official source, an npm artifact without optional packages, and ownership-aware uninstall are
+goals of [[f5exs0bd]], which builds on this plan.
 
 ## Non-Goals
 
@@ -97,12 +128,16 @@ This plan does not require:
 - Building a public marketplace with reviews, payments, ratings, moderation, or accounts.
 - Mirroring npm registry protocol or npm's dependency-resolution model.
 - Supporting arbitrary package code execution without an explicit trust model.
-- Implementing package-to-package dependencies in the first source abstraction.
+- New dependency features. Existing `requires` edges keep working, resolved by the rule in
+  Collision Behavior.
 - Implementing automatic publication from third-party repositories.
 - Creating an MCP package-management interface.
 - Supporting every possible transport in the first release.
 - Treating the user's workspace as disposable RoboRepo state.
-- Preserving the current `builtin` implementation forever after the official source is available.
+- The official `registry` source, changes to the npm `files` list, and new uninstall or reset
+  scopes. [[f5exs0bd]] owns them.
+- Rendering the portal tabs and the add screen. [[user-managed-packages-and-add-workflows]] owns
+  them; this plan supplies the service data they read.
 - Designing a general-purpose package manager outside RoboRepo's harness-configuration domain.
 
 ## Product Model
@@ -176,6 +211,7 @@ local/code-style
 
 The package's own `id` remains its package identity within a source. Source qualification is not written into every package manifest merely to avoid collisions.
 
+
 ### Collision Behavior
 
 RoboRepo must never silently choose between two different sources advertising the same package ID unless the user has already persisted that choice.
@@ -187,6 +223,10 @@ Rules:
 3. If multiple sources supply the same ID and no prior source is recorded, require an explicit source choice.
 4. A source-priority mechanism may influence search ordering, but priority alone must not silently rewrite persisted provenance.
 5. If a previously resolved source disappears, report the package as unresolved rather than substituting a different source automatically.
+6. A typed `replace` override in the workspace `overrides/resources.json` is a persisted choice of
+   the `local` source for that ID. It keeps working, and the migration records it as provenance.
+7. A `requires` edge resolves first within the requiring package's own source, then by rules 1–3.
+   A dependency that stays ambiguous is reported unresolved, never guessed.
 
 This favors reproducibility over convenience.
 
@@ -209,23 +249,19 @@ section titled with the source and has Select All / Deselect All. A source with 
 as one card with a source badge and no section header. `cloudflare/security-audit-skill` is that
 case: one Agent Skills folder, one package, in the Third Party tab.
 
+
+A source-derived collection is computed each time the catalog is read, from the source's own files,
+and carried as a field on each member's package descriptor (the collection's ID and title). Nothing
+about it is persisted, so it cannot drift from the source. How a user-created collection is stored
+remains an open decision in [[user-managed-packages-and-add-workflows]]; the portal groups members by
+this descriptor field the same way whichever storage that plan chooses.
+
 ## User Experience
 
 ### First Install
 
-A new RoboRepo installation should install the platform and only the minimal assets required to start package management.
-
-The initial experience should be:
-
-1. Install RoboRepo through npm.
-2. RoboRepo initializes machine-local state.
-3. The official package source is configured by default.
-4. RoboRepo refreshes or reads the official source catalog.
-5. The user chooses packages or a preset.
-6. Only selected remote package artifacts are downloaded.
-7. Selected packages are activated through the existing harness application flow.
-
-If a minimal bootstrap package is genuinely required for RoboRepo to function, it may remain bundled. "Convenient to have by default" is not sufficient reason to keep an optional package in the application artifact.
+Unchanged by this plan: the application still ships its package library. [[f5exs0bd]] describes the
+first-install experience once optional packages download on demand.
 
 ### Package Browser
 
@@ -250,7 +286,7 @@ inside each tab.
 
 | Tab | Holds | Source types | Turn off | Remove |
 | --- | --- | --- | --- | --- |
-| **System** | RoboRepo's own packages | `official` (the temporary `bundled` adapter until Stage 6) | Disable | Never offered |
+| **System** | RoboRepo's own packages | `official` (the temporary `bundled` adapter until [[f5exs0bd]] retires it) | Disable | Never offered |
 | **Custom** | Packages the user wrote or keeps in a local folder | `path`, including the workspace | Disable | Removes RoboRepo's record and any managed copy; never the user's folder |
 | **Third Party** | Packages from someone else's repo or catalog | `git`, and any `registry` other than `official` | Disable | Removes the installed copy and its record |
 
@@ -261,11 +297,11 @@ Required rules:
 
 - System packages are always listed and cannot be removed. The rule holds in the CLI as well as the
   portal, because both read the same package service.
-- After Stage 6, a System package that has never been enabled may not be downloaded yet. Enabling
+- After [[f5exs0bd]] removes optional packages from the application, a System package that has never been enabled may not be downloaded yet. Enabling
   it downloads it first; offline, that enable fails with a clear message instead of a partial
   install. To the user, a System package behaves as always installed.
-- `roborepo uninstall` and reset scopes may still delete downloaded System artifacts; that is
-  cleanup of managed state, not a per-package remove.
+- Cleanup scopes in `roborepo uninstall`, which [[f5exs0bd]] adds, may delete downloaded System
+  artifacts; that is cleanup of managed state, not a per-package remove.
 
 Third Party cards carry a source badge naming the repo or catalog, plus **Trusted** when the
 package came through the trusted catalog (see Source Types).
@@ -381,6 +417,7 @@ When offline:
 
 The source layer should make network availability a discovery/materialization concern, not a prerequisite for every package operation.
 
+
 ## Platform and Data Ownership
 
 ### Root Responsibilities
@@ -395,25 +432,28 @@ The existing three-root architecture should become the source of truth for packa
 
 A path source elsewhere on disk inherits the same user-owned treatment as `workspaceRoot` unless RoboRepo explicitly created and marked the content as managed.
 
+
 ### Proposed State Layout
 
-The exact names can adapt to current state conventions, but ownership should be obvious:
+New state files are registered in `scripts/cli/state-paths.mjs` like every other file under
+`stateRoot`. The exact names can adapt to that file's conventions, but ownership should be obvious:
 
 ```text
 stateRoot/
   package-sources.json
   packages/
     catalogs/
-      official.json
-      team.json
-    cache/
-      <content-address-or-source-key>/
+      <source-id>.json
     installed/
       <source-id>/
         <package-id>/
           <version-or-revision>/
     package-lock.json
 ```
+
+Selection stays in `enabled-packages.json` and installation ownership in `applied-packages.json`,
+both owned by `scripts/cli/package-state.mjs`. Their entries gain a source-qualified reference; the
+lock holds the resolution behind it.
 
 Do not make directory paths the only database of truth. Persist explicit records so `doctor`, uninstall, and migration logic can distinguish managed artifacts from user paths.
 
@@ -577,42 +617,6 @@ flowchart TD
 
 The first refactor can wrap today's built-in directory and workspace directory as adapters. That lets source composition land before any remote distribution behavior changes.
 
-### Official Registry v1
-
-The official source should start with infrastructure that is easy to inspect and replace.
-
-A reasonable v1 is:
-
-```text
-separate package-library repository or release store
-  |
-  +--> versioned index document
-  |
-  +--> immutable package artifacts
-```
-
-The index only needs enough information for discovery and immutable resolution:
-
-```json
-{
-  "schemaVersion": 1,
-  "packages": [
-    {
-      "id": "code-style",
-      "name": "Code Style",
-      "latest": "1.4.0",
-      "versions": {
-        "1.4.0": {
-          "artifact": "...",
-          "integrity": "sha256-..."
-        }
-      }
-    }
-  ]
-}
-```
-
-Do not make GitHub-specific API responses the domain contract. A GitHub repository/releases can host v1, while the `registry` adapter consumes a RoboRepo-owned index schema. This leaves room to move hosting later without changing package consumers.
 
 ### Source Types
 
@@ -635,6 +639,7 @@ Characteristics:
 - highest transparency;
 - drift is expected.
 
+
 #### `registry`
 
 Purpose:
@@ -642,13 +647,8 @@ Purpose:
 - official RoboRepo catalog;
 - organization/community catalogs using the same protocol.
 
-Characteristics:
-
-- remote index;
-- immutable version/revision resolution;
-- managed local cache/install copy;
-- integrity required;
-- supports refresh and offline cache.
+Owned by [[f5exs0bd]], which defines the index schema and implements the adapter. This plan only
+reserves the type name and keeps the source contract able to carry it.
 
 #### `git`
 
@@ -677,19 +677,20 @@ Characteristics:
 - managed copy under `stateRoot`;
 - integrity is the commit SHA plus a content hash of the materialized tree.
 
-The adapter does not depend on the `registry` adapter and can land before it; both need the
-install store from Stage 3.
+
+The adapter does not depend on the `registry` adapter; it needs the install store from Stage 3.
 
 #### Trusted catalog
 
-A `registry`-type source that ships with RoboRepo and lists vetted third-party GitHub repos. Each
-entry names the upstream repo and a reviewed commit, and installs through the `git` adapter.
+A RoboRepo-owned JSON data file that ships inside the application and lists vetted third-party
+GitHub repos. It is not a separate source type: the `git` source reads it as its list of known repos.
+Each entry names the upstream repo and a reviewed commit, and installs through the `git` adapter.
 
 - The portal shows it as a picker of known repos beside the paste-a-URL field.
 - Its packages land in the Third Party tab with a **Trusted** badge.
 - Adding a URL that is not in the catalog is allowed, with a stronger warning before install.
-- Its index is RoboRepo-owned data, so it can be updated without a platform release once the
-  official registry exists. Until then it ships inside the application.
+- It ships as a data file in the application. Once [[f5exs0bd]] delivers the `registry` source, the
+  same entries can be served remotely and updated without a platform release.
 
 ### Trust and Security
 
@@ -702,7 +703,8 @@ At minimum:
 - before installing from an `unverified` source, the portal and CLI show what the package contains,
   including any hooks, scripts, or permissions, and require an explicit confirmation;
 - every installed remote package records source provenance;
-- registry artifacts use integrity verification;
+- remote artifacts use integrity verification (a commit SHA plus content hash for `git`; registry
+  artifacts in [[f5exs0bd]]);
 - integrity failure is fatal and does not replace the prior installed artifact;
 - source collisions never silently change provenance;
 - third-party source addition is explicit;
@@ -711,7 +713,7 @@ At minimum:
 - remote refresh cannot directly apply or activate a newly discovered package;
 - activation continues through the existing managed apply lifecycle and its safety checks.
 
-Future signature verification can be added to the registry protocol without being required for v1 if HTTPS transport plus immutable artifact integrity is deemed sufficient for the first official source.
+Signature verification for registry artifacts is an open decision in [[f5exs0bd]].
 
 ### Failure and Atomicity
 
@@ -732,127 +734,6 @@ Source refresh should likewise parse and validate a new catalog before replacing
 
 Activation should consume a resolved local package path. It should not intermingle network fetching with harness mutation.
 
-## Platform Distribution
-
-### Target npm Artifact
-
-Today `package.json` includes `globals/` in the published `files` list. After remote official packages are proven, optional package-library content should no longer be part of the platform artifact.
-
-The target npm package contains:
-
-- CLI/runtime code;
-- portal/runtime assets;
-- harness and package schemas;
-- migration/bootstrap logic;
-- default source metadata required to find the official registry;
-- only package assets that are strictly required for RoboRepo itself to boot or repair its package manager.
-
-It does not contain the entire optional package library.
-
-### Bootstrap Exception
-
-If RoboRepo needs a small internal package to operate its own development harness or self-management, classify it explicitly as one of:
-
-1. application runtime asset;
-2. bootstrap package;
-3. optional catalog package.
-
-Do not leave an item bundled merely because it was historically under `globals/packages`.
-
-This classification should happen before removing `globals/` from the npm package manifest.
-
-### Independent Release Cadence
-
-Separating distribution allows:
-
-- platform releases without republishing unchanged optional packages;
-- official package releases without republishing the CLI;
-- third-party source releases on their own cadence;
-- users to update one installed package without replacing RoboRepo itself.
-
-The first implementation does not need sophisticated compatibility solving. It does need package metadata capable of declaring any minimum RoboRepo/package-schema compatibility that is already necessary to prevent an obviously incompatible package from activating.
-
-## Uninstall, Reset, and Ownership UX
-
-### Why RoboRepo Needs Its Own Cleanup Command
-
-Current npm lifecycle behavior does not provide package-controlled uninstall lifecycle scripts. `npm uninstall -g <package>` removes what npm installed on the package's behalf, but RoboRepo-created machine state and user package content have different ownership.
-
-Therefore `roborepo uninstall` should be the canonical RoboRepo cleanup experience, while npm remains responsible for removing the globally installed CLI/application package.
-
-The product documentation should present the sequence as:
-
-```text
-roborepo uninstall
-npm uninstall -g <roborepo-package-name>
-```
-
-RoboRepo should not depend on npm invoking it during uninstall.
-
-### Interactive Cleanup
-
-When run in a terminal, `roborepo uninstall` should preview owned paths and offer clearly scoped choices.
-
-Proposed interaction:
-
-```text
-What would you like to remove?
-
-  Reset RoboRepo state and keep installed package downloads
-  Remove RoboRepo state and managed package downloads
-  Remove all RoboRepo-managed data and preserve user workspaces
-  Cancel
-```
-
-The exact labels should be adjusted to the actual state layout, but each choice must show:
-
-- paths RoboRepo will delete;
-- paths it will preserve;
-- configured user-owned workspace/path sources;
-- active packages that will no longer be managed.
-
-Avoid an option named only "everything" if user-owned paths are excluded. "Everything RoboRepo owns" is more accurate.
-
-### Non-Interactive Cleanup
-
-Scripts and agents need deterministic flags. Proposed semantics:
-
-```bash
-roborepo uninstall --state
-roborepo uninstall --reset
-roborepo uninstall --purge
-roborepo uninstall --dry-run
-```
-
-`--dry-run` should be available with every destructive scope.
-
-Names can change before implementation, but the command must provide:
-
-- explicit scope;
-- machine-readable/non-interactive behavior;
-- no surprise prompts when a non-interactive flag is provided;
-- the same ownership engine used by the interactive flow.
-
-### Workspace Safety
-
-Never recursively delete `workspaceRoot` or another configured path source merely because RoboRepo has a pointer to it.
-
-A path can be deleted only when:
-
-- RoboRepo itself created the exact managed directory;
-- ownership metadata marks it as RoboRepo-managed;
-- the selected cleanup scope includes it.
-
-User-authored workspace/path sources should be preserved and reported after cleanup.
-
-Example:
-
-```text
-RoboRepo-managed state removed.
-
-Preserved user-owned package sources:
-  ~/projects/my-roborepo-packages
-```
 
 ## Migration Strategy
 
@@ -860,27 +741,20 @@ Preserved user-owned package sources:
 
 Introduce the abstraction before changing distribution.
 
-The migration should make today's behavior pass through the new model first. Only then should official packages move out of the npm artifact.
+The migration should make today's behavior pass through the new model first. Moving official
+packages out of the npm artifact happens afterwards, in [[f5exs0bd]].
 
 ### Existing Built-In Packages
 
-During the compatibility phase, expose the current `appRoot` package directory through a temporary internal source adapter:
+During this plan, expose the current `appRoot` package directory through a temporary internal source adapter:
 
 ```text
 sourceId: builtin
 type: bundled
 ```
 
-This is an implementation bridge, not a permanent public source type.
-
-Once official remote installation is stable:
-
-1. publish the optional built-in packages to the official source;
-2. resolve existing package selections to the official package identity;
-3. verify equivalent package contents/versions;
-4. update provenance records;
-5. remove optional packages from the application distribution;
-6. delete the temporary `bundled` adapter once no runtime path depends on it.
+This is an implementation bridge, not a permanent public source type. [[f5exs0bd]] retires it once
+the official source serves the same packages.
 
 ### Existing Workspace
 
@@ -897,15 +771,16 @@ source { id: "local", type: "path", path: workspaceRoot }
 
 This preserves familiar authoring behavior while removing special-case catalog logic.
 
+
 ### Existing Enabled Packages
 
 Create a one-time migration that maps current enabled package state to source-aware resolution records.
 
-For each existing package:
+For each package in `enabled-packages.json` and `applied-packages.json`:
 
 1. identify whether the current package resolves from built-in or workspace content;
-2. persist the corresponding source ID;
-3. preserve current enabled/disabled state;
+2. persist the corresponding source ID, recording `local` where a workspace `replace` override exists;
+3. preserve current enabled/disabled state, including explicit deselections;
 4. do not auto-switch between same-ID packages from different sources;
 5. report ambiguous states for manual repair rather than guessing.
 
@@ -913,20 +788,23 @@ The migration should be removable after the supported transition window rather t
 
 ## Implementation Plan
 
+Stages run in order; Stage 4 depends on Stage 3, and Stage 5 on Stages 2 and 4. Each stage ends
+with its focused checks passing.
+
 ### Stage 0 — Characterize Current Package Behavior
 
-**Goal:** lock down the behavior that source refactoring must preserve.
+**Goal:** lock down the behavior that source refactoring must preserve. No new architecture lands.
 
-Work:
+- [ ] Extend `scripts/test/package-catalog-check.mjs` to cover built-in/workspace discovery, a
+      duplicate workspace ID, the same-ID conflict error, and the `replace` override taking effect.
+- [ ] Characterize the package descriptor fields consumed by CLI, portal, and harness filtering,
+      including `origin`.
+- [ ] Characterize enable, disable, and apply for one package from each origin, including how a
+      `requires` edge resolves across origins.
+- [ ] Run every characterization against temporary app, state, and workspace roots; never the real
+      configuration.
 
-- Extend existing catalog tests to explicitly cover built-in/workspace precedence and duplicate behavior.
-- Characterize package descriptors consumed by CLI/portal/harness filtering.
-- Characterize enable/disable/apply behavior for a package from each current origin.
-- Record current root/path expectations.
-- Add fixtures using temporary app/state/workspace roots; do not write to real user configuration.
-- Add a packaging assertion that documents the current presence of `globals/` in `npm pack --dry-run`, so the later distribution change is intentional.
-
-Primary existing verification:
+Checks:
 
 ```bash
 node scripts/test/package-catalog-check.mjs
@@ -934,333 +812,112 @@ node scripts/test/package-catalog-harness-check.mjs
 node scripts/test/package-lifecycle-check.mjs
 node scripts/test/package-default-enabled-check.mjs
 ```
-
-Exit criteria:
-
-- package behavior needed by the refactor is represented in deterministic tests;
-- tests can run with isolated roots;
-- no new architecture has landed yet.
 
 ### Stage 1 — Introduce the Source Domain Model
 
 **Goal:** replace origin-specific catalog branching with configured source adapters while preserving behavior.
 
-Work:
+- [ ] Add the source configuration schema and the normalized source and package descriptor shapes,
+      including `sourceId` and the derived collection field.
+- [ ] Add a source registry that instantiates adapters by type.
+- [ ] Wrap `globals/packages` in the temporary `bundled` adapter and the workspace packages folder in
+      the `path` adapter.
+- [ ] Refactor `package-catalog.mjs` to compose adapter results instead of reading two hard-coded
+      origins, keeping manifest validation and harness compatibility filtering after normalization.
+- [ ] Make collision results explicit per Collision Behavior, keeping the `replace` override rule.
+- [ ] Keep the `origin` field, or migrate every consumer of it in the same stage.
+- [ ] Add focused checks for the source registry, the `path` adapter, the `bundled` adapter, and
+      collision resolution; register them in `scripts/test/check-groups.json`.
 
-- Add source configuration schema/domain functions.
-- Define normalized source and package descriptor shapes.
-- Implement a source registry that instantiates adapters by source type.
-- Wrap current built-in packages in a temporary `bundled` adapter.
-- Wrap `workspaceRoot` in the real `path` adapter.
-- Refactor `package-catalog.mjs` to compose adapter results instead of reading two hard-coded origins.
-- Preserve existing package validation and harness compatibility filtering after normalization.
-- Make collision results explicit instead of relying on traversal order.
+Place the domain code beside the existing package modules unless a clearer package-domain location
+exists by then. The boundary that matters is domain code outside CLI and portal presentation.
 
-Suggested code boundary:
-
-```text
-scripts/
-  lib/
-    packages/
-      source-registry.mjs
-      source-config.mjs
-      package-descriptor.mjs
-      package-resolver.mjs
-      sources/
-        path-source.mjs
-        bundled-source.mjs
-```
-
-Use the actual repository module conventions discovered during implementation rather than creating this exact tree if a better existing package-domain location has emerged. The important boundary is domain/service code outside CLI and portal presentation.
-
-Tests:
-
-- source registry unit/contract checks;
-- `path` adapter fixtures;
-- bundled adapter characterization;
-- collision and explicit-source resolution;
-- existing package test suite unchanged from the user's perspective.
-
-Exit criteria:
-
-- current built-in and workspace packages are both discovered through adapters;
-- downstream consumers operate on normalized descriptors;
-- no remote source exists yet;
-- current public package behavior remains intact.
+Exit criteria: built-in and workspace packages are both discovered through adapters; Stage 0 checks
+pass unchanged; no remote source exists.
 
 ### Stage 2 — Persist Sources and Provenance
 
 **Goal:** make source identity durable.
 
-Work:
+- [ ] Persist source configuration under `stateRoot` and register its path in `state-paths.mjs`.
+- [ ] Create the default `builtin` and `local` source records on first read. `builtin` carries
+      `official` trust and maps to the System tab; `local` carries `local` trust and maps to Custom.
+- [ ] Add source-qualified references to `enabled-packages.json` and `applied-packages.json`
+      through `package-state.mjs`, and add the provenance lock.
+- [ ] Use atomic, schema-validated reads and writes.
+- [ ] Add the one-time migration from bare-ID state, as Existing Enabled Packages describes.
+- [ ] Teach `doctor` to report invalid or missing sources, unresolved provenance, and path-source drift.
+- [ ] Cover schema round trips, an interrupted write, ambiguous same-ID migration, a missing source,
+      and no silent substitution.
 
-- Persist source configuration in `stateRoot`.
-- Auto-create the default official placeholder/config and local workspace source as appropriate.
-- Add source IDs to installed/active package records.
-- Introduce a package lock/provenance schema.
-- Add atomic read/write helpers with schema validation.
-- Teach `doctor` to report invalid/missing sources, unresolved package provenance, and path-source drift.
-- Add migration from current origin-only state.
-
-Tests:
-
-- state schema round trips;
-- atomic-write failure behavior;
-- ambiguous same-ID package migration;
-- missing source behavior;
-- no silent source substitution.
-
-Exit criteria:
-
-- every active package can answer "which source did this come from?";
-- source choice survives restart;
-- removing/reordering sources cannot silently retarget an installed package.
+Exit criteria: every active package can answer "which source did this come from?"; the choice
+survives restart; removing or reordering sources cannot silently retarget an installed package.
 
 ### Stage 3 — Separate Installed Artifacts from Source Catalogs
 
-**Goal:** create a local install/cache boundary before adding the network.
+**Goal:** create a local install boundary before any network source.
 
-Work:
+- [ ] Add managed install directories under `stateRoot`.
+- [ ] Add an install service that materializes a concrete resolution before activation.
+- [ ] Record `path` sources as live paths without copying user content.
+- [ ] Keep resolving `bundled` packages through `appRoot`.
+- [ ] Make activation accept a resolved local package reference instead of doing discovery itself.
+- [ ] Validate a package immediately before it becomes installable or activatable.
+- [ ] Add install, update, and remove primitives at the service layer.
+- [ ] Cover install idempotence, removing an inactive and an active package, a `path` source never
+      copied or deleted as managed state, and a failed materialization leaving the prior record intact.
 
-- Add managed package install/cache directories under `stateRoot`.
-- Add an install service that materializes a concrete resolution before activation.
-- For `path` sources, record the live path without copying user source.
-- For bundled compatibility packages, continue resolving through `appRoot`.
-- Make activation accept a resolved local package reference rather than performing source discovery itself.
-- Keep package validation immediately before a resolution becomes installable/activatable.
-- Add remove/update primitives at the service layer even if remote updates are not yet implemented.
+Exit criteria: discovery and activation are separate operations; installs have explicit ownership;
+source adapters never mutate harness state.
 
-Tests:
+### Stage 4 — GitHub Source and Trusted Catalog
 
-- install idempotence;
-- remove of inactive package;
-- removal behavior for active package;
-- local path source is never copied/deleted as managed state;
-- invalid materialization leaves the prior install record intact.
+**Goal:** let a user add a third-party skill from a public GitHub repo, by URL or from the trusted catalog.
 
-Exit criteria:
+- [ ] Implement the `git` adapter for public GitHub repos: resolve to a commit SHA, download that
+      commit's archive into staged storage, hash the materialized tree, then promote it atomically.
+- [ ] Group the repo's skills by the source-format table (plugin, Agent Skills folders, RoboRepo package).
+- [ ] Report a contents summary before install: skills, rules, hooks, scripts, and permissions found.
+- [ ] Ship the trusted catalog as a JSON data file in the application, `{ schemaVersion: 1,
+      entries: [{ repo, commit, description }] }`, read by the `git` source as its list of known
+      repos. Ship it with the entries the Trusted Catalog Curation decision approves; an empty list is
+      valid, and tests use fixture entries.
+- [ ] Mark trusted catalog entries `trusted` and pasted URLs `unverified`.
+- [ ] Make update resolve the latest commit and show what changed before moving the pin.
+- [ ] Test against a fixture Git server or local bare repo, never the public internet: a URL resolves
+      to an exact SHA in the lock; each grouping rule yields the expected packages; the summary lists
+      a hook found in the repo; a moved branch changes nothing until an explicit update; an
+      unreachable repo or invalid URL fails without writing state.
 
-- discovery and activation are no longer the same operation internally;
-- package installs have explicit ownership;
-- source adapters do not mutate harness state.
+Exit criteria: a public GitHub skill can be added, enabled, disabled, updated, and removed; trusted
+catalog entries install through the `git` adapter; every installed Git package records its repo and commit.
 
-### Stage 4 — Implement Registry Source v1
+### Stage 5 — Service and CLI Surfaces for Sources and Installation
 
-**Goal:** allow a remote source to advertise and materialize immutable package versions.
+**Goal:** make the model understandable and controllable without editing JSON.
 
-Work:
+- [ ] Add source list, add, remove, refresh, and info operations to the shared package service, and
+      expose them through the CLI, reusing existing `roborepo package` commands where they fit.
+- [ ] Add available, installed, active, source, and update fields to CLI package output, keeping the
+      default output concise.
+- [ ] Expose each package's tab (System, Custom, Third Party) and source badge in the shared package
+      view that the portal reads.
+- [ ] Add the explicit collision and disambiguation flow.
+- [ ] Add install, update, and remove distinct from enable and disable; refuse remove for System
+      packages in the service so the CLI and portal agree.
+- [ ] Cover source operations, non-interactive error codes, same-ID collision, a source becoming
+      unavailable while its installed package stays usable, a refused System remove, and a `path`
+      remove that leaves the folder intact.
 
-- Define RoboRepo registry index schema v1.
-- Implement `registry` adapter catalog fetch and schema validation.
-- Implement immutable resolution by version/revision.
-- Implement artifact download.
-- Verify declared integrity before exposing the artifact to the install service.
-- Cache the last valid catalog.
-- Use temporary/staged files and atomic promotion into managed storage.
-- Handle timeouts, unavailable registries, invalid JSON/schema, 404s, and integrity mismatch.
-- Ensure no network operation occurs during activation when the artifact is already installed.
+Exit criteria: a user can tell where an installed package came from without inspecting files; CLI
+and portal read the same domain state.
 
-Tests:
+### Stage 6 — Documentation and Release Checks
 
-- fixture HTTP server or deterministic local transport fixture;
-- valid index and artifact;
-- invalid index;
-- unavailable registry;
-- stale cache fallback;
-- integrity mismatch;
-- interrupted download;
-- same version with changed content rejected;
-- offline activation of installed package.
-
-Exit criteria:
-
-- a registry-hosted package can be listed, installed, and activated;
-- all remote content is validated and integrity-checked;
-- network failure cannot corrupt the prior catalog or installed artifact.
-
-### Stage 4b — GitHub Source and Trusted Catalog
-
-**Goal:** let a user add a third-party skill from a public GitHub repo, by URL or from the trusted
-catalog. Depends on Stage 3, not Stage 4, so it can land before the registry.
-
-Work:
-
-- Implement the `git` adapter for public GitHub repos: resolve to a commit SHA, download that
-  commit's archive into staged storage, hash the materialized tree, then promote it atomically.
-- Group the repo's skills by the source-format table (plugin, Agent Skills folders, RoboRepo
-  package).
-- Report a contents summary before install: skills, rules, hooks, scripts, and permissions found.
-- Ship the trusted catalog index and its source record; mark its entries `trusted` and pasted URLs
-  `unverified`.
-- Make update resolve the latest commit and show what changed before moving the pin.
-
-Tests:
-
-- fixture Git server or local bare repo, never the public internet;
-- URL resolves to an exact SHA and the lock records it;
-- the three grouping rules each produce the expected packages;
-- the contents summary lists a hook found in the repo;
-- a moved branch does not change an installed package until an explicit update;
-- unreachable repo and invalid URL fail without writing state.
-
-Exit criteria:
-
-- a public GitHub skill can be added, enabled, disabled, updated, and removed;
-- the trusted catalog lists its entries and installs them through the `git` adapter;
-- every installed Git package records its repo and commit.
-
-### Stage 5 — Establish the Official Package Source
-
-**Goal:** make RoboRepo's optional package library independently distributable.
-
-Work:
-
-- Create the official package-library repository/storage.
-- Publish an index using registry schema v1.
-- Package existing optional global packages as immutable versioned artifacts.
-- Add official-source metadata to RoboRepo's bootstrap/default state.
-- Mark the official source as trusted/official in presentation.
-- Verify package metadata and harness compatibility are preserved from the bundled versions.
-- Document publication/versioning workflow for official packages.
-
-Tests:
-
-- install representative packages from the official source;
-- compare expected manifests/content against current bundled package fixtures where equivalence is required;
-- verify new install with no prior catalog;
-- verify package update from one official version to the next.
-
-Exit criteria:
-
-- all optional packages intended for users are available from the official source;
-- a fresh RoboRepo install can discover them without reading the old bundled library.
-
-### Stage 6 — Remove Optional Package Library from Platform Distribution
-
-**Goal:** complete the infrastructure separation.
-
-Work:
-
-- Classify remaining `globals/` content as runtime/bootstrap versus optional package content.
-- Remove optional package-library paths from the npm `files` distribution.
-- Delete the temporary bundled-source adapter after migration no longer needs it.
-- Update install/bootstrap logic to initialize sources rather than assume package files under `appRoot`.
-- Update `npm pack --dry-run` tests to assert optional library artifacts are absent.
-- Verify platform install can complete when the network is unavailable, with remote package discovery deferred until connectivity exists.
-
-Tests:
-
-```bash
-npm run pack:dry-run
-npm run test:package-install
-node scripts/test/package-catalog-check.mjs
-node scripts/test/package-lifecycle-check.mjs
-npm test
-```
-
-Exit criteria:
-
-- npm platform artifact does not carry the full optional package library;
-- RoboRepo can boot without downloading packages;
-- selected official packages install on demand;
-- platform upgrade leaves package state/workspaces intact.
-
-### Stage 7 — Add Product Surfaces for Sources and Installation
-
-**Goal:** make the model understandable and controllable by users.
-
-Work:
-
-- Add source list/add/remove/refresh/info operations to the shared package service.
-- Expose them through CLI.
-- Add package available/installed/active/source/update fields to current CLI output.
-- Expose each package's tab (System, Custom, Third Party) and source badge in the shared package
-  view; the portal tabs themselves are rendered by [[user-managed-packages-and-add-workflows]].
-- Add explicit collision/disambiguation flow.
-- Add package install/update/remove actions distinct from enable/disable.
-- Refuse remove for `official` packages in the service, so the CLI and portal agree.
-- Preserve concise default output; detailed provenance can be available in package/source info views.
-
-Tests:
-
-- CLI contract tests for source operations;
-- non-interactive error codes;
-- portal/service tests around normalized state;
-- same-ID source collision;
-- source unavailable while installed package remains active/usable;
-- remove of an `official` package is refused; remove of a `path` package leaves the folder intact.
-
-Exit criteria:
-
-- a user can explain where an installed package came from without inspecting files;
-- source management does not require editing JSON manually;
-- CLI and portal expose the same domain state.
-
-### Stage 8 — Implement Reset and Uninstall Ownership Flows
-
-**Goal:** make removal safe after package state has multiple ownership classes.
-
-Work:
-
-- Build an ownership inventory from state records.
-- Add `roborepo uninstall --dry-run`.
-- Add interactive cleanup choices.
-- Add deterministic non-interactive scopes.
-- Preserve all user-owned path sources by default.
-- Report preserved paths after cleanup.
-- Add docs explaining that npm removes the application while RoboRepo cleanup removes RoboRepo-managed state.
-- Never rely on npm uninstall lifecycle scripts.
-
-Tests:
-
-- temporary roots only;
-- dry-run has zero filesystem mutation;
-- reset leaves expected managed artifacts;
-- purge deletes only records explicitly marked RoboRepo-owned;
-- workspace/path source outside `stateRoot` is preserved;
-- symlink/path traversal cannot expand the delete set;
-- interrupted cleanup remains recoverable/idempotent.
-
-Exit criteria:
-
-- every destructive operation can preview its exact delete set;
-- user-owned workspace content survives all normal RoboRepo cleanup scopes;
-- repeated cleanup is safe.
-
-### Stage 9 — Hardening, Documentation, and Release Validation
-
-**Goal:** make source-based packaging the supported default.
-
-Work:
-
-- Run full package and harness regression suite.
-- Add source architecture and registry schema documentation.
-- Update user install/setup/package-management docs.
-- Update maintainer release docs for independent platform and official-package publication.
-- Add `doctor` checks for source config, catalog cache, install records, integrity, and unresolved provenance.
-- Add telemetry only if existing local telemetry has an appropriate privacy-safe event shape; telemetry is not required for feature completion.
-- Remove obsolete compatibility code and migration scripts once their one-time purpose is complete.
-
-Verification:
-
-```bash
-node scripts/test/package-catalog-check.mjs
-node scripts/test/package-catalog-harness-check.mjs
-node scripts/test/package-lifecycle-check.mjs
-node scripts/test/package-default-enabled-check.mjs
-npm run test:package-install
-npm run pack:dry-run
-npm test
-```
-
-Exit criteria:
-
-- focused tests pass;
-- full suite passes;
-- fresh-install smoke test passes;
-- update from the pre-separation package model passes;
-- documentation reflects the source-based model;
-- no optional built-in package path remains as an accidental hidden source.
+- [ ] Update every document in Documentation impact.
+- [ ] Run the focused package checks, `npm run test:package-install`, and `npm test`.
+- [ ] Leave the bare-ID migration in place; a later release removes it once no supported install
+      still has bare-ID state.
 
 ## Testing Strategy
 
@@ -1271,18 +928,18 @@ Use the narrowest existing harness that proves each behavior, then widen.
 | Level | Purpose | Examples |
 | --- | --- | --- |
 | Pure/domain | Source normalization, identity, collision, lock/schema logic | new focused `.mjs` checks |
-| Adapter contract | Every source type returns equivalent normalized semantics | path, bundled migration, registry |
+| Adapter contract | Every source type returns equivalent normalized semantics | path, bundled, git |
 | Package lifecycle | Install/enable/disable/remove behavior | existing package lifecycle tests |
 | Harness integration | Resolved packages still render/apply correctly per harness | existing catalog/harness characterization |
-| Packaging | npm artifact contains runtime but not optional library | `pack:dry-run`, package-install smoke |
 | Full regression | Cross-feature confidence after integration stages | `npm test` |
+
 
 ### Deterministic Fixtures
 
 Tests must:
 
 - use temporary directories for app/state/workspace roots;
-- use fixture registries or a local deterministic HTTP server rather than the public internet;
+- use a fixture Git server or local bare repository rather than the public internet;
 - control package versions and integrity hashes;
 - never depend on the developer's real `~/.roborepo`;
 - never mutate real Claude/Codex configuration;
@@ -1297,56 +954,48 @@ Names are proposals and should follow existing test naming conventions:
 scripts/test/package-source-registry-check.mjs
 scripts/test/package-source-path-check.mjs
 scripts/test/package-resolution-check.mjs
-scripts/test/package-registry-check.mjs
 scripts/test/package-provenance-check.mjs
-scripts/test/package-uninstall-check.mjs
-scripts/test/package-distribution-check.mjs
+scripts/test/package-source-git-check.mjs
 ```
 
 Do not create one giant source test if focused tests produce clearer failure receipts.
 
 ## Acceptance Criteria
 
-The feature is complete when all of the following are true:
-
 - [ ] Package catalog discovery is driven by configured source adapters rather than hard-coded built-in/workspace branches.
 - [ ] The existing workspace is represented through the normal `path` source model.
 - [ ] Multiple package sources can be configured at once.
-- [ ] Same-ID packages from multiple sources cannot silently override one another.
-- [ ] Active/installed packages persist source provenance.
-- [ ] Remote package versions resolve to immutable artifacts with integrity verification.
-- [ ] Remote catalog refresh cannot corrupt the last valid cache.
-- [ ] Installed remote packages can be activated offline.
+- [ ] Same-ID packages from multiple sources cannot silently override one another, and an existing
+      workspace `replace` override keeps its effect.
+- [ ] Active and installed packages persist source provenance, and existing selections migrate
+      without changing what is enabled.
 - [ ] Discovery, installation, and activation are separate service operations.
+- [ ] Installed packages activate offline.
 - [ ] CLI and portal consume the same normalized package/source domain state.
-- [ ] Every package maps to exactly one tab (System, Custom, Third Party), and `official` packages cannot be removed from the CLI or portal.
-- [ ] A public GitHub repo URL can be added, resolves to a pinned commit, and installs only after its contents summary is shown.
-- [ ] The trusted catalog ships with RoboRepo, and its entries install with a `trusted` label while other URLs install as `unverified`.
-- [ ] The official RoboRepo package library is available through the registry source.
-- [ ] Optional official packages are no longer bundled in the npm platform artifact.
-- [ ] A platform update does not overwrite `stateRoot` package installs or user-owned path sources.
-- [ ] `roborepo uninstall --dry-run` reports exactly what a selected cleanup scope would delete.
-- [ ] Normal reset/purge operations preserve user-owned workspace/path-source content.
+- [ ] Every package maps to exactly one tab (System, Custom, Third Party), and System packages cannot
+      be removed from the CLI or portal.
+- [ ] A public GitHub repo URL can be added, resolves to a pinned commit, and installs only after its
+      contents summary is shown.
+- [ ] The trusted catalog ships with RoboRepo, and its entries install with a `trusted` label while
+      other URLs install as `unverified`.
+- [ ] A repo with two or more Agent Skills folders appears as a collection derived from the source.
 - [ ] Current package lifecycle and harness compatibility behavior remains covered by regression tests.
-- [ ] Focused package tests, package-install smoke tests, package dry-run validation, and the full suite pass.
-- [ ] User and maintainer documentation explain package sources, provenance, installation versus activation, and cleanup ownership.
+- [ ] Focused package checks, `npm run test:package-install`, and `npm test` pass.
+- [ ] The documents in Documentation impact describe package sources, provenance, and installation
+      versus activation.
 
 ## Risks and Mitigations
 
 | Risk | Consequence | Mitigation |
 | --- | --- | --- |
-| Source abstraction becomes a speculative plugin framework | Large refactor before user value | Start with only `path`, temporary `bundled`, and `registry`; keep adapter contract narrow |
+| Source abstraction becomes a speculative plugin framework | Large refactor before user value | Only `path`, temporary `bundled`, and `git` here; keep the adapter contract narrow |
 | Remote source changes package semantics | Existing harness behavior drifts | Normalize then reuse current package validation/apply pipeline |
 | Same-ID packages silently shadow each other | Wrong package becomes active | Persist source provenance and require explicit disambiguation |
-| Registry compromise or corrupted artifact | Untrusted config/code reaches harness | HTTPS transport, immutable resolution, integrity verification, trust labels, validation before activation |
-| Network failure couples to local harness operations | Existing setup becomes unusable offline | Cache valid catalogs/artifacts; make activation local once installed |
-| Platform update deletes packages | Loss of user state | Keep installs/cache in `stateRoot`; treat `appRoot` as replaceable only |
-| Purge deletes a custom workspace path | User data loss | Ownership inventory; user path sources are preserved by default; dry-run required for inspection |
+| Network failure couples to local harness operations | Existing setup becomes unusable offline | Make activation local once installed |
 | Migration guesses wrong source | Provenance corruption | Report ambiguity and require repair rather than source substitution |
+| Source-qualified records break readers of bare IDs | Enable, apply, or doctor misreports state | `package-state.mjs` stays the only reader and writer; Stage 0 characterization guards the change |
 | A pasted GitHub URL carries hooks or scripts the user did not expect | Untrusted code runs in the harness | Contents summary and explicit confirmation before install; `unverified` label; validation before activation |
 | A trusted catalog entry's upstream repo changes after review | Users get unreviewed content | Catalog entries pin a reviewed commit; update is explicit and shows the change |
-| Official registry hosting choice leaks into domain code | Later infrastructure migration is expensive | RoboRepo-owned registry schema and source adapter hide transport/hosting |
-| Package releases become incompatible with older clients | Broken installs | Add explicit registry/package schema and minimum compatibility metadata before independent release cadence is relied upon |
 
 ## Decisions Made by This Plan
 
@@ -1357,19 +1006,16 @@ The implementation should treat these as settled unless new repository constrain
 3. **Keep `appRoot`, `stateRoot`, and `workspaceRoot` ownership boundaries.**
 4. **Separate available, installed, and active package state.**
 5. **Persist package source provenance.**
-6. **Do not resolve same-ID source collisions silently.**
+6. **Do not resolve same-ID source collisions silently; a workspace `replace` override counts as a persisted choice.**
 7. **Use a small source-adapter contract.**
-8. **Make the first remote source a RoboRepo-owned registry protocol, even if GitHub hosts it.**
-9. **Require integrity verification for remote artifacts.**
-10. **Move optional official packages out of the npm artifact only after the source/install abstraction is working.**
-11. **Keep local path source content user-owned unless RoboRepo explicitly created and recorded ownership.**
-12. **Use `roborepo uninstall` for RoboRepo-managed cleanup; do not depend on npm uninstall hooks.**
-13. **Keep package-domain logic shared below CLI and portal surfaces.**
-14. **Implement in modern ESM JavaScript and reuse current validation/apply behavior rather than introducing a new TypeScript or package runtime.**
-15. **Split packages into System, Custom, and Third Party tabs by source.**
-16. **System packages cannot be removed; after unbundling they download on first enable.**
-17. **Support public GitHub repos in v1 of the `git` source, pinned to a commit.**
-18. **Ship a trusted catalog of vetted third-party repos; allow other URLs with a stronger warning.**
+8. **Keep local path source content user-owned unless RoboRepo explicitly created and recorded ownership.**
+9. **Keep package-domain logic shared below CLI and portal surfaces.**
+10. **Implement in modern ESM JavaScript and reuse current validation/apply behavior rather than introducing a new TypeScript or package runtime.**
+11. **Split packages into System, Custom, and Third Party tabs by source.**
+12. **System packages cannot be removed.**
+13. **Support public GitHub repos in v1 of the `git` source, pinned to a commit.**
+14. **Ship a trusted catalog of vetted third-party repos; allow other URLs with a stronger warning.**
+15. **Derive source collections when the catalog is read; persist nothing for them.**
 
 ## Decision Log
 
@@ -1377,41 +1023,30 @@ The implementation should treat these as settled unless new repository constrain
   packages, Custom holds the user's local packages, Third Party holds packages from other people's
   repos or catalogs. Considered and not chosen: one list with origin badges, and two tabs with
   user-authored packages under External.
-- **2026-10-24: System packages are never removable.** Decided by the user. Unbundling (Stage 6)
-  still goes ahead: a System package downloads the first time it is enabled. Considered and not
+- **2026-10-24: System packages are never removable.** Decided by the user. Unbundling (now owned by
+  [[f5exs0bd]]) still goes ahead: a System package downloads the first time it is enabled. Considered and not
   chosen: keeping every System package bundled in the application.
 - **2026-10-24: `git` source no longer deferred.** Decided by the user, to support adding a skill
   by pasting a GitHub URL. Limited to public GitHub repos in v1.
 - **2026-10-24: Trusted catalog plus open URLs.** Decided by the user. Considered and not chosen:
   allowing only catalog entries.
 
+- **2026-11-22: Split the remote half into its own plan.** Decided by the user. This plan keeps the
+  local source model, provenance, install store, the `git` source and trusted catalog, and the
+  service and CLI surfaces. [[f5exs0bd]] takes the official registry and its hosting, unbundling,
+  and uninstall scopes. Considered and not chosen: promoting all ten stages as one implementation,
+  which needed the hosting choice now; holding the plan in backlog.
+- **2026-11-22: Source collections are derived at read time.** Decided by the user. A collection
+  from a source is computed from its files on each catalog read and carried on the descriptor.
+  Considered and not chosen: a persisted collection record this plan would define for
+  [[user-managed-packages-and-add-workflows]] to reuse.
+- **2026-11-22: The workspace `replace` override is a persisted source choice.** It already makes
+  a workspace package win over a built-in one by explicit user action, which is what Collision
+  Behavior requires; keeping it avoids breaking existing workspaces.
+
 ## Open Decisions
 
-These choices should be resolved during the relevant implementation stage, but they do not change the architecture above.
-
-### Official Registry Hosting
-
-Recommended starting point: a separate GitHub repository plus immutable release artifacts or an equivalent static artifact host.
-
-The requirement is that the `registry` adapter consumes RoboRepo's index schema rather than GitHub-specific domain objects.
-
-### Package Artifact Format
-
-Recommended starting point: a deterministic archive containing one existing RoboRepo package directory, preserving the current package manifest/content contract.
-
-Choose the exact archive format based on current release tooling and reproducible hashing support.
-
-### Version Selector Surface
-
-Recommended starting point: exact versions for install/lock and a small convenience selector such as latest for user requests. Resolve convenience selectors immediately to an exact version before installation.
-
-Do not implement npm-style semver dependency solving unless a future package-dependency feature requires it.
-
-### Signature Verification
-
-Recommended v1: integrity hash plus trusted HTTPS distribution for the official source, with schema fields reserved for future signatures if helpful.
-
-Revisit signatures before treating arbitrary public third-party registries as equally trusted.
+These are resolved during the relevant stage and do not change the architecture above.
 
 ### Trusted Catalog Curation
 
@@ -1422,76 +1057,51 @@ refreshed. This decides how much "Trusted" actually promises.
 
 Choose the final file name/location to match current `stateRoot` configuration conventions. Do not encode source configuration in workspace package manifests.
 
-## Documentation Changes
 
-Update documentation as implementation lands rather than leaving all prose until the final stage.
+## Documentation impact
 
-Likely documents:
+Update each document as its stage lands:
 
-- `docs/architecture/config-code-separation.md`
-  - clarify package ownership under each root;
-  - document package source versus installed artifact.
-- package/harness architecture documentation
-  - document source adapter, normalized descriptor, resolution, and activation flow.
-- user setup/package docs
-  - explain official source, local workspace source, install versus enable, package updates.
-- CLI reference
-  - source and install lifecycle commands.
-- maintainer release docs
-  - separate platform publish from official package publication.
-- uninstall/reset docs
-  - explain RoboRepo-managed cleanup versus npm application removal.
+| Document | Change |
+| --- | --- |
+| `docs/architecture/config-code-separation.md` | Package ownership under each root; package source versus installed artifact |
+| `local/skills/roborepo-development/references/package-development.md` | Source adapters, normalized descriptor, resolution, derived collections, the `replace` override as a source choice |
+| `docs/user/reference/roborepo-cli.md` | Source and install lifecycle commands |
+| `docs/user/reference/config-control-panel.md` | System, Custom, and Third Party tabs and source badges, coordinated with [[user-managed-packages-and-add-workflows]] |
+| `docs/internal/cli-internals.md` | Package service boundary and the new state files |
 
-Avoid duplicating the registry schema in several narrative docs. Keep one schema/technical reference as the source of truth and link to it.
+Keep the source configuration and lock schemas in one technical reference and link to it.
 
 ## References
 
 Repository state reviewed at commit:
 
 ```text
-2a56135734a21c6c8ad9435f76f2e9e092b81201
+46f37fbc51d551f49999d757a328694c176555b8
 ```
 
 Relevant current RoboRepo files:
 
 - `scripts/cli/roots.mjs`
+- `scripts/cli/state-paths.mjs`
 - `scripts/cli/paths.mjs`
 - `scripts/cli/package-catalog.mjs`
+- `scripts/cli/workspace-resources.mjs`
+- `scripts/cli/package-state.mjs`
+- `scripts/cli/package-graph.mjs`
 - `scripts/cli/packages.mjs`
+- `scripts/cli/config.mjs`
+- `manifests/inventory/package-categories.json`
 - `scripts/test/package-catalog-check.mjs`
+- `scripts/test/check-groups.json`
 - `docs/architecture/config-code-separation.md`
-- `package.json`
-- `globals/packages/plan-suite/skills/plan-write/`
-- `globals/packages/technical-writing/skills/technical-writing/`
-- `globals/packages/code-style/skills/code-style/`
-- `globals/packages/javascript-typescript/skills/javascript-typescript/`
-- `globals/packages/test-harness/skills/test-harness/`
 
-External behavior relevant to cleanup:
+## Coordination
 
-- npm documents that uninstall lifecycle scripts present in npm v6 are not implemented from npm v7 onward, so RoboRepo cannot rely on `npm uninstall` to invoke application-controlled cleanup: <https://docs.npmjs.com/cli/using-npm/scripts/>
-- npm's uninstall command removes the package content npm installed on the package's behalf: <https://docs.npmjs.com/cli/uninstall/>
-
-## Definition of Ready for Implementation
-
-This backlog plan is ready to promote when:
-
-- the source/provenance architecture above is accepted;
-- the official registry v1 hosting choice is selected;
-- the first implementation stage is scoped to characterization plus source-model refactoring rather than remote distribution all at once;
-- no newer active plan has claimed the same package-source boundary;
-- the implementation session re-checks current `main` because this plan was reviewed against the commit recorded in frontmatter.
-
-## Coordination and first delivery boundary
-
-[[o9zwxuav]] owns desired roots and effective dependency closure; this plan owns source IDs,
-resolution provenance, installed immutable artifacts, collision selection, and source refresh.
-[[user-managed-packages-and-add-workflows]] owns typed authoring/receipts/export UX, the portal tabs,
-and the portal add screen that calls Stage 4b, and
-[[74h2tlim]] owns portable profile containment and backup. Agree source-qualified record references,
-owned caches versus authored path sources, and cleanup scopes before any storage migration.
-
-Characterization and the local `path`/temporary `bundled` source contract come first; remote registry
-transport and unbundling are later stages. Retain current activation semantics until the desired
-state contract is integrated. Do not force typed local creation or profile inventory to wait for the
-entire remote distribution implementation; their shared layout/provenance decision is the boundary.
+| Plan | Relationship | What it means here |
+| --- | --- | --- |
+| [[bysyzl1e]] Bundle Skills That Only Work Together | Landed dependency | Package and collection definitions used by the source-format table |
+| [[o9zwxuav]] Track What You Turned On, What It Pulls In, and What Is Installed | Landed dependency | Owns selected roots and dependency closure in `package-state.mjs`; this plan adds source-qualified references to those records without changing their semantics |
+| [[f5exs0bd]] Serve Official Packages From a Registry | Follow-up, depends on this plan | Official registry, unbundling, uninstall scopes |
+| [[user-managed-packages-and-add-workflows]] Add, Organize, and Remove Custom and Third-Party Packages | Backlog, depends on Stage 4 (it calls it Stage 4b, the number before the split) | Renders the tabs and the GitHub add screen; decides user-created collection storage |
+| [[74h2tlim]] Preserve User Data Across Installations and Macs | Backlog | Portable profile containment and backup; agree which new state files are portable before it migrates storage |
