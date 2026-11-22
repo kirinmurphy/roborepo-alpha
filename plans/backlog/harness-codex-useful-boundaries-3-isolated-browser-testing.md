@@ -48,7 +48,9 @@ flowchart LR
 ## Goals
 
 - Run the real portal browser suite with app and browser sharing container-local localhost.
-- Preserve strict host networking and separate approval for host-portal restarts.
+- Preserve strict host networking and separate approval for host-portal restarts. One exception
+  exists: with the GitHub agent identity on ([[w7vls1yk]]), Codex's sandbox reaches `github.com`
+  and `api.github.com` so agents can push and open pull requests as the bot.
 - Use credential-filtered source, disposable working files, and a bounded evidence output.
 - Measure overhead and verify narrowly scoped repeat authorization without general Docker access.
 
