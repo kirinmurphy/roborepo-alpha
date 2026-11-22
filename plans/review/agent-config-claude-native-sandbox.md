@@ -995,6 +995,11 @@ Acceptance criteria:
 - Reviewed implementation commit: d9743e02d4ed15ca411de405b9ad9c0d63225247
 - Base commit: cbd8fbdd53b705f19ddc7650373f163e22173996
 
+### Approval
+- Decision: approved
+- Reviewed implementation commit: d9743e02d4ed15ca411de405b9ad9c0d63225247
+- Confirmed by: human
+
 ## Open questions
 
 None. The pass 25 question about commands that only name a push was answered by the user on
