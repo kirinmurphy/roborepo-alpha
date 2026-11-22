@@ -126,6 +126,35 @@ export function renderPermissionsTo(
   return { touched };
 }
 
+// What renderPermissionsTo would write into each provider's permissions file, without writing
+// anything. Doctor compares it with the installed file to tell whether `roborepo update` would
+// change it. `current` is null for a file the render would create (same gate as
+// renderPermissionsTo); a file it would neither write nor create is left out. `cwdDependent` marks a provider whose render widens its sandbox for the folder
+// update runs from, so a comparison from any other folder would report a false difference.
+export function previewPermissionRenders(
+  baseDir,
+  { manifest = loadPermissionManifest(), overrides = {}, cwd = process.cwd() } = {},
+) {
+  const previews = [];
+  for (const provider of listHarnessProviders()) {
+    if (!provider.manifest.capabilities.includes("permissions")) continue;
+    const target = permissionsTargetFor(provider.manifest, baseDir);
+    if (!target) continue;
+    const fileExists = fs.existsSync(target.file);
+    if (!fileExists && !(fs.existsSync(target.homeDir) && target.mayCreate)) continue;
+    const current = fileExists ? fs.readFileSync(target.file, "utf8") : null;
+    const adapter = provider.adapters.permissions;
+    previews.push({
+      provider,
+      file: target.file,
+      current,
+      cwdDependent: typeof adapter.workspaceRoots === "function" || typeof adapter.writablePaths === "function",
+      render: () => adapter.render(target.seedCurrent && current !== null ? current : "", manifest, overrides, target.file, permissionOptionsForProvider(provider, { cwd })),
+    });
+  }
+  return previews;
+}
+
 // Global-scope render into the live home dir. This is the path that installs live permission hooks,
 // so it also records the app root those hooks resolve the platform manifest from.
 export function renderPermissionsToHome({

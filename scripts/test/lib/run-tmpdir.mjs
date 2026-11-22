@@ -13,7 +13,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { isMainModule } from "../../cli/roots.mjs";
 
 const RUN_PATTERN = /^run-(\d+)-\d+$/;
 
@@ -84,7 +84,7 @@ function makeWritable(dir) {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+if (isMainModule(import.meta.url)) {
   const [command, value] = process.argv.slice(2);
   if (command === "open" && /^\d+$/.test(value ?? "")) {
     console.log(openRunTmpdir({ pid: Number(value) }));
