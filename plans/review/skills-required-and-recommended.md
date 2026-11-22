@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Approved at commit 17519cd4, but main moved after the review; merge main into the branch and re-review before merging pull request 76 (run `/plan-review`).
+next_action: Review renewed at commit 2efa3ecc after merging main; it awaits the user's approval of that commit, then merge pull request 76 and run `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -439,10 +439,16 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 
 - Approval of 17519cd4: the user replied "Approve 17519cd4" in the /plan-review session on 2026-11-22.
 
+- Base moved after approval of 17519cd4: main gained 97f0d5b1 (install-drift doctor warning). Merged
+  cleanly in 2efa3ecc; the only shared file, scripts/test/check-groups.json, keeps both sides' checks.
+- Validator pass at 2efa3ecc (fresh-context subagent): clean; install-drift detection does not read
+  package manifests or skills, so the two changes do not interact.
+- CI run 45071990953 at 2efa3ecc (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
+
 ### Result
 - Status: complete
-- Reviewed implementation commit: 17519cd44b384eba2d762960b7781e6d76eef53d
-- Base commit: 46f37fbc51d551f49999d757a328694c176555b8
+- Reviewed implementation commit: 2efa3ecc41d2c573990f837c96ff46f9714ae8d8
+- Base commit: 97f0d5b139cf4eddf6eae8a5fab338bc7998e93e
 
 ### Approval
 - Decision: approved
