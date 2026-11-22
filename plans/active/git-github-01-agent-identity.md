@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
 reviewed_commit: 62e86111d947f66b6ce61f991cf152d90c13b8a1
-worktree:
+worktree: git-github-01-agent-identity
 ---
 
 # GitHub Integration Part 01: Agents Act on GitHub Under Their Own Identity
