@@ -43,10 +43,9 @@ whole workflow or recursively load its dependencies; apply each trigger to the a
 Conditional triggers are subject matter, never plan size: a one-phase plan that specifies module
 placement still needs `code-style`.
 
-A `requires` row's package is on whenever `plan-suite` is, so load it without checking its state. A
-`recommends` row loads when its condition matches and the session lists the skill; otherwise the run
-continues without it and names it once in the final report. Never ask the user to enable a package
-during a run.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the final report.
+Never ask the user to enable a package.
 
 State which paired skills were used, including guidance reused from context, and any applicable
 skill skipped or unavailable. Do not load skills or check package state just to report

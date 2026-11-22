@@ -29,10 +29,9 @@ Load these when the run calls for them; do not wait to be asked for them by name
 | --- | --- | --- | --- |
 | `technical-writing` | requires | The reason needs more than one sentence | Section content and reader clarity |
 
-A `requires` row's package is on whenever `plan-suite` is, so load it without checking its state. A
-`recommends` row loads when its condition matches and the session lists the skill; otherwise the run
-continues without it and names it once in the final report. Never ask the user to enable a package
-during a run.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the final report.
+Never ask the user to enable a package.
 
 ## Workflow
 

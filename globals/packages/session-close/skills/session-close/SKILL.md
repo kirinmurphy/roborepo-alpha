@@ -56,10 +56,9 @@ Load these when the session calls for them; do not wait to be asked for them by 
 | `test-harness` | recommends | Step 1 verifies the session's changes: choosing or running the checks they affect | Test selection and observable-behavior assertions |
 | `plan-write` | recommends | The session worked on a repository plan, or the user sends an open thread to the backlog | Syncing the plan from evidence, and creating a backlog plan |
 
-A `requires` row's package is on whenever `session-close` is, so load it without checking its
-state. A `recommends` row loads when its condition matches and the session lists the skill;
-otherwise continue without it and name it once in the status summary. Never ask the user to enable a
-package during a session close.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the status summary.
+Never ask the user to enable a package.
 
 ## Workflow
 

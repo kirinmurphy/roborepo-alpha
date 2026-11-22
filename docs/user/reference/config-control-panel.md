@@ -100,16 +100,17 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
   `recommended (not enabled): code-style, javascript-typescript — enable with: roborepo package enable <id>`,
   naming what the packages you selected recommend and is still off.
 
-For example, `plan-suite` (Development Planning Lifecycle) requires `technical-writing`,
-`test-harness`, and `implementation-review`, and recommends `code-style`, `javascript-typescript`,
-and `feature-verification`. `session-close` requires `implementation-review` and recommends
-`test-harness` and `plan-suite`. Turning on `plan-suite` turns on its three requirements; turning
-off `plan-suite` leaves `implementation-review` on while `session-close` is still on.
 - A **dependency-only** package has no toggle of its own (`selectable: false`) and no row either
   (`presentation.visibility: "dependency"`); it turns on and off with the packages that require it.
   A **hidden** package (`presentation.visibility: "hidden"`) appears nowhere on the page. A
   non-selectable package must be one of these two: the catalog rejects one that would keep a row
   without a toggle.
+
+For example, `plan-suite` (Development Planning Lifecycle) requires `technical-writing`,
+`test-harness`, and `implementation-review`, and recommends `code-style`, `javascript-typescript`,
+and `feature-verification`. `session-close` requires `implementation-review` and recommends
+`test-harness` and `plan-suite`. Turning on `plan-suite` turns on its three requirements; turning
+off `plan-suite` leaves `implementation-review` on while `session-close` is still on.
 
 A selectable required package with `catalog` visibility keeps its own row. Dependency-only
 packages appear under **Requires** in their parents' source popups instead. Clicking a package's

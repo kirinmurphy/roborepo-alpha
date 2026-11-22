@@ -213,11 +213,21 @@ function packageSkillGroups(skills) {
   }));
 }
 
+// Package-boundary warnings over the live catalog.
+export function catalogBoundaryFindings() {
+  return packageBoundaryFindings(packageSkillGroups(packageSkillEntries().map(readSkill)));
+}
+
 function escapeCell(value) {
   return String(value ?? "").replaceAll("|", "\\|").replace(/\s+/g, " ").trim();
 }
 
 export function renderSkillAudit() {
+  return buildSkillAudit().content;
+}
+
+// The rendered audit and its package-boundary warnings, from one pass over the catalog.
+function buildSkillAudit() {
   const policies = manifestPolicies();
   const skills = packageSkillEntries().map(readSkill);
   // Prose-pairing detection matches against real skill names, so an ordinary backticked value is
@@ -240,7 +250,7 @@ export function renderSkillAudit() {
   const unknownPolicies = [...policies.keys()].filter((name) => !skills.some((skill) => skill.name === name));
   const dynamicCount = rows.filter((row) => row.findings !== "none").length;
 
-  return `${[
+  const content = `${[
     "# Skill Invocation Audit",
     "",
     GENERATED_MARKER,
@@ -298,15 +308,14 @@ export function renderSkillAudit() {
     "3. Keep high-risk or side-effecting workflows behind explicit commands or hooks.",
     "",
   ].join("\n")}\n`;
+  return { content, boundaryWarnings };
 }
 
 export function skillAudit(args = []) {
   const checkOnly = args.includes("--check");
   const write = args.includes("--write") || !checkOnly;
-  const content = renderSkillAudit();
-  const warnings = content.split("## Package Boundary Warnings")[1].split("\n## ")[0]
-    .split("\n").filter((line) => line.startsWith("- "));
-  for (const warning of warnings) console.warn(`warn: ${warning.slice(2)}`);
+  const { content, boundaryWarnings } = buildSkillAudit();
+  for (const warning of boundaryWarnings) console.warn(`warn: ${warning}`);
   const current = fs.existsSync(AUDIT_PATH) ? fs.readFileSync(AUDIT_PATH, "utf8").replace(/\r\n/g, "\n") : "";
 
   if (checkOnly) {

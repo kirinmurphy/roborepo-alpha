@@ -64,10 +64,9 @@ Load these when the run calls for them; do not wait to be asked for them by name
 | `test-harness` | requires | **Always**: step 1 selects and runs the checks the verdict rests on | Test selection, and whether a failing or missing test is relevant to the plan |
 | `technical-writing` | requires | Writing the completion summary and `## Verification` section | Section content and reader clarity |
 
-A `requires` row's package is on whenever `plan-suite` is, so load it without checking its state. A
-`recommends` row loads when its condition matches and the session lists the skill; otherwise the run
-continues without it and names it once in the final report. Never ask the user to enable a package
-during a run.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the final report.
+Never ask the user to enable a package.
 
 ## Workflow
 

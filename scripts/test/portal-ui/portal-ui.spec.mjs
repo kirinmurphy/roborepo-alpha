@@ -132,6 +132,7 @@ test.describe("Agents page", () => {
     // The edges a dependency-only package would add: one dependency shared by two rows, a chain
     // past it (session-close -> technical-writing -> code-style), and one recommendation that is off.
     planSuite.requires = ["technical-writing"];
+    planSuite.recommends = [];
     sessionClose.requires = ["technical-writing"];
     dependency.requires = ["code-style"];
     sessionClose.recommends = ["tighten"];

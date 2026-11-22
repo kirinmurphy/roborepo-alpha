@@ -87,10 +87,9 @@ whole workflow or recursively load its dependencies; apply each trigger to the a
 | `code-style` | recommends | Reviewing where code was placed: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
 | `technical-writing` | requires | Authoring or substantially revising explanatory documentation, requirements, or design prose during a fix | Section content and reader clarity |
 
-A `requires` row's package is on whenever `plan-suite` is, so load it without checking its state. A
-`recommends` row loads when its condition matches and the session lists the skill; otherwise the run
-continues without it and names it once in the final report. Never ask the user to enable a package
-during a run.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the final report.
+Never ask the user to enable a package.
 
 State which paired skills were used, including guidance reused from context, and any applicable
 skill skipped or unavailable. Do not load skills or check package state just to report
@@ -157,11 +156,10 @@ of it. The human's review is the independent check; this step makes sure they re
   `implementation-review` and applies its rubric, with the plan's acceptance criteria and
   `## Documentation impact` as the requirements and `git diff <base>...HEAD` as the scope; issues
   the plan did not cause go under `Outside this scope` in its report, never into the plan.
-- Each finding carries the rubric's severity and class. A `blocking` or `actionable` finding is
-  recorded with its class; a `note` stays in the pass's report. Class **fix** when the right fix is
-  clear and stays within the plan's requirements and specified contracts, code included; **escalate**
-  when it chooses between real alternatives, each with a compelling argument for it, changes
-  requirements or a contract the plan did not specify, or lands outside the plan.
+- Each finding carries the rubric's severity and class, as `implementation-review` defines them,
+  with the plan's requirements and specified contracts as the scope. A `blocking` or `actionable`
+  finding is recorded with its class; a `note` stays in the pass's report. A **fix** finding is
+  fixed in step 5; an **escalate** finding goes to the human.
 - Do not fix anything while checking. Record every finding first, so each fix answers a recorded
   finding.
 

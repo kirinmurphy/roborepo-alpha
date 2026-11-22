@@ -157,7 +157,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Read `references/validation-loop.md` before the first pass",
     "never the implementer's account of the work",
     "The Validator only reports",
-    "A finding is classed by consequence, not size",
+    "Findings carry `implementation-review`'s severity and class",
     "which is recorded and never blocks",
     "Never run the submit transition until the loop has ended",
     "without asking the user",
@@ -438,7 +438,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   const suite = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
   for (const id of suite) {
     const skill = readSkill(id);
-    includesAll(`${id} paired skills`, skill, ["## Paired Skills", "| Skill | Relationship | Load when | Contributes |", "load it without checking its state", "Never ask the user to enable a package"]);
+    includesAll(`${id} paired skills`, skill, ["## Paired Skills", "| Skill | Relationship | Load when | Contributes |", "the paired-skill rule in Skill Loading", "Never ask the user to enable a package"]);
     for (const phrase of ["Enable it, or skip it", "host's skill/package manager"]) {
       assert.ok(!skill.includes(phrase), `${id}: paired skills no longer run an enable-or-skip check ("${phrase}")`);
     }

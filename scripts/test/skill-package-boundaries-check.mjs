@@ -2,12 +2,8 @@
 // Package-boundary warnings from `roborepo skill audit`: one fixture per warning, each a small
 // in-memory catalog, plus the real catalog, which must produce none.
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { packageBoundaryFindings, pairedSkillRows } from "../cli/skill-package-boundaries.mjs";
-
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+import { catalogBoundaryFindings } from "../cli/skill-audit.mjs";
 
 const table = (...rows) => [
   "## Paired Skills",
@@ -55,6 +51,12 @@ assert.deepEqual(packageBoundaryFindings([
   pkg("helper", { helper: "# Helper\n" }),
 ]), []);
 
+// Nor is it reported when the loaded package requires the loader instead.
+assert.deepEqual(packageBoundaryFindings([
+  pkg("writer", { writer: "# Writer\n\nThen load `helper` and run it.\n" }),
+  pkg("helper", { helper: table(["writer", "requires", "The helper writes its output"]) }, { requires: ["writer"] }),
+], { proseOnly: new Set() }), []);
+
 // Two packages that each unconditionally hand off to the other: merge them.
 only([
   pkg("left", { left: "# Left\n\nWhen done, hand off to `right`.\n" }),
@@ -87,10 +89,8 @@ assert.deepEqual(packageBoundaryFindings([
   pkg("helper", { helper: "# Helper\n" }),
 ], { proseOnly: new Set(["writer -> helper"]) }), []);
 
-// The built-in catalog: the rendered audit lists no package-boundary warning.
-const audit = fs.readFileSync(path.join(repoRoot, "docs/internal/skill-invocation-audit.md"), "utf8");
-const section = audit.split("## Package Boundary Warnings")[1]?.split("\n## ")[0];
-assert.ok(section, "skill audit has a Package Boundary Warnings section");
-assert.match(section, /\nNone\.\n/, `built-in catalog has package-boundary warnings:\n${section}`);
+// The built-in catalog, rendered fresh: no package-boundary warning.
+const live = catalogBoundaryFindings();
+assert.deepEqual(live, [], `built-in catalog has package-boundary warnings:\n${live.join("\n")}`);
 
 console.log("ok: package-boundary warnings");

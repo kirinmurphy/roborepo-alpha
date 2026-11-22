@@ -56,10 +56,9 @@ Load these by subject matter while implementing; do not wait to be asked for the
 | `javascript-typescript` | recommends | The work touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
 | `feature-verification` | recommends | Delivered UI, server, API, CLI, permission, or performance behavior needs a demonstration beyond routine test reporting | Select and show the fastest sufficient behavioral evidence; reuse existing captures and execution output |
 
-A `requires` row's package is on whenever `plan-suite` is, so load it without checking its state. A
-`recommends` row loads when its condition matches and the session lists the skill; otherwise the run
-continues without it and names it once in the final report ("Skipped `feature-verification`: not
-enabled"). Never ask the user to enable a package during a run.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the final report.
+Never ask the user to enable a package.
 
 State which paired skills applied and which did not — a skipped skill and a forgotten one look
 identical otherwise.
@@ -233,11 +232,9 @@ the Validator, and the record it leaves in `## Review`; the rubric the Validator
   the plan, the diff, and the gate output, never the implementer's account of the work.
 - The Validator only reports. This session fixes every `blocking` or `actionable` finding classed
   `fix`, code included, without asking the user, and each later pass validates the revised work.
-- A finding is classed by consequence, not size: `fix` when the right fix is clear and stays within
-  the plan's requirements; `escalate`, as an Open Questions entry, when it chooses between real
-  alternatives, each with a compelling argument for it, changes requirements or a contract, or lands
-  outside the plan; `base` when the base branch fails the same check, which is recorded and never
-  blocks.
+- Findings carry `implementation-review`'s severity and class. Here an `escalate` finding becomes
+  an Open Questions entry, and a `base` failure, which is recorded and never blocks, is not a
+  finding.
 - **Never run the submit transition until the loop has ended:** a pass reports no `blocking` or
   `actionable` `fix` findings, or the eight-pass cap is reached. The cap limits passes only: the
   last pass's findings are fixed like any other's, and the run continues, recording that those fixes
