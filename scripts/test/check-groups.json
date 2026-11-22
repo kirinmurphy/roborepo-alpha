@@ -86,6 +86,7 @@
     "browser-playwright-resolve-check.mjs",
     "delivery-operations-check.mjs",
     "protect-check.mjs",
-    "doctor-protection-check.mjs"
+    "doctor-protection-check.mjs",
+    "install-drift-check.mjs"
   ]
 }
