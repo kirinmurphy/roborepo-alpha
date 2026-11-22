@@ -1,6 +1,6 @@
 ---
 id: gy8ncs9u
-next_action: Ready to build once the Claude sandbox plan (9njvfh5z) merges; start it with /plan-execute.
+next_action: "Implementation is committed and validated on branch local-data-agent-temp-locations; run /plan-review to review it."
 blocked_by: []
 depends_on: ["9njvfh5z"]
 related: ["9njvfh5z", "n8kw3rp2", "wu7h7gdp"]
@@ -97,9 +97,8 @@ recordings, and the plan-suite skills require evidence to be written into the pl
 
 Cut Claude permission prompts by running shell commands in the native sandbox (9njvfh5z) lets
 sandboxed shell commands write only to temp roots, the checkout, and a short list of extra folders.
-That plan is in review and not merged into `main`; its branch adds the list as
-`CLAUDE_SANDBOX_WRITABLE_PATHS` in `scripts/harnesses/claude/sandbox-settings.mjs`, holding `~/.npm`
-today. A sandboxed shell cannot write to `~/.roborepo/`; `roborepo` commands are excluded from the
+That plan merged into `main` (#66); it adds the list as `CLAUDE_SANDBOX_WRITABLE_PATHS` in
+`scripts/harnesses/claude/sandbox-settings.mjs`, holding `~/.npm` before this plan. A sandboxed shell cannot write to `~/.roborepo/`; `roborepo` commands are excluded from the
 sandbox and can.
 
 The shared `write-scope` path list in `manifests/inventory/agent-permissions.json` is not a place to
@@ -172,29 +171,38 @@ as the system temp folders, so a Codex agent can write its pull request body the
 
 | Plan | State | Relationship |
 | --- | --- | --- |
-| Cut Claude permission prompts by running shell commands in the native sandbox (9njvfh5z) | Active, in review; branch not merged into `main` | Unlanded dependency. This plan adds the scratch folder to the writable-path list that plan introduces. Start after it merges |
+| Cut Claude permission prompts by running shell commands in the native sandbox (9njvfh5z) | Completed; merged into `main` (#66) | Landed dependency. This plan adds the scratch folder to the writable-path list that plan introduces |
 | Bound Every Local Store With One Staleness Policy (wu7h7gdp) | Completed; the retention registry is in `main` | Landed dependency. This plan adds a store and a shape to that registry |
 | Generated State Stores: Inventory, Retention, and Visibility (n8kw3rp2) | Backlog | No conflict. It owns the other stores under `~/.roborepo/`; this plan touches only scratch and the shared `--dry-run` flag |
 
 ## Implementation plan
 
-- [ ] Confirm which paths Codex's sandbox lets a shell command write and how its provider adds a
-      writable folder outside the workspace; record the result in this plan.
-- [ ] Add a folder-set shape to the retention module (`modules/retention/`), measured as described
+- [x] Confirm which paths Codex's sandbox lets a shell command write and how its provider adds a
+      writable folder outside the workspace; record the result in this plan. Measured 2026-11-22
+      with `codex sandbox -P managed-workspace` (codex-cli 0.166.0) and a fake home outside every
+      temp root: the `:workspace` profile lets a shell write the workspace, `$TMPDIR`, and `/tmp`,
+      and refuses everything under the home folder. A `[permissions.managed-workspace.filesystem]`
+      entry `"~/.roborepo/scratch/**" = "write"` opens exactly that folder, including creating it
+      when absent; `~/.roborepo/other` stays refused. The provider's `writablePaths` option is the
+      mechanism; see the Decision Log for where the entry is added.
+- [x] Add a folder-set shape to the retention module (`modules/retention/`), measured as described
       under "Scratch as a retention store", and register the scratch store in `registry.mjs`.
       Teach `scripts/cli/maintenance-stores.mjs` to trim and clear it.
-- [ ] Add `--dry-run` to `roborepo maintenance stores reset`, for every shape and with `--all`.
-- [ ] Add `roborepo scratch <name>`, pruning the scratch store on each call, and register it in
+- [x] Add `--dry-run` to `roborepo maintenance stores reset`, for every shape and with `--all`.
+- [x] Add `roborepo scratch <name>`, pruning the scratch store on each call, and register it in
       the CLI command list.
-- [ ] Add `~/.roborepo/scratch` to `CLAUDE_SANDBOX_WRITABLE_PATHS`, and to Codex through the
+- [x] Add `~/.roborepo/scratch` to `CLAUDE_SANDBOX_WRITABLE_PATHS`, and to Codex through the
       mechanism the first task found.
-- [ ] Let `delivery pr-body` accept a file under `~/.roborepo/scratch/`, keeping the symlink,
+- [x] Let `delivery pr-body` accept a file under `~/.roborepo/scratch/`, keeping the symlink,
       regular-file, and `read-secrets` checks it applies to temp folders.
-- [ ] Add the shared rule fragment under `globals/system/rules/shared/` and update the instruction
+- [x] Add the shared rule fragment under `globals/system/rules/shared/` and update the instruction
       sources listed under "What the instructions tell agents" to point at it.
-- [ ] Give the test runners a per-run `TMPDIR` that they remove at the end and sweep at start.
-- [ ] Make `withTemporaryStorage` remove its own earlier empty shells.
-- [ ] Remove this machine's existing test leftovers once, after a dry-run listing.
+- [x] Give the test runners a per-run `TMPDIR` that they remove at the end and sweep at start.
+- [x] Make `withTemporaryStorage` remove its own earlier empty shells.
+- [x] Remove this machine's existing test leftovers once, after a dry-run listing. On 2026-11-22
+      the listing found none of the surveyed two-week-old leftovers: the user temp root held about
+      50 entries, all from that day. Only the files this run itself created were removed; see the
+      Decision Log.
 
 ## Validation
 
@@ -247,6 +255,50 @@ as the system temp folders, so a Codex agent can write its pull request body the
   prompt for writes there.
 - **2026-11-16 — Folder age is the newest change inside it.** The folder's own time does not move
   when a nested file is edited, so it would expire folders still in use.
+- **2026-11-22 — Codex gets the scratch folder from a provider constant, not per-repository
+  `writablePaths`.** `CODEX_SANDBOX_WRITABLE_PATHS` in `scripts/harnesses/codex/index.mjs` is
+  merged into every render, so the tracked `generated/codex/config.toml` carries it too, mirroring
+  Claude's `CLAUDE_SANDBOX_WRITABLE_PATHS`. Alternative: add it inside
+  `codexPlansStoreWritablePaths`, which returns nothing outside a repository with a plans store,
+  so the folder would be writable only in some sessions.
+- **2026-11-22 — The scratch byte cap is 500 MB.** Twice browser evidence's 250 MB, since scratch
+  holds investigation output as well as notes; it is a backstop behind the 14-day age limit.
+- **2026-11-22 — Scratch names are `[A-Za-z0-9][A-Za-z0-9._-]{0,99}`.** Narrower than "one path
+  segment": it also refuses leading dots (hidden folders) and spaces. Plan ids and short topics fit.
+- **2026-11-22 — Folder-set removal lives in the retention module.** The log and file-set shapes
+  leave the commit to each store because their readers differ; a folder set has no reader, and
+  both callers (the scratch command and `stores reset`) need the same link-safe removal.
+- **2026-11-22 — `delivery pr-body` trusts `~/.roborepo/scratch` at its default path only.**
+  `ROBOREPO_STATE_ROOT` is an environment variable, and the command already refuses to let
+  `$TMPDIR` widen what it reads. Like the denylist check, both `$HOME` and the account's own home
+  are read. A state root moved elsewhere still has temp folders available.
+- **2026-11-22 — `maintenance stores reset --dry-run` on a log reports a record count.** Log
+  records have no per-record listing worth printing; file and folder sets list each entry with size
+  and age. `--all --dry-run` lists every entry in the directory, since `--all` removes the whole
+  target, not only what the store's filter counts.
+- **2026-11-22 — Test runs name their folder by pid and sweep only runs whose pid is gone.**
+  Alternative: sweep by age, which would remove a long-running concurrent run's folder. A pid the
+  sandbox hides (EPERM) counts as alive.
+- **2026-11-22 — `withTemporaryStorage` sweeps shells unchanged for an hour, with rmdir only.** A
+  concurrent call's folder is empty until its assessment writes, so a fresh empty folder is not
+  proof of a leftover; rmdir can never remove a file, so a shell that gained content is left.
+- **2026-11-22 — The one-time leftover removal touched only this run's own files.** The surveyed
+  leftovers (oldest 2026-10-31 to 2026-11-03) were already gone. The remaining test-named entries
+  were all created that day, several by other sessions' test runs that may still be live; the
+  automatic sweeps this plan adds reach those once their runs end.
+
+## Not tested
+
+- [x] The rendered Claude sandbox lets a sandboxed shell write `~/.roborepo/scratch` while still
+      refusing the rest of the home folder — Verified by agent 2026-11-22 at d6f38f1c: `node
+      scripts/test/claude-sandbox-enforcement-check.mjs` (signed-in `claude -p` with freshly rendered
+      settings) → passed, `scratch-write=ok`, `home-write=refused`.
+- [x] The rendered Codex profile lets `roborepo scratch` create and hand out a folder, and a shell
+      write into it, inside Codex's sandbox, while `~/.roborepo` elsewhere stays refused — Verified
+      by agent 2026-11-22 at d6f38f1c: `codex sandbox --include-managed-config -P managed-workspace`
+      (codex-cli 0.166.0) running `node scripts/cli/main.mjs scratch e2e-topic` and `sh -c` writes,
+      with a fake home outside every temp root, scratch root absent and present → exit 0, path
+      printed, `wrote-in-scratch`, `elsewhere-denied`.
 
 ## Documentation impact
 
