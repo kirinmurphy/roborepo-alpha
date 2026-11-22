@@ -452,7 +452,7 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: 17519cd44b384eba2d762960b7781e6d76eef53d
+- Reviewed implementation commit: 2efa3ecc41d2c573990f837c96ff46f9714ae8d8
 - Confirmed by: human
 
 ## Decision Log
