@@ -71,7 +71,7 @@ function pruneScratch(store, keep) {
   const verdict = measureFolderSet({ dirPath: store.target, policy: store.policy });
   const paths = verdict.files.filter((entryPath) => entryPath !== keep);
   if (paths.length === 0) return;
-  const { removed, refused } = removeFolderSetEntries({ dirPath: store.target, paths });
+  const { removed, refused } = removeFolderSetEntries({ dirPath: store.target, paths, measured: verdict.entries });
   if (removed.length) console.error(`scratch: removed ${removed.length} folder(s) unused for ${store.policy.maxAgeDays} days or over the cap`);
   for (const refusal of refused) console.error(`scratch: left ${refusal.path} (${refusal.reason})`);
 }

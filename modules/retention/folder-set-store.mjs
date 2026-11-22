@@ -58,7 +58,10 @@ export function measureFolderSet({
 
   const victims = entries.filter((entry) => doomed.has(entry.path));
   if (victims.length === 0) {
-    const reason = wanted > byBytes ? "over cap, recent folders spared" : "within-policy";
+    // Over the cap with nothing to remove: the overage is in recently changed folders or in the
+    // newest folder, which the final-entry guard keeps.
+    const overCap = resolved.maxBytes !== null && total > resolved.maxBytes;
+    const reason = overCap ? "over cap, nothing removable" : "within-policy";
     return { act: false, dropCount: 0, reason, files: [], entries: [] };
   }
 
@@ -90,7 +93,8 @@ export function folderSetEntries({ dirPath, fsApi = fs } = {}) {
   return entries;
 }
 
-// sparedBytes is what the byte cap may not remove yet: folders changed within spareRecentMs.
+// sparedBytes is what the byte cap cannot remove: folders changed within spareRecentMs, and the
+// newest folder, which the final-entry guard in measureFolderSet always keeps.
 export function describeFolderSet({
   dirPath,
   fsApi = fs,
@@ -102,11 +106,14 @@ export function describeFolderSet({
   let totalBytes = 0;
   let sparedBytes = 0;
   let oldestMtimeMs = null;
+  let newest = null;
   for (const entry of entries) {
     totalBytes += entry.bytes;
     if (entry.mtimeMs >= spareFrom) sparedBytes += entry.bytes;
     if (oldestMtimeMs === null || entry.mtimeMs < oldestMtimeMs) oldestMtimeMs = entry.mtimeMs;
+    if (newest === null || entry.mtimeMs >= newest.mtimeMs) newest = entry;
   }
+  if (newest && newest.mtimeMs < spareFrom) sparedBytes += newest.bytes;
   return { entryCount: entries.length, totalBytes, sparedBytes, oldestMtimeMs };
 }
 
@@ -119,7 +126,12 @@ export function folderAgeDays(entry, now = new Date()) {
 // inside dirPath and, once resolved, stay inside the resolved store: a link is unlinked as a link,
 // and a folder that resolves anywhere else is refused rather than removed. fs.rmSync never follows
 // links inside the tree it removes. Returns the paths removed and the ones refused or failed.
-export function removeFolderSetEntries({ dirPath, paths, fsApi = fs }) {
+//
+// `measured` is the verdict's entries. A folder whose newest time is later than when it was measured
+// was reopened or written in between (another `roborepo scratch` call, say) and is left. This
+// narrows that race to the instant between the recheck and the removal; it does not close it.
+export function removeFolderSetEntries({ dirPath, paths, measured = [], fsApi = fs }) {
+  const measuredAt = new Map(measured.map((entry) => [entry.path, entry.mtimeMs]));
   const removed = [];
   const refused = [];
   let root;
@@ -142,6 +154,11 @@ export function removeFolderSetEntries({ dirPath, paths, fsApi = fs }) {
         const real = fsApi.realpathSync(entryPath);
         if (path.dirname(real) !== root) {
           refused.push({ path: entryPath, reason: "resolves outside the store" });
+          continue;
+        }
+        const expected = measuredAt.get(entryPath);
+        if (expected !== undefined && (measureTree(entryPath, fsApi)?.mtimeMs ?? expected) > expected) {
+          refused.push({ path: entryPath, reason: "changed since it was measured" });
           continue;
         }
         fsApi.rmSync(entryPath, { recursive: true, force: true });

@@ -265,8 +265,9 @@ function storeRow(item) {
   const size = item.maxBytes
     ? `${formatBytes(item.bytes)} of ${formatBytes(item.maxBytes)}`
     : formatBytes(item.bytes);
-  // A spared store is over its cap only through folders changed in the last hour; it is not a fault.
-  const suffix = item.over ? " — over cap" : item.spared ? " — over cap, recent folders spared" : "";
+  // A spared store is over its cap only through folders a reset keeps (recently changed folders
+  // and the newest); it is not a fault.
+  const suffix = item.over ? " — over cap" : item.spared ? " — over cap, nothing removable" : "";
   row.querySelector('[data-slot="size"]').textContent = `${size}${suffix}`;
   // Only an over-cap store is worth colouring; a store at 3% and one at 80% are both fine, and
   // shading the difference would imply an action the user does not need to take.

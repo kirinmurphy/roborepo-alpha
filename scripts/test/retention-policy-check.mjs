@@ -26,6 +26,7 @@ import {
   measureFolderSet,
   measureLog,
   normalizePolicy,
+  removeFolderSetEntries,
   retentionStores,
 } from "../../modules/retention/index.mjs";
 
@@ -182,10 +183,31 @@ try {
   fs.rmSync(path.join(folderDir, "quiet"), { recursive: true });
   const allBusy = measureFolderSet({ dirPath: folderDir, policy: folderPolicy, now: NOW });
   assert.equal(allBusy.act, false, "an overage held only in recent folders removes nothing");
-  assert.equal(allBusy.reason, "over cap, recent folders spared");
+  assert.equal(allBusy.reason, "over cap, nothing removable");
   const busyDescribed = describeFolderSet({ dirPath: folderDir, now: NOW });
   assert.equal(busyDescribed.totalBytes, 1200);
   assert.equal(busyDescribed.sparedBytes, 1200, "describe reports the bytes the cap may not remove yet");
+
+  // A lone quiet folder over the cap is the newest folder, which the final-entry guard keeps: a
+  // reset removes nothing, so describe counts it as kept rather than as removable overage.
+  const loneDir = path.join(tempRoot, "folder-set-lone");
+  writeAgedFolder(loneDir, "only", 2 * 60 * 60 * 1000, 1500);
+  const lone = measureFolderSet({ dirPath: loneDir, policy: folderPolicy, now: NOW });
+  assert.equal(lone.act, false, "the newest folder is never removed for size");
+  assert.equal(lone.reason, "over cap, nothing removable");
+  assert.equal(describeFolderSet({ dirPath: loneDir, now: NOW }).sparedBytes, 1500, "the kept newest folder counts as spared");
+  writeAgedFolder(loneDir, "older", 3 * 60 * 60 * 1000, 600);
+  assert.equal(describeFolderSet({ dirPath: loneDir, now: NOW }).sparedBytes, 1500, "an older quiet folder stays removable");
+
+  // A folder written after it was measured is left by the removal, which rechecks its time.
+  const victims = measureFolderSet({ dirPath: loneDir, policy: folderPolicy, now: NOW }).entries;
+  assert.deepEqual(victims.map((entry) => entry.name), ["older"]);
+  const reopenedAt = new Date();
+  fs.utimesSync(path.join(loneDir, "older"), reopenedAt, reopenedAt);
+  const reopened = removeFolderSetEntries({ dirPath: loneDir, paths: victims.map((entry) => entry.path), measured: victims });
+  assert.deepEqual(reopened.removed, [], "a reopened folder is not removed");
+  assert.equal(reopened.refused[0]?.reason, "changed since it was measured");
+  assert.ok(fs.existsSync(path.join(loneDir, "older")));
 
   // ---- Registry ----
   const stores = retentionStores(tempRoot);

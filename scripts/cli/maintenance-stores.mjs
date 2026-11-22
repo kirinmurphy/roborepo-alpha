@@ -112,17 +112,26 @@ function unitOf(store) {
   return store.shape === FOLDER_SET_SHAPE ? "folder" : "file";
 }
 
+function noActionText(verdict) {
+  if (verdict.reason === "over cap, nothing removable") return `over its cap, but ${KEPT_FOLDERS_TEXT}`;
+  return `already within policy (${verdict.reason})`;
+}
+
+// Why a folder-set store over its cap can hold that overage through a reset.
+const KEPT_FOLDERS_TEXT = "a reset can remove none of it: it is in folders changed in the last hour"
+  + " or in the newest folder, which is always kept";
+
 function trimStore(store) {
   const verdict = measureStore(store);
   if (!verdict.act) {
-    console.log(`${store.id}: already within policy (${verdict.reason})`);
+    console.log(`${store.id}: ${noActionText(verdict)}`);
     return 0;
   }
 
   let removed;
   if (store.shape === LOG_SHAPE) removed = trimLog(store.target, verdict.dropCount);
   else if (store.shape === FOLDER_SET_SHAPE) {
-    const result = removeFolderSetEntries({ dirPath: store.target, paths: verdict.files });
+    const result = removeFolderSetEntries({ dirPath: store.target, paths: verdict.files, measured: verdict.entries });
     for (const refusal of result.refused) console.error(`${store.id}: left ${refusal.path} (${refusal.reason})`);
     removed = result.removed.length;
   } else removed = removeFiles(verdict.files);
@@ -139,7 +148,7 @@ function previewTrim(store) {
   }
   const verdict = measureStore(store);
   if (!verdict.act) {
-    console.log(`${store.id}: already within policy (${verdict.reason}); nothing would be removed`);
+    console.log(`${store.id}: ${noActionText(verdict)}; nothing would be removed`);
     return 0;
   }
   if (store.shape === LOG_SHAPE) {
@@ -289,14 +298,14 @@ function describeBound(policy) {
 // Only the byte cap is checked. Age is enforced on the write path and a store that has not been
 // written to lately is legitimately holding old records — flagging that would report normal
 // behavior as a fault.
-// A store over its cap with every byte in recently changed folders the byte cap spares is reported
-// as a hint, not a failure: a reset cannot act on it yet, and it is capped once those folders go quiet.
+// A store over its cap with every byte in folders the byte cap keeps (recently changed ones and the
+// newest) is reported as a hint, not a failure: a reset cannot act on it.
 export function checkStoreBounds() {
   const health = storeHealth();
   for (const store of health.filter((entry) => entry.spared)) {
     console.log(
       `hint: ${store.id} is ${formatBytes(store.bytes)}, over its ${formatBytes(store.maxBytes)} cap, but`
-      + ` all of it is in folders changed in the last hour; the cap applies once they go quiet`,
+      + ` ${KEPT_FOLDERS_TEXT}; age cleanup still removes it once unchanged for ${store.maxAgeDays} days`,
     );
   }
   const over = health.filter((store) => store.over);
@@ -311,7 +320,8 @@ export function checkStoreBounds() {
 
 // Registry-backed store list for doctor, which needs sizes and bounds without the CLI formatting.
 // `over`: over the cap with something a reset can remove (the byte walk removes quiet folders
-// first). `spared`: over the cap, but every byte is in folders the cap spares for now.
+// first). `spared`: over the cap, but every byte is in folders the cap keeps: recently changed
+// folders and the newest folder.
 export function storeHealth() {
   return retentionStores(stateDir).map((store) => {
     const policy = policyFor(store);
@@ -323,6 +333,7 @@ export function storeHealth() {
       bytes,
       sparedBytes,
       maxBytes: policy.maxBytes,
+      maxAgeDays: policy.maxAgeDays,
       over,
       spared: capped && !over,
       path: path.relative(stateDir, store.target),

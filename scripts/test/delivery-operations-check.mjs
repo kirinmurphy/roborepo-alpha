@@ -179,7 +179,14 @@ try {
       refused(runDelivery(["pr-body", path.join(repoRoot, "package.json")], [pr], run, null, repository, homeEnv), /inside a system temp directory or the scratch folder/);
     } finally {
       fs.rmSync(outsideHome, { recursive: true, force: true });
-      if (madeIgnoredTmp) fs.rmSync(ignoredTmp, { recursive: true, force: true });
+      // Non-recursive: another task may have put files in .tmp since this test made it.
+      if (madeIgnoredTmp) {
+        try {
+          fs.rmdirSync(ignoredTmp);
+        } catch {
+          // Not empty any more; leave it.
+        }
+      }
     }
     const template = path.join(secretDir, ".env.example");
     fs.writeFileSync(template, "PLACEHOLDER=1");

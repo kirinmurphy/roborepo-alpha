@@ -161,7 +161,7 @@ try {
   const sparedCheck = run(["--check"]);
   assert.equal(sparedCheck.status, 0, `--check passes while the overage is in a recently changed folder: ${sparedCheck.stderr}`);
   assert.match(sparedCheck.stdout, /hint: scratch is .* changed in the last hour/, "--check names the spared overage");
-  assert.match(run(["reset", "scratch", "--dry-run"]).stdout, /recent folders spared\); nothing would be removed/, "the preview says the overage is spared");
+  assert.match(run(["reset", "scratch", "--dry-run"]).stdout, /over its cap, but a reset can remove none of it.*; nothing would be removed/, "the preview says the overage is kept");
   assert.equal(run(["reset", "scratch"]).status, 0);
   assert.ok(fs.existsSync(busy), "a reset leaves the recently changed folder");
 
@@ -180,7 +180,7 @@ try {
   assert.ok(!fs.existsSync(quietSibling) && fs.existsSync(busy), "the reset removes the quiet folder and spares the busy one");
   const afterMixed = run(["--check"]);
   assert.equal(afterMixed.status, 0);
-  assert.match(afterMixed.stdout, /hint: scratch .* all of it is in folders changed in the last hour/);
+  assert.match(afterMixed.stdout, /hint: scratch .* a reset can remove none of it: it is in folders changed in the last hour/);
 
   fs.utimesSync(path.join(busy, "sparse.bin"), quietAt, quietAt);
   fs.utimesSync(busy, quietAt, quietAt);

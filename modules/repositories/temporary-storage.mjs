@@ -42,8 +42,10 @@ export async function withTemporaryStorage(purpose, assess, {
 // with a warning. Each later call removes the shells earlier calls left: a folder with this
 // prefix, holding nothing but directories, unchanged for an hour. Removal is rmdir from the deepest
 // folder up, which can only ever remove empty directories, so a folder that gained a file or link
-// is left alone. A denied removal is left silently for a later call; the original call already
-// warned about it.
+// is left alone. Before each removal the folder and every ancestor up to the shell must still be the
+// directory that was scanned: a shell or ancestor replaced by a link in between would otherwise
+// steer rmdir into the link's target, so that shell is left. A denied removal is left silently for
+// a later call; the original call already warned about it.
 export function sweepEmptyShells(tmpRoot = os.tmpdir(), { fsApi = fs, now = Date.now() } = {}) {
   const swept = [];
   let names;
@@ -57,14 +59,33 @@ export function sweepEmptyShells(tmpRoot = os.tmpdir(), { fsApi = fs, now = Date
     const shell = path.join(tmpRoot, name);
     const folders = emptyShellFolders(shell, fsApi);
     if (!folders || folders.some((folder) => now - folder.mtimeMs < SHELL_MIN_AGE_MS)) continue;
+    const scanned = new Map(folders.map((folder) => [folder.path, folder]));
     try {
-      for (const folder of folders.reverse()) fsApi.rmdirSync(folder.path);
-      swept.push(shell);
+      let complete = true;
+      for (const folder of folders.reverse()) {
+        if (!chainUnchanged(folder.path, shell, scanned, fsApi)) {
+          complete = false;
+          break;
+        }
+        fsApi.rmdirSync(folder.path);
+      }
+      if (complete) swept.push(shell);
     } catch {
       // Denied or changed underneath; the next call tries again.
     }
   }
   return swept;
+}
+
+// True when `folder` and each ancestor up to `shell` is still the real directory that was scanned.
+function chainUnchanged(folder, shell, scanned, fsApi) {
+  for (let current = folder; ; current = path.dirname(current)) {
+    const recorded = scanned.get(current);
+    let stat;
+    try { stat = fsApi.lstatSync(current); } catch { return false; }
+    if (!recorded || !stat.isDirectory() || stat.dev !== recorded.dev || stat.ino !== recorded.ino) return false;
+    if (current === shell) return true;
+  }
 }
 
 // Every folder in the tree, parents before children, or null when anything but a directory is in it.
@@ -74,7 +95,7 @@ function emptyShellFolders(root, fsApi) {
     let stat;
     try { stat = fsApi.lstatSync(directory); } catch { return false; }
     if (!stat.isDirectory()) return false;
-    folders.push({ path: directory, mtimeMs: stat.mtimeMs });
+    folders.push({ path: directory, mtimeMs: stat.mtimeMs, dev: stat.dev, ino: stat.ino });
     let names;
     try { names = fsApi.readdirSync(directory); } catch { return false; }
     return names.every((name) => visit(path.join(directory, name)));

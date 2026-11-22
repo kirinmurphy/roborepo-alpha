@@ -9,7 +9,7 @@ import { Readable } from "node:stream";
 import { repositoriesRoutes } from "../cli/portal-routes-repositories.mjs";
 import { dispatchRoutes } from "../cli/portal-router.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
-import { withTemporaryStorage } from "../../modules/repositories/temporary-storage.mjs";
+import { sweepEmptyShells, withTemporaryStorage } from "../../modules/repositories/temporary-storage.mjs";
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
@@ -51,6 +51,43 @@ import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
     assert.deepEqual(fs.readdirSync(tmpRoot).sort(), [path.basename(unrelated), path.basename(fresh), path.basename(holdsFile)].sort(),
       "the old empty shell and the call's own folder are gone; a folder holding a file, a recent shell, and unrelated folders remain");
     assert.equal(fs.readFileSync(path.join(holdsFile, "object"), "utf8"), "synthetic");
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+}
+
+// A shell replaced by a link between the scan and the removal is left, and the link's target keeps
+// its empty folders; an unchanged shell is still removed deepest first.
+{
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shell-swap-"));
+  try {
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const shell = path.join(tmpRoot, "roborepo-disposable-landing-Swap01");
+    fs.mkdirSync(path.join(shell, "objects", "pack"), { recursive: true });
+    [path.join(shell, "objects", "pack"), path.join(shell, "objects"), shell].forEach((folder) => fs.utimesSync(folder, old, old));
+    const elsewhere = path.join(tmpRoot, "unrelated");
+    fs.mkdirSync(path.join(elsewhere, "objects"), { recursive: true });
+    let swapped = false;
+    const fsApi = {
+      ...fs,
+      rmdirSync(target) {
+        fs.rmdirSync(target);
+        if (swapped) return;
+        // After the deepest folder goes, the shell becomes a link to an unrelated folder.
+        swapped = true;
+        fs.renameSync(shell, `${shell}-moved`);
+        fs.symlinkSync(elsewhere, shell);
+      },
+    };
+    assert.deepEqual(sweepEmptyShells(tmpRoot, { fsApi }), [], "a replaced shell is not reported swept");
+    assert.ok(fs.existsSync(path.join(elsewhere, "objects")), "the link's target keeps its empty folder");
+
+    fs.unlinkSync(shell);
+    fs.renameSync(`${shell}-moved`, shell);
+    fs.utimesSync(path.join(shell, "objects"), old, old);
+    fs.utimesSync(shell, old, old);
+    assert.deepEqual(sweepEmptyShells(tmpRoot), [shell], "an unchanged shell is removed");
+    assert.ok(!fs.existsSync(shell));
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }

@@ -3,7 +3,9 @@
 // first removes the folders of earlier runs whose process is gone, which catches a crashed or
 // SIGKILLed run.
 //
-// Folders are named `roborepo-tests/run-<pid>-<time>`. A folder is swept only when signalling its
+// Folders are named `roborepo-tests-<account>/run-<pid>-<time>`. The root is per account and
+// private (0700): a shared /tmp root made by one account under umask 022 would refuse every other
+// account's runs. A folder is swept only when signalling its
 // pid reports ESRCH (no such process). Any other answer, including EPERM from a sandbox that hides
 // other processes, counts as alive, so a concurrent run in another session is never swept.
 //
@@ -17,13 +19,26 @@ import { isMainModule } from "../../cli/roots.mjs";
 
 const RUN_PATTERN = /^run-(\d+)-\d+$/;
 
+const RUNS_ROOT_PREFIX = "roborepo-tests-";
+
 export function runsRoot(base = os.tmpdir()) {
-  return path.join(base, "roborepo-tests");
+  return path.join(base, `${RUNS_ROOT_PREFIX}${accountKey()}`);
+}
+
+// The numeric uid where the platform has one; Windows has no uid and a per-user TMPDIR already.
+function accountKey() {
+  const uid = process.getuid?.();
+  if (uid !== undefined) return String(uid);
+  try {
+    return os.userInfo().username.replace(/[^A-Za-z0-9._-]/g, "_") || "user";
+  } catch {
+    return "user";
+  }
 }
 
 export function openRunTmpdir({ pid = process.pid, base = os.tmpdir(), isAlive = processAlive } = {}) {
   const root = runsRoot(base);
-  fs.mkdirSync(root, { recursive: true });
+  fs.mkdirSync(root, { recursive: true, mode: 0o700 });
   sweepFinishedRuns(root, isAlive);
   const dir = path.join(root, `run-${pid}-${Date.now()}`);
   fs.mkdirSync(dir);
@@ -32,7 +47,7 @@ export function openRunTmpdir({ pid = process.pid, base = os.tmpdir(), isAlive =
 
 export function closeRunTmpdir(dir) {
   // Only a folder this helper named; a stray argument must not become a recursive delete.
-  if (!RUN_PATTERN.test(path.basename(dir)) || path.basename(path.dirname(dir)) !== "roborepo-tests") return false;
+  if (!RUN_PATTERN.test(path.basename(dir)) || !path.basename(path.dirname(dir)).startsWith(RUNS_ROOT_PREFIX)) return false;
   makeWritable(dir);
   fs.rmSync(dir, { recursive: true, force: true });
   return true;

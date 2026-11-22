@@ -123,6 +123,11 @@ export function renderPermissionsTo(
     touched.push(target.file);
   }
 
+  // The rendered sandboxes list ~/.roborepo/scratch as writable. Claude on Linux and WSL2 can skip
+  // a writable path that does not exist when the sandbox starts, so the folder is made here, before
+  // any session, rather than left to the first `roborepo scratch` call.
+  if (touched.length) fs.mkdirSync(path.join(baseDir, ".roborepo", "scratch"), { recursive: true });
+
   return { touched };
 }
 

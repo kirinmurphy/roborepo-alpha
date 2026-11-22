@@ -103,7 +103,7 @@ test.describe("Agents page", () => {
     await page.goto("/agents");
     await page.locator('[data-slot="stores-toggle"]').click();
     const row = (label) => page.locator(".item").filter({ has: page.locator('[data-slot="label"]', { hasText: new RegExp(`^${label}$`) }) });
-    await expect(row("scratch").locator('[data-slot="size"]')).toHaveText("600.0MB of 500.0MB — over cap, recent folders spared");
+    await expect(row("scratch").locator('[data-slot="size"]')).toHaveText("600.0MB of 500.0MB — over cap, nothing removable");
     await expect(row("scratch").locator('[data-slot="dot"]')).toHaveClass(/\bon\b/);
     await expect(row("scratch-quiet").locator('[data-slot="size"]')).toHaveText("700.0MB of 500.0MB — over cap");
     await expect(row("scratch-quiet").locator('[data-slot="dot"]')).toHaveClass(/\boff\b/);

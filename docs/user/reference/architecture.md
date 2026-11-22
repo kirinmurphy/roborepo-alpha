@@ -195,7 +195,7 @@ of it part of the portable profile.
 | Telemetry experiments | `telemetry/experiments/` | one file per id | 5MB total |
 | Dense bash capture | `capture/<harness>/dense-bash.jsonl` | append-only JSONL | 30 days, 10MB |
 | Browser evidence | `browser/evidence/` | one file per screenshot, video, or trace | 14 days, 250MB |
-| Agent scratch | `scratch/` | one folder per plan or topic, from `roborepo scratch <name>` | 14 days since the last change inside a folder, 500MB (folders changed in the last hour are spared) |
+| Agent scratch | `scratch/` | one folder per plan or topic, from `roborepo scratch <name>` | 14 days since the last change inside a folder, 500MB (folders changed in the last hour, and the newest folder, are kept) |
 | Worktree removal log | `worktree-cleanup/removals.jsonl` | append/compact JSONL | 30 days, 2 MiB |
 | Worktree transactions | `worktree-cleanup/transactions/` | one file per removal | 7 days, 5 MiB |
 | Usage snapshots | `usage/latest/<harness>.json` | overwritten per harness | self-bounding |
@@ -219,8 +219,9 @@ roborepo maintenance stores reset <id> [--all] --dry-run  # list what would go; 
 ```
 
 `roborepo doctor --installed` fails when a store is over its cap and a reset can remove something.
-When every byte of an over-cap scratch store is in folders changed in the last hour, which the cap
-spares, it prints a hint instead, and the portal marks the store "recent folders spared".
+When every byte of an over-cap scratch store is in folders the cap keeps (folders changed in the
+last hour, and the newest folder, which is never removed for size), it prints a hint instead, and
+the portal marks the store "nothing removable".
 
 ## Sync Flow
 
