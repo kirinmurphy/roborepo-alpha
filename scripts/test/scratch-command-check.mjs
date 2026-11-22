@@ -36,6 +36,23 @@ try {
   assert.equal(returning.status, 0, returning.stderr);
   assert.equal(fs.readFileSync(path.join(scratch, "returning-topic", "notes.md"), "utf8"), "earlier work", "the named old folder survives with its contents");
 
+  // ---- The byte cap never removes the folder being handed out ----
+  // A sparse file counts its full size toward the 500 MB cap without using disk. Stamped in the
+  // future, the big folder sorts newer than the one just touched, so the oldest-first byte walk
+  // would pick the handed-out folder first.
+  const big = path.join(scratch, "big-topic");
+  fs.mkdirSync(big);
+  fs.writeFileSync(path.join(big, "sparse.bin"), "");
+  fs.truncateSync(path.join(big, "sparse.bin"), 600 * 1024 * 1024);
+  const future = new Date(Date.now() + 60 * 60 * 1000);
+  fs.utimesSync(path.join(big, "sparse.bin"), future, future);
+  fs.utimesSync(big, future, future);
+  const capped = run(["capped-topic"]);
+  assert.equal(capped.status, 0, capped.stderr);
+  assert.equal(capped.stdout, `${path.join(scratch, "capped-topic")}\n`);
+  assert.ok(fs.existsSync(path.join(scratch, "capped-topic")), "the printed folder exists after pruning");
+  fs.rmSync(big, { recursive: true });
+
   // ---- Names that are not one path segment are refused, and nothing is created ----
   for (const bad of ["../escape", "a/b", "..", ".hidden", "", "with space"]) {
     const refused = run([bad]);

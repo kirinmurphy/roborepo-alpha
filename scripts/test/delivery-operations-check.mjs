@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
+import { scratchBodyRoots } from "../cli/delivery.mjs";
 
 // pr-body accepts only fixed system temp roots, so on POSIX the fixture uses /tmp rather than a
 // $TMPDIR that may point elsewhere.
@@ -145,26 +146,28 @@ try {
     fs.writeFileSync(homeKey, "ghp_secretValue");
     const homeSecret = delivery(checkout, ["pr-body", homeKey], { HOME: home, USERPROFILE: home });
     refused(homeSecret, /matches the read-secrets credential denylist \(path not printed\)/);
-    // The agent scratch store is a body location too, so a Codex agent, whose sandbox cannot write
-    // the system temp folders' neighbours under $HOME, can hand over a body. The home sits outside
-    // every temp root (in the checkout's ignored .tmp/), so only the scratch rule can accept it;
-    // the rest of the state root stays refused.
+    // The agent scratch store is a body location too, since the Temporary Files rule sends agents
+    // there instead of /tmp. Only the account's own home counts: a $HOME override pointing at a
+    // folder outside every temp root (the checkout's ignored .tmp/) must not make its scratch
+    // folder, or a link standing in for one, acceptable.
     const ignoredTmp = path.join(repoRoot, ".tmp");
     const madeIgnoredTmp = !fs.existsSync(ignoredTmp);
     fs.mkdirSync(ignoredTmp, { recursive: true });
     const outsideHome = fs.mkdtempSync(path.join(ignoredTmp, "delivery-home-"));
     try {
-      const scratchBody = path.join(outsideHome, ".roborepo", "scratch", "gy8ncs9u", "body.md");
-      const stateBody = path.join(outsideHome, ".roborepo", "telemetry", "body.md");
-      for (const file of [scratchBody, stateBody]) {
-        fs.mkdirSync(path.dirname(file), { recursive: true });
-        fs.writeFileSync(file, body);
-      }
+      const scratchRoot = path.join(outsideHome, ".roborepo", "scratch");
+      const scratchBody = path.join(scratchRoot, "gy8ncs9u", "body.md");
+      fs.mkdirSync(path.dirname(scratchBody), { recursive: true });
+      fs.writeFileSync(scratchBody, body);
+      assert.deepEqual(scratchBodyRoots(outsideHome), [fs.realpathSync(scratchRoot)], "a home's real scratch folder is a body root");
       const homeEnv = { HOME: outsideHome, USERPROFILE: outsideHome };
-      passed(runDelivery(["pr-body", scratchBody], [pr], run, null, repository, homeEnv));
-      assert.deepEqual(calls().at(-1).input, body, "a scratch-folder body reaches the pull request");
-      refused(runDelivery(["pr-body", stateBody], [pr], run, null, repository, homeEnv), /inside a system temp directory or the scratch folder/);
-      assert.deepEqual(calls(), [], "a body elsewhere in the state root stops before any GitHub call");
+      refused(runDelivery(["pr-body", scratchBody], [pr], run, null, repository, homeEnv), /inside a system temp directory or the scratch folder/);
+      assert.deepEqual(calls(), [], "an overridden $HOME does not widen the body locations");
+      // A scratch folder replaced by a link to the checkout is ignored, not followed.
+      fs.rmSync(scratchRoot, { recursive: true });
+      fs.symlinkSync(repoRoot, scratchRoot);
+      assert.deepEqual(scratchBodyRoots(outsideHome), [], "a linked scratch folder is not a body root");
+      refused(runDelivery(["pr-body", path.join(repoRoot, "package.json")], [pr], run, null, repository, homeEnv), /inside a system temp directory or the scratch folder/);
     } finally {
       fs.rmSync(outsideHome, { recursive: true, force: true });
       if (madeIgnoredTmp) fs.rmSync(ignoredTmp, { recursive: true, force: true });

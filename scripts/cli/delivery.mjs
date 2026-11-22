@@ -61,18 +61,24 @@ function temporaryRoots() {
   return [...new Set(candidates.filter((root) => fs.existsSync(root)).map((root) => fs.realpathSync(root)))];
 }
 
-// The agent scratch store at its default location, the one both harness sandboxes let a shell
-// write (Codex's sandbox does not reach the system temp folders' siblings under $HOME). The default
-// path is used rather than ROBOREPO_STATE_ROOT for the same reason $TMPDIR is not trusted above;
-// like the denylist check, both the $HOME and the account's own home are read.
-function scratchRoots() {
-  const homes = [...new Set([os.homedir(), accountHome()])];
-  return [...new Set(homes.map((home) => path.join(home, ".roborepo", "scratch"))
-    .filter((root) => fs.existsSync(root)).map((root) => fs.realpathSync(root)))];
+// The agent scratch store, where the Temporary Files rule sends agents instead of /tmp, so a body
+// written there must be accepted. Only the account's own home counts: $HOME and ROBOREPO_STATE_ROOT
+// are environment variables, and like $TMPDIR above they must not widen what this command reads.
+// (The denylist reads both homes because there a union only refuses more; here it would allow
+// more.) A sandboxed shell can write the scratch folder, so one replaced by a link is ignored rather
+// than followed.
+export function scratchBodyRoots(home = accountHome()) {
+  const root = path.join(home, ".roborepo", "scratch");
+  try {
+    if (!fs.lstatSync(root).isDirectory()) return [];
+    return [fs.realpathSync(root)];
+  } catch {
+    return [];
+  }
 }
 
 function bodyRoots() {
-  return [...new Set([...temporaryRoots(), ...scratchRoots()])];
+  return [...new Set([...temporaryRoots(), ...scratchBodyRoots()])];
 }
 
 const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);

@@ -3,8 +3,7 @@
 // Prints `<stateRoot>/scratch/<name>/`, creating it if needed, and prunes the scratch store by its
 // registry policy. Running this command is the store's write path, so the store is pruned whenever
 // agents use it, the way browser evidence is pruned when a browser run starts; no hook or schedule
-// is involved. The named folder is touched before pruning, so a call never removes the folder it is
-// about to hand back.
+// is involved. A call never removes the folder it is about to hand back.
 //
 // stdout carries only the path, so `dir=$(roborepo scratch <name>)` works; pruning reports go to
 // stderr.
@@ -38,7 +37,7 @@ function runScratch(args) {
   const store = findRetentionStore(stateDir, SCRATCH_STORE_ID);
   try {
     const folder = openScratchFolder(store.target, args[0]);
-    pruneScratch(store);
+    pruneScratch(store, folder);
     console.log(folder);
     return 0;
   } catch (error) {
@@ -62,10 +61,14 @@ export function openScratchFolder(root, name, { now = new Date() } = {}) {
   return folder;
 }
 
-function pruneScratch(store) {
+// The folder being handed out is never removed. Touching it keeps it out of the age rule, but the
+// byte cap walks oldest first and another folder can carry a newer time (a concurrent call, a file
+// stamped in the future), so it is also excluded by name.
+function pruneScratch(store, keep) {
   const verdict = measureFolderSet({ dirPath: store.target, policy: store.policy });
-  if (!verdict.act) return;
-  const { removed, refused } = removeFolderSetEntries({ dirPath: store.target, paths: verdict.files });
+  const paths = verdict.files.filter((entryPath) => entryPath !== keep);
+  if (paths.length === 0) return;
+  const { removed, refused } = removeFolderSetEntries({ dirPath: store.target, paths });
   if (removed.length) console.error(`scratch: removed ${removed.length} folder(s) unused for ${store.policy.maxAgeDays} days or over the cap`);
   for (const refusal of refused) console.error(`scratch: left ${refusal.path} (${refusal.reason})`);
 }

@@ -53,7 +53,8 @@ another); pass it to every command below.
    An existing open pull request whose base is not `<base>` is not edited or readied; report the
    mismatch under Needs you. The body is written for a person: the plan's title and what it
    changes for them, the checks that ran, the open `## Not tested` entries, and the plan's store
-   path. Write the body to a file in the system temp directory. With no open pull
+   path. Write the body to a file where the Temporary Files rule says (Claude's session scratchpad,
+   or the folder `roborepo scratch <plan-id>` prints). With no open pull
    request for the branch, run `gh pr create --base <base> --head <branch> --title "<plan title>"
    --body-file <file>`; otherwise run `roborepo delivery pr-body <file>`, and `roborepo delivery
    pr-ready` when the open pull request is a draft. Never merge it, enable auto-merge, or approve it.
