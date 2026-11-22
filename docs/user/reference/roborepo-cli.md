@@ -60,8 +60,8 @@ run `roborepo harness refresh`.
 | `roborepo doctor --installed [--verbose]` | Verifies that installed harness paths resolve correctly; also fails when a local store is over its size cap. |
 | `roborepo maintenance repair [--dry-run] [--on-conflict ...]` | Repairs a moved or renamed checkout by relinking stale symlinks against the current path; it leaves copied config content alone. |
 | `roborepo maintenance repair local-config [--dry-run or --apply]` | Recovers safe local Claude/Codex settings from recent backups when `update` or `doctor --installed` reports local config repair candidates. |
-| `roborepo maintenance stores [list]` | Lists the local stores RoboRepo keeps on disk — telemetry spools, runtime history, capture logs, browser evidence — with each one's size against its bound. |
-| `roborepo maintenance stores reset <id> [--all]` | Reclaims space in one store. Applies that store's own retention policy, or with `--all` clears it outright. Store ids come from `stores list`. |
+| `roborepo maintenance stores [list]` | Lists the local stores RoboRepo keeps on disk — telemetry spools, runtime history, capture logs, browser evidence, agent scratch folders — with each one's size against its bound. |
+| `roborepo maintenance stores reset <id> [--all] [--dry-run]` | Reclaims space in one store. Applies that store's own retention policy, or with `--all` clears it outright. `--dry-run` lists what the reset would remove, with sizes and ages, and removes nothing. Store ids come from `stores list`. |
 | `roborepo maintenance portal-pids [--reap]` | Lists `~/.roborepo/portal/server-<port>.pid` files and whether each one's process is still alive. `--reap` deletes only entries whose process is gone, never a running portal or one owned by another user. |
 
 From a development checkout, two more commands render generated files after you edit their sources:
@@ -243,6 +243,19 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 | --- | --- |
 | `roborepo run <cmd> [args...]` | Runs a command and prints a trimmed output tail so noisy checks stay readable. |
 
+## Scratch Folders
+
+| Command | What it does |
+| --- | --- |
+| `roborepo scratch <name>` | Prints `~/.roborepo/scratch/<name>/`, creating it if needed. `<name>` is a plan id or a short topic: one path segment of letters, digits, `.`, `_`, and `-`. |
+
+Agents write temporary files that are not throwaway files in Claude here: throwaway files in Codex,
+notes handed between sessions, a long investigation's intermediate results. Both harness sandboxes
+let shell commands write this folder. Each call removes scratch folders unchanged for 14 days, or
+the oldest ones once the store passes 500 MB, but never the folder it prints. A folder's age is
+the newest change anywhere inside it. The store appears in `roborepo maintenance stores` as
+`scratch`.
+
 > `roborepo dev …` exists only in a Git checkout of RoboRepo itself; the scripts it drives are not
 > published to npm, so an installed copy reports that it requires a development checkout.
 
@@ -356,15 +369,16 @@ permission entries for workflow skills that deliver an already-pushed feature br
 | Command | Operation |
 | --- | --- |
 | `roborepo delivery fetch <remote>` | Refresh heads under `refs/remotes/<remote>/` using a configured remote name |
-| `roborepo delivery pr-body <body-file>` | Replace the current branch's open PR body with a UTF-8 file in a temp directory |
+| `roborepo delivery pr-body <body-file>` | Replace the current branch's open PR body with a UTF-8 file in a temp directory or the scratch folder |
 | `roborepo delivery pr-ready` | Mark that PR ready for review |
 | `roborepo delivery retry-ci <run-id>` | Rerun failed jobs in a completed, failed run at that PR head |
 
 A normal workflow refreshes the configured remote, pushes the feature branch with its upstream,
 writes the finished PR description to a file, and updates the existing PR. The body file must
 resolve, after symlinks, to a regular file under a fixed system temp location (`/tmp`,
-`/var/tmp`, macOS `/var/folders`, or a Windows per-user `AppData\Local\Temp`) that the
-`read-secrets` credential denylist does not name. `TMPDIR` does not widen that set; on Windows,
+`/var/tmp`, macOS `/var/folders`, or a Windows per-user `AppData\Local\Temp`) or under the
+scratch folder (`~/.roborepo/scratch/`), and the `read-secrets` credential denylist must not
+name it. `TMPDIR` does not widen that set; on Windows,
 `TEMP` is accepted only when it names an `AppData\Local\Temp` folder. The command opens the file
 and rechecks its identity before reading. On Linux that check uses the kernel's path for the open
 file and refuses a path swapped mid-check; on macOS and Windows it narrows that window but cannot

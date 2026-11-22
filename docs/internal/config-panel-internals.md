@@ -283,7 +283,7 @@ printout, and onboarding label those rows "Claude only".
 | `read-secrets` deny | `filesystem.allowRead` = `readableExceptions` |
 | Each `network-hosts` behavior, allow / ask / deny | its `hosts` joined to `network.allowedDomains` / nothing / `network.deniedDomains` |
 | Defaults | `reach-allowed-hosts` allow; `reach-claude-log-upload` deny, so a `claude` command run from a sandboxed shell does not prompt for the program's Datadog log address |
-| Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm"]`, `network.allowLocalBinding: false` |
+| Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm", "~/.roborepo/scratch"]`, `network.allowLocalBinding: false` |
 
 Writable temp folders and denied credentials are not repeated: Claude merges the `Edit` allow and
 `Read`/`Edit` deny rules from the `permissions` key into the sandbox. `go-online` never affects

@@ -194,6 +194,17 @@ When that check fails, add the file to a runner. Only if it is genuinely not a s
 a child process, a benchmark, a manual smoke that binds a port — add it to `EXEMPT` in
 `scripts/test/orphan-test-check.mjs` along with the reason it is not automated.
 
+## Temporary Files
+
+`scripts/test/run-checks.mjs` and `scripts/test/test-cli.sh` give each run its own temp folder,
+`roborepo-tests/run-<pid>-<time>/` under the temp root, and set `TMPDIR`, `TEMP`, and `TMP` to it
+for everything the run starts. The runner removes the folder when it ends, so a suite that calls
+`mkdtemp` and never cleans up leaves nothing behind. At start a run also removes the folders of
+earlier runs whose process no longer exists, which catches a crashed or killed run; a folder whose
+process may still be alive, including one a sandbox hides, is left alone. The helper is
+`scripts/test/lib/run-tmpdir.mjs`. A suite run directly with `node` gets no run folder, so it
+should still remove what it creates.
+
 ## Sandbox Notes
 
 Codex sandboxes can block checks that are valid on the host machine:

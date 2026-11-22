@@ -61,18 +61,32 @@ function temporaryRoots() {
   return [...new Set(candidates.filter((root) => fs.existsSync(root)).map((root) => fs.realpathSync(root)))];
 }
 
+// The agent scratch store at its default location, the one both harness sandboxes let a shell
+// write (Codex's sandbox does not reach the system temp folders' siblings under $HOME). The default
+// path is used rather than ROBOREPO_STATE_ROOT for the same reason $TMPDIR is not trusted above;
+// like the denylist check, both the $HOME and the account's own home are read.
+function scratchRoots() {
+  const homes = [...new Set([os.homedir(), accountHome()])];
+  return [...new Set(homes.map((home) => path.join(home, ".roborepo", "scratch"))
+    .filter((root) => fs.existsSync(root)).map((root) => fs.realpathSync(root)))];
+}
+
+function bodyRoots() {
+  return [...new Set([...temporaryRoots(), ...scratchRoots()])];
+}
+
 const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
 
 // Agent permissions allow `delivery pr-body` with any argument, and the command reads the file
 // outside the agent's Read tool, so it must enforce what Read would: the body must resolve, after
-// symlinks, to a regular file inside a system temp directory that the `read-secrets` denylist does
-// not name. The file is then opened and its identity rechecked. On Linux the kernel's own path
+// symlinks, to a regular file inside a system temp directory or the agent scratch store that the
+// `read-secrets` denylist does not name. The file is then opened and its identity rechecked. On Linux the kernel's own path
 // for the open descriptor is compared, which closes a path component swapped mid-check. Elsewhere
 // Node has no descriptor-path lookup, so a fresh resolution's device and inode are compared, which
 // narrows that window but cannot close it against repeated timed swaps. Refusals and read errors
 // never print the path.
 function readBodyFile(file) {
-  const roots = temporaryRoots();
+  const roots = bodyRoots();
   let resolved;
   try {
     resolved = fs.realpathSync(file);
@@ -80,7 +94,7 @@ function readBodyFile(file) {
     throw new Error("PR body file was not found (path not printed)");
   }
   if (!roots.some((root) => resolved.startsWith(root.endsWith(path.sep) ? root : root + path.sep))) {
-    throw new Error(`PR body file must be inside a system temp directory (${roots.join(" or ") || "none available"})`);
+    throw new Error(`PR body file must be inside a system temp directory or the scratch folder (${roots.join(" or ") || "none available"})`);
   }
   if (isDeniedSecret(resolved)) throw new Error("PR body file matches the read-secrets credential denylist (path not printed)");
   let fd;

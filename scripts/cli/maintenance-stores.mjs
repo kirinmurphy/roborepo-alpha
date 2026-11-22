@@ -15,12 +15,18 @@ import { withCleanupStoreLock } from "../../modules/repositories/worktree-cleanu
 import { loadSettings } from "../../modules/developer-runtime/settings.mjs";
 import {
   FILE_SET_SHAPE,
+  FOLDER_SET_SHAPE,
   LOG_SHAPE,
   describeFileSet,
+  describeFolderSet,
   findRetentionStore,
+  folderAgeDays,
+  folderSetEntries,
   formatBytes,
   measureFileSet,
+  measureFolderSet,
   measureLog,
+  removeFolderSetEntries,
   resolveStorePolicy,
   retentionStores,
 } from "../../modules/retention/index.mjs";
@@ -29,7 +35,7 @@ export function maintenanceStores(args = []) {
   const [sub, ...rest] = args;
   if (!sub || sub === "list") return listStores(rest);
   if (sub === "reset") return resetStore(rest);
-  console.error("usage: roborepo maintenance stores [list | reset <id> [--all]]");
+  console.error("usage: roborepo maintenance stores [list | reset <id> [--all] [--dry-run]]");
   return 2;
 }
 
@@ -60,15 +66,16 @@ function listStores(args) {
   }
   console.log("");
   console.log(`state root: ${stateDir}`);
-  console.log("reset one with: roborepo maintenance stores reset <id> [--all]");
+  console.log("reset one with: roborepo maintenance stores reset <id> [--all] [--dry-run]");
   return 0;
 }
 
 async function resetStore(args) {
   const all = args.includes("--all");
-  const rest = args.filter((arg) => arg !== "--all");
+  const dryRun = args.includes("--dry-run");
+  const rest = args.filter((arg) => arg !== "--all" && arg !== "--dry-run");
   if (rest.length !== 1) {
-    console.error("usage: roborepo maintenance stores reset <id> [--all]");
+    console.error("usage: roborepo maintenance stores reset <id> [--all] [--dry-run]");
     return 2;
   }
 
@@ -79,6 +86,8 @@ async function resetStore(args) {
     return 2;
   }
 
+  // A dry run only reads, so it takes no lock.
+  if (dryRun) return all ? previewClear(store) : previewTrim(store);
   const reset = () => all ? clearStore(store) : trimStore(store);
   if (!["worktree-removal-log", "worktree-cleanup-transactions"].includes(store.id)) return reset();
   try {
@@ -89,29 +98,91 @@ async function resetStore(args) {
   }
 }
 
-function trimStore(store) {
-
-  // Apply the store's own policy. This is the same measurement its write path performs, so a reset
-  // that reports "nothing to do" is telling the truth about the store being within its bound.
+// Apply the store's own policy. This is the same measurement its write path performs, so a reset
+// that reports "nothing to do" is telling the truth about the store being within its bound.
+function measureStore(store) {
   const policy = policyFor(store);
-  const verdict = store.shape === LOG_SHAPE
-    ? measureLog({ filePath: store.target, policy })
-    : measureFileSet({ dirPath: store.target, policy, filter: store.filter });
+  if (store.shape === LOG_SHAPE) return measureLog({ filePath: store.target, policy });
+  if (store.shape === FOLDER_SET_SHAPE) return measureFolderSet({ dirPath: store.target, policy });
+  return measureFileSet({ dirPath: store.target, policy, filter: store.filter });
+}
 
+function unitOf(store) {
+  if (store.shape === LOG_SHAPE) return "record";
+  return store.shape === FOLDER_SET_SHAPE ? "folder" : "file";
+}
+
+function trimStore(store) {
+  const verdict = measureStore(store);
   if (!verdict.act) {
     console.log(`${store.id}: already within policy (${verdict.reason})`);
     return 0;
   }
 
-  const removed = store.shape === LOG_SHAPE
-    ? trimLog(store.target, verdict.dropCount)
-    : removeFiles(verdict.files);
-  console.log(`${store.id}: removed ${removed} ${store.shape === LOG_SHAPE ? "record" : "file"}(s) (${verdict.reason})`);
+  let removed;
+  if (store.shape === LOG_SHAPE) removed = trimLog(store.target, verdict.dropCount);
+  else if (store.shape === FOLDER_SET_SHAPE) {
+    const result = removeFolderSetEntries({ dirPath: store.target, paths: verdict.files });
+    for (const refusal of result.refused) console.error(`${store.id}: left ${refusal.path} (${refusal.reason})`);
+    removed = result.removed.length;
+  } else removed = removeFiles(verdict.files);
+  console.log(`${store.id}: removed ${removed} ${unitOf(store)}(s) (${verdict.reason})`);
   return 0;
 }
 
+// --dry-run: what trimStore would remove, with sizes and ages, removing nothing. A log's records
+// carry no per-record listing worth printing, so a log reports the count.
+function previewTrim(store) {
+  const verdict = measureStore(store);
+  if (!verdict.act) {
+    console.log(`${store.id}: already within policy (${verdict.reason}); nothing would be removed`);
+    return 0;
+  }
+  if (store.shape === LOG_SHAPE) {
+    console.log(`${store.id}: would remove ${verdict.dropCount} record(s) (${verdict.reason})`);
+    return 0;
+  }
+  const entries = store.shape === FOLDER_SET_SHAPE ? verdict.entries : verdict.files.map(statEntry).filter(Boolean);
+  printPreview(store, entries, `would remove ${entries.length} ${unitOf(store)}(s) (${verdict.reason})`);
+  return 0;
+}
+
+// --all --dry-run: everything --all would delete. --all removes the whole target, so every entry in
+// the directory is listed, not only the ones the store's filter counts.
+function previewClear(store) {
+  if (store.shape === LOG_SHAPE) {
+    const { bytes, detail } = inspect(store);
+    console.log(`${store.id}: would clear ${detail === "absent" ? "nothing (absent)" : formatBytes(bytes)}`);
+    return 0;
+  }
+  const entries = folderSetEntries({ dirPath: store.target }) ?? [];
+  entries.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  printPreview(store, entries, `would clear ${entries.length} entr${entries.length === 1 ? "y" : "ies"}`);
+  return 0;
+}
+
+function printPreview(store, entries, headline) {
+  const total = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+  console.log(`${store.id}: ${headline}, ${formatBytes(total)} — dry run, nothing removed`);
+  const now = new Date();
+  for (const entry of entries) {
+    const age = `${folderAgeDays(entry, now).toFixed(1)}d old`;
+    console.log(`  ${formatBytes(entry.bytes).padStart(9)}  ${age.padStart(10)}  ${path.basename(entry.path)}`);
+  }
+}
+
+function statEntry(filePath) {
+  try {
+    const stat = fs.lstatSync(filePath);
+    return { path: filePath, bytes: stat.size, mtimeMs: stat.mtimeMs };
+  } catch {
+    return null;
+  }
+}
+
 // --all is the destructive form: everything goes, not just what policy would drop. Reporting the
-// byte count makes the difference visible in the transcript.
+// byte count makes the difference visible in the transcript. rmSync removes links inside the tree
+// as links and never follows them.
 function clearStore(store) {
   const { bytes } = inspect(store);
   try {
@@ -169,6 +240,10 @@ function policyFor(store) {
 }
 
 function inspect(store) {
+  if (store.shape === FOLDER_SET_SHAPE) {
+    const { entryCount, totalBytes } = describeFolderSet({ dirPath: store.target });
+    return { bytes: totalBytes, detail: entryCount ? `${entryCount} folder(s)` : "empty" };
+  }
   if (store.shape === FILE_SET_SHAPE) {
     const { fileCount, totalBytes } = describeFileSet({ dirPath: store.target, filter: store.filter });
     return { bytes: totalBytes, detail: fileCount ? `${fileCount} file(s)` : "empty" };

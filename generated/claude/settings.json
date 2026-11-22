@@ -233,7 +233,8 @@
     ],
     "filesystem": {
       "allowWrite": [
-        "~/.npm"
+        "~/.npm",
+        "~/.roborepo/scratch"
       ],
       "allowRead": [
         "/private/etc/ssl/cert.pem",

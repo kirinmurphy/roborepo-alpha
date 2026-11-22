@@ -23,6 +23,13 @@ import { codexProjectInventory } from "./project-inventory.mjs";
 import { locateTranscript, extractHeavyTurns, transcriptTitle } from "../transcript-locate.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+// Writable for every checkout, unlike the per-repository plans-store grants. Codex's `:workspace`
+// profile already lets shells write the workspace, $TMPDIR, and /tmp, but nothing under the home
+// folder; Codex accepts `write` only on an exact path or a trailing `/**`.
+//   - ~/.roborepo/scratch: agents' temporary folders from `roborepo scratch <name>`. Listed here
+//     rather than in write-scope, whose shared allow rules may not name a home folder.
+export const CODEX_SANDBOX_WRITABLE_PATHS = Object.freeze(["~/.roborepo/scratch/**"]);
 const manifestPath = path.resolve(here, "..", "..", "..", "globals", "harnesses", "codex", "provider.json");
 const codexManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 
@@ -164,7 +171,8 @@ export const codexProvider = defineHarnessProvider({
       render: (current, manifest, overrides, target, options = {}) => {
         const behaviors = resolveBehaviors(manifest, overrides.behaviors);
         const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
-        return renderCodexConfig(current, behaviors, arbitraryCommands, target, options);
+        const writablePaths = [...CODEX_SANDBOX_WRITABLE_PATHS, ...(options.writablePaths ?? [])];
+        return renderCodexConfig(current, behaviors, arbitraryCommands, target, { ...options, writablePaths });
       },
     },
     mcp: {

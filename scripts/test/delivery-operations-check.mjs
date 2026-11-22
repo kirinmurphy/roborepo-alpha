@@ -10,6 +10,7 @@ import { isolateGitConfig } from "./lib/git-config.mjs";
 // $TMPDIR that may point elsewhere.
 const root = fs.mkdtempSync(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "roborepo-delivery-"));
 const cli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 isolateGitConfig(root);
 
 try {
@@ -66,9 +67,10 @@ try {
   } else {
     const gh = createFakeGh();
     const repository = { defaultBranchRef: { name: "main" }, nameWithOwner: "example/project", url: "https://github.com/example/project" };
-    const runDelivery = (args, prs = [pr], workflow = run, configChange = null, repo = repository) => {
+    const runDelivery = (args, prs = [pr], workflow = run, configChange = null, repo = repository, extraEnv = {}) => {
       fs.writeFileSync(gh.log, "");
       return delivery(checkout, args, {
+        ...extraEnv,
         PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`,
         FAKE_GH_LOG: gh.log,
         FAKE_GH_REPO: JSON.stringify(repo),
@@ -143,6 +145,30 @@ try {
     fs.writeFileSync(homeKey, "ghp_secretValue");
     const homeSecret = delivery(checkout, ["pr-body", homeKey], { HOME: home, USERPROFILE: home });
     refused(homeSecret, /matches the read-secrets credential denylist \(path not printed\)/);
+    // The agent scratch store is a body location too, so a Codex agent, whose sandbox cannot write
+    // the system temp folders' neighbours under $HOME, can hand over a body. The home sits outside
+    // every temp root (in the checkout's ignored .tmp/), so only the scratch rule can accept it;
+    // the rest of the state root stays refused.
+    const ignoredTmp = path.join(repoRoot, ".tmp");
+    const madeIgnoredTmp = !fs.existsSync(ignoredTmp);
+    fs.mkdirSync(ignoredTmp, { recursive: true });
+    const outsideHome = fs.mkdtempSync(path.join(ignoredTmp, "delivery-home-"));
+    try {
+      const scratchBody = path.join(outsideHome, ".roborepo", "scratch", "gy8ncs9u", "body.md");
+      const stateBody = path.join(outsideHome, ".roborepo", "telemetry", "body.md");
+      for (const file of [scratchBody, stateBody]) {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, body);
+      }
+      const homeEnv = { HOME: outsideHome, USERPROFILE: outsideHome };
+      passed(runDelivery(["pr-body", scratchBody], [pr], run, null, repository, homeEnv));
+      assert.deepEqual(calls().at(-1).input, body, "a scratch-folder body reaches the pull request");
+      refused(runDelivery(["pr-body", stateBody], [pr], run, null, repository, homeEnv), /inside a system temp directory or the scratch folder/);
+      assert.deepEqual(calls(), [], "a body elsewhere in the state root stops before any GitHub call");
+    } finally {
+      fs.rmSync(outsideHome, { recursive: true, force: true });
+      if (madeIgnoredTmp) fs.rmSync(ignoredTmp, { recursive: true, force: true });
+    }
     const template = path.join(secretDir, ".env.example");
     fs.writeFileSync(template, "PLACEHOLDER=1");
     passed(runDelivery(["pr-body", template]));

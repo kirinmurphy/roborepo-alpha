@@ -27,6 +27,35 @@ import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mj
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
 import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
 
+// Each call first removes the empty shells earlier calls were denied removing, and only those.
+{
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shell-sweep-"));
+  try {
+    const hourAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const age = (folder) => fs.utimesSync(folder, hourAgo, hourAgo);
+    const shell = path.join(tmpRoot, "roborepo-disposable-landing-AbC123");
+    fs.mkdirSync(path.join(shell, "objects", "pack"), { recursive: true });
+    [path.join(shell, "objects", "pack"), path.join(shell, "objects"), shell].forEach(age);
+    const holdsFile = path.join(tmpRoot, "roborepo-disposable-preservation-XyZ789");
+    fs.mkdirSync(holdsFile);
+    fs.writeFileSync(path.join(holdsFile, "object"), "synthetic");
+    age(holdsFile);
+    const fresh = path.join(tmpRoot, "roborepo-disposable-landing-Fresh1");
+    fs.mkdirSync(fresh);
+    const unrelated = path.join(tmpRoot, "other-empty-folder");
+    fs.mkdirSync(unrelated);
+    age(unrelated);
+
+    const result = await withTemporaryStorage("landing", async () => ({ landed: true }), { tmpRoot });
+    assert.equal(result.landed, true);
+    assert.deepEqual(fs.readdirSync(tmpRoot).sort(), [path.basename(unrelated), path.basename(fresh), path.basename(holdsFile)].sort(),
+      "the old empty shell and the call's own folder are gone; a folder holding a file, a recent shell, and unrelated folders remain");
+    assert.equal(fs.readFileSync(path.join(holdsFile, "object"), "utf8"), "synthetic");
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+}
+
 // Injected filesystem failures below are simulations, not native permission evidence.
 {
   const denied = () => { throw Object.assign(new Error("directory denied"), { code: "EPERM" }); };

@@ -88,7 +88,8 @@ a plan is the same from every checkout and never merges into a code branch.
 Plans change only through named `roborepo plans` commands. To edit one:
 
 1. Read it with `roborepo plans show <plan>`, which refreshes from the remote first.
-2. Write your edited copy outside the code checkout, under the plan's own filename.
+2. Write your edited copy in a temporary folder outside the code checkout (see the Temporary Files
+   rule), under the plan's own filename.
 3. Run `roborepo plans save <file.md>`. It validates, commits, and pushes.
 
 `plans save` keeps an existing plan's path and lifecycle, and puts a new plan in `backlog/`. It

@@ -324,7 +324,7 @@ on it; `merge-pull-requests` does not, since `gh` runs outside it either way:
 
 | Inside the sandbox | Bound |
 | --- | --- |
-| Writes | The session's checkout, the temp folders in `write-scope`, and the npm cache (`~/.npm`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
+| Writes | The session's checkout, the temp folders in `write-scope`, the npm cache (`~/.npm`), and the agent scratch folder (`~/.roborepo/scratch`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
 | Reads | Everything except `read-secrets`, minus the certificate bundles above |
 | Network | Hosts in `reach-allowed-hosts` connect; the address in `reach-claude-log-upload` is refused; any other host prompts |
 

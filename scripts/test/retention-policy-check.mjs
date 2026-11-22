@@ -15,6 +15,7 @@ import { appendRemoval, removalLogPath } from "../../modules/repositories/worktr
 import { saveTransaction, readTransaction } from "../../modules/repositories/worktree-transactions.mjs";
 import {
   FILE_SET_SHAPE,
+  FOLDER_SET_SHAPE,
   LOG_SHAPE,
   assertBounded,
   describeFileSet,
@@ -180,7 +181,7 @@ try {
   const ids = stores.map((store) => store.id);
   assert.equal(new Set(ids).size, ids.length, "store ids are unique");
   for (const store of stores) {
-    assert.ok([LOG_SHAPE, FILE_SET_SHAPE].includes(store.shape), `${store.id} has a known shape`);
+    assert.ok([LOG_SHAPE, FILE_SET_SHAPE, FOLDER_SET_SHAPE].includes(store.shape), `${store.id} has a known shape`);
     assert.ok(store.target.startsWith(tempRoot), `${store.id} resolves under the given stateRoot`);
     assert.ok(store.label && store.description, `${store.id} is described for reporting surfaces`);
   }

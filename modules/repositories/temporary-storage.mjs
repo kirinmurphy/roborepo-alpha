@@ -2,10 +2,19 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+const PREFIX = "roborepo-disposable-";
+const SHELL_NAME = /^roborepo-disposable-(landing|preservation)-[A-Za-z0-9]+$/;
+// An earlier call's folder is swept only once it has sat unchanged this long, so a concurrent
+// call whose folder is still empty because its assessment has barely started is never touched.
+const SHELL_MIN_AGE_MS = 60 * 60 * 1000;
+
 // Own creation and cleanup together: callers cannot accidentally nominate a worktree for deletion.
-export async function withTemporaryStorage(purpose, assess, { fsApi = fs, warn = (message) => console.warn(message) } = {}) {
+export async function withTemporaryStorage(purpose, assess, {
+  fsApi = fs, warn = (message) => console.warn(message), tmpRoot = os.tmpdir(), now = Date.now(),
+} = {}) {
   if (!["landing", "preservation"].includes(purpose)) throw new Error("unsupported temporary storage purpose");
-  const temporary = fsApi.mkdtempSync(path.join(os.tmpdir(), `roborepo-disposable-${purpose}-`));
+  sweepEmptyShells(tmpRoot, { fsApi, now });
+  const temporary = fsApi.mkdtempSync(path.join(tmpRoot, `${PREFIX}${purpose}-`));
   const identity = fsApi.lstatSync(temporary);
   let result;
   let failure;
@@ -27,6 +36,50 @@ export async function withTemporaryStorage(purpose, assess, { fsApi = fs, warn =
     throw failure;
   }
   return { ...result, cleanupWarnings };
+}
+
+// When the sandbox denies removing a folder, cleanup leaves verified empty directory shells behind
+// with a warning. Each later call removes the shells earlier calls left: a folder with this
+// prefix, holding nothing but directories, unchanged for an hour. Removal is rmdir from the deepest
+// folder up, which can only ever remove empty directories, so a folder that gained a file or link
+// is left alone. A denied removal is left silently for a later call; the original call already
+// warned about it.
+export function sweepEmptyShells(tmpRoot = os.tmpdir(), { fsApi = fs, now = Date.now() } = {}) {
+  const swept = [];
+  let names;
+  try {
+    names = fsApi.readdirSync(tmpRoot);
+  } catch {
+    return swept;
+  }
+  for (const name of names) {
+    if (!SHELL_NAME.test(name)) continue;
+    const shell = path.join(tmpRoot, name);
+    const folders = emptyShellFolders(shell, fsApi);
+    if (!folders || folders.some((folder) => now - folder.mtimeMs < SHELL_MIN_AGE_MS)) continue;
+    try {
+      for (const folder of folders.reverse()) fsApi.rmdirSync(folder.path);
+      swept.push(shell);
+    } catch {
+      // Denied or changed underneath; the next call tries again.
+    }
+  }
+  return swept;
+}
+
+// Every folder in the tree, parents before children, or null when anything but a directory is in it.
+function emptyShellFolders(root, fsApi) {
+  const folders = [];
+  const visit = (directory) => {
+    let stat;
+    try { stat = fsApi.lstatSync(directory); } catch { return false; }
+    if (!stat.isDirectory()) return false;
+    folders.push({ path: directory, mtimeMs: stat.mtimeMs });
+    let names;
+    try { names = fsApi.readdirSync(directory); } catch { return false; }
+    return names.every((name) => visit(path.join(directory, name)));
+  };
+  return visit(root) ? folders : null;
 }
 
 function cleanTemporaryTree(root, fsApi, identity) {

@@ -12,6 +12,8 @@ import path from "node:path";
 
 export const LOG_SHAPE = "log";
 export const FILE_SET_SHAPE = "file-set";
+export const FOLDER_SET_SHAPE = "folder-set";
+export const SCRATCH_STORE_ID = "scratch";
 
 const MB = 1024 * 1024;
 
@@ -120,7 +122,23 @@ export function retentionStores(stateRoot) {
       filter: isBrowserEvidenceFile,
       description: "Screenshots, recordings, and traces captured as verification evidence.",
     },
+    {
+      id: SCRATCH_STORE_ID,
+      label: "Agent scratch",
+      shape: FOLDER_SET_SHAPE,
+      target: scratchRoot(stateRoot),
+      // One folder per plan or topic, handed out by `roborepo scratch <name>`, which prunes this
+      // store on every call. A folder untouched for 14 days is done with; work that must last
+      // longer belongs in the plan or the repo. The byte cap is the backstop.
+      policy: { maxAgeDays: 14, maxBytes: 500 * MB, floorBytes: 0, keepFraction: null },
+      description: "Temporary folders agents share between sessions.",
+    },
   ];
+}
+
+// The scratch folder's location, shared by the registry entry and the scratch command.
+export function scratchRoot(stateRoot) {
+  return path.join(stateRoot, "scratch");
 }
 
 // Evidence files are flat (`<run-id>-<n>-<type>.<ext>`) so the file-set measurement applies as is;
