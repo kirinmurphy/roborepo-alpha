@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Approved at d9743e02; merge PR 66, then run /plan-close.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
