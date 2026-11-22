@@ -442,6 +442,11 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - Reviewed implementation commit: 17519cd44b384eba2d762960b7781e6d76eef53d
 - Base commit: 46f37fbc51d551f49999d757a328694c176555b8
 
+### Approval
+- Decision: approved
+- Reviewed implementation commit: 17519cd44b384eba2d762960b7781e6d76eef53d
+- Confirmed by: human
+
 ## Decision Log
 
 - **2026-11-22 (user decision): Ask about a recommendation once, at enable time.** The plan earlier
