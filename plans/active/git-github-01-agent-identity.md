@@ -517,9 +517,16 @@ phases build, so run them before Phase 3.
 - [x] The docs say Gemini is not covered but not why (its `.env` lookup order) — fixed (35f1b186)
 - [x] `## Not tested` omits manual Validation rows an agent can or a person must check, and its Codex entry claims person-only for parts that need no token — fixed: entries rewritten, agent-runnable checks run (plan record, November 22)
 
+- [x] An agent could run the setup past its deny by prefixing `ROBOREPO_GITHUB_SETUP_SCRIPTED=1`, which skipped the terminal check — fixed: the switch is gone and the setup always needs a terminal (a60d58a9)
+- [x] The setup compared the typed bot login case-sensitively after storing the token — fixed: GitHub's own spelling, compared case-insensitively (a60d58a9)
+- [x] Whether `gh` reaches GitHub inside Codex's sandbox was listed as person-only though it needs no token — fixed: checked, see Not tested
+- [x] The setup printed the sign-up and token pages instead of opening them — fixed: opened with the platform opener, still printed (a60d58a9)
+- [x] The docs did not say turning the package off leaves the bot's token in `hosts.yml` — fixed: says what remains and how to remove it (a60d58a9)
+
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
 - Validation pass 1 at 43a377d4 (fresh-context subagent): 10 findings above, all fixed
+- Validation pass 2 at 8565a475 (fresh-context subagent): 5 findings above, all fixed
 - Codex TLS: the CA read grants added in 35f1b186 did not work (`/**/*.pem` deny wins); replaced by the CA bundle copy in 8565a475
 
 ## Not tested
@@ -537,6 +544,10 @@ phases build, so run them before Phase 3.
       `git -c http.sslCAInfo=<copy>.crt ls-remote https://github.com/kirinmurphy/roborepo-alpha.git HEAD`
       → the HEAD commit, exit 0; `curl --cacert <copy>.crt https://api.github.com/zen` → 200. The copy
       sat in a temporary folder, not the setup's `~/.roborepo/github-agent/ca-bundle.crt`.
+- [x] `gh` reaches GitHub over TLS inside Codex's sandbox with the identity's network settings. —
+      Verified by agent 2026-11-22 at a60d58a9: `codex exec` running
+      `GH_TOKEN=dummy gh repo view kirinmurphy/roborepo-alpha --json name` → "HTTP 401: Bad
+      credentials", so the network and TLS work and only the token is missing.
 - [x] Codex's permission hook follows the identity. — Verified by agent 2026-11-22 at 35f1b186:
       `codex-command-permission-check.mjs` and a direct hook probe with an isolated state root:
       `gh api repos/o/r` → deny without the package asset, allow with it.
