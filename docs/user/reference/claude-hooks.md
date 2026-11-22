@@ -10,7 +10,7 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 | Event | Hook | What it does | Installed by |
 | --- | --- | --- | --- |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | always |
-| PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes (see below) | always |
+| PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes; denies merges into a checkout on a protected branch and asks before a delete there (see below) | always |
 | PreToolUse `Bash` | Output minimizer | Trims noisy build, lint, and typecheck output; denies `--watch`, `--verbose`, and `--debug`; auto-allows a short list of safe read-only commands, alone or piped into read-only filters such as `head` or `wc`, never with anything chained or redirected | always |
 | PreToolUse `Bash` | Dense command log | Records commands of three or more lines to `<stateRoot>/capture/claude/dense-bash.jsonl` so you can find ones worth scripting. Never blocks | `capture-dense-bash` |
 | PreToolUse `Read`, `Write`, `Edit` | Repository scope | Reads across the repository and its worktrees are quiet; writes outside the checkout in use prompt. See [Config Control Panel](config-control-panel.md#changing-path-scopes) | always |
@@ -31,19 +31,62 @@ force-push to any branch.
 So the same hooks also refuse a hand-made commit or merge commit in a checkout of `repo-plans`: the
 `pre-commit` and `pre-merge-commit` hooks in the same folder stop it before it is recorded.
 
-The permission settings leave `git push` at **ask**. The protected-branch hook is what approves a
-push, and only one it has checked. So an install without the hooks, a harness without them (Gemini),
-and `roborepo agent-run` all keep the prompt.
+The permission settings leave `git push` (`push-code`) at **ask**. The protected-branch hook is
+what approves a push, and only one it has checked. So a harness without the hook (Gemini) and
+`roborepo agent-run` keep the prompt.
+
+For Claude, that ask renders no permission rule. Claude applies an ask rule even when a hook
+approves the call, so with the rule in place every push prompted, verified or not. Without it, the
+hook decides: it allows a verified feature-branch push, asks about one it cannot check, and denies
+`main` and force pushes, which the `rewrite-history` deny rules also block. If the hook is missing,
+an unlisted `git push` still prompts in Claude's default permission mode. Setting `push-code` to
+`allow` or `deny` renders those rules as usual.
 
 Two checks enforce this, for Claude and Codex alike:
 
 | Check | When it runs | What it does |
 | --- | --- | --- |
-| Protected-branch push hook | Before the shell command runs | Allows a push it verified lands on non-protected branches, when the whole command is pushes and the `pre-push` hook is installed. Denies protected destinations and every force spelling (`--force` anywhere, `--force-with-lease=<ref>`, `-uf`, a `+` refspec). Asks when it cannot tell: `--all`, `:`, a `$VARIABLE`, `--no-verify`, an unrecorded remote default branch, or a source-only refspec under `remote.<name>.push` |
+| Protected-branch push hook | Before the shell command runs | Allows a push it verified lands on non-protected branches, when the whole command is pushes and the `pre-push` hook is installed. Denies protected destinations and every force spelling (`--force` anywhere, `--force-with-lease=<ref>`, `-uf`, a `+` refspec). Asks when it cannot tell: `--all`, `:`, a `$VARIABLE`, `--no-verify`, an unrecorded remote default branch, or a source-only refspec under `remote.<name>.push`. Asks before deleting any remote branch (`--delete`, `:branch`). A redirect into a file keeps the push from being approved silently; `2>/dev/null` does not |
 | Git `pre-push` hook | When git pushes | Checks the exact refs git sends, including through aliases and scripts. Refuses protected destinations and any update that is not a fast-forward. Looks up the remote's default branch from the remote when it is not recorded locally, and refuses when it cannot |
 
-Anything else in the same command (`git push origin feat && npm publish`) leaves the whole command to
-the permission prompt, so the hook's approval never covers it.
+Anything else in the same command (`git push origin feat && npm publish`) keeps the hook from
+approving it, so the other commands are left to the sandbox and the permission rules; a verified
+feature push in such a chain still lands only where the hook checked. A push the hook cannot read
+asks instead: one with a `git -c` or environment prefix, one behind a wrapper (`env`, `command`), in
+a subshell or `$(…)`, through `xargs`, or through an alias. So does a push in a script handed to a
+shell (`bash -c`, `eval`, `watch`, `env -S`, a `bash <<EOF` heredoc or `<<<` here-string), a push
+whose words the shell builds (`git $CMD`, `$GIT push`, `git {push,}`), and a push after a command
+that changes what it reads (`export`, `unset`, a `GIT_*` or `PATH` assignment, `git config`,
+`git remote set-url`, `source`). A command that only mentions a push, such as `echo git push`,
+`grep "git push"`, or `git log --grep push`, asks nothing, unless something in the same command could
+run that text as a script (`echo git push origin main | sh`, a shell reading a file it wrote, or an
+interpreter such as `python3`, `perl`, `ruby`, `node`, `awk`, or `make` anywhere in the command).
+Quoted text is not a command, so a commit message such as `"guard git push; make it clearer"` asks
+nothing.
+
+A heredoc body is skipped only when it is plainly data: `cat`, `tee`, `gh`, or a `git commit`,
+`git tag`, or `git notes` message read from stdin reads it, nothing pipes that command on, no part
+of the command could run it as a script (a shell, even one glued to a bracket or redirect such as
+`(sh)` or `bash<x`, `source`, `eval`, `xargs`, `env -S`, one of those interpreters, a path such as
+`./x.sh`, a program from a variable or a substitution such as `$(which sh)`), and the shell expands
+nothing in it (a quoted delimiter such as `<<'EOF'`, or no `$(…)` or backticks in the body). So a
+commit message, pull request body, or written file that mentions `git push` asks nothing, and every
+other body is read like the rest of the command.
+
+Some pushes the hook cannot see at all, so it neither asks nor allows them, and the decision falls
+to the permission rules and the `pre-push` hook below:
+
+- a push started by another program from text the command never shows, such as an existing
+  script, Makefile, or npm script;
+- a push on another machine through `ssh`;
+- a shell function or alias defined in an earlier command;
+- a subcommand that comes from a variable or file the command never spells out, such as
+  `git $CMD` with no `push` anywhere in the command;
+- any other form the hook does not parse.
+
+The `pre-push` hook still refuses each of these when it would reach a protected branch or rewrite
+history, unless the push passes `--no-verify`, which skips it. Only branch protection on the remote
+stops such a push.
 
 On Codex, every push the hook would ask about is denied instead, with a message to run it yourself.
 Codex has been seen running commands whose hook result was ask without prompting, and a push with
@@ -61,6 +104,76 @@ do not run in agent shells.
 A push from your own terminal is never blocked. Pair this with branch protection on the remote for
 a guard that does not depend on the local machine.
 
+### Merges into a protected branch
+
+Agents never merge into a protected branch, locally or on GitHub. In a checkout that has one checked
+out, the hook denies `git merge`, `git pull`, `git rebase`, `git cherry-pick`, and `git am` (Claude
+and Codex alike), following `cd`, `git -C`, subshells, and `sh -c` the same way as for deletes. Two
+forms stay allowed because they bring in no new commits:
+
+- a fast-forward-only update from the branch's own upstream, meaning its configured remote (`origin`
+  when none is set) and its own name: `git pull --ff-only`, `git pull --ff-only origin main`,
+  `git merge --ff-only origin/main`, `git merge --ff-only @{u}`;
+- stopping one in progress: `--abort` or `--quit`.
+
+A fast-forward from anything else is denied: `git merge --ff-only feature` would land the feature
+branch, and `git pull --ff-only <path or URL>` another repository's history. So is one with
+`--upload-pack` or `git -c`/`--config-env`, which can point the fetch at another repository under
+the remote's name. To bring `main` into a
+feature branch, run `roborepo plans sync-base` from that branch's worktree.
+
+The agents' git hooks back this up, however the command reached git, such as through an alias:
+`pre-merge-commit` refuses a merge commit on a protected branch, `pre-commit` refuses finishing one
+(after a conflict or `--no-commit`), and `pre-rebase` refuses rebasing one. A fast-forward,
+`cherry-pick`, `am`, and `merge --squash` make ordinary commits, so only the shell hook sees those.
+Your own terminal is unaffected.
+
+### Deletes on a protected branch
+
+Deleting files is allowed by default (`delete-files`), because Claude's shell sandbox keeps shell
+commands inside the session's checkout and the temp folders. That still leaves the checkout itself,
+which on `main` is the one you most want intact. The same hook adds that check:
+
+| Delete target | Result |
+| --- | --- |
+| A temp folder (`/tmp`, `/private/tmp`, `/var/folders`, `$TMPDIR`) | Runs, no prompt |
+| A checkout or worktree on a feature branch | Runs, no prompt |
+| A checkout with a protected branch checked out, including its `.git` folder | Asks (Codex: denied) |
+| A folder holding such a checkout up to two levels down | Asks (Codex: denied) |
+| A path the shell expands | Judged by its literal part: `$TMPDIR/x` is temp, `/repo/src/*` is `/repo/src`; a word that starts with an expansion (`"$f"`, `*.log`) is judged by the folder the command runs in |
+
+It recognizes `rm`, `rmdir`, `unlink`, `find … -delete` or `-exec rm`, `xargs rm`, `git rm`,
+`git clean -f`, `git reset --hard`, `git restore` of the working tree, and `git stash drop` or
+`clear`. It finds them chained, in loops and `if` blocks, in subshells and `$(…)`, behind wrappers
+such as `env`, `command`, `nohup`, `time`, and `sudo`, and inside `sh -c`. It follows `cd`, `cd -`,
+`pushd`, `popd`, `~`, `$TMPDIR`, and `git -C`, and a `cd` inside `( … )` or `$(…)` ends with it. A
+`cd` to any other variable or to a `$(…)` is not followed, so later deletes are judged by the folder before it,
+though a `cd -` or `popd` after it still returns where the shell does. It cannot see a delete
+hidden in a script, `mv` over a file, or a redirect that truncates one.
+
+A few more rules keep a temp-looking path from reaching a protected checkout:
+
+- Paths are followed through symlinks the way the shell walks them, so `/tmp/link/x`, `/tmp/link/`,
+  and `/tmp/link/../x` are judged where they land, and so is `$TMPDIR/../x`. Deleting the link
+  itself (`rm /tmp/link`) removes only the link, so it is judged as the temp folder.
+- After a `cd` or `pushd` to a folder that does not exist yet, later commands are judged both there
+  and in the folder before it, since the move may fail or follow a `mkdir`. Every such folder stays
+  in play through further moves, `cd -`, and `popd`.
+- Operands written after `find … -exec rm` or `xargs rm` count, not only where the command runs.
+- A `git switch` or `git checkout` earlier in the command counts alongside the branch already
+  checked out, since the switch may fail. `-b main` (or `-bmain`, `--create=main`), `--track origin/main`, and a name the hook
+  cannot read (`-`, `@{-1}`, a variable) count as protected.
+- When Claude runs a command outside its sandbox (`dangerouslyDisableSandbox`), nothing limits a
+  delete to the checkout, so any delete outside the temp folders asks.
+
+Protected branches are the same list as for pushes. `ROBOREPO_TEMP_ROOTS` (comma-separated)
+replaces the temp folder list.
+
+The hook runs on every shell call, sandboxed or not. That matters because the desktop app was seen
+running a sandboxed `rm` without the prompt its ask rule called for, while a hook's ask on a
+sandboxed command did prompt. Gemini runs neither the sandbox nor this hook, so set `delete-files`
+to `ask` if you run agents there.
+
 ## Opening Pull Requests With gh
 
 Agents can open pull requests and read them with the GitHub CLI. The protected-branch guards only
@@ -74,7 +187,8 @@ they can reach:
 | deny | `gh pr merge`, `gh api`, `gh auth token`, `gh repo edit`, `repo delete`, `repo rename`, `gh secret`, `gh variable`, `gh release`, `gh workflow run` |
 
 The protected-branch hook also denies the deny-bucket commands when global flags come first
-(`gh -R owner/repo pr merge 12`), a form the prefix rules miss.
+(`gh -R owner/repo api …`), a form the prefix rules miss. Agents never merge a pull request
+(`merge-pull-requests`): you merge it on GitHub.
 
 The workflow an agent should follow:
 

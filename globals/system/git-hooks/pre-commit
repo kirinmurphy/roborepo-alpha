@@ -1,7 +1,10 @@
 #!/bin/sh
-# Refuses a hand-made commit in the plans store, then runs the repo's own hook of this name; see
-# chain.sh.
+# Refuses a hand-made commit in the plans store, and finishing a merge on a protected branch (a
+# conflicted or --no-commit merge that `git commit` completes skips pre-merge-commit), then runs the
+# repo's own hook of this name; see chain.sh.
 . "$(dirname "$0")/chain.sh"
 . "$(dirname "$0")/plans-store.sh"
+. "$(dirname "$0")/protected-branch.sh"
 roborepo_refuse_plans_store
+[ -f "$(git rev-parse --git-path MERGE_HEAD 2>/dev/null)" ] && roborepo_refuse_protected_merge "finishing a merge"
 roborepo_chain_hook "$(basename "$0")" "$@"

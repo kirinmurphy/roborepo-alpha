@@ -318,7 +318,7 @@ main {
   font-size: var(--text-2xs);
   margin-top: 2px;
 }
-.codex-note {
+.harness-note {
   color: var(--warn);
   font-size: var(--text-2xs);
 }

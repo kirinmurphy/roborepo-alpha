@@ -119,6 +119,7 @@ export function behaviorRow(item, { onApplyBucket }) {
 
   fill(wrap, { label: item.label });
   toggleSlot(wrap, "codex-only", item.codexOnly);
+  toggleSlot(wrap, "claude-only", item.claudeOnly);
   toggleSlot(wrap, "description", item.description, item.description);
   // A default row states no default — it IS the default; saying so twice is noise.
   toggleSlot(wrap, "default-bucket", item.overridden && item.defaultBucket,

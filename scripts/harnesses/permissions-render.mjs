@@ -46,8 +46,9 @@ function quoteToml(value) {
 
 // Native prompt rules require an approval-capable session policy. The reviewer remains a
 // user-owned setting; this renderer must not select human or automatic review.
+// Claude-only behaviors render nothing for Codex, so their bucket must not change its policy.
 function codexApprovalPolicy(behaviors, arbitraryCommands) {
-  return behaviors.some((b) => b.bucket === "ask") || arbitraryCommands.some((c) => c.bucket === "ask")
+  return behaviors.some((b) => b.bucket === "ask" && !b.claudeOnly) || arbitraryCommands.some((c) => c.bucket === "ask")
     ? "on-request"
     : "never";
 }
@@ -72,8 +73,8 @@ function codexSandboxMode(behaviors) {
   return writeFiles?.bucket === "allow" ? "workspace-write" : "read-only";
 }
 
-// Network access derives from the go-online behavior (Codex-only concept; Claude has no sandbox
-// network gate at all).
+// Network access derives from the go-online behavior, Codex's on/off switch. Claude's shell sandbox
+// reads the separate network-hosts list instead (scripts/harnesses/claude/sandbox-settings.mjs).
 function codexNetworkAccess(behaviors) {
   return findBehavior(behaviors, "go-online")?.bucket === "allow";
 }
@@ -293,8 +294,14 @@ export function claudePermissions(manifest, overrides = {}, { home: _home = os.h
     // mechanism it has (Claude: a PreToolUse hook; Codex: its workspace sandbox), so the platform
     // renders nothing here and the bucket travels to the provider instead.
     if (b.kind === "repo-scope") continue;
-    if (b.kind === "network") continue; // Codex-only concept; no Claude equivalent to render.
+    // Network intent is not a permission rule: go-online is Codex's sandbox switch, and the Claude
+    // provider renders its own sandbox key from network-hosts and shell-sandbox.
+    if (b.kind === "network" || b.kind === "network-hosts" || b.kind === "shell-sandbox") continue;
     if (b.kind !== "commands") continue;
+    // Claude applies an ask rule even when a PreToolUse hook allows the call, so a hook that approves
+    // what it can verify (the protected-branch hook for `git push`) needs no ask rule beside it: the
+    // hook asks about the rest itself. Allow and deny still render.
+    if (b.bucket === "ask" && b.askDecidedByHook) continue;
     const bucket = b.bucket === "deny" ? deny : b.bucket === "ask" ? ask : allow;
     for (const pattern of b.commands ?? []) bucket.push(commandToClaude(pattern));
   }

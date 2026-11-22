@@ -1,5 +1,5 @@
-prefix_rule(pattern=["rm"], decision="prompt")
-prefix_rule(pattern=["git", "rm"], decision="prompt")
+prefix_rule(pattern=["rm"], decision="allow")
+prefix_rule(pattern=["git", "rm"], decision="allow")
 prefix_rule(pattern=["git", "add"], decision="allow")
 prefix_rule(pattern=["git", "commit"], decision="allow")
 prefix_rule(pattern=["git", "push"], decision="prompt")
