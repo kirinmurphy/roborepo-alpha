@@ -268,10 +268,12 @@ as the system temp folders, so a Codex agent can write its pull request body the
 - **2026-11-22 — Folder-set removal lives in the retention module.** The log and file-set shapes
   leave the commit to each store because their readers differ; a folder set has no reader, and
   both callers (the scratch command and `stores reset`) need the same link-safe removal.
-- **2026-11-22 — `delivery pr-body` trusts `~/.roborepo/scratch` at its default path only.**
-  `ROBOREPO_STATE_ROOT` is an environment variable, and the command already refuses to let
-  `$TMPDIR` widen what it reads. Like the denylist check, both `$HOME` and the account's own home
-  are read. A state root moved elsewhere still has temp folders available.
+- **2026-11-22 — `delivery pr-body` trusts `~/.roborepo/scratch` under the account's own home
+  only.** `$HOME` and `ROBOREPO_STATE_ROOT` are environment variables, and the command already
+  refuses to let `$TMPDIR` widen what it reads. The first version also read `$HOME`, as the denylist
+  does; the validator showed a fake `$HOME` whose scratch folder links elsewhere let any file pass,
+  so only the account home counts, and a scratch folder replaced by a link is ignored. A state root
+  moved elsewhere still has temp folders available.
 - **2026-11-22 — `maintenance stores reset --dry-run` on a log reports a record count.** Log
   records have no per-record listing worth printing; file and folder sets list each entry with size
   and age. `--all --dry-run` lists every entry in the directory, since `--all` removes the whole
@@ -287,6 +289,31 @@ as the system temp folders, so a Codex agent can write its pull request body the
   were all created that day, several by other sessions' test runs that may still be live; the
   automatic sweeps this plan adds reach those once their runs end.
 
+## Open Questions
+
+- **Should `roborepo scratch` run without a permission prompt?** The full gate's
+  `agent-run-coverage-check` requires every `roborepo` command to be classified in
+  `manifests/inventory/agent-permissions.json`, and `scratch` is not. Options:
+  - Allow it, as a new allow behavior like `guarded-delivery` and `plan-store-commands`. For: the
+    rule tells agents to call it routinely, and it writes only inside its own store with a
+    validated name. Against: it deletes (prunes old scratch folders) without asking.
+  - Ask-bucket it with `mutate-harness-config`. For: every prune is approved. Against: a prompt on
+    every call in Claude, where `roborepo` runs outside the sandbox under ordinary rules, which
+    works against "temporary content disappears on its own".
+  - Leave it unclassified (`INTENTIONALLY_UNCLASSIFIED`), which prompts the same as ask.
+  Recommendation: allow. Blocked because it changes agent permissions, which the run may not decide.
+  Blocks: the CI gate (agent-run-coverage-check fails until it is classified) and submission.
+- **Should the byte cap spare folders changed recently?** The cap removes the oldest folders with
+  no minimum age, so when the store passes 500 MB a folder another session touched minutes ago can
+  go. The command never removes the folder it prints. Options:
+  - Exempt folders changed within the last hour from the byte cap. For: never deletes work in use.
+    Against: a runaway writer is by definition recent, so the cap stops nothing during that hour.
+  - Make the cap report-only: doctor already flags a store over its cap. For: no surprise deletes.
+    Against: nothing bounds the store between age expiries.
+  - Keep it as designed ("byte cap as a backstop"). For: a hard bound. Against: the risk above.
+  Recommendation: exempt folders changed within the last hour. Blocked because each option has a
+  real argument and the plan specified the cap without a floor. Blocks: submission only.
+
 ## Not tested
 
 - [x] The rendered Claude sandbox lets a sandboxed shell write `~/.roborepo/scratch` while still
@@ -299,6 +326,34 @@ as the system temp folders, so a Codex agent can write its pull request body the
       (codex-cli 0.166.0) running `node scripts/cli/main.mjs scratch e2e-topic` and `sh -c` writes,
       with a fake home outside every temp root, scratch root absent and present → exit 0, path
       printed, `wrote-in-scratch`, `elsewhere-denied`.
+
+## Review
+
+### Findings
+
+- [x] `delivery pr-body` accepted a scratch folder under an overridden `$HOME`, so a fake home
+      whose scratch folder links elsewhere let any undenied file pass — fixed (afdf7853)
+- [x] `roborepo scratch` could prune the folder it prints when the byte cap picked it first —
+      fixed (afdf7853)
+- [x] Comments in `scripts/cli/delivery.mjs` and its test gave the wrong reason scratch is a body
+      location — fixed (afdf7853)
+- [x] `plan-execute/references/handoff.md` still told agents to write the PR body in the system
+      temp directory — fixed (afdf7853)
+- [ ] Byte cap can remove a folder another session is using — escalated, see Open Questions
+- [ ] `roborepo scratch` is not classified in the agent permission manifest, failing
+      `agent-run-coverage-check` — escalated, see Open Questions
+
+### Verification
+
+- Validation pass 1 at d6f38f1c (fresh-context subagent): 3 `fix`, 2 `escalate`; the `$HOME`
+  finding, filed as `escalate`, was fixed as its remedy was clear.
+- Full local gate (`npm run check`) at d6f38f1c: 424 passed, 3 failed. `agent-run-coverage-check`
+  is the open question above. The `generated/` guard and the add-skill
+  `git diff --quiet -- globals/packages/plan-suite` check failed because the run started with
+  uncommitted work that was committed mid-run, not from the change.
+- Base failure: `cli-surface-integration-check.mjs` fails intermittently on `main` too (1 of 5
+  direct runs at 46f37fbc, "single-repo refresh should leave other cached ahead repos in the main
+  list"), a PTY timing race in the remote-sync menu.
 
 ## Documentation impact
 
