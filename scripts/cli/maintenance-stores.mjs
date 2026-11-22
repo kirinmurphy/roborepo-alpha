@@ -260,8 +260,8 @@ function policyFor(store) {
 
 function inspect(store) {
   if (store.shape === FOLDER_SET_SHAPE) {
-    const { entryCount, totalBytes } = describeFolderSet({ dirPath: store.target });
-    return { bytes: totalBytes, detail: entryCount ? `${entryCount} folder(s)` : "empty" };
+    const { entryCount, totalBytes, sparedBytes } = describeFolderSet({ dirPath: store.target });
+    return { bytes: totalBytes, sparedBytes, detail: entryCount ? `${entryCount} folder(s)` : "empty" };
   }
   if (store.shape === FILE_SET_SHAPE) {
     const { fileCount, totalBytes } = describeFileSet({ dirPath: store.target, filter: store.filter });
@@ -289,8 +289,17 @@ function describeBound(policy) {
 // Only the byte cap is checked. Age is enforced on the write path and a store that has not been
 // written to lately is legitimately holding old records — flagging that would report normal
 // behavior as a fault.
+// A store over its cap only because of recently changed folders the byte cap spares is reported as a
+// hint, not a failure: a reset cannot act on it yet, and it is capped once those folders go quiet.
 export function checkStoreBounds() {
-  const over = storeHealth().filter((store) => store.over);
+  const health = storeHealth();
+  for (const store of health.filter((entry) => entry.spared)) {
+    console.log(
+      `hint: ${store.id} is ${formatBytes(store.bytes)}, over its ${formatBytes(store.maxBytes)} cap, but`
+      + ` ${formatBytes(store.sparedBytes)} is in folders changed in the last hour; the cap applies once they go quiet`,
+    );
+  }
+  const over = health.filter((store) => store.over);
   for (const store of over) {
     console.error(
       `fail: ${store.id} is ${formatBytes(store.bytes)}, over its ${formatBytes(store.maxBytes)} cap`
@@ -301,15 +310,21 @@ export function checkStoreBounds() {
 }
 
 // Registry-backed store list for doctor, which needs sizes and bounds without the CLI formatting.
+// `over` counts only bytes a reset could remove; `spared` marks a store over its cap because of
+// folders the byte cap spares for now.
 export function storeHealth() {
   return retentionStores(stateDir).map((store) => {
     const policy = policyFor(store);
-    const { bytes } = inspect(store);
+    const { bytes, sparedBytes = 0 } = inspect(store);
+    const capped = policy.maxBytes !== null && bytes > policy.maxBytes;
+    const over = policy.maxBytes !== null && bytes - sparedBytes > policy.maxBytes;
     return {
       id: store.id,
       bytes,
+      sparedBytes,
       maxBytes: policy.maxBytes,
-      over: policy.maxBytes !== null && bytes > policy.maxBytes,
+      over,
+      spared: capped && !over,
       path: path.relative(stateDir, store.target),
     };
   });

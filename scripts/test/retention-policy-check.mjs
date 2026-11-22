@@ -19,9 +19,11 @@ import {
   LOG_SHAPE,
   assertBounded,
   describeFileSet,
+  describeFolderSet,
   dropCountForBytes,
   findRetentionStore,
   measureFileSet,
+  measureFolderSet,
   measureLog,
   normalizePolicy,
   retentionStores,
@@ -165,6 +167,25 @@ try {
   assert.equal(described.fileCount, 3);
   assert.ok(described.totalBytes > 0);
   assert.ok(described.oldestMtimeMs !== null);
+
+  // ---- Folder set: the byte cap spares folders changed within spareRecentMs ----
+  const folderDir = path.join(tempRoot, "folder-set");
+  writeAgedFolder(folderDir, "quiet", 2 * 60 * 60 * 1000, 600);
+  writeAgedFolder(folderDir, "busy-a", 30 * 60 * 1000, 600);
+  writeAgedFolder(folderDir, "busy-b", 10 * 60 * 1000, 600);
+  const folderPolicy = { maxBytes: 1000 };
+  const spared = measureFolderSet({ dirPath: folderDir, policy: folderPolicy, now: NOW });
+  assert.deepEqual(spared.entries.map((entry) => entry.name), ["quiet"], "the cap removes only the folder quiet for over an hour");
+  assert.equal(spared.reason, "size");
+  const unspared = measureFolderSet({ dirPath: folderDir, policy: folderPolicy, now: NOW, spareRecentMs: 0 });
+  assert.deepEqual(unspared.entries.map((entry) => entry.name), ["quiet", "busy-a"], "without the spare the walk continues into recent folders");
+  fs.rmSync(path.join(folderDir, "quiet"), { recursive: true });
+  const allBusy = measureFolderSet({ dirPath: folderDir, policy: folderPolicy, now: NOW });
+  assert.equal(allBusy.act, false, "an overage held only in recent folders removes nothing");
+  assert.equal(allBusy.reason, "over cap, recent folders spared");
+  const busyDescribed = describeFolderSet({ dirPath: folderDir, now: NOW });
+  assert.equal(busyDescribed.totalBytes, 1200);
+  assert.equal(busyDescribed.sparedBytes, 1200, "describe reports the bytes the cap may not remove yet");
 
   // ---- Registry ----
   const stores = retentionStores(tempRoot);
@@ -311,4 +332,15 @@ function writeAgedJson(dir, name, ageMs) {
   fs.writeFileSync(filePath, JSON.stringify({ name }) + "\n");
   const when = new Date(NOW.getTime() - ageMs);
   fs.utimesSync(filePath, when, when);
+}
+
+// One folder holding a file of `bytes` bytes, both last changed `ageMs` before NOW.
+function writeAgedFolder(dir, name, ageMs, bytes) {
+  const folder = path.join(dir, name);
+  fs.mkdirSync(folder, { recursive: true });
+  const filePath = path.join(folder, "data.bin");
+  fs.writeFileSync(filePath, "x".repeat(bytes));
+  const when = new Date(NOW.getTime() - ageMs);
+  fs.utimesSync(filePath, when, when);
+  fs.utimesSync(folder, when, when);
 }

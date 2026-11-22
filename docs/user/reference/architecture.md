@@ -210,7 +210,8 @@ roborepo maintenance stores reset <id> --all # clear it outright
 roborepo maintenance stores reset <id> [--all] --dry-run  # list what would go; remove nothing
 ```
 
-`roborepo doctor --installed` fails when a store is over its cap.
+`roborepo doctor --installed` fails when a store is over its cap. When the scratch store's overage
+is all in folders changed in the last hour, which the cap spares, it prints a hint instead.
 
 ## Sync Flow
 

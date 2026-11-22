@@ -153,6 +153,27 @@ try {
   fs.unlinkSync(scratch);
   fs.renameSync(realScratch, scratch);
 
+  // An overage held in a folder changed in the last hour is a hint, not a failure, and a reset
+  // leaves it; once the folder is quiet, --check fails and the reset removes it. The dry-run case
+  // above left the snapshot store over its cap, so it is reset first to isolate the scratch store.
+  assert.equal(run(["reset", "telemetry-snapshots"]).status, 0);
+  const busy = sparseFolder("busy-writer", new Date());
+  const sparedCheck = run(["--check"]);
+  assert.equal(sparedCheck.status, 0, `--check passes while the overage is in a recently changed folder: ${sparedCheck.stderr}`);
+  assert.match(sparedCheck.stdout, /hint: scratch is .* changed in the last hour/, "--check names the spared overage");
+  assert.match(run(["reset", "scratch", "--dry-run"]).stdout, /recent folders spared\); nothing would be removed/, "the preview says the overage is spared");
+  assert.equal(run(["reset", "scratch"]).status, 0);
+  assert.ok(fs.existsSync(busy), "a reset leaves the recently changed folder");
+  const quietAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  fs.utimesSync(path.join(busy, "sparse.bin"), quietAt, quietAt);
+  fs.utimesSync(busy, quietAt, quietAt);
+  const quietCheck = run(["--check"]);
+  assert.equal(quietCheck.status, 1, "--check fails once the folder holding the overage is quiet");
+  assert.match(quietCheck.stderr, /fail: scratch .* over its 500\.0MB cap/);
+  assert.equal(run(["reset", "scratch"]).status, 0);
+  assert.ok(!fs.existsSync(busy), "the reset removes the quiet over-cap folder");
+  assert.equal(run(["--check"]).status, 0);
+
   assert.equal(run(["reset", "scratch", "--all"]).status, 0);
   assert.ok(!fs.existsSync(scratch), "--all clears the scratch store");
   assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "must survive", "--all removes the link, not its target");
@@ -176,6 +197,18 @@ function makeFolder(name, at) {
   fs.mkdirSync(folder, { recursive: true });
   const file = path.join(folder, "file.txt");
   fs.writeFileSync(file, name);
+  fs.utimesSync(file, at, at);
+  fs.utimesSync(folder, at, at);
+  return folder;
+}
+
+// A scratch folder holding one sparse 600 MB file (over the 500 MB cap alone), last changed `at`.
+function sparseFolder(name, at) {
+  const folder = path.join(tempRoot, "scratch", name);
+  fs.mkdirSync(folder, { recursive: true });
+  const file = path.join(folder, "sparse.bin");
+  fs.writeFileSync(file, "");
+  fs.truncateSync(file, 600 * MB);
   fs.utimesSync(file, at, at);
   fs.utimesSync(folder, at, at);
   return folder;

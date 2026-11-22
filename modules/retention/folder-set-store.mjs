@@ -49,14 +49,18 @@ export function measureFolderSet({
   // Survivors are oldest first, so the recently changed ones form the tail the walk must stop before.
   const spareFrom = toMillis(now) - spareRecentMs;
   const removable = survivors.filter((entry) => entry.mtimeMs < spareFrom).length;
-  const byBytes = Math.min(dropCountForBytes(lengths, total, resolved), removable);
+  const wanted = dropCountForBytes(lengths, total, resolved);
+  const byBytes = Math.min(wanted, removable);
   for (let i = 0; i < byBytes; i += 1) doomed.add(survivors[i].path);
 
   // Never empty the set entirely — the same final-entry guard the other shapes keep.
   if (doomed.size === entries.length) doomed.delete(entries[entries.length - 1].path);
 
   const victims = entries.filter((entry) => doomed.has(entry.path));
-  if (victims.length === 0) return { act: false, dropCount: 0, reason: "within-policy", files: [], entries: [] };
+  if (victims.length === 0) {
+    const reason = wanted > byBytes ? "over cap, recent folders spared" : "within-policy";
+    return { act: false, dropCount: 0, reason, files: [], entries: [] };
+  }
 
   const byAge = cutoff !== null && entries.some((entry) => entry.mtimeMs < cutoff);
   return {
@@ -86,15 +90,24 @@ export function folderSetEntries({ dirPath, fsApi = fs } = {}) {
   return entries;
 }
 
-export function describeFolderSet({ dirPath, fsApi = fs } = {}) {
+// sparedBytes is what the byte cap may not remove yet: folders changed within spareRecentMs.
+export function describeFolderSet({
+  dirPath,
+  fsApi = fs,
+  now = new Date(),
+  spareRecentMs = FOLDER_SET_BYTE_CAP_SPARE_MS,
+} = {}) {
   const entries = folderSetEntries({ dirPath, fsApi }) ?? [];
+  const spareFrom = toMillis(now) - spareRecentMs;
   let totalBytes = 0;
+  let sparedBytes = 0;
   let oldestMtimeMs = null;
   for (const entry of entries) {
     totalBytes += entry.bytes;
+    if (entry.mtimeMs >= spareFrom) sparedBytes += entry.bytes;
     if (oldestMtimeMs === null || entry.mtimeMs < oldestMtimeMs) oldestMtimeMs = entry.mtimeMs;
   }
-  return { entryCount: entries.length, totalBytes, oldestMtimeMs };
+  return { entryCount: entries.length, totalBytes, sparedBytes, oldestMtimeMs };
 }
 
 export function folderAgeDays(entry, now = new Date()) {
