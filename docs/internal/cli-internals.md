@@ -14,6 +14,7 @@ thin composition root; commands are declared as JSON under
 | `scripts/cli/skills.mjs` | `skill adopt`, `skill inspect`, `skill native`, `skill export-to-project`, `skill link-project` |
 | `scripts/cli/skill-inventory.mjs` | read-only skill inventory used by `skill inspect` and `/agents` source popups |
 | `scripts/cli/run.mjs` | `run`, `agent-run` |
+| `scripts/cli/scratch.mjs` | `scratch <name>`: hands out a folder in the `scratch` retention store and prunes the store by its policy on every call |
 | `scripts/cli/browser.mjs` + `scripts/cli/browser/` | `browser probe\|run`: package gate, provider contract and validation, Playwright and stub providers, evidence store, local-service lifecycle |
 | `scripts/cli/mcp.mjs` | `mcp add` (registration with every MCP-capable harness) |
 | `scripts/cli/presets.mjs` | `library` / `package manage` (one shared `packageLibrary` execution preset), `bundle status\|apply\|check\|remove` |

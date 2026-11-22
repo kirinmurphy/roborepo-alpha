@@ -386,7 +386,8 @@ Reading `main` from a worktree to compare against it is routine and harmless, so
 whole repository family. Writing across checkouts is rare and is how one session overwrites another's
 in-flight work, so writes stay inside the checkout in use and prompt anywhere else.
 
-Codex enforces only the write half of this table. If a repository's `plans/plans-config.json` sets
+Codex enforces only the write half of this table. Every Codex profile that can write also gets
+the agent scratch folder, `~/.roborepo/scratch`. If a repository's `plans/plans-config.json` sets
 `"worktreeRoot": "~/.worktrees"`, Codex also gets write access to that repository's worktree folder,
 `~/.worktrees/<worktreeRepoName>` — not to all of `~/.worktrees` — and to the exact paths in the
 repository's Git directory that a plans commit writes: its objects, the plans worktree's

@@ -74,7 +74,9 @@ in `plans/plans-config.json`, a normal checkout and a nested worktree such as
 for `permissions.writablePaths({ cwd })`, where the Codex provider
 (`scripts/harnesses/codex/plans-store-grants.mjs`) lists the exact Git paths a plans commit writes. Codex profiles require
 concrete `workspace_roots`, so the Codex provider materializes the path instead of using a glob for
-every repository under `~/.worktrees`.
+every repository under `~/.worktrees`. Separately from that per-repository output, every Codex render
+adds `CODEX_SANDBOX_WRITABLE_PATHS` (`scripts/harnesses/codex/index.mjs`): the agent scratch folder,
+`~/.roborepo/scratch/**`.
 
 ## Web endpoints
 
