@@ -1,6 +1,6 @@
 ---
 id: 9njvfh5z
-next_action: Confirm the recorded desktop-app check results under Not tested and approve d9743e02 in /plan-review.
+next_action: Approved at d9743e02; merge PR 66, then run /plan-close.
 blocked_by: []
 depends_on: []
 related: ["46qth5z8", "4zyo2woj", "8bjltk2n", "permva27", "permissions-ui-revamp", "ia1q1z9", "harness-capability-derived-resource-targeting", "0jped168", "plan-session-launching-milestone-1"]
@@ -579,27 +579,35 @@ Acceptance criteria:
 
 ## Not tested
 
-- [ ] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
+- [x] In a manual-mode desktop-app session on `main` with the merged hook installed, `rm` of a
       checkout file asks, and `rm` of a temp-folder file runs without a prompt. The hook decisions
       are asserted by `protected-branch-push-check.mjs`, and the desktop prompt path was observed
       with the push guard; this combination needs the installed hook and a person watching.
-      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); awaiting the user's confirmation: the `rm` on `main` asked, the temp-folder `rm` did not.
-- [ ] In a manual-mode desktop-app session in a feature-branch checkout or worktree, `rm` on a
+      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); then: the `rm` on `main` asked, the temp-folder `rm` did not.
+      — Confirmed by the user 2026-11-22: "Yes, all four match" (answer in /plan-review to the four recorded desktop-app checks).
+
+- [x] In a manual-mode desktop-app session in a feature-branch checkout or worktree, `rm` on a
       file in the checkout runs without a prompt. Needs a person watching for prompts after the
       merged settings are applied. A home-folder delete refused by the sandbox is the enforcement
       runner's home-write control and the 2026-11-13 desktop-app check.
-      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); awaiting the user's confirmation: no prompt.
-- [ ] In a manual-mode desktop-app session, a bare `git switch <branch>` asks. Same reason. That
+      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); then: no prompt.
+      — Confirmed by the user 2026-11-22: "Yes, all four match" (answer in /plan-review to the four recorded desktop-app checks).
+
+- [x] In a manual-mode desktop-app session, a bare `git switch <branch>` asks. Same reason. That
       `git switch main` stays denied is the rendered `occupy-main` deny rule, which
       `claude-sandbox-projection-check.mjs` asserts, applied to a command that now runs outside the
       sandbox under the ordinary rules.
-      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); awaiting the user's confirmation: `git switch feature` asked.
-- [ ] In a manual-mode desktop-app session, `roborepo plans show`, `roborepo plans save` of an
+      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); then: `git switch feature` asked.
+      — Confirmed by the user 2026-11-22: "Yes, all four match" (answer in /plan-review to the four recorded desktop-app checks).
+
+- [x] In a manual-mode desktop-app session, `roborepo plans show`, `roborepo plans save` of an
       edited copy in a temp folder, and `roborepo plans sync-base` run without a prompt and report
       `"synchronized": true` where they print it. Same reason; a bare `roborepo plans show 9njvfh5z
       --json` from this plan's worktree reported `"synchronized": true` on 2026-11-14.
-      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); awaiting the user's confirmation: `plans show` and `plans sync-base` ran with no prompt (`"synchronized": true`, up to
+      Observed 2026-11-20 in a manual-mode desktop-app session with the branch settings and hook installed, read from that session's record of its permission decisions (no person watched); then: `plans show` and `plans sync-base` ran with no prompt (`"synchronized": true`, up to
       date). `plans save` was not run.
+      — Confirmed by the user 2026-11-22: "Yes, all four match" (answer in /plan-review to the four recorded desktop-app checks).
+
 - [x] After merge, `roborepo update` on this machine writes the `sandbox` key into
       `~/.claude/settings.json`, `roborepo doctor` passes, and a new session's shell commands run
       without prompts. Needs the merged code applied to the live home, which this branch must not do
@@ -975,13 +983,15 @@ Acceptance criteria:
   to this plan's files. The plan's checks passed there (the eight listed above plus
   `protected-branch-push-check`, `render-agent-permissions.mjs --check`, and byte-identical hook
   copies), and GitHub CI on PR 66 passed at d9743e02 (macOS, Ubuntu, Windows installer)
+- Human review, 2026-11-22: base `main` still cbd8fbdd and PR 66 head still d9743e02 with CI passed
+  (macOS, Ubuntu, Windows installer); the user confirmed the four desktop-app checks
 - A first desktop-app check session (2026-11-18) ran `rm` on `main` without a prompt; it had started
   before the branch settings were written. A fresh session then ran all checks as recorded under
   `## Not tested`
 
 ### Result
 
-- Status: pending — the user has not yet confirmed the recorded desktop-app check results
+- Status: complete
 - Reviewed implementation commit: d9743e02d4ed15ca411de405b9ad9c0d63225247
 - Base commit: cbd8fbdd53b705f19ddc7650373f163e22173996
 
