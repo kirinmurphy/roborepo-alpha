@@ -348,6 +348,8 @@ as the system temp folders, so a Codex agent can write its pull request body the
       fallback — fixed (fac86228)
 - [x] No test read a scratch-folder body end to end or refused a body elsewhere in `~/.roborepo/`
       — fixed (fac86228)
+- [x] The new Scratch Folders section in `docs/user/reference/roborepo-cli.md` split the
+      dev-checkout note from Command Output — fixed (82718950)
 - [ ] Byte cap can remove a folder another session is using — escalated, see Open Questions
 - [ ] `roborepo scratch` is not classified in the agent permission manifest, failing
       `agent-run-coverage-check` — escalated, see Open Questions
@@ -357,6 +359,7 @@ as the system temp folders, so a Codex agent can write its pull request body the
 - Validation pass 1 at d6f38f1c (fresh-context subagent): 3 `fix`, 2 `escalate`; the `$HOME`
   finding, filed as `escalate`, was fixed as its remedy was clear.
 - Validation pass 2 at afdf7853 (fresh-context subagent): 4 `fix`, 0 `escalate`.
+- Validation pass 3 at fac86228 (fresh-context subagent): 1 `fix`, 0 `escalate`.
 - Full local gate (`npm run check`) at d6f38f1c: 424 passed, 3 failed. `agent-run-coverage-check`
   is the open question above. The `generated/` guard and the add-skill
   `git diff --quiet -- globals/packages/plan-suite` check failed because the run started with
