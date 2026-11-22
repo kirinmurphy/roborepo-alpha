@@ -1,0 +1,10 @@
+# Agent shells act on GitHub as the bot logged in under GH_CONFIG_DIR. Inherited helpers
+# (osxkeychain) may hold the user's credential, so the empty helper clears them first.
+[credential]
+	helper =
+[credential "https://github.com"]
+	helper = !gh auth git-credential
+# SSH remotes go over HTTPS, so git asks gh (as the bot) instead of using the user's SSH key.
+[url "https://github.com/"]
+	insteadOf = git@github.com:
+	insteadOf = ssh://git@github.com/

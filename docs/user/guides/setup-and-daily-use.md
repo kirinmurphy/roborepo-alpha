@@ -52,6 +52,39 @@ Some commands flood the terminal. Wrap them to get only the useful tail.
 roborepo run <command> [args]
 ```
 
+## Let agents act as a GitHub bot
+
+By default, Claude and Codex act on GitHub as you: pushes and pull requests carry your identity, and
+Codex's sandbox blocks GitHub, so it hands pushes back to you. The optional **GitHub Agent
+Identity** package gives agents their own bot account instead. The bot can push feature branches,
+open pull requests, and read and reply to review threads, but GitHub itself rejects its push to
+`main` and its merges without your approval. `/plan-suite-init` offers the setup when it is missing,
+or run it any time in your own terminal (agents are denied it, so the token never enters a
+transcript):
+
+```sh
+roborepo github setup
+roborepo github status    # read-only report
+```
+
+The setup walks you through each step and skips the ones already done:
+
+1. Create a GitHub account for the bot, in a private window (guided).
+2. Invite the bot to the repo as a collaborator with write access, not admin (automatic, as you).
+3. Create a classic token for the bot with only `repo` and `read:org`, an expiry, and no `workflow`
+   (guided, with the exact scopes shown), then paste it at a hidden prompt.
+4. Accept the invite (automatic, as the bot).
+5. Run `roborepo protect` if the repo needs it (it asks first), so the bot is not on any bypass list.
+6. Check everything, then enable the package. A failed check leaves it off.
+
+The token is stored in plaintext, mode 0600, under `~/.roborepo/github-agent/gh`, because neither
+Claude's nor Codex's sandbox can read the macOS keychain. Any process you run, agents included, can
+read it, so the bot's limited role and the token's expiry are what bound the damage.
+
+If you decline, nothing changes: agents act as you, `gh api` stays denied, posting commands ask,
+and Codex hands pushes back to you. The identity does not cover Gemini. See
+[Claude Hooks](../reference/claude-hooks.md#acting-as-a-github-bot) for what it changes.
+
 ## Fix problems
 
 Something feels off — commands missing, config not loading, hooks not firing. Run this to verify key files, JSON/TOML config, helpers, and dependencies.

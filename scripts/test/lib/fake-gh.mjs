@@ -11,6 +11,14 @@
 //   refuseCreate  a ruleset name whose create answers 422, to fail an apply partway
 //   refuseUpdate  a ruleset name whose update answers 422
 //   classicProtection  optional { [branch]: GitHub's classic branch protection answer }
+//   tokens    { [token]: { login, scopes: [..] | null, expires: "2027-01-01 00:00:00 UTC" | null, expired } }
+//             the accounts a bot's `gh auth login --with-token` can sign in as, keyed by token
+//   users     logins that exist on GitHub (default: the signed-in user and every token's login)
+//   collaborators [{ login, permission: "push" | "admin" }]; invitations [{ id, invitee, repo }]
+//   invitePermission  what accepting an invitation grants (default "push"); refuseInvite answers 403
+//   Identity: a call with GH_CONFIG_DIR set is the account whose token is in that directory's
+//   hosts.yml (or `.fake-token`, for a keychain login); without it, the `login` user. The hosts.yml
+//   that `auth login --insecure-storage` writes is the only place the fake stores a token.
 // List endpoints page by `per_page` and `page` as GitHub does; each log entry records the
 // `--hostname` the call named.
 //   rulesets  full ruleset objects; `source_type` other than "Repository" marks an inherited one
@@ -31,6 +39,9 @@ export function fakeGitHubState(overrides = {}) {
     rulesets: [],
     runs: [{ id: 501, conclusion: "success", jobs: [{ name: "check (ubuntu-latest)", conclusion: "success" }, { name: "check (macos-latest)", conclusion: "success" }] }],
     nextId: 9000,
+    tokens: {},
+    collaborators: [],
+    invitations: [],
     ...overrides,
   };
 }
@@ -65,12 +76,17 @@ const statePath = process.env.FAKE_GH_STATE;
 const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
 const REFUSED = ${JSON.stringify(RULESETS_REFUSED_MESSAGE)};
 
-if (args[0] !== "api") fail(1, "fake gh: only \`gh api\` is implemented");
+const path = require("node:path");
+const configDir = process.env.GH_CONFIG_DIR || null;
+const hostsPath = configDir ? path.join(configDir, "hosts.yml") : null;
+const argvLog = { argv: args, configDir };
+if (args[0] === "auth") authCommand();
+if (args[0] !== "api") fail(1, "fake gh: only \`gh api\` and \`gh auth\` are implemented");
 const method = args[args.indexOf("--method") + 1];
-const endpoint = args.find((arg) => /^(repos\\/|user$)/.test(arg));
+const endpoint = args.find((arg) => /^(repos\\/|users?(\\/|$))/.test(arg));
 const body = args.includes("--input") ? JSON.parse(fs.readFileSync(0, "utf8")) : null;
 const hostname = args.includes("--hostname") ? args[args.indexOf("--hostname") + 1] : null;
-fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ method, endpoint, body, hostname }) +"\\n");
+fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ ...argvLog, method, endpoint, body, hostname }) +"\\n");
 
 if (state.failure === "not-signed-in") fail(4, "To get started with GitHub CLI, please run:  gh auth login");
 if (state.failure === "unreachable") fail(1, "error connecting to api.github.com");
@@ -81,6 +97,7 @@ else respond();
 function respond() {
 
 const [pathname, query = ""] = endpoint.split("?");
+const identity = resolveIdentity();
 const params = new URLSearchParams(query);
 // GitHub's paging: per_page (default 30) items from page (default 1).
 const paged = (list) => {
@@ -95,8 +112,55 @@ const visible = (ruleset) => {
   return rest;
 };
 
-if (pathname === "user") reply({ login: state.login });
-if (route === "") reply({ default_branch: state.defaultBranch, permissions: { admin: state.admin, push: true, pull: true } });
+const repoName = (pathname.match(/^repos\\/([^/]+\\/[^/]+)/) || [])[1];
+const known = (login) => (login || "").toLowerCase();
+const permissionOf = (login) => (state.collaborators || []).find((entry) => known(entry.login) === known(login))?.permission || null;
+if (pathname === "user") reply({ login: identity.login });
+const userPage = pathname.match(/^users\\/([^/]+)$/);
+if (userPage) {
+  const logins = state.users || [state.login, ...Object.values(state.tokens || {}).map((entry) => entry.login)];
+  if (!logins.some((login) => known(login) === known(userPage[1]))) httpError(404, "Not Found");
+  reply({ login: userPage[1] });
+}
+const invitationsFor = () => (state.invitations || []).filter((entry) => known(entry.invitee) === known(identity.login));
+if (pathname === "user/repository_invitations" && method === "GET") {
+  reply(paged(invitationsFor().map((entry) => ({ id: entry.id, invitee: { login: entry.invitee }, repository: { full_name: entry.repo } }))));
+}
+const accept = pathname.match(/^user\\/repository_invitations\\/(\\d+)$/);
+if (accept && method === "PATCH") {
+  const found = invitationsFor().find((entry) => entry.id === Number(accept[1]));
+  if (!found) httpError(404, "Not Found");
+  state.invitations = state.invitations.filter((entry) => entry !== found && entry.id !== found.id);
+  state.collaborators = [...(state.collaborators || []), { login: found.invitee, permission: state.invitePermission || "push" }];
+  save();
+  process.exit(0);
+}
+if (route === "") {
+  const permission = identity.bot ? permissionOf(identity.login) : null;
+  const permissions = identity.bot
+    ? { admin: permission === "admin", push: permission === "admin" || permission === "push", pull: true }
+    : { admin: state.admin, push: true, pull: true };
+  reply({ default_branch: state.defaultBranch, permissions });
+}
+const collaborator = route.match(/^collaborators\\/([^/]+)$/);
+if (collaborator) {
+  const login = decodeURIComponent(collaborator[1]);
+  if (method === "GET") {
+    if (!permissionOf(login)) httpError(404, "Not Found");
+    process.exit(0);
+  }
+  if (method === "PUT") {
+    if (!state.admin || state.refuseInvite) httpError(403, "Must have admin rights to Repository.");
+    if (permissionOf(login)) process.exit(0);
+    state.invitations = [...(state.invitations || []), { id: state.nextId, invitee: login, repo: repoName }];
+    state.nextId += 1;
+    save();
+    reply({ id: state.nextId - 1 });
+  }
+}
+if (route === "invitations" && method === "GET") {
+  reply(paged((state.invitations || []).filter((entry) => entry.repo === repoName).map((entry) => ({ id: entry.id, invitee: { login: entry.invitee }, repository: { full_name: entry.repo } }))));
+}
 
 const rulesTouched = /^(rules|rulesets)(\\/|$)/.test(route);
 if (rulesTouched && state.failure === "rulesets-refused") httpError(403, REFUSED);
@@ -190,7 +254,59 @@ function stored(identity, body) {
   return { ...identity, ...body, rules };
 }
 function save() { fs.writeFileSync(statePath, JSON.stringify(state, null, 2)); }
-function reply(value) { process.stdout.write(JSON.stringify(value)); process.exit(0); }
+function reply(value) {
+  if (args.includes("-i") && endpoint === "user") {
+    const info = tokenOf(configDir);
+    let head = "HTTP/2.0 200 OK\\r\\nContent-Type: application/json\\r\\n";
+    if (info && info.scopes) head += "X-Oauth-Scopes: " + info.scopes.join(", ") + "\\r\\n";
+    if (info && info.expires) head += "Github-Authentication-Token-Expiration: " + info.expires + "\\r\\n";
+    process.stdout.write(head + "\\r\\n");
+  }
+  process.stdout.write(JSON.stringify(value));
+  process.exit(0);
+}
+// The token a config directory holds: hosts.yml's oauth_token, else the keychain stand-in.
+function savedToken(dir) {
+  for (const [file, pattern] of [["hosts.yml", /oauth_token:\\s*(\\S+)/], [".fake-token", /^(\\S+)/]]) {
+    try {
+      const match = pattern.exec(fs.readFileSync(path.join(dir, file), "utf8"));
+      if (match) return match[1];
+    } catch {}
+  }
+  return null;
+}
+function tokenOf(dir) {
+  const token = dir ? savedToken(dir) : null;
+  return token ? (state.tokens || {})[token] || null : null;
+}
+function resolveIdentity() {
+  if (!configDir) return { login: state.login, bot: false };
+  if (!fs.existsSync(hostsPath)) fail(4, "To get started with GitHub CLI, please run:  gh auth login");
+  const info = tokenOf(configDir);
+  if (!info || info.expired) httpError(401, "Bad credentials");
+  return { login: info.login, bot: true };
+}
+function authCommand() {
+  fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ ...argvLog, method: null, endpoint: null }) + "\\n");
+  if (!configDir) fail(1, "fake gh: auth needs GH_CONFIG_DIR");
+  if (args[1] === "logout") {
+    fs.rmSync(hostsPath, { force: true });
+    fs.rmSync(path.join(configDir, ".fake-token"), { force: true });
+    process.exit(0);
+  }
+  if (args[1] !== "login" || !args.includes("--with-token")) fail(1, "fake gh: unsupported auth command");
+  const token = fs.readFileSync(0, "utf8").trim();
+  const info = (state.tokens || {})[token];
+  if (!info) fail(1, "error validating token: HTTP 401 Bad credentials");
+  fs.mkdirSync(configDir, { recursive: true });
+  const entry = "github.com:\\n    user: " + info.login + "\\n    git_protocol: https\\n";
+  if (args.includes("--insecure-storage")) fs.writeFileSync(hostsPath, entry.replace("    user:", "    oauth_token: " + token + "\\n    user:"), { mode: state.hostsMode || 0o644 });
+  else {
+    fs.writeFileSync(hostsPath, entry);
+    fs.writeFileSync(path.join(configDir, ".fake-token"), token + "\\n");
+  }
+  process.exit(0);
+}
 function fail(code, message) { process.stderr.write(message + "\\n"); process.exit(code); }
 function httpError(status, message) {
   process.stdout.write(JSON.stringify({ message, status: String(status) }));

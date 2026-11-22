@@ -129,7 +129,7 @@ export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktr
 
   const origin = await run(["remote", "get-url", "origin"]);
   if (!origin.ok) throw initFailure("This repo has no `origin` remote, so its plans have nowhere to live.", "Add an `origin` remote, then run `roborepo plans init` again.", origin);
-  const remote = await run(["ls-remote", "--heads", "origin", LOCAL_REF], { timeoutMs: NETWORK_TIMEOUT_MS });
+  const remote = await run(["ls-remote", "--heads", "origin", LOCAL_REF], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
   if (!remote.ok) throw initFailure("The `origin` remote could not be reached, so nothing was set up.", "Check the remote's address and your credentials, then run `roborepo plans init` again.", remote);
 
   let state = "connected";
@@ -139,7 +139,7 @@ export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktr
     state = (await createRemoteBranch({ run, primary, worktreeRoot, repoName })) ? "created" : "connected";
   } else {
     // The remote lost the branch but this clone still has it: the local copy recreates it.
-    const pushed = await run(["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+    const pushed = await run(["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
     if (!pushed.ok) throw initFailure("The plans branch could not be pushed back to `origin`, so nothing was set up.", "Check that you can push to `origin`, then run `roborepo plans init` again.", pushed);
     await run(["update-ref", TRACKING_REF, LOCAL_REF]);
     state = "created";
@@ -171,7 +171,7 @@ function initFailure(message, resolution, result) {
 }
 
 async function fetchInto(run) {
-  const fetched = await run(["fetch", "--no-prune", "--no-tags", "origin", `+${LOCAL_REF}:${TRACKING_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+  const fetched = await run(["fetch", "--no-prune", "--no-tags", "origin", `+${LOCAL_REF}:${TRACKING_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
   if (!fetched.ok) throw initFailure("The plans branch could not be fetched.", "Check your credentials, then run `roborepo plans init` again.", fetched);
   // A local branch with pending commits is kept; only a machine without one takes the remote's.
   if (!(await run(["rev-parse", "--verify", "-q", LOCAL_REF])).ok) {
@@ -203,7 +203,7 @@ async function createRemoteBranch({ run, primary, worktreeRoot, repoName }) {
     const tree = await run(["write-tree"], { plumbing });
     const commit = await run(["commit-tree", tree.stdout.trim(), "-m", "Create plans branch"]);
     if (!commit.ok) throw initFailure("The plans scaffold could not be committed.", "Set your Git user.name and user.email, then run `roborepo plans init` again.", commit);
-    const pushed = await run(["push", "origin", `${commit.stdout.trim()}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+    const pushed = await run(["push", "origin", `${commit.stdout.trim()}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
     if (!pushed.ok) {
       if (isPushRace(pushed)) {
         await fetchInto(run);
@@ -295,7 +295,7 @@ async function syncRemote(store) {
 }
 
 function fetchRemote(store) {
-  return storeGit(store, ["fetch", "--no-prune", "--no-tags", "origin", `+${LOCAL_REF}:${TRACKING_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+  return storeGit(store, ["fetch", "--no-prune", "--no-tags", "origin", `+${LOCAL_REF}:${TRACKING_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
 }
 
 // Brings the local branch up to the fetched remote. Returns the paths the remote changed that this
@@ -378,7 +378,7 @@ function sameRelativeOrder(a, b) {
 }
 
 async function pushBranch(store) {
-  const pushed = await storeGit(store, ["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+  const pushed = await storeGit(store, ["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
   if (pushed.ok) {
     // A single-branch clone's fetch refspec would not move this on its own, and pending counts read it.
     await storeGit(store, ["update-ref", TRACKING_REF, LOCAL_REF]);

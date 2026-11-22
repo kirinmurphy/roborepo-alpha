@@ -60,12 +60,30 @@ const SKIPS_BACKSTOP = new Set(['--no-verify'])
 const PLANS_STORE_BRANCH = 'repo-plans'
 
 const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
-// Covers the change-github-directly and merge-pull-requests behaviors in agent-permissions.json; a
-// test keeps the first equal to this list.
-const GH_DENIED = [
-  ['api'], ['auth', 'token'], ['pr', 'merge'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
-  ['secret'], ['variable'], ['release'], ['workflow', 'run'],
-]
+// Git hosts whose CLI can act on the host without going through git, so the push guards cannot check
+// it. Each entry names the CLI and the command prefixes denied; a second host is a new entry.
+// The `github` list covers the change-github-directly and merge-pull-requests behaviors in
+// agent-permissions.json; a test keeps the first equal to this list.
+const HOST_CLIS = {
+  github: {
+    cli: 'gh',
+    denied: [
+      ['api'], ['auth', 'token'], ['pr', 'merge'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
+      ['secret'], ['variable'], ['release'], ['workflow', 'run'],
+    ],
+    // Denied prefixes lifted while the shell runs as the agent identity (see agentIdentityActive).
+    allowedAsAgent: [['api']],
+  },
+}
+// True when GH_CONFIG_DIR is exactly the github-agent identity's gh config dir. Acting as the bot,
+// GitHub's rulesets and the bot's collaborator role limit what `gh api` can do; as the user, `gh api`
+// could rewrite main. Any other value, unset, or a shell that unset it keeps `gh api` denied.
+function agentIdentityActive() {
+  const dir = process.env.GH_CONFIG_DIR
+  if (!dir) return false
+  const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
+  return path.resolve(dir) === path.resolve(path.join(stateRoot, 'github-agent', 'gh'))
+}
 // gh options that take their value as the next word, before or between subcommands.
 const GH_VALUE_OPTIONS = new Set(['-R', '--repo', '--hostname'])
 const hookDir = path.dirname(fileURLToPath(import.meta.url))
@@ -471,15 +489,17 @@ function classifyPush(cwd, args) {
   return defaultKnown ? VERIFIED : unknownDefault(remote)
 }
 
-// gh with its options removed, matched against GH_DENIED.
+// gh with its options removed, matched against the host's denied list.
 function classifyGh(args) {
   const words = []
   for (let i = 0; i < args.length; i += 1) {
     if (GH_VALUE_OPTIONS.has(args[i])) i += 1
     else if (!args[i].startsWith('-')) words.push(args[i])
   }
-  const denied = GH_DENIED.find((prefix) => prefix.every((word, k) => words[k] === word))
+  const { denied: deniedList, allowedAsAgent } = HOST_CLIS.github
+  const denied = deniedList.find((prefix) => prefix.every((word, k) => words[k] === word))
   if (!denied) return null
+  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive()) return null
   return {
     decision: 'deny',
     reason: `roborepo: \`gh ${denied.join(' ')}\` acts on GitHub without going through git, so the protected-branch guards cannot check it. Run it yourself.`,

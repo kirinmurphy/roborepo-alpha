@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "github-agent-identity",
+  "label": "GitHub Agent Identity",
+  "description": "Agents push, open pull requests, and read and reply to review threads as a separate GitHub bot account, which GitHub itself stops from pushing to main or merging without approval. Set it up with `roborepo github setup`.",
+  "lifecycle": "optional",
+  "defaultEnabled": false,
+  "permissionsRender": true,
+  "presentation": {
+    "category": "integrations",
+    "order": 10
+  },
+  "resources": [
+    {
+      "type": "package-runtime-asset",
+      "source": "gitconfig"
+    },
+    {
+      "type": "config-patch",
+      "harness": "claude",
+      "label": "GitHub bot config directory",
+      "patches": [
+        {
+          "op": "set",
+          "path": ["env", "GH_CONFIG_DIR"],
+          "value": "${roborepo-state:github-agent/gh}"
+        }
+      ]
+    },
+    {
+      "type": "config-patch",
+      "harness": "codex",
+      "label": "GitHub bot config directory and network",
+      "patches": [
+        {
+          "op": "set",
+          "path": ["shell_environment_policy", "set", "GH_CONFIG_DIR"],
+          "value": "${roborepo-state:github-agent/gh}"
+        },
+        {
+          "op": "set",
+          "path": ["features", "network_proxy"],
+          "value": true
+        },
+        {
+          "op": "set",
+          "path": ["permissions", "managed-workspace", "network", "domains", "github.com"],
+          "value": "allow"
+        },
+        {
+          "op": "set",
+          "path": ["permissions", "managed-workspace", "network", "domains", "api.github.com"],
+          "value": "allow"
+        }
+      ]
+    }
+  ]
+}

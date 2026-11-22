@@ -434,6 +434,31 @@ check_branch_protection() {
   esac
 }
 
+# Whether agents in this GitHub repo act as the optional bot account safely. Not setting it up is
+# fine, and a problem is a hint, never a failure. Prints nothing outside a Git repo with a GitHub
+# origin. Test suites set ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1 to stay off the network.
+check_agent_identity() {
+  if ! command -v node >/dev/null 2>&1; then
+    ok "node unavailable; skipped GitHub agent identity check"
+    return 0
+  fi
+  if [[ "${ROBOREPO_SKIP_AGENT_IDENTITY_CHECK:-}" == "1" ]]; then
+    ok "GitHub agent identity check skipped (ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1)"
+    return 0
+  fi
+  local output status
+  set +e
+  output="$(node "${repo_root}/scripts/cli/github-identity.mjs" --doctor 2>&1)"
+  status=$?
+  set -e
+  [[ -z "${output}" && "${status}" -eq 0 ]] && return 0
+  case "${status}" in
+    0) ok "${output}" ;;
+    1) hint "${output}" ;;
+    *) fail "GitHub agent identity check crashed: ${output}" ;;
+  esac
+}
+
 check_local_config_repair_candidates() {
   if ! command -v node >/dev/null 2>&1; then
     ok "node unavailable; skipped local config repair check"
@@ -596,6 +621,7 @@ check_toml "generated/codex/config.toml"
 
 check_node_release
 check_branch_protection
+check_agent_identity
 
 if command -v node >/dev/null 2>&1; then
   node "${repo_root}/scripts/build/normalize-claude-settings.mjs" --check "${repo_root}/generated/claude/settings.json" >/dev/null \

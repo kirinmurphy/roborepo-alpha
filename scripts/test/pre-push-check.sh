@@ -16,6 +16,7 @@ cd "${repo_root}"
 # the push off the network, as ci.sh does.
 export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
 export ROBOREPO_SKIP_PROTECTION_CHECK=1
+export ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1
 
 failed=()
 

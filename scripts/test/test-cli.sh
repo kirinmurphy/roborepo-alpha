@@ -13,6 +13,7 @@ cli="${repo_root}/scripts/cli/main.mjs"
 # doctor-protection-check.mjs cover the two checks that would use it.
 export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
 export ROBOREPO_SKIP_PROTECTION_CHECK=1
+export ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1
 # Run fixture git as a human would, without the agent hooks an agent shell carries (see ci.sh).
 while IFS='=' read -r name _; do
   [[ "${name}" =~ ^GIT_CONFIG_(COUNT|KEY_[0-9]+|VALUE_[0-9]+)$ ]] && unset "${name}"
@@ -2053,6 +2054,9 @@ assert "plan-suite: every checkout of a repository reads its one plans store" \
 # own lifecycle and approval. The migration helper is checked until it is deleted after rollout.
 assert "plan store: init, save, approve, synchronization, and conflicts" \
   node "${repo_root}/scripts/test/plan-store-check.mjs"
+
+assert "git exec: agent Git config pairs are kept only on request" \
+  node "${repo_root}/scripts/test/git-exec-identity-check.mjs"
 
 assert "plan store: one-time migration from the old layout" \
   node "${repo_root}/scripts/test/migrate-plans-once-check.mjs"

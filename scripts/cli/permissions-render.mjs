@@ -4,6 +4,8 @@ import os from "node:os";
 import { repoRoot } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
 import { recordAppRoot } from "./state-paths.mjs";
+import { loadPackageCatalog } from "./package-catalog.mjs";
+import { effectiveEnabledIds } from "./package-state.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import {
   resolveBehaviors,
@@ -97,9 +99,21 @@ function ensureClaudePermissionHookAssets(baseDir) {
 // Iterates the provider registry rather than a fixed provider list, so a newly registered harness
 // receives permissions without editing this function. A provider that does not declare the
 // "permissions" capability is skipped by contract, not by omission.
+export const AGENT_IDENTITY_PACKAGE_ID = "github-agent-identity";
+
+// Whether agent shells act as the GitHub bot: the identity package is in the effective set.
+export function agentIdentityEnabled() {
+  try {
+    return effectiveEnabledIds(loadPackageCatalog()).includes(AGENT_IDENTITY_PACKAGE_ID);
+  } catch {
+    return false;
+  }
+}
+
+// `agentIdentity` defaults to whether the identity package is enabled; pass it explicitly to override.
 export function renderPermissionsTo(
   baseDir,
-  { manifest = loadPermissionManifest(), overrides = {}, createClaude = false, workspaceRoots = [], cwd = process.cwd() } = {},
+  { manifest = loadPermissionManifest(), overrides = {}, createClaude = false, workspaceRoots = [], cwd = process.cwd(), agentIdentity = agentIdentityEnabled() } = {},
 ) {
   const touched = [];
 
@@ -117,7 +131,7 @@ export function renderPermissionsTo(
 
     fs.mkdirSync(path.dirname(target.file), { recursive: true });
     const cur = target.seedCurrent && fileExists ? fs.readFileSync(target.file, "utf8") : "";
-    const rendered = provider.adapters.permissions.render(cur, manifest, overrides, target.file, permissionOptionsForProvider(provider, { cwd, workspaceRoots }));
+    const rendered = provider.adapters.permissions.render(cur, manifest, overrides, target.file, { ...permissionOptionsForProvider(provider, { cwd, workspaceRoots }), agentIdentity });
     writeRootConfig(provider.id, target.file, rendered);
     if (provider.id === "claude") ensureClaudePermissionHookAssets(baseDir);
     touched.push(target.file);
@@ -134,7 +148,8 @@ export function renderPermissionsToHome({
   overrides = {},
   workspaceRoots,
   cwd = process.cwd(),
+  agentIdentity,
 } = {}) {
   recordAppRoot();
-  return renderPermissionsTo(home, { manifest, overrides, workspaceRoots, cwd });
+  return renderPermissionsTo(home, { manifest, overrides, workspaceRoots, cwd, ...(agentIdentity === undefined ? {} : { agentIdentity }) });
 }

@@ -7,10 +7,19 @@ import { GIT_NETWORK_TIMEOUT_MS } from "../repositories/git-remote-operations.mj
 
 const execFileAsync = promisify(execFile);
 
-export async function runGh(cwd, args, input = "", { timeoutMs = GIT_NETWORK_TIMEOUT_MS } = {}) {
+// A null value in `env` removes that variable, so a call can run as the person's own account even
+// when the surrounding shell points GH_CONFIG_DIR at the bot.
+function mergedEnv(extra) {
+  const merged = { ...process.env, ...extra, GH_PROMPT_DISABLED: "1" };
+  for (const [key, value] of Object.entries(extra || {})) if (value === null) delete merged[key];
+  return merged;
+}
+
+export async function runGh(cwd, args, input = "", { timeoutMs = GIT_NETWORK_TIMEOUT_MS, env = null } = {}) {
   const pending = execFileAsync("gh", args, {
     cwd, encoding: "utf8", timeout: timeoutMs, maxBuffer: 1024 * 1024,
-    env: { ...process.env, GH_PROMPT_DISABLED: "1" },
+    // `env` lets a caller run gh as another account, e.g. with GH_CONFIG_DIR set.
+    env: mergedEnv(env),
   });
   pending.child.stdin.on("error", () => {});
   pending.child.stdin.end(input);
@@ -57,15 +66,49 @@ async function api(context, endpoint, { method = "GET", body = null } = {}) {
   if (body) args.push("--input", "-");
   let stdout;
   try {
-    stdout = await runGh(context.cwd, args, body ? JSON.stringify(body) : "", { timeoutMs: context.timeoutMs });
+    stdout = await runGh(context.cwd, args, body ? JSON.stringify(body) : "", { timeoutMs: context.timeoutMs, env: context.env });
   } catch (error) {
     throw describeGhFailure(error);
   }
+  // Some writes answer 204 with no body.
+  if (stdout.trim() === "") return null;
   try {
     return JSON.parse(stdout);
   } catch {
     throw new GitHubError("unavailable", "GitHub returned a response that could not be read");
   }
+}
+
+// `gh api -i user`: the signed-in account plus what the response headers say about the token (its
+// scopes and expiry). Fine-grained tokens send no scopes header, so `scopes` is then null.
+async function tokenInfo(context) {
+  let stdout;
+  try {
+    stdout = await runGh(context.cwd, ["api", "-i", "--hostname", "github.com", "--method", "GET", "user"], "", { timeoutMs: context.timeoutMs, env: context.env });
+  } catch (error) {
+    throw describeGhFailure(error);
+  }
+  const split = stdout.search(/\r?\n\r?\n/);
+  const head = split < 0 ? stdout : stdout.slice(0, split);
+  const headers = new Map();
+  for (const line of head.split(/\r?\n/).slice(1)) {
+    const colon = line.indexOf(":");
+    if (colon > 0) headers.set(line.slice(0, colon).trim().toLowerCase(), line.slice(colon + 1).trim());
+  }
+  let login = null;
+  try {
+    login = JSON.parse(split < 0 ? "" : stdout.slice(split).trim()).login ?? null;
+  } catch {
+    throw new GitHubError("unavailable", "GitHub returned a response that could not be read");
+  }
+  const scopeHeader = headers.get("x-oauth-scopes");
+  const expiry = headers.get("github-authentication-token-expiration");
+  const expiresAt = expiry ? new Date(expiry.replace(" UTC", "Z").replace(" ", "T")) : null;
+  return {
+    login,
+    scopes: scopeHeader === undefined ? null : scopeHeader.split(",").map((scope) => scope.trim()).filter(Boolean),
+    expiresAt: expiresAt && !Number.isNaN(expiresAt.getTime()) ? expiresAt : null,
+  };
 }
 
 const repoPath = (repo) => `repos/${repo}`;
@@ -95,6 +138,35 @@ export const githubClient = {
   run: runGh,
 
   repository: (context, repo) => api(context, repoPath(repo)),
+
+  tokenInfo,
+
+  // Whether an account exists on GitHub.
+  async userExists(context, login) {
+    try {
+      await api(context, `users/${encodeURIComponent(login)}`);
+      return true;
+    } catch (error) {
+      if (error instanceof GitHubError && error.status === 404) return false;
+      throw error;
+    }
+  },
+
+  async isCollaborator(context, repo, login) {
+    try {
+      await api(context, `${repoPath(repo)}/collaborators/${encodeURIComponent(login)}`);
+      return true;
+    } catch (error) {
+      if (error instanceof GitHubError && error.status === 404) return false;
+      throw error;
+    }
+  },
+
+  // Invitations still waiting on a repo (as its admin), and those waiting for the signed-in account.
+  repoInvitations: (context, repo) => allPages(context, `${repoPath(repo)}/invitations`),
+  userInvitations: (context) => allPages(context, "user/repository_invitations"),
+  inviteCollaborator: (context, repo, login) => api(context, `${repoPath(repo)}/collaborators/${encodeURIComponent(login)}`, { method: "PUT" }),
+  acceptInvitation: (context, id) => api(context, `user/repository_invitations/${id}`, { method: "PATCH" }),
 
   async login(context) {
     return (await api(context, "user")).login;

@@ -138,6 +138,16 @@ a rule for the exact `git push` prefix. Chained pushes defer to native approval 
 their own restrictions. If the guard is missing or inconclusive for a matched generic push,
 the permission hook denies it.
 
+Codex's sandbox blocks GitHub by default, so Codex cannot push, and it hands pushes back to you.
+With the optional [GitHub Agent Identity](claude-hooks.md#acting-as-a-github-bot) package on, the
+sandbox opens network access for `github.com` and `api.github.com` only, plus read access to Git's
+CA certificate file. Codex then pushes feature branches as the bot without a prompt (the hooks still
+deny protected branches), and the `gh` rules follow the identity as for Claude: `gh api` and the
+posting commands (`gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`,
+`gh issue create`, `issue comment`) are allowed; `gh pr merge`, `gh auth token`, and
+repo, secret, variable, release, and workflow commands stay denied. Without it, those commands
+keep their usual buckets and `gh api` is denied.
+
 Human versus automatic review is a separate [Codex setting](https://learn.chatgpt.com/docs/sandboxing).
 With `approvals_reviewer = "user"`, native approval requests go to the person; with `auto_review`,
 eligible requests go to the reviewer agent. RoboRepo preserves this setting. An unmatched command

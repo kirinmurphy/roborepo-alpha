@@ -327,6 +327,28 @@ for (const command of manifest.behaviors.find((b) => b.id === "change-github-dir
 for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
 }
+// As the github-agent identity (GH_CONFIG_DIR is exactly its gh dir) `gh api` is allowed; every other
+// denied gh command stays denied, and any other GH_CONFIG_DIR keeps `gh api` denied.
+{
+  const stateRoot = path.join(tmp, "agent-state");
+  const agentDir = path.join(stateRoot, "github-agent", "gh");
+  const asAgent = { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: agentDir };
+  const codexOptions = { toolName: "exec_command", hookPath: path.join(codexHooks, "protected-branch-push.mjs"), key: "cmd" };
+  for (const options of [{}, codexOptions]) {
+    const label = options.hookPath ? "Codex" : "Claude";
+    for (const command of ["gh api repos/o/r", "gh api graphql -f query=x", "gh -R o/r api repos/o/r/pulls"]) {
+      assert.equal(decide(command, { ...options, env: asAgent }), "defer", `${label} allows as agent: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ...asAgent, GH_CONFIG_DIR: path.join(tmp, "other-gh") } }), "deny", `${label} denies other GH_CONFIG_DIR: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "" } }), "deny", `${label} denies unset GH_CONFIG_DIR: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot } }), "deny", `${label} denies without identity: ${command}`);
+    }
+    for (const command of ["gh auth token", "gh -R o/r pr merge 12", "gh secret set X", "gh release create v1", "gh workflow run x"]) {
+      assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} still denies as agent: ${command}`);
+    }
+  }
+  // The default state root is ~/.roborepo when ROBOREPO_STATE_ROOT is unset.
+  assert.equal(decide("gh api repos/o/r", { env: { HOME: tmp, ROBOREPO_STATE_ROOT: "", GH_CONFIG_DIR: path.join(tmp, ".roborepo", "github-agent", "gh") } }), "defer", "default state root");
+}
 // Each command start scans only its own command, so a long chain stays fast.
 {
   const started = Date.now();

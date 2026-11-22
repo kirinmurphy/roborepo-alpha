@@ -27,6 +27,10 @@ Agents can push to feature branches without a prompt. They cannot push to a prot
 environment variable (comma-separated), and `repo-plans`, the plans store branch. They cannot
 force-push to any branch.
 
+Codex's sandbox blocks GitHub unless the [GitHub agent identity](#acting-as-a-github-bot) is on, so
+without it Codex hands a feature-branch push back to you. With it, Codex pushes to feature branches
+without a prompt, as the bot; the hooks still deny protected branches.
+
 `repo-plans` changes only through `roborepo plans` commands, which run their own Git with hooks off.
 So the same hooks also refuse a hand-made commit or merge commit in a checkout of `repo-plans`: the
 `pre-commit` and `pre-merge-commit` hooks in the same folder stop it before it is recorded.
@@ -186,8 +190,14 @@ they can reach:
 | ask | `gh pr comment`, `pr edit`, `pr ready`, `pr review`, `pr close`, `pr reopen`, `gh issue create`, `issue comment` |
 | deny | `gh pr merge`, `gh api`, `gh auth token`, `gh repo edit`, `repo delete`, `repo rename`, `gh secret`, `gh variable`, `gh release`, `gh workflow run` |
 
+With the [GitHub agent identity](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot)
+on, two rows change: the ask commands are allowed, and `gh api` is allowed. Everything else in the
+deny row stays denied, including `gh pr merge` and `gh auth token`.
+
 The protected-branch hook also denies the deny-bucket commands when global flags come first
-(`gh -R owner/repo api …`), a form the prefix rules miss. Agents never merge a pull request
+(`gh -R owner/repo api …`), a form the prefix rules miss. It lifts the `gh api` denial only when
+`GH_CONFIG_DIR` is exactly the agent identity's folder, `~/.roborepo/github-agent/gh`; a shell that
+unsets or changes it keeps `gh api` denied. Agents never merge a pull request
 (`merge-pull-requests`): you merge it on GitHub.
 
 The workflow an agent should follow:
@@ -198,11 +208,31 @@ The workflow an agent should follow:
    from pushing or forking by itself.
 
 A push chained to anything else (`git push … && gh pr create …`) goes to the permission prompt
-as a whole. To read review comments, use `gh pr view --comments`; `gh api` is denied even for reads.
+as a whole. To read review comments, use `gh pr view --comments`. Without the identity, `gh api` is
+denied even for reads. With it, agents can also read review threads and whether each is resolved,
+reply, and resolve them through `gh api`.
 
-`gh` acts with your GitHub token, so to GitHub an agent is you. These rules are local. Add a branch
-ruleset on GitHub for `main` that requires a pull request, blocks force pushes and deletion, and does
-not let administrators bypass it. That is the guard that holds if a local rule is too broad.
+### Acting as a GitHub bot
+
+Without the identity, `gh` acts with your GitHub token, so to GitHub an agent is you. These rules
+are local. Add a branch ruleset on GitHub for `main` that requires a pull request, blocks force
+pushes and deletion, and does not let administrators bypass it (`roborepo protect` sets this up).
+That is the guard that holds if a local rule is too broad.
+
+The optional **GitHub Agent Identity** package (`github-agent-identity`, off by default) gives agents
+their own GitHub account instead. Claude and Codex shells then push, open pull requests, and post as
+a bot you create; Gemini is not covered. The bot is a plain collaborator with write access, not an
+administrator, and is not on a ruleset's bypass list, so GitHub itself rejects an agent push to
+`main` and an agent merge without a person's approval. Your own terminal, `gh`, and SSH pushes keep
+your identity and your bypass. `roborepo github setup` creates it
+([Setup And Daily Use](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot)).
+
+The package works through two settings in agent shells only:
+
+- `GH_CONFIG_DIR` points `gh` at `~/.roborepo/github-agent/gh`, where the bot's token is stored.
+- A Git config file at `~/.roborepo/package-runtime/github-agent-identity/gitconfig`, included
+  through the agents' `GIT_CONFIG_*` variables, clears inherited credential helpers, has
+  `gh auth git-credential` answer for github.com, and rewrites SSH remotes to HTTPS.
 
 ## When Installed Hooks Run
 

@@ -204,12 +204,6 @@ priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
-commandPrefix = "gh api"
-decision = "deny"
-priority = 500
-
-[[rule]]
-toolName = "run_shell_command"
 commandPrefix = "gh auth token"
 decision = "deny"
 priority = 500
@@ -254,6 +248,24 @@ priority = 500
 toolName = "run_shell_command"
 commandPrefix = "gh workflow run"
 decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh api"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo github setup"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo github status"
+decision = "allow"
 priority = 500
 
 [[rule]]

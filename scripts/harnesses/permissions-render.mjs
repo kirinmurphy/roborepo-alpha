@@ -20,10 +20,13 @@ const end = PERMISSION_BLOCK_END;
 // Merge personal overrides (keyed by behavior id) on top of the manifest's default buckets for
 // the small set of named behaviors. Returns a NEW array; never mutates the manifest's own
 // behavior objects.
-export function resolveBehaviors(manifest, overrides = {}) {
+//
+// With `agentIdentity` on (agent shells act as the GitHub bot), a behavior's `agentIdentityBucket`
+// replaces its default bucket first; personal overrides still win over both.
+export function resolveBehaviors(manifest, overrides = {}, { agentIdentity = false } = {}) {
   return (manifest.behaviors ?? []).map((b) => ({
     ...b,
-    bucket: overrides[b.id] ?? b.bucket,
+    bucket: overrides[b.id] ?? (agentIdentity ? b.agentIdentityBucket : undefined) ?? b.bucket,
   }));
 }
 
@@ -79,7 +82,11 @@ function codexNetworkAccess(behaviors) {
   return findBehavior(behaviors, "go-online")?.bucket === "allow";
 }
 
-function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], credentials = { paths: [] }, readOnly = false) {
+// Git's CA bundle. Codex's sandbox could not read it in a test, which breaks HTTPS to GitHub.
+// UNVERIFIED: this read grant is not confirmed to fix that until a `codex exec` run does.
+const CODEX_CA_BUNDLE_READS = ["/etc/ssl/cert.pem", "/private/etc/ssl/cert.pem"];
+
+function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], credentials = { paths: [] }, readOnly = false, agentIdentity = false) {
   const roots = [...new Set(workspaceRoots.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))];
   const writable = readOnly ? [] : [...new Set(writablePaths)];
   const profile = readOnly ? "managed-read-only" : "managed-workspace";
@@ -95,24 +102,27 @@ function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], 
     for (const root of roots) lines.push(`${quoteToml(root)} = true`);
   }
 
-  if (writable.length || credentials.paths.length) {
+  const certReads = !readOnly && agentIdentity ? CODEX_CA_BUNDLE_READS : [];
+  if (writable.length || credentials.paths.length || certReads.length) {
     lines.push("", `[permissions.${profile}.filesystem]`);
     for (const item of writable) lines.push(`${quoteToml(item)} = "write"`);
+    for (const cert of certReads) lines.push(`${quoteToml(cert)} = "read"`);
     for (const credential of credentials.paths) lines.push(`${quoteToml(credential)} = "deny"`);
   }
 
-  lines.push("", `[permissions.${profile}.network]`, `enabled = ${!readOnly && codexNetworkAccess(behaviors) ? "true" : "false"}`);
+  const networkOn = !readOnly && (agentIdentity || codexNetworkAccess(behaviors));
+  lines.push("", `[permissions.${profile}.network]`, `enabled = ${networkOn ? "true" : "false"}`);
   return lines;
 }
 
-function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoots = [], writablePaths = [] } = {}) {
+function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoots = [], writablePaths = [], agentIdentity = false } = {}) {
   const sandboxMode = codexSandboxMode(behaviors);
   const lines = [begin, "# Source: manifests/inventory/agent-permissions.json", `approval_policy = ${quoteToml(codexApprovalPolicy(behaviors, arbitraryCommands))}`];
 
   const credentials = codexCredentialPermissions(behaviors);
   lines.push(...credentials.notes.map((note) => `# roborepo credential: ${note}`));
   if (sandboxMode === "workspace-write" || credentials.paths.length) {
-    lines.push(...renderCodexProfile(behaviors, workspaceRoots, writablePaths, credentials, sandboxMode === "read-only"));
+    lines.push(...renderCodexProfile(behaviors, workspaceRoots, writablePaths, credentials, sandboxMode === "read-only", agentIdentity));
   } else {
     lines.push(`default_permissions = ${quoteToml(":read-only")}`);
   }
@@ -226,8 +236,8 @@ function renderCodexRule(pattern, decision) {
 
 // Command buckets map to native rules. Omitting an ask rule would let in-workspace commands
 // fall through without an explicit approval requirement.
-export function renderCodexRules(manifest, overrides = {}) {
-  const behaviors = resolveBehaviors(manifest, overrides.behaviors);
+export function renderCodexRules(manifest, overrides = {}, { agentIdentity = false } = {}) {
+  const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity });
   const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
   const lines = [];
   for (const b of behaviors) {
@@ -257,8 +267,8 @@ function scopedToolToClaude(tool, scopePath) {
 
 // Claude has a real 3-state permissions model (allow/deny/ask), so every resolved behavior and
 // arbitrary command maps directly to its native permission bucket.
-export function claudePermissions(manifest, overrides = {}, { home: _home = os.homedir() } = {}) {
-  const behaviors = resolveBehaviors(manifest, overrides.behaviors);
+export function claudePermissions(manifest, overrides = {}, { home: _home = os.homedir(), agentIdentity = false } = {}) {
+  const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity });
   const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
   const allow = [...(manifest.tools?.read ?? [])];
   const deny = [];

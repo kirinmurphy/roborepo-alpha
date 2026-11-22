@@ -95,9 +95,9 @@ export function defaultRunGitSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS } = {}
   return runGitProcessSync(cwd, args, { timeoutMs });
 }
 
-export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
+export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER, keepAgentGitConfig = false } = {}) {
   try {
-    const pending = execFileAsync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer }));
+    const pending = execFileAsync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer, keepAgentGitConfig }));
     pending.child.stdin.on("error", () => {});
     pending.child.stdin.end(input);
     const result = await pending;
@@ -113,8 +113,8 @@ export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, inp
   }
 }
 
-export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
-  const result = spawnSync("git", [...HARDENING_ARGS, ...args], { ...execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer }), input });
+export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER, keepAgentGitConfig = false } = {}) {
+  const result = spawnSync("git", [...HARDENING_ARGS, ...args], { ...execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer, keepAgentGitConfig }), input });
   if (result.error || result.status !== 0) {
     return {
       ok: false,
@@ -138,14 +138,27 @@ const REPOSITORY_ENV = [
   "GIT_COMMON_DIR",
 ];
 
-function gitEnvironment() {
-  const env = { ...process.env, ...HARDENING_ENV };
+// `keepAgentGitConfig` exists for RoboRepo's own network calls (fetch and push). An agent's shell
+// carries the settings that make Git reach GitHub as the agent's identity (credential helper, HTTPS
+// routing) as GIT_CONFIG_COUNT / GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n pairs. Stripping them would
+// send those calls out as the user, or over SSH where the sandbox blocks it. It is safe because only
+// those numbered pairs survive: GIT_CONFIG, GIT_CONFIG_PARAMETERS and every other repository
+// variable are still removed, the wrapper's own `-c core.hooksPath=/dev/null` is a command-line
+// setting that outranks env pairs, and callers opt in per call, never by default.
+function gitEnvironment({ keepAgentGitConfig = false } = {}) {
+  const inherited = { ...process.env };
+  const env = { ...inherited, ...HARDENING_ENV };
   for (const name of REPOSITORY_ENV) delete env[name];
+  if (keepAgentGitConfig) {
+    for (const name of Object.keys(inherited)) {
+      if (name === "GIT_CONFIG_COUNT" || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name)) env[name] = inherited[name];
+    }
+  }
   return env;
 }
 
-function execOptions(cwd, timeoutMs, { binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
-  const env = gitEnvironment();
+function execOptions(cwd, timeoutMs, { binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER, keepAgentGitConfig = false } = {}) {
+  const env = gitEnvironment({ keepAgentGitConfig });
   // Only explicit plumbing callers can choose a temporary index/object store. Ambient repository
   // variables remain stripped; callers must create and own these paths.
   for (const [key, value] of Object.entries(plumbing || {})) {

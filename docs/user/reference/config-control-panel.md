@@ -229,7 +229,7 @@ The guarded delivery commands validate their repository, branch, and head target
 The lifecycle commands retain their transition, synchronization, and process guards. The plan-store
 allow covers shell invocation. The archive and close skills still require their workflow approvals. Raw fetch and GitHub commands follow their
 existing policies, including the prompts for `gh pr edit` and `gh pr ready`, and the denials for
-`gh pr merge`, direct `gh api`, and force-push.
+`gh pr merge`, direct `gh api` (unless the GitHub agent identity is on), and force-push.
 
 | Provider | Projection and scope |
 | --- | --- |

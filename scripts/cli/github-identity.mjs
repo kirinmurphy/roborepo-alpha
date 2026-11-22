@@ -1,0 +1,96 @@
+// `roborepo github status`: reads whether agents act on GitHub as a safe bot account. The guided
+// setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
+import { forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
+import { AGENT_IDENTITY_PACKAGE_ID, readAgentIdentity } from "../../modules/forge/agent-identity.mjs";
+import { currentRepositoryId } from "./current-repository.mjs";
+import { loadPackageCatalog } from "./package-catalog.mjs";
+import { effectiveEnabledIds } from "./package-state.mjs";
+import { isMainModule } from "./roots.mjs";
+import { stateDir } from "./state-paths.mjs";
+
+const USAGE = "Usage: roborepo github status [--json]";
+// Doctor waits on these reads, so each gives up sooner than an explicit `roborepo github status`.
+const DOCTOR_TIMEOUT_MS = 8000;
+
+export function agentIdentityPackageEnabled() {
+  return effectiveEnabledIds(loadPackageCatalog()).includes(AGENT_IDENTITY_PACKAGE_ID);
+}
+
+export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs } = {}) {
+  const repositoryId = await currentRepositoryId(cwd);
+  return readAgentIdentity({ repositoryId, cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled() });
+}
+
+export async function githubStatusCommand(argv) {
+  const rest = argv.filter((arg) => arg !== "--json");
+  if (rest.length > 0) {
+    console.error(`Unknown option: ${rest[0]}\n${USAGE}`);
+    process.exitCode = 2;
+    return;
+  }
+  const report = await readCurrentAgentIdentity();
+  if (argv.includes("--json")) console.log(JSON.stringify(report, null, 2));
+  else console.log(formatReport(report));
+  process.exitCode = report.state === "problem" ? 1 : 0;
+}
+
+export function formatReport(report) {
+  const repo = report.repository ? ` for ${report.repository}` : "";
+  switch (report.state) {
+    case "not-set-up":
+      return "GitHub agent identity is not set up (optional). Run roborepo github setup in your own terminal to let agents act on GitHub as a bot account.";
+    case "unavailable":
+      return `GitHub agent identity could not be checked${repo}: ${report.reason}. Nothing is wrong that this check can see.`;
+    default: {
+      const headline = report.state === "healthy"
+        ? `GitHub agent identity is healthy${repo}: agents act as ${report.botLogin}.`
+        : `GitHub agent identity has problems${repo}:`;
+      const lines = [headline];
+      for (const entry of report.problems) {
+        lines.push(`  ${entry.severity === "warn" ? "Note" : "Problem"}: ${entry.message}`, `    Fix: ${entry.fix}`);
+      }
+      return lines.join("\n");
+    }
+  }
+}
+
+// Doctor's one line for a report: `hint` when the user can act, `ok` otherwise.
+export function doctorLine(report) {
+  const repo = report.repository;
+  switch (report.state) {
+    case "not-set-up":
+      return { level: "ok", text: "GitHub agent identity not set up (optional) — run roborepo github setup in your own terminal" };
+    case "healthy": {
+      const warn = report.problems[0];
+      if (warn) return { level: "hint", text: `GitHub agent identity for ${repo}: ${warn.message} — run roborepo github setup` };
+      return { level: "ok", text: `GitHub agent identity: agents act as ${report.botLogin} on ${repo}` };
+    }
+    case "problem":
+      return { level: "hint", text: `GitHub agent identity problem for ${repo}: ${report.problems[0].message} — run roborepo github setup` };
+    default:
+      return { level: "ok", text: `GitHub agent identity check skipped (${report.reason})` };
+  }
+}
+
+// --doctor is scripts/doctor.sh's contract, as in protect.mjs: one line, exit 0 for an `ok` line
+// and 1 for a `hint`; nothing, exit 0, outside a Git repo with a GitHub origin; exit 3 on a crash.
+async function doctorMode() {
+  try {
+    const repositoryId = await currentRepositoryId(process.cwd());
+    if (forgeTargetForRepositoryId(repositoryId)?.host !== "github.com") return 0;
+    const { level, text } = doctorLine(await readCurrentAgentIdentity({ timeoutMs: DOCTOR_TIMEOUT_MS }));
+    console.log(text);
+    return level === "hint" ? 1 : 0;
+  } catch (error) {
+    console.log(String(error?.message || error));
+    return 3;
+  }
+}
+
+if (isMainModule(import.meta.url)) {
+  if (!process.argv.includes("--doctor")) {
+    console.error("usage: node github-identity.mjs --doctor");
+    process.exit(2);
+  }
+  process.exit(await doctorMode());
+}

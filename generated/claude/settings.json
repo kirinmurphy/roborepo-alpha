@@ -23,6 +23,7 @@
       "Bash(gh run view:*)",
       "Bash(gh repo view:*)",
       "Bash(gh pr create:*)",
+      "Bash(roborepo github status:*)",
       "Bash(roborepo agent-run:*)",
       "Bash(roborepo doctor:*)",
       "Bash(roborepo telemetry:*)",
@@ -109,7 +110,6 @@
       "Bash(git switch main:*)",
       "Bash(git checkout -B main:*)",
       "Bash(gh pr merge:*)",
-      "Bash(gh api:*)",
       "Bash(gh auth token:*)",
       "Bash(gh repo edit:*)",
       "Bash(gh repo delete:*)",
@@ -117,7 +117,9 @@
       "Bash(gh secret:*)",
       "Bash(gh variable:*)",
       "Bash(gh release:*)",
-      "Bash(gh workflow run:*)"
+      "Bash(gh workflow run:*)",
+      "Bash(gh api:*)",
+      "Bash(roborepo github setup:*)"
     ],
     "ask": [
       "Bash(git pull:*)",
@@ -213,9 +215,11 @@
   "alwaysThinkingEnabled": false,
   "awaySummaryEnabled": false,
   "env": {
-    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_COUNT": "2",
     "GIT_CONFIG_KEY_0": "core.hooksPath",
-    "GIT_CONFIG_VALUE_0": "~/.claude/git-hooks"
+    "GIT_CONFIG_VALUE_0": "~/.claude/git-hooks",
+    "GIT_CONFIG_KEY_1": "include.path",
+    "GIT_CONFIG_VALUE_1": "~/.roborepo/package-runtime/github-agent-identity/gitconfig"
   },
   "sandbox": {
     "enabled": true,

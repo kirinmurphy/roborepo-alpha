@@ -23,7 +23,7 @@ Use it when you want to:
 
 | Command | What you get |
 | --- | --- |
-| `/plan-suite-init` | Set up a repo for the suite once: the plans branch and its worktree, where worktrees go, and `plans-config.json` with your plan-name namespaces. On a new machine it reconnects to the existing plans. It ends by checking [branch protection](#protect-the-plans-branch) and offering to add it. `/plan-write` runs it for you when the config is missing |
+| `/plan-suite-init` | Set up a repo for the suite once: the plans branch and its worktree, where worktrees go, and `plans-config.json` with your plan-name namespaces. On a new machine it reconnects to the existing plans. It ends by checking [branch protection](#protect-the-plans-branch) and offering to add it, then runs `roborepo github status --json` and offers the [GitHub agent identity](../../setup-and-daily-use.md#let-agents-act-as-a-github-bot) setup when it is not set up. `/plan-write` runs it for you when the config is missing |
 | `/plan-write` | Create a plan with its initial checklist, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development, then move it to `ready/` |
 | `/plan-execute` | Start or resume implementation in an isolated worktree, check it with a validator and fix what it finds, then move the plan to `review/`; or fix findings a review sent back |
@@ -126,7 +126,9 @@ nothing, and running a move again after it succeeded commits nothing.
 
 If the remote can't be reached, or refuses the push (a hook or branch rule), the commit stays local
 and the command reports **not synchronized** with Git's reason. The next command or portal Refresh
-that reaches the remote pushes it; a refusal keeps recurring until the rule allows the push. If another machine changed the
+that reaches the remote pushes it. Codex's sandbox blocks GitHub, so a Codex save reports **not
+synchronized** until the GitHub agent identity is on; with it, Codex saves push as the bot, and
+earlier saves push on the next one. A refusal keeps recurring until the rule allows the push. If another machine changed the
 same plan, the command refuses rather than overwriting. Backlog order changes from both sides combine:
 added and removed plans from each, and a reorder from either side, unless both reordered the same
 namespace differently, which also refuses.

@@ -93,6 +93,7 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; they join the effective set automatically. Cycle-checked, missing-id-checked, no self-reference |
 | `recommends` | no | array of package IDs; offered after an enable, never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
+| `permissionsRender` | no (defaults `false`) | boolean; `true` re-renders the home permission files (`renderPermissionsToHome`) after the package's other components apply on enable or disable, for a package whose presence changes how permissions render (it reads `effectiveEnabledIds`, as `github-agent-identity` does for `agentIdentityBucket`) |
 | `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse, except that `disable` removes one still recorded as a root (an older registry, or a manifest that later set `selectable: false`). Cannot combine with `defaultEnabled: true`, and needs `presentation.visibility` `dependency` or `hidden` (a `catalog` row would have no switch) |
 | `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Requires** in the source popup of each package that requires it), or `hidden` (no UI row) |
 | `resources` | yes | array — see Resource types |
@@ -126,6 +127,11 @@ All resource types get shape-level validation at `roborepo package validate` tim
 just at enable-time. If you're extending one
 of these checks, mirror the existing `else if (next.type === ...)` branches in `normalizeResource`
 (`scripts/cli/package-catalog.mjs`).
+
+Config-patch values also accept `${roborepo-state:<relative path>}`, expanded to the absolute path
+under the state directory (`~/.roborepo`, or `ROBOREPO_STATE_ROOT`) for tools that do not expand `~`.
+The path must be relative and may not contain `..` segments. It is the sibling of
+`${package-runtime:...}` (`expandPackageRuntimeRefs` in `scripts/cli/package-runtime-assets.mjs`).
 
 Keep package-runtime assets out of prompt-context accounting; they are copied executable files and
 folders, not agent instructions.
