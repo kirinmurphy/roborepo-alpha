@@ -3,10 +3,9 @@
 // row's required packages travel with its inspect click, so the source popup can list them, and a
 // row with required or recommended packages gets a Package Dependencies popover listing both. Set
 // .item (the behaviorView item) and .actions ({onInspect, onToggle, onDependency, offersOnEnable})
-// as properties
-// right after creation. Builds itself from the tpl-config-item template, owns conditional listener
-// wiring (inspect-click, toggle-swap) internally, embeds <config-toggle> in its toggle slot when
-// the item is mutable.
+// as properties right after creation. Builds itself from the tpl-config-item template, owns
+// conditional listener wiring (inspect-click, toggle-swap) internally, embeds <config-toggle> in
+// its toggle slot when the item is mutable.
 import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
 import { applyTokenChip, packageDependencies } from "../templates.js";
 import { contextCostChipSpecs } from "../state.js";

@@ -319,6 +319,28 @@ test.describe("Agents page", () => {
     expect(posts).toHaveLength(3);
   });
 
+  test("an enable whose recommendations have no row on the page opens no dialog", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const target = snapshot.behaviorView.flatMap((section) => section.items || [])
+      .find((item) => item.toggle === "package" && !item.active && item.id !== "telemetry");
+    expect(target, "fixture needs a disabled package row").toBeTruthy();
+    const posts = [];
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    await page.route("**/api/config/packages", (route) => {
+      const change = route.request().postDataJSON();
+      posts.push(change);
+      route.fulfill({ json: {
+        ok: true, message: `enabled: ${change.id}`, outcomes: [], changedPackageIds: [change.id], config: snapshot,
+        recommendations: [{ id: "no-such-package", label: "No such package" }],
+      } });
+    });
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: target.label }) }).first();
+    await row.getByRole("checkbox").dispatchEvent("click");
+    await expect.poll(() => posts).toEqual([{ id: target.id, enabled: true }]);
+    await expect(page.locator("dialog#recommendations-modal")).not.toBeVisible();
+  });
+
   test("a recommendation switched on in the dialog opens no further offer", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const rows = snapshot.behaviorView.flatMap((section) => section.items || [])
