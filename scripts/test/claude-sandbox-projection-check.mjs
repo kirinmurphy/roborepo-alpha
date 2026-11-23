@@ -24,7 +24,7 @@ assert.deepEqual(defaults, {
   enabled: true,
   autoAllowBashIfSandboxed: true,
   excludedCommands: [...CLAUDE_SANDBOX_EXCLUDED_COMMANDS],
-  filesystem: { allowWrite: ["~/.npm"], allowRead: secrets.readableExceptions },
+  filesystem: { allowWrite: ["~/.npm", "~/.roborepo/scratch"], allowRead: secrets.readableExceptions },
   network: { allowLocalBinding: false, allowedDomains: hosts.hosts, deniedDomains: logUpload.hosts },
 });
 assert.deepEqual(logUpload.hosts, ["http-intake.logs.us5.datadoghq.com"]);

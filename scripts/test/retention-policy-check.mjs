@@ -15,14 +15,18 @@ import { appendRemoval, removalLogPath } from "../../modules/repositories/worktr
 import { saveTransaction, readTransaction } from "../../modules/repositories/worktree-transactions.mjs";
 import {
   FILE_SET_SHAPE,
+  FOLDER_SET_SHAPE,
   LOG_SHAPE,
   assertBounded,
   describeFileSet,
+  describeFolderSet,
   dropCountForBytes,
   findRetentionStore,
   measureFileSet,
+  measureFolderSet,
   measureLog,
   normalizePolicy,
+  removeFolderSetEntries,
   retentionStores,
 } from "../../modules/retention/index.mjs";
 
@@ -165,6 +169,55 @@ try {
   assert.ok(described.totalBytes > 0);
   assert.ok(described.oldestMtimeMs !== null);
 
+  // ---- Folder set: the byte cap spares folders changed within spareRecentMs ----
+  const folderDir = path.join(tempRoot, "folder-set");
+  writeAgedFolder(folderDir, "quiet", 2 * 60 * 60 * 1000, 600);
+  writeAgedFolder(folderDir, "busy-a", 30 * 60 * 1000, 600);
+  writeAgedFolder(folderDir, "busy-b", 10 * 60 * 1000, 600);
+  const folderPolicy = { maxBytes: 1000 };
+  const spared = measureFolderSet({ dirPath: folderDir, policy: folderPolicy, now: NOW });
+  assert.deepEqual(spared.entries.map((entry) => entry.name), ["quiet"], "the cap removes only the folder quiet for over an hour");
+  assert.equal(spared.reason, "size");
+  const unspared = measureFolderSet({ dirPath: folderDir, policy: folderPolicy, now: NOW, spareRecentMs: 0 });
+  assert.deepEqual(unspared.entries.map((entry) => entry.name), ["quiet", "busy-a"], "without the spare the walk continues into recent folders");
+  fs.rmSync(path.join(folderDir, "quiet"), { recursive: true });
+  const allBusy = measureFolderSet({ dirPath: folderDir, policy: folderPolicy, now: NOW });
+  assert.equal(allBusy.act, false, "an overage held only in recent folders removes nothing");
+  assert.equal(allBusy.reason, "over cap, nothing removable");
+  const busyDescribed = describeFolderSet({ dirPath: folderDir, now: NOW });
+  assert.equal(busyDescribed.totalBytes, 1200);
+  assert.equal(busyDescribed.sparedBytes, 1200, "describe reports the bytes the cap may not remove yet");
+
+  // A lone quiet folder over the cap is the newest folder, which the final-entry guard keeps: a
+  // reset removes nothing, so describe counts it as kept rather than as removable overage.
+  const loneDir = path.join(tempRoot, "folder-set-lone");
+  writeAgedFolder(loneDir, "only", 2 * 60 * 60 * 1000, 1500);
+  const lone = measureFolderSet({ dirPath: loneDir, policy: folderPolicy, now: NOW });
+  assert.equal(lone.act, false, "the newest folder is never removed for size");
+  assert.equal(lone.reason, "over cap, nothing removable");
+  assert.equal(describeFolderSet({ dirPath: loneDir, now: NOW }).sparedBytes, 1500, "the kept newest folder counts as spared");
+  // Past the age limit as well: age selects it, the guard keeps it, and the verdict still names the
+  // overage rather than calling the store within policy.
+  const agedDir = path.join(tempRoot, "folder-set-lone-aged");
+  writeAgedFolder(agedDir, "only", 30 * DAY, 1500);
+  const lonePastAge = measureFolderSet({ dirPath: agedDir, policy: { maxAgeDays: 14, maxBytes: 1000 }, now: NOW });
+  assert.equal(lonePastAge.act, false, "the guard keeps a lone folder past the age limit");
+  assert.equal(lonePastAge.reason, "over cap, nothing removable");
+  assert.equal(describeFolderSet({ dirPath: agedDir, now: NOW }).sparedBytes, 1500, "the kept aged folder counts as spared");
+
+  writeAgedFolder(loneDir, "older", 3 * 60 * 60 * 1000, 600);
+  assert.equal(describeFolderSet({ dirPath: loneDir, now: NOW }).sparedBytes, 1500, "an older quiet folder stays removable");
+
+  // A folder written after it was measured is left by the removal, which rechecks its time.
+  const victims = measureFolderSet({ dirPath: loneDir, policy: folderPolicy, now: NOW }).entries;
+  assert.deepEqual(victims.map((entry) => entry.name), ["older"]);
+  const reopenedAt = new Date();
+  fs.utimesSync(path.join(loneDir, "older"), reopenedAt, reopenedAt);
+  const reopened = removeFolderSetEntries({ dirPath: loneDir, paths: victims.map((entry) => entry.path), measured: victims });
+  assert.deepEqual(reopened.removed, [], "a reopened folder is not removed");
+  assert.equal(reopened.refused[0]?.reason, "changed since it was measured");
+  assert.ok(fs.existsSync(path.join(loneDir, "older")));
+
   // ---- Registry ----
   const stores = retentionStores(tempRoot);
   assert.ok(stores.length > 0, "the registry is populated");
@@ -180,7 +233,7 @@ try {
   const ids = stores.map((store) => store.id);
   assert.equal(new Set(ids).size, ids.length, "store ids are unique");
   for (const store of stores) {
-    assert.ok([LOG_SHAPE, FILE_SET_SHAPE].includes(store.shape), `${store.id} has a known shape`);
+    assert.ok([LOG_SHAPE, FILE_SET_SHAPE, FOLDER_SET_SHAPE].includes(store.shape), `${store.id} has a known shape`);
     assert.ok(store.target.startsWith(tempRoot), `${store.id} resolves under the given stateRoot`);
     assert.ok(store.label && store.description, `${store.id} is described for reporting surfaces`);
   }
@@ -310,4 +363,15 @@ function writeAgedJson(dir, name, ageMs) {
   fs.writeFileSync(filePath, JSON.stringify({ name }) + "\n");
   const when = new Date(NOW.getTime() - ageMs);
   fs.utimesSync(filePath, when, when);
+}
+
+// One folder holding a file of `bytes` bytes, both last changed `ageMs` before NOW.
+function writeAgedFolder(dir, name, ageMs, bytes) {
+  const folder = path.join(dir, name);
+  fs.mkdirSync(folder, { recursive: true });
+  const filePath = path.join(folder, "data.bin");
+  fs.writeFileSync(filePath, "x".repeat(bytes));
+  const when = new Date(NOW.getTime() - ageMs);
+  fs.utimesSync(filePath, when, when);
+  fs.utimesSync(folder, when, when);
 }

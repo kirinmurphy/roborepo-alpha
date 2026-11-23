@@ -9,7 +9,7 @@ import { Readable } from "node:stream";
 import { repositoriesRoutes } from "../cli/portal-routes-repositories.mjs";
 import { dispatchRoutes } from "../cli/portal-router.mjs";
 import { inspectBranchLanding } from "../../modules/repositories/worktree-landed.mjs";
-import { withTemporaryStorage } from "../../modules/repositories/temporary-storage.mjs";
+import { sweepEmptyShells, withTemporaryStorage } from "../../modules/repositories/temporary-storage.mjs";
 import { assessWorktreePreservation } from "../../modules/repositories/worktree-preservation.mjs";
 import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
 import { linkedWorktrees } from "../../modules/repositories/worktree-inventory.mjs";
@@ -26,6 +26,140 @@ import { checkWorktreeRemoval } from "../../modules/repositories/worktree-guards
 import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mjs";
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
 import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
+
+// Each call first removes the empty shells earlier calls were denied removing, and only those.
+{
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shell-sweep-"));
+  try {
+    const hourAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const age = (folder) => fs.utimesSync(folder, hourAgo, hourAgo);
+    const shell = path.join(tmpRoot, "roborepo-disposable-landing-AbC123");
+    fs.mkdirSync(path.join(shell, "objects", "pack"), { recursive: true });
+    [path.join(shell, "objects", "pack"), path.join(shell, "objects"), shell].forEach(age);
+    const holdsFile = path.join(tmpRoot, "roborepo-disposable-preservation-XyZ789");
+    fs.mkdirSync(holdsFile);
+    fs.writeFileSync(path.join(holdsFile, "object"), "synthetic");
+    age(holdsFile);
+    const fresh = path.join(tmpRoot, "roborepo-disposable-landing-Fresh1");
+    fs.mkdirSync(fresh);
+    const unrelated = path.join(tmpRoot, "other-empty-folder");
+    fs.mkdirSync(unrelated);
+    age(unrelated);
+
+    const result = await withTemporaryStorage("landing", async () => ({ landed: true }), { tmpRoot });
+    assert.equal(result.landed, true);
+    assert.deepEqual(fs.readdirSync(tmpRoot).sort(), [path.basename(unrelated), path.basename(fresh), path.basename(holdsFile)].sort(),
+      "the old empty shell and the call's own folder are gone; a folder holding a file, a recent shell, and unrelated folders remain");
+    assert.equal(fs.readFileSync(path.join(holdsFile, "object"), "utf8"), "synthetic");
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+}
+
+// A temp root reached through a link (macOS /tmp) is still swept.
+{
+  const realRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shell-linked-root-"));
+  const linkedRoot = `${realRoot}-link`;
+  const cwdBefore = process.cwd();
+  try {
+    fs.symlinkSync(realRoot, linkedRoot);
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const shell = path.join(realRoot, "roborepo-disposable-landing-Link01");
+    fs.mkdirSync(shell);
+    fs.utimesSync(shell, old, old);
+    assert.deepEqual(sweepEmptyShells(linkedRoot), [path.join(linkedRoot, path.basename(shell))], "a shell under a linked temp root is swept");
+    assert.ok(!fs.existsSync(shell));
+    assert.equal(process.cwd(), cwdBefore, "the working directory is restored");
+  } finally {
+    fs.rmSync(linkedRoot, { force: true });
+    fs.rmSync(realRoot, { recursive: true, force: true });
+  }
+}
+
+// A shell replaced by a link between the scan and the removal is left, and the link's target keeps
+// its empty folders; an unchanged shell is still removed deepest first.
+{
+  const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shell-swap-"));
+  const cwdBefore = process.cwd();
+  try {
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const shell = path.join(tmpRoot, "roborepo-disposable-landing-Swap01");
+    fs.mkdirSync(path.join(shell, "objects", "pack"), { recursive: true });
+    [path.join(shell, "objects", "pack"), path.join(shell, "objects"), shell].forEach((folder) => fs.utimesSync(folder, old, old));
+    const elsewhere = path.join(tmpRoot, "unrelated");
+    fs.mkdirSync(path.join(elsewhere, "objects"), { recursive: true });
+    let swapped = false;
+    const fsApi = {
+      ...fs,
+      rmdirSync(target) {
+        fs.rmdirSync(target);
+        if (swapped) return;
+        // After the deepest folder goes, the shell becomes a link to an unrelated folder.
+        swapped = true;
+        fs.renameSync(shell, `${shell}-moved`);
+        fs.symlinkSync(elsewhere, shell);
+      },
+    };
+    assert.deepEqual(sweepEmptyShells(tmpRoot, { fsApi }), [], "a replaced shell is not reported swept");
+    assert.ok(fs.existsSync(path.join(elsewhere, "objects")), "the link's target keeps its empty folder");
+
+    fs.unlinkSync(shell);
+    fs.renameSync(`${shell}-moved`, shell);
+    fs.utimesSync(path.join(shell, "objects"), old, old);
+    fs.utimesSync(shell, old, old);
+    assert.deepEqual(sweepEmptyShells(tmpRoot), [shell], "an unchanged shell is removed");
+    assert.ok(!fs.existsSync(shell));
+
+    // The swap lands after every check, immediately before the rmdir itself. The removal runs from
+    // inside the verified parent, so it still removes the scanned folder, never the link's target.
+    fs.mkdirSync(path.join(shell, "objects", "pack"), { recursive: true });
+    [path.join(shell, "objects", "pack"), path.join(shell, "objects"), shell].forEach((folder) => fs.utimesSync(folder, old, old));
+    fs.mkdirSync(path.join(elsewhere, "objects", "pack"), { recursive: true });
+    let swappedLate = false;
+    const lateSwap = {
+      ...fs,
+      rmdirSync(target) {
+        if (!swappedLate) {
+          swappedLate = true;
+          fs.renameSync(shell, `${shell}-moved`);
+          fs.symlinkSync(elsewhere, shell);
+        }
+        fs.rmdirSync(target);
+      },
+    };
+    sweepEmptyShells(tmpRoot, { fsApi: lateSwap });
+    assert.ok(swappedLate, "the swap ran");
+    assert.ok(fs.existsSync(path.join(elsewhere, "objects", "pack")), "the link's target keeps its empty folder");
+    assert.ok(!fs.existsSync(path.join(`${shell}-moved`, "objects", "pack")), "the scanned folder is the one removed");
+    assert.equal(process.cwd(), cwdBefore, "the sweep restores the working directory");
+
+    // The swap lands during the scan, after the shell is checked and before it is listed. The scan
+    // enters the shell and confirms it, so it never lists the link's target, and nothing is removed.
+    fs.rmSync(`${shell}-moved`, { recursive: true, force: true });
+    fs.unlinkSync(shell);
+    fs.mkdirSync(path.join(shell, "objects"), { recursive: true });
+    [path.join(shell, "objects"), shell].forEach((folder) => fs.utimesSync(folder, old, old));
+    let swappedInScan = false;
+    const scanSwap = {
+      ...fs,
+      lstatSync(target, ...rest) {
+        const stat = fs.lstatSync(target, ...rest);
+        if (!swappedInScan && path.basename(String(target)) === path.basename(shell)) {
+          swappedInScan = true;
+          fs.renameSync(shell, `${shell}-moved`);
+          fs.symlinkSync(elsewhere, shell);
+        }
+        return stat;
+      },
+    };
+    assert.deepEqual(sweepEmptyShells(tmpRoot, { fsApi: scanSwap }), [], "a shell replaced mid-scan is not swept");
+    assert.ok(swappedInScan, "the scan swap ran");
+    assert.ok(fs.existsSync(path.join(elsewhere, "objects", "pack")), "the link's target keeps its empty folders");
+    assert.equal(process.cwd(), cwdBefore, "the sweep restores the working directory after a refused scan");
+  } finally {
+    fs.rmSync(tmpRoot, { recursive: true, force: true });
+  }
+}
 
 // Injected filesystem failures below are simulations, not native permission evidence.
 {

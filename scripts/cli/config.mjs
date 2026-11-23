@@ -487,6 +487,7 @@ function storesSection() {
       bytes: store.bytes,
       maxBytes: store.maxBytes,
       over: store.over,
+      spared: store.spared,
     })),
   };
 }

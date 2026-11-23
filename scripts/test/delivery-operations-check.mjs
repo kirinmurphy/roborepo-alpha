@@ -5,11 +5,13 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
+import { readBodyFile, scratchBodyRoots } from "../cli/delivery.mjs";
 
 // pr-body accepts only fixed system temp roots, so on POSIX the fixture uses /tmp rather than a
 // $TMPDIR that may point elsewhere.
 const root = fs.mkdtempSync(path.join(process.platform === "win32" ? os.tmpdir() : "/tmp", "roborepo-delivery-"));
 const cli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
+const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 isolateGitConfig(root);
 
 try {
@@ -66,9 +68,10 @@ try {
   } else {
     const gh = createFakeGh();
     const repository = { defaultBranchRef: { name: "main" }, nameWithOwner: "example/project", url: "https://github.com/example/project" };
-    const runDelivery = (args, prs = [pr], workflow = run, configChange = null, repo = repository) => {
+    const runDelivery = (args, prs = [pr], workflow = run, configChange = null, repo = repository, extraEnv = {}) => {
       fs.writeFileSync(gh.log, "");
       return delivery(checkout, args, {
+        ...extraEnv,
         PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`,
         FAKE_GH_LOG: gh.log,
         FAKE_GH_REPO: JSON.stringify(repo),
@@ -143,6 +146,48 @@ try {
     fs.writeFileSync(homeKey, "ghp_secretValue");
     const homeSecret = delivery(checkout, ["pr-body", homeKey], { HOME: home, USERPROFILE: home });
     refused(homeSecret, /matches the read-secrets credential denylist \(path not printed\)/);
+    // The agent scratch store is a body location too, since the Temporary Files rule sends agents
+    // there instead of /tmp. Only the account's own home counts: a $HOME override pointing at a
+    // folder outside every temp root (the checkout's ignored .tmp/) must not make its scratch
+    // folder, or a link standing in for one, acceptable.
+    const ignoredTmp = path.join(repoRoot, ".tmp");
+    const madeIgnoredTmp = !fs.existsSync(ignoredTmp);
+    fs.mkdirSync(ignoredTmp, { recursive: true });
+    const outsideHome = fs.mkdtempSync(path.join(ignoredTmp, "delivery-home-"));
+    try {
+      const scratchRoot = path.join(outsideHome, ".roborepo", "scratch");
+      const scratchBody = path.join(scratchRoot, "gy8ncs9u", "body.md");
+      fs.mkdirSync(path.dirname(scratchBody), { recursive: true });
+      fs.writeFileSync(scratchBody, body);
+      const scratchRoots = scratchBodyRoots(outsideHome);
+      assert.deepEqual(scratchRoots, [fs.realpathSync(scratchRoot)], "a home's real scratch folder is a body root");
+      // The read itself, through the location check, with that home's scratch folder as the only
+      // root: a scratch body is read, and a file elsewhere in the state root is refused.
+      assert.equal(readBodyFile(scratchBody, scratchRoots), body, "a body in the scratch folder is read");
+      const stateBody = path.join(outsideHome, ".roborepo", "telemetry", "body.md");
+      fs.mkdirSync(path.dirname(stateBody), { recursive: true });
+      fs.writeFileSync(stateBody, body);
+      assert.throws(() => readBodyFile(stateBody, scratchRoots), /inside a system temp directory or the scratch folder/,
+        "a body elsewhere in ~/.roborepo/ is refused");
+      const homeEnv = { HOME: outsideHome, USERPROFILE: outsideHome };
+      refused(runDelivery(["pr-body", scratchBody], [pr], run, null, repository, homeEnv), /inside a system temp directory or the scratch folder/);
+      assert.deepEqual(calls(), [], "an overridden $HOME does not widen the body locations");
+      // A scratch folder replaced by a link to the checkout is ignored, not followed.
+      fs.rmSync(scratchRoot, { recursive: true });
+      fs.symlinkSync(repoRoot, scratchRoot);
+      assert.deepEqual(scratchBodyRoots(outsideHome), [], "a linked scratch folder is not a body root");
+      refused(runDelivery(["pr-body", path.join(repoRoot, "package.json")], [pr], run, null, repository, homeEnv), /inside a system temp directory or the scratch folder/);
+    } finally {
+      fs.rmSync(outsideHome, { recursive: true, force: true });
+      // Non-recursive: another task may have put files in .tmp since this test made it.
+      if (madeIgnoredTmp) {
+        try {
+          fs.rmdirSync(ignoredTmp);
+        } catch {
+          // Not empty any more; leave it.
+        }
+      }
+    }
     const template = path.join(secretDir, ".env.example");
     fs.writeFileSync(template, "PLACEHOLDER=1");
     passed(runDelivery(["pr-body", template]));

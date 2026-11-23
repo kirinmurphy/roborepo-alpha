@@ -333,6 +333,11 @@ check_store_bounds() {
   local output
   if output="$(node "${repo_root}/scripts/cli/maintenance-stores.mjs" --check 2>&1)"; then
     ok "local stores within their bounds"
+    # A store over its cap only because of folders the byte cap spares prints a hint line.
+    while IFS= read -r line; do
+      # An `if`, not `&&`: a non-matching last line would return 1 and stop doctor under set -e.
+      if [[ "${line}" == hint:* ]]; then echo "${line}"; fi
+    done <<< "${output}"
   else
     failed=1
     while IFS= read -r line; do

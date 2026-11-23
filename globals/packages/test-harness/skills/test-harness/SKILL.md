@@ -13,7 +13,7 @@ Keep verification small, native to the repo, and explicit.
 2. Choose the smallest check that proves touched behavior.
 3. Prefer scoped format/lint/type/test commands when available.
 4. Pick the tier by what the change can break: prose-only edits run the checks that read those files, not a suite; module code runs that module's tests; shared code adds its callers. Build/tooling config, dependency changes, generated types, auth/payments/data migrations, broad refactors, and cross-cutting types/config need the full suite: where CI runs it, CI is that check, so run the affected tests locally and, after a push, keep working and read the CI result for the commit instead of rerunning the suite; without CI, run the full suite locally once. Run the full suite locally regardless only for CI scripts or test orchestration, or on explicit user request.
-5. If output may be large, use `roborepo run <command> ...` or redirect to `/tmp` and show only useful failure/pass lines.
+5. If output may be large, use `roborepo run <command> ...` or redirect to a file in your scratch folder (see the Temporary Files rule) and show only useful failure/pass lines.
 6. Final response includes `Verified: <command> -> <pass|fail|blocked>`.
 
 ## Test Design

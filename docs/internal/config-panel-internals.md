@@ -76,7 +76,9 @@ in `plans/plans-config.json`, a normal checkout and a nested worktree such as
 for `permissions.writablePaths({ cwd })`, where the Codex provider
 (`scripts/harnesses/codex/plans-store-grants.mjs`) lists the exact Git paths a plans commit writes. Codex profiles require
 concrete `workspace_roots`, so the Codex provider materializes the path instead of using a glob for
-every repository under `~/.worktrees`.
+every repository under `~/.worktrees`. Separately from that per-repository output, every Codex render
+adds `CODEX_SANDBOX_WRITABLE_PATHS` (`scripts/harnesses/codex/index.mjs`): the agent scratch folder,
+`~/.roborepo/scratch/**`.
 
 ## Web endpoints
 
@@ -285,7 +287,7 @@ printout, and onboarding label those rows "Claude only".
 | `read-secrets` deny | `filesystem.allowRead` = `readableExceptions` |
 | Each `network-hosts` behavior, allow / ask / deny | its `hosts` joined to `network.allowedDomains` / nothing / `network.deniedDomains` |
 | Defaults | `reach-allowed-hosts` allow; `reach-claude-log-upload` deny, so a `claude` command run from a sandboxed shell does not prompt for the program's Datadog log address |
-| Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm"]`, `network.allowLocalBinding: false` |
+| Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm", "~/.roborepo/scratch"]`, `network.allowLocalBinding: false` |
 
 Writable temp folders and denied credentials are not repeated: Claude merges the `Edit` allow and
 `Read`/`Edit` deny rules from the `permissions` key into the sandbox. `go-online` never affects

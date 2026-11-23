@@ -804,6 +804,20 @@
       ],
       "bucket": "allow",
       "category": "git"
+    },
+    {
+      "id": "scratch-folders",
+      "label": "Open agent scratch folders",
+      "description": "Print a named folder under ~/.roborepo/scratch for temporary files, and remove scratch folders left untouched past the store's bounds. The name is checked and nothing outside the scratch folder is written.",
+      "kind": "commands",
+      "commands": [
+        [
+          "roborepo",
+          "scratch"
+        ]
+      ],
+      "bucket": "allow",
+      "category": "files"
     }
   ],
   "tools": {},
