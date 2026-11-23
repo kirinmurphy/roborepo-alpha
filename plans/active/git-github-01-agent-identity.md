@@ -662,6 +662,8 @@ reads status and opens the terminal.
 - [x] The docs claim only a file-read query escapes the merge check, and promise the inherited-token check under Codex, whose hooks never see profile-exported variables — fixed (654b3a86)
 - [x] A merge mutation name the shell builds (`${M}PullRequest`, `$(printf merge)PullRequest`) is not seen, so the bot could merge through `gh api` by deliberate obfuscation — owner chose to keep it a documented limitation (654b3a86 documents it)
 
+- [x] Home read "healthy" for a token with no expiry date, though the docs, doctor, and setup treat it as one to renew — fixed (d3345f4e); "token expired" also now labels only the expiry problem
+
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
 - Validation pass 1 at 43a377d4 (fresh-context subagent): 10 findings above, all fixed
@@ -671,6 +673,7 @@ reads status and opens the terminal.
 - Validation pass 5 at 9a18caee (fresh-context subagent): 2 actionable findings, fixed in ead9425f
 - Validation pass 6 at ead9425f and f3192485 (fresh-context subagent): 2 actionable doc findings fixed, test notes added; one escalate open
 - Phase 8 targeted checks at b39f969e: `repository-agent-identity-check.mjs`, `hook-review-launch-check.mjs`, `github-setup-check.mjs`, `github-identity-status-check.mjs` pass; portal UI `agent-identity.spec.mjs` 6/6; `doctor.sh --quiet` passed (99 checks)
+- Validation pass 7 at b39f969e (fresh-context subagent): 1 actionable finding, fixed in d3345f4e; two notes (label wording, fixed in the same commit; focus re-reads for a repo left un-renewed, kept as designed)
 - Codex TLS: the CA read grants added in 35f1b186 did not work (`/**/*.pem` deny wins); replaced by the CA bundle copy in 8565a475
 
 ## Not tested
