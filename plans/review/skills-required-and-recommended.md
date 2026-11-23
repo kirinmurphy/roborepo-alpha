@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Approved at 843701dd, but `plans close` reports landed: unconfirmed: 843701dd merged main into the branch after it landed, so the landing scan has no main commits after the fork to check. Either reset the branch to 279cc4c0 and re-record approval of 279cc4c0, or fix the landing check, then rerun `/plan-close`.
+next_action: Approved at 843701dd and landed in main; run `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -686,11 +686,15 @@ cascading-disable dialog, required packages are called "included" wherever a per
 - `roborepo plans validate ejsc769o`: 0 findings before closure.
 - `roborepo plans approval ejsc769o`: fresh at 843701ddb880e16c3a8913591eefee610735d53e (renewed after
   the refusal below; 843701dd is a merge of main whose tree equals main at 9ad6fab7).
-- `roborepo plans landed ejsc769o`: landed, newly scanned.
-- Absorbing commit: 1604eab84a69511b795a930ed333dc936d18e4b9
+- `roborepo plans landed ejsc769o`: landed, newly scanned. The work first reached `main` in
+  1604eab84a69511b795a930ed333dc936d18e4b9 (pull request 76); after 843701dd merged main back into the
+  branch, the first absorbing first-parent commit after its fork is ba376812 (pull request 83).
+- Absorbing commit: ba3768126d4109fd6e20e76a81b0cf952b666f69
 - Closure refused 2026-11-23: after these checks the branch gained 843701dd, a merge of main at
   9ad6fab7 whose tree equals main, and `roborepo plans close` reported the approval of 279cc4c0
   stale (changed paths are #80's four files). Resolved by `/plan-review` and the user's approval of 843701dd.
 - Closure refused again 2026-11-23: `roborepo plans close` reported landed: unconfirmed (not
   absorbed). The branch tip 843701dd forks from main at 9ad6fab7, so no main commit after the fork
-  exists to absorb it, although its tree equals main at 9ad6fab7.
+  exists to absorb it, although its tree equals main at 9ad6fab7. Resolved by pull request 83,
+  which stops `plans sync-base` merging base into a landed branch and lets the landing check accept
+  the fork; its merge ba376812 absorbs the branch.
