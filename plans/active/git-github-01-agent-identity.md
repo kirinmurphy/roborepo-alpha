@@ -31,9 +31,12 @@ Turning the identity on is a guided setup. Right after a user sets up the plan s
 RoboRepo offers it. The setup walks the user through the steps only a person can do, checks the
 result, and turns the identity on at the end. A user who declines keeps today's behavior.
 
-**Recommendation:** a bot user with a classic personal access token, stored by `gh` in the OS
-keychain. Agent shells reach it through a non-secret `GH_CONFIG_DIR` setting. An optional package
-is the on/off switch. A fine-grained token is not an option for this repo (see Context).
+**Recommendation:** a bot user with a classic personal access token, stored by `gh` in a file in the
+bot's own `gh` config folder (`~/.roborepo/github-agent/gh`), because neither agent sandbox can read
+the keychain (Decision Log, November 22). Agent shells reach it through a non-secret `GH_CONFIG_DIR` setting. An optional
+package is the on/off switch. A fine-grained token is not an option for this repo (see Context).
+The token expires, so renewing it is part of the design: RoboRepo warns two weeks ahead, and
+rerunning the guided setup replaces it.
 
 ## Goals
 
@@ -51,6 +54,10 @@ is the on/off switch. A fine-grained token is not an option for this repo (see C
   transcript.
 - A user turns the identity on through one guided setup, offered when they set up the plan suite,
   without reading separate docs first.
+- A user renews an expiring, expired, or revoked token by rerunning the same setup, which skips
+  every step except the token. Status and doctor warn before the token expires.
+- A token exported in the shell that starts an agent does not replace the bot (one documented
+  exception, see Risks).
 - GitHub-specific pieces sit in one place that is tagged as belonging to the GitHub host.
 
 ## Non-goals
@@ -195,7 +202,7 @@ role is not on the bypass list.
 | What limits it | Collaborator role: no settings, no rulesets, not on bypass | App permissions: grant Contents, Pull requests, Issues write; omit Administration |
 | Token scope | Classic `repo` and `read:org` (which `gh` requires to log in), covering every repo the bot is invited to. Omit `workflow` so pushes cannot change `.github/workflows/` | Narrowed per repo and per permission |
 | Token lifetime | Long-lived. Set an expiry and rotate | One hour |
-| Getting a token into `gh` and `git` | `gh auth login --with-token` once; `gh` keeps it in the keychain | Needs a helper that signs a JWT and mints a token at least hourly. `gh` has no built-in App login |
+| Getting a token into `gh` and `git` | `gh auth login --with-token` once; `gh` keeps it in the bot's `hosts.yml` (Decision Log, November 22) | Needs a helper that signs a JWT and mints a token at least hourly. `gh` has no built-in App login |
 | Attribution | Commits and comments show the bot login | Commits and comments show `<app>[bot]` |
 | Moving parts in roborepo | Env entries only | Env entries plus a minting helper and refresh |
 
@@ -245,21 +252,23 @@ else runs from the setup:
 | 3. Create the bot account | **The user (guided)** | The setup opens GitHub's sign-up page, tells the user to use a private window so their own session stays signed in, and asks for the bot's login. It confirms the account exists with a public `gh api users/<login>` lookup |
 | 4. Invite the bot | The setup, as the user | `PUT /repos/{owner}/{repo}/collaborators/{bot}` through the user's own `gh` login, which sends the invitation. Skipped when the bot is already a collaborator |
 | 5. Create a classic token | **The user (guided)** | The setup opens the classic token page and shows the exact choices: scopes `repo` and `read:org` only, a note naming the repo, and an expiry. The classic page has no documented way to pre-fill these |
-| 6. Hand over the token | The user pastes; the setup stores it | Hidden prompt, piped to `gh auth login --with-token` under the agent config dir (see "Token entry") |
+| 6. Hand over the token | The user pastes; the setup checks it, then stores it | Hidden prompt, piped to `gh auth login --with-token` in a staging folder first; only a token for the bot, with the right scopes and not expired, replaces the live login (see "Token entry") |
 | 7. Accept the invite | The setup, as the bot | `GET /user/repository_invitations`, then `PATCH /user/repository_invitations/{id}` with the bot's new token. Skipped when there is no pending invite |
 | 8. Protect the branches | The setup, as the user | Runs `roborepo protect` after the user confirms, when `roborepo protect --check` reports it missing |
-| 9. Check the result | The setup | Bot login differs from the user's, write-not-admin permission, token scopes, and the merge and `repo-plans` rules |
-| 10. Turn the identity on | The setup | Enables `github-agent-identity`, which re-renders Claude and Codex config |
+| 9. Check the result | The setup | Bot login differs from the user's, write-not-admin permission, token scopes, and the merge and `repo-plans` rules. A check that cannot run stops the setup too |
+| 10. Turn the identity on | The setup | Enables `github-agent-identity`, which re-renders Claude and Codex config. If the package is turned on but one of the files or settings it installs is missing, the setup applies it again; if the package still installs only partly, the setup fails |
 
-If a check fails at any step, the setup reports what failed and how to fix it, and the package
-stays off. A user who declines the offer keeps today's behavior: agents act as the user, `gh api` stays
+If a check fails, the setup reports what failed and how to fix it. If a check cannot run, it reports
+why. Either way it does not turn the package on; a package that was already on stays
+on. A user who declines the offer keeps today's behavior: agents act as the user, `gh api` stays
 denied, and Codex hands pushes back to the user.
 
 | Piece | Behavior |
 | --- | --- |
 | Offer | `/plan-suite-init` ends by running the doctor's identity check. When the identity is not set up, it offers the setup and gives the one command to run. Packages have no post-enable hook, so the offer lives in the step a user runs right after turning on the plan suite |
 | `roborepo github setup` | A new CLI command under a new `github` namespace. Interactive: it opens each GitHub page, waits for the user, and checks the result before moving on. It reruns safely and skips steps already done |
-| Token entry | Read with hidden input and piped to `gh auth login --with-token` under the agent `GH_CONFIG_DIR`. Never echoed, written to a file, or passed as an argument |
+| Token entry | Read with hidden input and piped to `gh auth login --with-token` in a staging folder beside the agent `GH_CONFIG_DIR`. The setup refuses a staged token for another account, with the wrong scopes, or already expired; one that expires soon or never is stored with a note. It then moves the staged `hosts.yml` into place; a refused token is deleted and the previous one keeps working. Never echoed, written anywhere but `gh`'s own `hosts.yml`, or passed as an argument |
+| Renewal | A rerun when GitHub rejects the saved token reads the bot's login from `hosts.yml`, skips the account steps, opens the token list (where **Regenerate token** keeps the scopes), and asks only for the new token. A rerun when the token still works but expires within 14 days, has no expiry, or has the wrong scopes offers to replace it |
 | Agents and the setup | Agents are denied `roborepo github setup`, so a token never passes through an agent transcript. The offer tells the user to run it in their own terminal |
 | Checks | The same checks as the doctor (see "Doctor check"), through `modules/forge/` |
 | Ruleset step | If `roborepo protect` has not been run for this repo, the setup runs it after the user confirms |
@@ -270,6 +279,8 @@ What the package changes, and who renders it:
 | Entry | Rendered by | Why there |
 | --- | --- | --- |
 | `GH_CONFIG_DIR` (Claude `env`, Codex `shell_environment_policy.set`) | Package `config-patch` (`set`) | A single key the package owns |
+| `GH_TOKEN` and `GITHUB_TOKEN` set to empty (same two places) | Package `config-patch` (`set`) | `gh` uses either ahead of the stored login and treats an empty value as unset |
+| A short agent rule: an authentication failure means the bot's token expired, so stop and ask the user to rerun the setup | Package `rules` resource | Agents otherwise retry, or suggest a `gh auth login` they may not run |
 | Codex `network.domains` GitHub entries, `features.network_proxy` | Package `config-patch` | Keys the package can own; existing domains are kept |
 | Extra `GIT_CONFIG_*` pairs and `GIT_CONFIG_COUNT` | Core renderer, when the package is enabled | `GIT_CONFIG_COUNT` is shared with core's `core.hooksPath` entry, so one patch cannot own it |
 | Codex `network.enabled` | Core renderer (`codexNetworkAccess`), when the package is enabled | Already rendered from `go-online` |
@@ -286,16 +297,17 @@ flowchart LR
     U[User terminal] -- uses --> UC[~/.config/gh: user token]
     U -- pushes with --> SSH[User SSH key]
     A[Agent shell] -- env sets --> G[GH_CONFIG_DIR: agent gh dir]
-    G -- reads token from --> K[OS keychain: bot entry]
+    G -- reads token from --> K[hosts.yml: bot token, mode 0600]
     A -- fetches and pushes over HTTPS via --> H[git credential helper: gh auth git-credential]
     H -- asks --> G
 ```
 
-The secret never leaves the keychain. Rendered config carries only non-secret values:
+The token stays in the bot's `hosts.yml`. Rendered config carries only non-secret values:
 
 | Setting | Delivered as | Value | Purpose |
 | --- | --- | --- | --- |
-| `GH_CONFIG_DIR` | Environment variable | `<home>/.roborepo/github-agent/gh`, absolute | `gh` reads the bot's `hosts.yml` from here, and the token from the keychain |
+| `GH_CONFIG_DIR` | Environment variable | `<home>/.roborepo/github-agent/gh`, absolute | `gh` reads the bot's login and token from `hosts.yml` here |
+| `GH_TOKEN`, `GITHUB_TOKEN` | Environment variables | `""` | A token exported in the user's shell would win over the stored login, for `gh` and for the credential it hands Git |
 | `core.hooksPath` | `GIT_CONFIG_*` pair | Unchanged | The existing `pre-push` backstop |
 | `credential.helper` | `GIT_CONFIG_*` pair | `""` | Clears inherited helpers, such as `osxkeychain`, which may hold the user's credential |
 | `credential.https://github.com.helper` | `GIT_CONFIG_*` pair | `!gh auth git-credential` | Git asks `gh`, which answers as the bot |
@@ -391,15 +403,27 @@ settings, so its pushes keep the user's identity.
 
 ### Doctor check
 
-`roborepo doctor` reports, with the agent `GH_CONFIG_DIR`:
+`roborepo doctor` and `roborepo github status` call GitHub as the bot, using the agent
+`GH_CONFIG_DIR`, with any exported `GH_TOKEN` or `GITHUB_TOKEN` removed from those calls. They report:
 
 - whether the identity is set up at all; when it is not, the line names `roborepo github setup`;
-- the bot is logged in, its token is not expired, and its login differs from the user's;
+- the bot is logged in, its token is not expired or revoked, and its login differs from the user's;
 - the bot's permission on the current repo is write, not admin;
 - the default branch's effective rules require an approval of the last push (`roborepo-main-merge`);
 - `repo-plans` is protected from deletion and force pushes;
-- the token's scopes do not include `workflow`, `admin:org`, or `delete_repo`. `read:org` is
-  expected, because `gh` requires it to log in.
+- the token is a classic token with exactly `repo` and `read:org`. Any other scope is too broad, and
+  a fine-grained token, which lists no scopes, is refused because nothing confirms what it may do.
+
+Each finding has a severity:
+
+| Severity | Examples | Effect on the result |
+| --- | --- | --- |
+| Problem | Expired or revoked token, wrong scopes, bot is admin or the user, missing protection | `problem`; doctor hints, status exits 1 |
+| Warn | Token expires within 14 days, token has no expiry, stale CA bundle copy | Stays `healthy`; doctor hints |
+| Unchecked | The user's own account or the branch protection could not be read | `unavailable` (never `healthy`) unless a problem is already known; doctor hints with the fix; setup stops |
+
+A GitHub read that fails with nothing else known stays a plain "check skipped"; a problem found
+before a later read fails is still reported.
 
 ## Implementation plan
 
@@ -489,7 +513,8 @@ phases build, so run them before Phase 3.
       "Turning the identity on", skips steps already done, and on a failed check reports the cause
       and leaves the package off.
 - [x] Read the token with hidden input and pipe it to `gh auth login --with-token` under the agent
-      `GH_CONFIG_DIR`; never echo it, write it to disk, or pass it as an argument.
+      `GH_CONFIG_DIR`; never echo it or pass it as an argument, and write it nowhere but `gh`'s own
+      `hosts.yml` (Decision Log, November 22).
 - [x] Run `roborepo protect` from the setup, after confirmation, when it has not been run for the
       repo.
 - [x] Automate the invite and its acceptance: send the invitation through the user's `gh` login
@@ -502,6 +527,39 @@ phases build, so run them before Phase 3.
       (`globals/packages/plan-suite/skills/plan-suite-init/SKILL.md`): after the store is ready, run
       the doctor's identity check, and when the identity is not set up, offer `roborepo github setup`
       for the user to run in their own terminal.
+
+### Phase 7: Token lifetime and setup hardening
+
+Added November 23 at the user's request and from review of PR 82 (Decision Log). The last three
+items are fixes found along the way that the token work depends on.
+
+- [x] Rerunning the setup after GitHub rejects the token renews it for the saved bot, without the
+      account steps. — 0b1f4d26; `github-setup-check.mjs` renewal case.
+- [x] Status and doctor warn 14 days before expiry and note a token with no expiry date. —
+      0b1f4d26; `github-identity-status-check.mjs` 13- and 15-day and no-expiry cases.
+- [x] The package adds an agent rule that an authentication failure means the token expired. —
+      0b1f4d26 (`globals/packages/github-agent-identity/rules.md`).
+- [x] The setup suggests a 90-day expiry, and the setup guide has a renewal section. — 0b1f4d26.
+- [x] A rerun offers to replace a working token that expires soon, has no expiry, or has the wrong
+      scopes. — b10b5c5b; `github-setup-check.mjs` replace-or-keep case.
+- [x] A new token is checked in a staging folder before it replaces the live login. — b10b5c5b;
+      rejected-replacement case.
+- [x] Setup's and status's bot calls drop an exported `GH_TOKEN` or `GITHUB_TOKEN`. — b10b5c5b; both
+      tests set each variable.
+- [x] Status flags any scope beyond `repo` and `read:org`, and fine-grained tokens. — b10b5c5b.
+- [x] A check that cannot run makes the result `unavailable`, never `healthy`, and stops the setup.
+      — b10b5c5b, abb24603.
+- [x] Agent shells get `GH_TOKEN` and `GITHUB_TOKEN` set to empty. — 7167d591;
+      `github-agent-identity-package-check.mjs`.
+- [x] When the package is on but a file or setting it installs is missing, the setup applies it
+      again, and fails if the install is still partial. — b10b5c5b, abb24603; missing-file and
+      own-`GH_CONFIG_DIR` cases.
+- [x] The Codex permission rules file (`~/.codex/rules/roborepo.rules`) is written even when the
+      `rules` folder links to a dotfiles folder outside the checkout; a link into the checkout is
+      still left alone. — b10b5c5b; `github-agent-identity-render-check.mjs`.
+- [x] The record of which config values a package set (`owned-scalars-state.mjs`) no longer shares
+      one empty object between reads in a process, which let a package overwrite a value the user
+      set. — abb24603; found by the partial-install test.
 
 ## Review
 
@@ -582,6 +640,16 @@ phases build, so run them before Phase 3.
 - [ ] With the agent environment exported, `git push --no-verify origin HEAD:main` is rejected by
       GitHub naming `roborepo-main-merge`, and the owner's own push to `main` still succeeds through
       the admin bypass. Needs a person: both attempt real pushes to `main`.
+- [ ] Renewing on the real repo: after the bot's token expires or is revoked, rerunning
+      `roborepo github setup` names the saved bot, opens the token list, takes a regenerated token,
+      and status is healthy again; a rerun with a token expiring within 14 days offers to replace
+      it. Needs a person: the token is typed at a hidden prompt in the owner's own terminal.
+      `github-setup-check.mjs` covers both paths against a fake `gh`.
+- [ ] In a new Claude and a new Codex agent shell with the identity on, after exporting a token in
+      the launching shell: `printf '[%s]' "$GH_TOKEN"` prints `[]` and `gh auth status` names the
+      bot. Needs a person: it needs the package on in the owner's install and new agent sessions
+      started from that shell. A fake-token check (2026-11-23) showed `gh` hands Git the stored
+      bot token when `GH_TOKEN` is empty, and the exported one when it is set.
 - [ ] `/plan-suite-init` in a repo without a plan store ends by offering `roborepo github setup`.
       Needs a person: initializing a store creates a remote branch on a real GitHub repo, which is
       the owner's call; `github-identity-status-check.mjs` covers the `not-set-up` answer the offer
@@ -607,6 +675,15 @@ Automated:
 - A `git-exec.mjs` test shows the new option keeps the `GIT_CONFIG_COUNT` pairs and the default
   still strips them.
 - `node scripts/test/delivery-operations-check.mjs` passes after the `gh` runner moves.
+- The setup test also shows: an expired token is renewed for the saved bot with only the token
+  asked for; a working token that expires soon can be replaced or kept; a replacement with the
+  wrong scopes is not stored and the old token stays; an exported `GH_TOKEN` or `GITHUB_TOKEN` is
+  ignored; a missing package file is re-applied; a partial install fails.
+- The status test also shows: notes at 13 days and none at 15; a no-expiry note; any extra scope
+  and a fine-grained token are problems; an unreadable account or protection makes the result
+  `unavailable`, not `healthy`.
+- The package test shows `GH_TOKEN` and `GITHUB_TOKEN` set to empty on enable and removed on
+  disable, for Claude and Codex.
 - `npm run check` passes before the PR.
 
 Manual, on the real repo, after Phase 6:
@@ -656,15 +733,24 @@ Manual, on the real repo, after Phase 6:
   later, an agent resolving threads could unblock a merge. The required approval still holds.
 - **Bot attribution changes PR history.** Agent commits and comments show the bot login, which is
   the point, but reviewers need to know who the bot is.
-- **Codex's sandbox may not reach the keychain.** If `gh` cannot read the token there, the design
-  needs a different way to hand it over. Phase 2 finds this out before any rendering work starts.
+- **The token is a plaintext file.** Neither sandbox can read the keychain, so the token sits in
+  `hosts.yml` with mode 0600 (Decision Log, November 22). Any process the user runs, agents included,
+  can read it; the bot's limited role and the token's expiry bound the damage.
 - **Allowed GitHub hosts widen what sandboxed commands can do.** Any sandboxed command can send data
   to those hosts, for example through `gh api` as the bot. Mitigation: the exception names only two
   hosts, is off without the identity, and the bot's role limits what its token can change. It does
   not stop data leaving through GitHub.
 - **An expired bot token looks like a network problem.** An expired token turns Codex saves into
-  "not synchronized" rather than an error, and the commits wait locally. Mitigation: the doctor
-  check fails on an expired token and names `roborepo github setup` to replace it.
+  "not synchronized" rather than an error, and the commits wait locally. Mitigation: status and
+  doctor warn 14 days ahead and report an expired or revoked token as a problem (status exits 1,
+  doctor shows a hint without failing), a rerun of the setup renews it,
+  and the package's agent rule tells agents to stop and ask the user on an authentication failure.
+  Nothing warns between doctor runs; GitHub's own expiry email goes to the bot account's address.
+- **The Claude desktop app's launch environment may win over Claude's settings.** Claude Code's
+  settings reference ("How env values interact with your shell") says that when the desktop app
+  starts a session, its launch environment takes precedence for any variable it already sets. So a
+  `GH_TOKEN` set there would not be blanked, and agents would act as that token's account. Read from
+  the docs on 2026-11-23, not tested. Mitigation: the setup guide says not to set either token there.
 - **The token passes through a terminal.** The setup reads it with hidden input and agents are
   denied the command, but a user who pastes the token into an agent chat leaks it to the transcript.
   The setup's instructions say to paste it only at its own prompt.
@@ -692,6 +778,20 @@ decides.
 
 ## Decision Log
 
+- November 23, 2026 (user decision): token expiry is handled inside this plan. A rerun of
+  `roborepo github setup` renews the token rather than a separate `renew` command; status and doctor
+  warn 14 days ahead (was 7) and note a token without an expiry date; the package adds an agent rule
+  for authentication failures; the setup suggests a 90-day expiry. Rejected: a separate renew
+  command, which would duplicate the setup's checks.
+- November 23, 2026: from review of PR 82, a new token is checked in a staging folder
+  before it replaces the live login, so a rejected token never reaches agents, and a rerun offers
+  to replace a working token that needs it. A check that cannot run gets its own severity,
+  `unchecked`, which makes the result `unavailable` instead of `healthy` and stops the setup.
+- November 23, 2026 (user decision): agent shells get `GH_TOKEN` and `GITHUB_TOKEN` set to empty,
+  because `gh` would use either ahead of the bot's stored login. Chosen over removing them, which
+  Claude's `env` cannot do; `gh` treats an empty value as unset (checked with fake tokens). Claude
+  Code's docs say a settings value overrides a shell export, except in sessions the desktop app
+  starts (see Risks).
 - November 23, 2026 (user decision): the push hooks lift the `gh api` deny under Claude only when
   the hook's `GH_CONFIG_DIR` is exactly the agent's gh folder; a Claude session started before setup
   keeps `gh api` denied until restarted. Codex keeps accepting an unset `GH_CONFIG_DIR`: its source
