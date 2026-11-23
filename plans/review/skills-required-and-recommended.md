@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Review renewed at commit 43230c08 after the user's Config page changes; it awaits the user's approval of that commit, then merge pull request 76 and run `/plan-close`.
+next_action: Review renewed at commit c63f38db after the user's latest changes; it awaits the user's approval of that commit, then merge pull request 76 and run `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -108,10 +108,10 @@ References between skills in the same package are not relationships.
 
 | Package | `requires` | `recommends` | Prose-only references |
 | --- | --- | --- | --- |
-| `plan-suite` | `technical-writing`, `implementation-review`, `test-harness`, `code-style` | `javascript-typescript`, `feature-verification` | — |
-| `session-close` | `implementation-review` | `test-harness`, `plan-suite` | — |
-| `implementation-review` (new) | — | `code-style`, `javascript-typescript` | — |
-| `technical-writing` | — | `code-style`, `javascript-typescript`, `test-harness` | — |
+| `plan-suite` | `technical-writing`, `implementation-review`, `test-harness`, `code-style`, `feature-verification` | — | — |
+| `session-close` | archived 2026-11-23 | — | — |
+| `implementation-review` (new) | — | `code-style` | — |
+| `technical-writing` | — | `code-style`, `test-harness` | — |
 | `javascript-typescript` | `code-style` | — | `react` (inverse link: `react` requires it) |
 | `react` | `javascript-typescript`, `code-style` | — | — |
 | `feature-verification` | — | — | `test-harness` (boundary: test-harness chooses and runs tests) |
@@ -131,13 +131,12 @@ Why each edge, by source skill:
 | `plan-suite` → `implementation-review` (requires) | Validator passes in `plan-execute` and `plan-review`; `plan-close`'s quality pass | One rubric for every pass |
 | `plan-suite` → `test-harness` (requires) | `plan-close` needs repository-native verification for a complete verdict; the other plan skills pair it | Required by one skill, so required by the package. Enabling `plan-suite` now turns `test-harness` on |
 | `plan-suite` → `code-style` (requires) | Pairs in `plan-write`, `plan-promote`, `plan-execute`, `plan-review` | User decision 2026-11-22: the suite always carries the placement rules |
-| `plan-suite` → `javascript-typescript` (recommends) | Pairs in `plan-write`, `plan-promote`, `plan-execute` | Applies only to plans and diffs with JS/TS |
-| `plan-suite` → `feature-verification` (recommends) | `plan-execute` pairing; `plan-write`'s `references/completion-report.md` reuses its captures | Only for behavior that needs a demonstration |
+| `plan-suite` → `feature-verification` (requires) | `plan-execute` pairing; `plan-write`'s `references/completion-report.md` reuses its captures | User decision 2026-11-22: always available; still loaded only when behavior needs a demonstration |
 | `session-close` → `implementation-review` (requires) | Its "Review the code" step | Replaces "load a code-quality review skill if one exists" |
 | `session-close` → `test-harness` (recommends) | New: verification of the session's changes | Useful, not required to close a session |
 | `session-close` → `plan-suite` (recommends) | `plan-write` pairing for plan sync and backlog hand-off | Only when the session touched a plan |
-| `implementation-review` → `code-style`, `javascript-typescript` (recommends) | New skill | Flattened into the recommendations of `plan-suite` and `session-close`, which require it |
-| `technical-writing` → three packages (recommends) | Its `## Paired Skills` table and `references/review-loop.md` | Subject-matter constraints, conditional |
+| `implementation-review` → `code-style` (recommends) | New skill | Flattened into the recommendations of `session-close`, which includes it |
+| `technical-writing` → `code-style`, `test-harness` (recommends) | Its `## Paired Skills` table and `references/review-loop.md` | Subject-matter constraints, conditional |
 | `react` → `javascript-typescript`, `code-style` (requires) | React's `## Paired Skills` table | User decision 2026-11-22: React work is JS/TS work and places code |
 | `javascript-typescript` → `code-style` (requires) | "as `code-style` describes" for helper placement | User decision 2026-11-22: its placement rule defers to code-style |
 
@@ -325,9 +324,9 @@ requires nor recommends (prose-only references in the "Package relationships" ta
       removes it.
 - [x] With `technical-writing` removed from disk, `roborepo package status plan-suite --json`
       reports the package unhealthy.
-- [x] Interactive `roborepo package enable plan-suite` offers `javascript-typescript` and
-      `feature-verification` once each and enables none on No (`code-style` was offered too until it
-      became required, 2026-11-22).
+- [x] Interactive `roborepo package enable` offers each recommendation once and enables none on No
+      (verified with `plan-suite`, whose recommendations were later all moved into what it includes
+      or dropped, 2026-11-22).
 - [x] The setup wizard check from Phase 4 passes.
 - [x] No `SKILL.md` or reference under `globals/packages/` asks the user to enable or skip a package
       (a text check added to `scripts/test/skill-reference-matrix-characterization-check.mjs`).
@@ -413,6 +412,15 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - [x] User request: javascript-typescript, react, and plan-suite require code-style; react requires javascript-typescript; javascript-typescript no longer recommends react — c8fb4a13
 - [x] User request: flatten nested dependencies into one required and one recommended list — `recommendedClosure`, c8fb4a13
 - [x] Flattened recommendations were not nearest first for branched requirements — breadth-first walk and test (43230c08)
+- [x] User request: popup close button keeps its own column; long titles wrap beside it — 57da0642
+- [x] User request: "Required" is "Included" everywhere a person reads it; smaller dependency list font — 44e3861f, 8f2c9731
+- [x] User request: plan-suite includes feature-verification; javascript-typescript recommended by none of plan-suite, technical-writing, implementation-review — 44e3861f, df6b3f61
+- [x] Skipped-dependency warning test still expected "requires" — fixed (c586904a); CI had failed on 8f2c9731
+- [x] User request: the row button reads "Dependencies" — a7b9a3f9
+- [x] User request: turning off a package that selected packages include opens a dialog naming them, with Leave them enabled / Disable All Packages — a7b9a3f9
+- [x] Toggle route's 409 and cascade had no server test or API doc — added (59ddb2ce)
+- [x] User request: the disable dialog is wide enough that its sentences do not wrap — 3cdfa238
+- [x] User request: archive caveman, tool-call-optimization, session-close, and branch-safety to globals/packages-archived/; drop Token Optimization and Additional Agent Rules; Monitoring (Usage Statusline, Capture Dense Bash) is the last section — 86aec445, c63f38db
 
 ### Verification
 - Validator pass 1 at 40dae82 (fresh-context subagent): 3 actionable, 4 notes; all fixed in 76a693a.
@@ -481,10 +489,37 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - No CI ran on pushes 23677d29..73b93d7b: the pull request conflicted with main, so GitHub skipped
   its checks until the merge.
 - CI run 45089213771 at 43230c08 (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
+- At 57da0642..8f2c9731: package-relationships, plan-suite-skills, package-lifecycle,
+  config-bulk-toggle, config-dependency-sections, wizard-recommendations, skill-reference-matrix,
+  skill-structure, skill-package-boundaries, package-catalog, package-graph, docs-reference checks;
+  `package validate`, `skill audit --check`, `skill triggers --check`, `skill render-commands
+  --check`; `npm run test:portal-ui` 276 passed, 0 failed at df6b3f61.
+- Browser: the popup head at 375px keeps the close button in its own column with a two-line title;
+  the Development Planning Lifecycle popover lists five Included Packages in the smaller font.
+- Validator pass at df6b3f61 (fresh-context subagent): 3 actionable wording leftovers and 3 notes,
+  fixed in 8f2c9731; plan relationship tables updated in this record.
+- CI run 45109941055 at 8f2c9731 failed: package-lifecycle-check still expected the old
+  skipped-dependency wording; fixed in c586904a.
+- At a7b9a3f9..3cdfa238: config-dependency-sections (cascading disable), harness-portal-api (409 and
+  cascade route cases), package-lifecycle, config-bulk-toggle, docs-reference checks; `npm run
+  test:portal-ui` 278 passed at a7b9a3f9 (includes the disable dialog test).
+- Browser (portal from the worktree, real home): turning Code Style off opened the dialog naming
+  Development Planning Lifecycle; Leave them enabled kept Code Style on with no error. At 3cdfa238
+  the dialog is 620px wide and each sentence fits on one line.
+- Validator pass at a7b9a3f9 (fresh-context subagent): 2 actionable (route test, API doc), fixed
+  59ddb2ce.
+- At 86aec445..c63f38db: 23 affected checks (catalog, bulk toggle, relationships, wizard, retired ids,
+  plan-suite skills, response-output, docs-reference, and others) pass; `package validate` (17),
+  `skill audit --check`, `skill render-commands --check`, `skill triggers --check`, `doctor.sh
+  --quiet` (99); `npm run test:portal-ui` 278 passed at 86aec445.
+- Validator pass at 86aec445 (fresh-context subagent): 1 actionable escalated (an enabled caveman
+  install keeps its hook and plugin settings; accepted under the no-migration non-goal) and 4 notes,
+  fixed in c63f38db or accepted.
+- CI run 45116314032 at c63f38db (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
 
 ### Result
 - Status: complete
-- Reviewed implementation commit: 43230c08102a58ba9cef88dee934283128d19bae
+- Reviewed implementation commit: c63f38dbb9a35f24fd5375bbfe491be05e4575f7
 - Base commit: d66dcfce6abd923f3f836d142b04a745e725ffae
 
 ### Approval
@@ -515,6 +550,26 @@ requires nor recommends (prose-only references in the "Package relationships" ta
   A recommended package's own recommendations are left out: each is offered once, from the package
   the user turns on, and a recommended package's requirements come with it when it is turned on.
   Manifests and Paired Skills rows still declare direct edges only.
+- **2026-11-22 (user decision): A required package is called "included" in everything a person
+  reads** (Config page, terminal output, user docs). The manifest field stays `requires`, as do
+  Paired Skills relationship values, API values, and manifest-author errors; install bundles keep
+  their own wording.
+- **2026-11-22 (user decision): `plan-suite` includes `feature-verification` and recommends
+  nothing.** `javascript-typescript` is dropped from the recommendations of `plan-suite`,
+  `technical-writing`, and `implementation-review`, since flattening would otherwise surface it
+  through what the suite includes; their Paired Skills rows for it go too.
+- **2026-11-22 (user decision): A blocked disable asks instead of failing.** The refusal carries
+  the selected packages that include the target (`includedBy`); the toggle route answers it with
+  `409 INCLUDED_IN_SELECTED` and accepts `cascade` for package disables. Leave them enabled changes
+  nothing; Disable All Packages retries with `cascade`, as `--cascade` does in the terminal.
+- **2026-11-23 (user decision): Four packages are archived** to `globals/packages-archived/`, out
+  of the catalog: `caveman`, `tool-call-optimization`, `session-close`, `branch-safety`. Sections
+  above that name `/session-close` as an `implementation-review` caller describe the design before
+  this; the rubric now serves `/plan-execute`, `/plan-review`, and `/plan-close`, and the Plans banner
+  enables `plan-suite` alone. Token Optimization and Additional Agent Rules are removed; Monitoring
+  is the last package section. A user who had `caveman` enabled keeps its Codex hook and Claude
+  plugin settings after updating, since reconcile only forgets ids no longer in the catalog; per
+  this plan's no-migration non-goal, nothing removes them automatically.
 - **2026-11-22 (user decision): No skill-count badge.** Removed for every multi-skill package;
   plan-suite is the only one.
 
