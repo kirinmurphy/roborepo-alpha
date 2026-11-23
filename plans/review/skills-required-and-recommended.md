@@ -535,7 +535,7 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: 2efa3ecc41d2c573990f837c96ff46f9714ae8d8
+- Reviewed implementation commit: 279cc4c0452e3f5ca6aa5cc36720256a1507e824
 - Confirmed by: human
 
 ## Decision Log
