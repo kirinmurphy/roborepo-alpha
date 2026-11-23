@@ -60,4 +60,42 @@ await new Promise(setImmediate);
 assert.equal(res.status, 200);
 assert.deepEqual(JSON.parse(res.body), { harness: "claude", state: "unknown", groups: [] }, "a failed read reports unknown, never an error page");
 
+// Package and skill toggles: a disable that selected packages block answers 409 with the packages
+// that include it; `cascade` reaches the package mutation only, and must be a boolean.
+const toggleCalls = [];
+const toggleHandlers = {
+  loadConfig: () => ({ ok: "config" }),
+  mutatePackage: async (id, enabled, options) => {
+    toggleCalls.push({ route: "packages", id, enabled, options });
+    if (!options.cascade && id === "leaf") {
+      return { ok: false, message: "cannot disable leaf", includedBy: [{ id: "parent", label: "Parent" }] };
+    }
+    return { ok: true, message: `disabled: ${id}` };
+  },
+  mutateSkill: async (id, enabled, options) => {
+    toggleCalls.push({ route: "skills", id, enabled, options });
+    return { ok: true, message: `unlinked: ${id}` };
+  },
+};
+async function toggle(path, body) {
+  const out = response();
+  dispatchRoutes([configRoutes], { method: "POST", ...request(body) }, out, path, "", toggleHandlers);
+  for (let i = 0; i < 5 && out.status === null; i++) await new Promise(setImmediate);
+  return { status: out.status, body: JSON.parse(out.body) };
+}
+let toggled = await toggle("/api/config/packages", { id: "leaf", enabled: false });
+assert.equal(toggled.status, 409, "a disable that selected packages block is a conflict");
+assert.equal(toggled.body.error.code, "INCLUDED_IN_SELECTED");
+assert.deepEqual(toggled.body.error.details.includedBy, [{ id: "parent", label: "Parent" }]);
+assert.deepEqual(toggled.body.config, { ok: "config" }, "the conflict still returns the fresh snapshot");
+toggled = await toggle("/api/config/packages", { id: "leaf", enabled: false, cascade: true });
+assert.equal(toggled.status, 200, "cascade lets the disable through");
+assert.deepEqual(toggleCalls.at(-1), { route: "packages", id: "leaf", enabled: false, options: { cascade: true } });
+toggled = await toggle("/api/config/packages", { id: "leaf", enabled: false, cascade: "yes" });
+assert.equal(toggled.status, 400, "cascade must be a boolean");
+toggled = await toggle("/api/config/skills", { id: "some-skill", enabled: false, cascade: true });
+assert.equal(toggled.status, 200);
+assert.deepEqual(toggleCalls.at(-1), { route: "skills", id: "some-skill", enabled: false, options: undefined },
+  "cascade never reaches a skill toggle");
+
 console.log("portal harness API checks passed");

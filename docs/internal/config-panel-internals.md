@@ -86,7 +86,7 @@ one response.
 
 | Endpoint | Body | Result |
 | --- | --- | --- |
-| `POST /api/config/packages` | `{ id, enabled }` | enable/disable a package |
+| `POST /api/config/packages` | `{ id, enabled, cascade? }` | enable/disable a package. `cascade: true` also disables the selected packages that include it; without it, such a disable answers `409` with `error.code` `INCLUDED_IN_SELECTED` and `error.details.includedBy` (`[{ id, label }]`) |
 | `POST /api/config/skills` | `{ id, enabled }` | link/unlink a skill |
 | `POST /api/config/permissions` | `{ behaviorId, bucket }` or `{ tokens, bucket }` | set a named behavior or arbitrary command to `deny`, `ask`, `allow`, or `default` |
 
