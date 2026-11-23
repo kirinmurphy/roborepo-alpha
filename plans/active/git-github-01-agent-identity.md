@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Rerun /plan-execute to build Phase 8 (portal status card and terminal hand-off), validate, submit for review, merge main in, and update PR 82. The owner separately runs roborepo github setup to turn the identity on
+next_action: Run /plan-review on PR 82 (all phases built and validated). Before approving, the owner runs roborepo github setup in their own terminal to turn the identity on, then settles the open Not tested entries
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["rtkmc8kf", "f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -616,22 +616,25 @@ items are fixes found along the way that the token work depends on.
 Added November 23 at the user's request (Decision Log). The token stays in the terminal; the portal
 reads status and opens the terminal.
 
-- [ ] Add `scripts/cli/repository-agent-identity.mjs`: validate the repo id against the registry,
+- [x] Add `scripts/cli/repository-agent-identity.mjs`: validate the repo id against the registry,
       call `readCurrentAgentIdentity` with the repo's path as `cwd` and an 8-second timeout, cache
       each repo's result for five minutes, add `setupLaunch.supported`, and answer `applies: false`
-      for a repo whose GitHub target is not `github.com`.
-- [ ] Add `launchAgentIdentitySetup` modeled on `launchHookReview`: recheck the repo, launch
+      for a repo whose GitHub target is not `github.com`. — `repository-agent-identity-check.mjs`.
+- [x] Add `launchAgentIdentitySetup` modeled on `launchHookReview`: recheck the repo, launch
       `process.execPath` with the absolute path of `scripts/cli/main.mjs` and `github setup`, and
-      return `launched` or a reason.
-- [ ] Wire `handlers.loadRepositoryAgentIdentity` and `handlers.launchAgentIdentitySetup` in
+      return `launched` or a reason. — Same file; refuses `not_github`, `unsupported_platform`,
+      `no_checkout`.
+- [x] Wire `handlers.loadRepositoryAgentIdentity` and `handlers.launchAgentIdentitySetup` in
       `scripts/cli/telemetry.mjs`, and add `GET /api/repositories/:id/agent-identity` and
       `POST /api/repositories/:id/agent-identity/setup` in `scripts/cli/portal-routes-repositories.mjs`.
-- [ ] Give `launchInTerminal` (`scripts/cli/terminal-launch.mjs`) a working-folder option.
-- [ ] On Home: a status line in each supported repo card, and the full card from its menu, showing
+- [x] Give `launchInTerminal` (`scripts/cli/terminal-launch.mjs`) a working-folder option. — `cwd`, refused as `no_folder` unless an existing absolute folder.
+- [x] On Home: a status line in each supported repo card, and the full card from its menu, showing
       the state, the first finding's `fix` or the `reason`, **Open setup** or the copy command, and
-      the github.com links; refetch that repo on focus after a launch or a shown copy command.
-- [ ] Move the github.com step text (pages, scopes, expiry advice) into one place that
-      `scripts/cli/github-setup.mjs` and the portal card both use.
+      the github.com links; refetch that repo on focus after a launch or a shown copy command. —
+      `portal/home/agent-identity.js`; `agent-identity.spec.mjs`.
+- [x] Move the github.com step text (pages, scopes, expiry advice) into one place that
+      `scripts/cli/github-setup.mjs` and the portal card both use. — `modules/forge/agent-identity-guide.mjs`;
+      the portal gets it in the status response as `guide`.
 
 ## Review
 
@@ -667,6 +670,7 @@ reads status and opens the terminal.
 - Validation pass 4 at 445fece6 (fresh-context subagent): clean; its doc-wording note fixed in 9a18caee
 - Validation pass 5 at 9a18caee (fresh-context subagent): 2 actionable findings, fixed in ead9425f
 - Validation pass 6 at ead9425f and f3192485 (fresh-context subagent): 2 actionable doc findings fixed, test notes added; one escalate open
+- Phase 8 targeted checks at b39f969e: `repository-agent-identity-check.mjs`, `hook-review-launch-check.mjs`, `github-setup-check.mjs`, `github-identity-status-check.mjs` pass; portal UI `agent-identity.spec.mjs` 6/6; `doctor.sh --quiet` passed (99 checks)
 - Codex TLS: the CA read grants added in 35f1b186 did not work (`/**/*.pem` deny wins); replaced by the CA bundle copy in 8565a475
 
 ## Not tested
@@ -722,6 +726,16 @@ reads status and opens the terminal.
       bot. Needs a person: it needs the package on in the owner's install and new agent sessions
       started from that shell. A fake-token check (2026-11-23) showed `gh` hands Git the stored
       bot token when `GH_TOKEN` is empty, and the exported one when it is set.
+- [x] Home shows the bot identity for a real GitHub repo with the package off. — Verified by agent
+      2026-11-23 at b39f969e: a portal started from the worktree (port 47821, the owner's normal
+      state) showed `roborepo-alpha` as "needs attention", "A bot is signed in but the
+      github-agent-identity package is off", the fix naming `roborepo github setup`, the token's
+      expiry, and **Open setup**; repos with no GitHub remote showed no line.
+- [ ] **Open setup** on macOS opens a terminal running `roborepo github setup` in the repo's folder,
+      and returning to the portal after it finishes shows "healthy". Needs a person: the setup is
+      interactive and reads the bot's token at a hidden prompt in the owner's terminal.
+      `repository-agent-identity-check.mjs` asserts the launched command and folder, and the
+      browser spec covers the post and the refresh on return.
 - [ ] `/plan-suite-init` in a repo without a plan store ends by offering `roborepo github setup`.
       Needs a person: initializing a store creates a remote branch on a real GitHub repo, which is
       the owner's call; `github-identity-status-check.mjs` covers the `not-set-up` answer the offer
@@ -846,6 +860,17 @@ Manual, on the real repo, after Phase 6:
 None open.
 
 ## Decision Log
+
+- November 23, 2026: the github.com step text lives in `modules/forge/agent-identity-guide.mjs`,
+  which the setup prints from and the status route returns as `guide`. Alternative: a portal copy of
+  the text, which the browser could import directly but would drift from the setup's wording.
+- November 23, 2026: the portal passes the repo id it already knows to `readCurrentAgentIdentity`
+  (a new optional `repositoryId`) instead of rereading the checkout's origin. With no recorded
+  checkout, status still reads from the home folder, and the setup button is replaced by the
+  command, since the setup must run in the repo's folder to know which repo to set up.
+- November 23, 2026: the line and card read "Agent GitHub account" with short state labels
+  (not set up, healthy, renew soon, token expired, needs attention, not checked); the message and
+  fix are the report's own text, so doctor, `roborepo github status`, and the portal agree.
 
 - November 23, 2026 (user decision): the portal tracks the bot identity's setup and renewal
   status per repo and hands the token step to a terminal running `roborepo github setup`; the
