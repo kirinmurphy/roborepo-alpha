@@ -107,13 +107,13 @@ installs.
 | Command | What it does |
 | --- | --- |
 | `roborepo package source list [--json]` | Lists sources with their tab, trust, and how many packages each offers and has installed. |
-| `roborepo package source add <github-url\|folder> [--id <id>]` | Adds a GitHub repo (`https://github.com/<owner>/<repo>`) or a local folder. A repo is fetched at one commit and listed; nothing is installed. A repo in RoboRepo's trusted catalog is added as **trusted** and pinned to its reviewed commit; any other repo is **unverified**. |
+| `roborepo package source add <github-url\|folder> [--id <id>]` | Adds a GitHub repo (`https://github.com/<owner>/<repo>`, or a `file://` URL for a local clone or mirror) or a local folder. It warns when the new source offers a name another source already offers. A repo is fetched at one commit and listed; nothing is installed. A repo in RoboRepo's trusted catalog is added as **trusted** and pinned to its reviewed commit; any other repo is **unverified**. |
 | `roborepo package source refresh [source]` | Fetches the newest listing of one or every Git source. Installed packages keep their commit until you update them. Offline, it fails and keeps the last listing. |
 | `roborepo package source info <source>` | Shows one source and the packages it offers. |
 | `roborepo package source enable\|disable <source>` | Turns a source's listing on or off. Packages already installed from it stay usable. `builtin` cannot be disabled. |
 | `roborepo package source remove <source> [--keep-installed]` | Removes a source. Refused while packages are installed from it, unless `--keep-installed` keeps them installed without a source. Never deletes your files. `builtin` and `local` cannot be removed. |
 | `roborepo package source trusted` | Lists the trusted catalog of vetted repos. |
-| `roborepo package install <package\|source/package> [--yes]` | Installs a package without enabling it. For a Git package it first prints what the package contains (skills, rules, hooks, scripts, permissions); a package from an **unverified** source asks for confirmation, or needs `--yes` in a script. A local package is used in place, never copied. |
+| `roborepo package install <package\|source/package> [--yes]` | Installs a package without enabling it. For a Git package it first prints what the package contains (skills, rules, hooks, scripts, permissions); a package from an **unverified** source asks for confirmation, or needs `--yes` in a script. Packages it requires are shown and confirmed the same way. Installing an already-installed package keeps its commit; use `update` to move it. A local package is used in place, never copied. |
 | `roborepo package update <package> [--yes]` | Moves a Git package to its source's newest revision (for a trusted source, the newest reviewed commit), after showing which files change. An enabled package is re-applied. |
 | `roborepo package remove <package>` | Removes an installed package, disabling it first if it is on. A built-in (System) package cannot be removed; disable it instead. Removing a local package forgets RoboRepo's record and leaves your folder. |
 

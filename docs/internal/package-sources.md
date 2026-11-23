@@ -167,7 +167,9 @@ folder. Uninstall removes `package-sources.json` and `packages/`.
 - **Refresh:** resolves the target commit (the trusted catalog's commit for a trusted source,
   otherwise the default branch's head), fetches exactly that commit, scans it, builds packages into
   `cache/`, validates each, and only then replaces `catalogs/<id>.json`. A failed refresh keeps the
-  last listing. Refresh never installs or moves an installed pin.
+  last listing. Refresh never installs or moves an installed pin. Each listed package records the
+  content hash of what refresh built (`integrity` in the catalog); install verifies its copy
+  against it, so a cache altered after refresh fails with an integrity mismatch and writes nothing.
 - **Grouping:** decided by the repo's own files, in this order:
 
 | Repo contains | Packages |
@@ -205,7 +207,7 @@ data and throw `PackageServiceError` with a `code`:
 | --- | --- |
 | `listSources`, `sourceInfo`, `addSource`, `removeSource`, `setSourceEnabled`, `refreshSources`, `trustedCatalog` | Source management |
 | `listAvailablePackages`, `resolvePackageReference` | Every (source, package) pair; one pick per the reference rules |
-| `previewInstall`, `installPackage` | Contents summary, then install with what it requires from the same source |
+| `previewInstall`, `installPackage` | Contents summary of the package and every package the install brings, then the install. Installing a package already installed from the same source never moves its pin; it reports a newer revision for `update` |
 | `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed; re-apply an active package |
 | `removePackage` | Refuse System; disable an active package first; delete the record and any copy |
 | `packageView` | Rows with `tab`, `sourceId`, `sourceBadge`, `trust`, `collection`, `available`, `installed`, `active`, `revision`, `latestRevision`, `updateAvailable`, `removable` |

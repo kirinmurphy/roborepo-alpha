@@ -18,7 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { appRoot } from "./roots.mjs";
-import { cacheDir, catalogsDir } from "./package-install-store.mjs";
+import { cacheDir, catalogsDir, hashPackageTree } from "./package-install-store.mjs";
 import { createPackageSource, readManifest, registerSourceAdapter } from "./package-source-adapters.mjs";
 import { writeJsonStateAtomic } from "./state-paths.mjs";
 import { PackageSourceError } from "./package-sources.mjs";
@@ -393,7 +393,9 @@ export function refreshGitSource(record, { revision = null, validate = null } = 
       fs.mkdirSync(dest, { recursive: true });
       item.build(dest);
       if (validate) validate(dest, item.packageId);
-      packages.push({ packageId: item.packageId, collection: item.collection, contents: contentsSummary(dest) });
+      // The content hash of what refresh built; install verifies its copy against it, so a cache
+      // altered after refresh fails instead of installing.
+      packages.push({ packageId: item.packageId, collection: item.collection, contents: contentsSummary(dest), integrity: hashPackageTree(dest) });
     }
     fs.rmSync(tree, { recursive: true, force: true });
     fs.rmSync(revisionDir, { recursive: true, force: true });
@@ -436,7 +438,7 @@ function gitSource(record) {
     return catalog.packages.map((item) => {
       const root = path.join(revisionCacheDir(record.id, catalog.revision), "packages", item.packageId);
       const file = path.join(root, "package.config.json");
-      return { sourceId: record.id, packageId: item.packageId, root, file, config: readManifest(file), collection: item.collection, revision: catalog.revision, contents: item.contents };
+      return { sourceId: record.id, packageId: item.packageId, root, file, config: readManifest(file), collection: item.collection, revision: catalog.revision, contents: item.contents, integrity: item.integrity || null };
     });
   };
   return createPackageSource({
@@ -454,6 +456,7 @@ function gitSource(record) {
         kind: "materialized",
         selector: record.trust === "trusted" ? "trusted-catalog" : "default-branch",
         resolved: entry.revision,
+        integrity: entry.integrity,
         url: record.url,
       };
     },

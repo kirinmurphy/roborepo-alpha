@@ -142,7 +142,7 @@ export function addSource({ location, id = null }) {
   };
   const { catalog } = runRefresh(record, { revision: trusted?.commit || null });
   writeSourceConfig([...sources, record]);
-  return { source: sourceSummary(record, []), packages: catalog.packages.map((item) => item.packageId), trusted: Boolean(trusted) };
+  return { source: sourceSummary(record, []), packages: catalog.packages.map((item) => item.packageId), trusted: Boolean(trusted), collisions: [] };
 }
 
 function addPathSource(folder, id, sources) {
@@ -157,7 +157,17 @@ function addPathSource(folder, id, sources) {
   // List it once so a folder with an invalid package is refused before it is recorded.
   candidatesFromLiveSource(record);
   writeSourceConfig([...sources, record]);
-  return { source: sourceSummary(record, []), packages: availableFromSource(record).map((pkg) => pkg.id), trusted: false };
+  return { source: sourceSummary(record, []), packages: availableFromSource(record).map((pkg) => pkg.id), trusted: false, collisions: newCollisions() };
+}
+
+// IDs two live sources now offer with no recorded choice: until the user picks one, the catalog
+// refuses to load, so `source add` says so at once.
+function newCollisions() {
+  try {
+    return composePackageCatalog().collisions;
+  } catch {
+    return [];
+  }
 }
 
 // Removing a source never deletes user files and never silently uninstalls. With installed
@@ -299,7 +309,12 @@ export function ambiguityError(packageId, candidates) {
 // What installing `reference` would put on this machine, without changing anything. The portal and
 // the CLI show this before an install.
 export function previewInstall(reference) {
-  const pkg = resolvePackageReference(reference);
+  const available = listAvailablePackages();
+  const lock = readPackageLock();
+  const pkg = resolvePackageReference(reference, { available, lock });
+  // Everything the install would bring, dependencies included, so the user sees each package's
+  // contents before agreeing to any of them.
+  const plan = installPlan(pkg, available, lock);
   return {
     qualifiedName: pkg.qualifiedName,
     sourceId: pkg.sourceId,
@@ -307,8 +322,9 @@ export function previewInstall(reference) {
     trust: pkg.trust,
     tab: pkg.tab,
     revision: pkg.revision || null,
-    needsConfirmation: pkg.trust === "unverified",
+    needsConfirmation: plan.some((entry) => entry.trust === "unverified"),
     contents: pkg.contents || contentsSummary(pkg.sourceRoot),
+    packages: plan.map((entry) => previewOf(entry)),
   };
 }
 
@@ -334,7 +350,13 @@ export function installPackage(reference, { confirmed = false } = {}) {
 }
 
 function previewOf(pkg) {
-  return { qualifiedName: pkg.qualifiedName, trust: pkg.trust, revision: pkg.revision || null, contents: pkg.contents || contentsSummary(pkg.sourceRoot) };
+  return {
+    qualifiedName: pkg.qualifiedName,
+    trust: pkg.trust,
+    sourceType: pkg.sourceType,
+    revision: pkg.revision || null,
+    contents: pkg.contents || contentsSummary(pkg.sourceRoot),
+  };
 }
 
 // The package and every package it requires that is not already resolvable. A requirement is
@@ -409,13 +431,16 @@ function installOne(pkg, lock) {
   const adapter = createSourceAdapter(record);
   const resolution = adapter.resolve(pkg.id);
   const current = lock.packages[pkg.id];
-  if (current && current.sourceId === resolution.sourceId && current.resolved === resolution.resolved && fs.existsSync(current.installedPath || "")) {
-    return { qualifiedName: pkg.qualifiedName, kind: "materialized", revision: current.resolved, changed: false };
+  // Already installed from this source: install never moves the pin. A newer revision goes
+  // through `update`, which shows the change and re-applies an active package.
+  if (current && current.sourceId === resolution.sourceId && current.kind === "materialized" && fs.existsSync(current.installedPath || "")) {
+    const newer = current.resolved !== resolution.resolved ? resolution.resolved : null;
+    return { qualifiedName: pkg.qualifiedName, kind: "materialized", revision: current.resolved, changed: false, newerRevision: newer };
   }
   const folder = adapter.materialize(resolution);
   const { record: written, previous } = promoteMaterialized({
     sourceFolder: folder,
-    resolution: { ...resolution, integrity: null },
+    resolution,
     metadata: { collection: pkg.collection || null, url: record.url },
   });
   if (previous?.kind === "materialized" && previous.installedPath !== written.installedPath) deleteMaterializedCopy(previous.installedPath);
@@ -462,7 +487,7 @@ export async function updatePackage(reference, { confirmed = false, reapply = nu
   validateProspective([pkg]);
   const { record: written, previous } = promoteMaterialized({
     sourceFolder: nextFolder,
-    resolution: { ...resolution, integrity: null },
+    resolution,
     metadata: { collection: pkg.collection || null, url: record.url },
   });
   const reapplied = reapply ? await reapply(packageId) : false;
@@ -547,11 +572,12 @@ export async function removePackage(reference, { disable = null } = {}) {
 // installed, and active state.
 export function packageView({ includeAvailable = true } = {}) {
   const lock = readPackageLock();
-  const composed = composePackageCatalog({ lock });
+  const sources = readSourceConfig().sources;
+  const composed = composePackageCatalog({ lock, sources });
   const active = new Set(effectiveEnabledIds(composed.packages));
-  const rows = composed.packages.map((pkg) => viewRow(pkg, { lock, active, available: true }));
+  const rows = composed.packages.map((pkg) => viewRow(pkg, { lock, active, available: true, sources }));
   if (includeAvailable) {
-    for (const record of readSourceConfig().sources) {
+    for (const record of sources) {
       if (!record.enabled || record.type !== "git") continue;
       const latest = readGitCatalog(record.id)?.revision || null;
       for (const pkg of availableFromSource(record)) {
@@ -561,12 +587,12 @@ export function packageView({ includeAvailable = true } = {}) {
           existing.updateAvailable = Boolean(existing.revision && latest && existing.revision !== latest);
           continue;
         }
-        rows.push(viewRow(pkg, { lock, active, available: true }));
+        rows.push(viewRow(pkg, { lock, active, available: true, sources }));
       }
     }
   }
   for (const row of rows) {
-    if (row.sourceType === "git" && row.installed && !readSourceConfig().sources.some((record) => record.id === row.sourceId)) row.available = false;
+    if (row.sourceType === "git" && row.installed && !sources.some((record) => record.id === row.sourceId)) row.available = false;
   }
   return {
     tabs: SOURCE_TABS.map((tab) => ({ ...tab, count: rows.filter((row) => row.tab === tab.id).length })),
@@ -576,7 +602,7 @@ export function packageView({ includeAvailable = true } = {}) {
   };
 }
 
-function viewRow(pkg, { lock, active, available }) {
+function viewRow(pkg, { lock, active, available, sources }) {
   const record = lock.packages[pkg.id];
   const installedHere = record && record.sourceId === pkg.sourceId;
   return {
@@ -589,7 +615,7 @@ function viewRow(pkg, { lock, active, available }) {
     trust: pkg.trust,
     tab: pkg.tab,
     tabLabel: tabLabel(pkg.tab),
-    sourceBadge: sourceBadge(pkg),
+    sourceBadge: sourceBadge(pkg, sources),
     collection: pkg.collection || null,
     available,
     installed: Boolean(installedHere) || (isLiveSource({ type: pkg.sourceType }) && active.has(pkg.id)),
@@ -603,9 +629,14 @@ function viewRow(pkg, { lock, active, available }) {
 
 // The short provenance label a card shows: nothing for System packages, the source for the rest,
 // plus "Trusted" for a package from the trusted catalog.
-export function sourceBadge(pkg) {
+export function sourceBadge(pkg, sources = null) {
   if (pkg.tab === "system") return null;
-  const record = findSource(pkg.sourceId);
+  let record = null;
+  try {
+    record = findSource(pkg.sourceId, sources || readSourceConfig().sources);
+  } catch {
+    record = null;
+  }
   const name = record?.display || pkg.sourceId;
   return pkg.trust === "trusted" ? `${name} · Trusted` : name;
 }

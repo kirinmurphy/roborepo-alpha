@@ -83,6 +83,7 @@ export function packageSourceCommand(args = []) {
         if (json) return emitJson(result);
         console.log(`added package source ${result.source.id} (${result.source.trust}): ${result.packages.length} package(s) available`);
         for (const id of result.packages) console.log(`  ${result.source.id}/${id}`);
+        for (const collision of result.collisions || []) console.log(`warn: ${collision.candidates.join(" and ")} share a name; choose one with \`roborepo package install <source>/${collision.id}\``);
         if (result.source.trust === "unverified") console.log("This repository is not in RoboRepo's trusted catalog. Review each package's contents before installing it.");
         if (result.packages.length) console.log(`next: roborepo package install ${result.source.id}/${result.packages[0]}`);
         return;
@@ -144,13 +145,15 @@ export function packageInstallCommand(rest = []) {
     const [reference] = positional;
     if (!reference) throw new PackageServiceError("usage: roborepo package install <package|source/package> [--yes]", { code: "usage" });
     const preview = previewInstall(reference);
-    if (preview.sourceId && preview.revision) {
-      console.log(`${preview.qualifiedName} (${preview.trust}) at ${short(preview.revision)} contains:`);
-      for (const line of formatContentsSummary(preview.contents)) console.log(line);
+    // Every remote package the install brings, dependencies included, is shown before any prompt.
+    for (const entry of preview.packages.filter((item) => item.sourceType === "git")) {
+      console.log(`${entry.qualifiedName} (${entry.trust}) at ${short(entry.revision)} contains:`);
+      for (const line of formatContentsSummary(entry.contents)) console.log(line);
     }
     let confirmed = flags.has("yes");
     if (preview.needsConfirmation && !confirmed && interactive(flags)) {
-      confirmed = await confirm(`Install ${preview.qualifiedName} from an unverified source?`);
+      const unverified = preview.packages.filter((item) => item.trust === "unverified").map((item) => item.qualifiedName);
+      confirmed = await confirm(`Install ${unverified.join(", ")} from an unverified source?`);
       if (!confirmed) {
         console.log("not installed");
         return;
@@ -161,6 +164,7 @@ export function packageInstallCommand(rest = []) {
     for (const item of result.installed) {
       const where = item.kind === "live" ? `in place at ${item.path}` : `at ${short(item.revision)}`;
       console.log(`${item.changed ? "installed" : "already installed"}: ${item.qualifiedName} ${where}`);
+      if (item.newerRevision) console.log(`  a newer revision ${short(item.newerRevision)} is available: roborepo package update ${item.qualifiedName.split("/").pop()}`);
     }
     console.log(`next: roborepo package enable ${preview.packageId}`);
   }, flags);

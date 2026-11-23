@@ -229,6 +229,48 @@ try {
   assert.deepEqual(chosen.map((row) => row.qualifiedName), ["clash/shared-name"], "the explicit choice is the package in the catalog");
 
   // ---------------------------------------------------------------------------------------------
+  // A dependency from an unverified source is shown, hook included, before anything installs.
+  const depsRepo = makeRepo("deps-pack", {
+    "packages/dep-root/package.config.json": JSON.stringify({
+      schemaVersion: 1, id: "dep-root", label: "Dep Root", description: "Requires dep-hooked.",
+      presentation: { category: "integrations" }, requires: ["dep-hooked"],
+      resources: [{ type: "rules", harness: "claude", source: "rules.md" }],
+    }),
+    "packages/dep-root/rules.md": "## Dep root\n",
+    "packages/dep-hooked/package.config.json": JSON.stringify({
+      schemaVersion: 1, id: "dep-hooked", label: "Dep Hooked", description: "Has a hook.",
+      presentation: { category: "integrations" },
+      resources: [{ type: "hooks", harness: "claude", source: "hooks.json" }],
+    }),
+    "packages/dep-hooked/hooks.json": JSON.stringify({ hooks: {} }),
+  });
+  json("package", "source", "add", depsRepo.url, "--id", "deps");
+  const depPreview = cli("package", "install", "deps/dep-root");
+  assert.equal(depPreview.status, 4, depPreview.output);
+  assert.match(depPreview.output, /deps\/dep-hooked \(unverified\)[^\n]*contains:\n {2}hooks: hooks\.json \(claude\)/, `the dependency's hook is shown\n${depPreview.output}`);
+  assert.ok(!lock()["dep-root"] && !lock()["dep-hooked"], "nothing installs unconfirmed");
+  ok("package", "install", "deps/dep-root", "--yes");
+  assert.ok(lock()["dep-root"] && lock()["dep-hooked"], "the dependency installs with its parent once confirmed");
+
+  // Install never moves an installed pin, even after a refresh found a newer commit.
+  const depsFirst = lock()["dep-root"].resolved;
+  depsRepo.commit({ "packages/dep-root/rules.md": "## Dep root v2\n" });
+  ok("package", "source", "refresh", "deps");
+  const reinstall = ok("package", "install", "deps/dep-root", "--yes");
+  assert.match(reinstall, /already installed[\s\S]*newer revision[\s\S]*roborepo package update dep-root/);
+  assert.equal(lock()["dep-root"].resolved, depsFirst, "the pin stays until an explicit update");
+
+  // A cache altered after refresh fails integrity at install and leaves the prior record alone.
+  const robo = JSON.parse(fs.readFileSync(path.join(roots.stateRoot, "packages", "catalogs", "robo.json"), "utf8"));
+  assert.match(robo.packages[0].integrity, /^sha256-/, "refresh records each package's content hash");
+  fs.appendFileSync(path.join(roots.stateRoot, "packages", "cache", "robo", robo.revision, "packages", "robo-hooked", "hooks.json"), "\n");
+  const tampered = cli("package", "install", "robo/robo-hooked", "--yes");
+  assert.notEqual(tampered.status, 0);
+  assert.match(tampered.output, /integrity mismatch/);
+  assert.ok(!lock()["robo-hooked"], "a failed integrity check writes no record");
+  assert.ok(!fs.existsSync(path.join(roots.stateRoot, "packages", "installed", "robo")), "and leaves no copy");
+
+  // ---------------------------------------------------------------------------------------------
   // Failures that must leave no state behind.
   const before = fs.readFileSync(sourcesFile, "utf8");
   const unreachable = cli("package", "source", "add", pathToFileURL(path.join(roots.tmp, "repos", "missing")).href, "--id", "gone");

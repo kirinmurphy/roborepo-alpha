@@ -75,7 +75,8 @@ export function installedPathFor(sourceId, revision, packageId) {
 }
 
 // Copy a package folder into the store and record it, in this order: copy to staging, verify the
-// copy hashes to `integrity`, move it into place, then write the lock record. Any failure before
+// copy hashes to `resolution.integrity` (the hash refresh recorded; skipped only when a listing
+// predates recorded hashes), move it into place, then write the lock record. Any failure before
 // the lock write leaves the previous record and copy untouched. Returns the new lock record and
 // the previous one, so the caller can remove the old copy once nothing points at it.
 export function promoteMaterialized({ sourceFolder, resolution, metadata = null }) {

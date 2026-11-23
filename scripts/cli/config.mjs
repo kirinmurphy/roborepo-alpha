@@ -18,7 +18,7 @@ import {
 } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageSelectionStates } from "./package-state.mjs";
-import { findSource } from "./package-sources.mjs";
+import { sourceBadge } from "./package-service.mjs";
 import { bundleSelectionStates, selectedBundleRoots } from "./bundle-selection.mjs";
 import { recommendedBy, requiredBy, requiredClosure } from "./package-graph.mjs";
 import { inspectSkill, skillInventorySource } from "./skill-inventory.mjs";
@@ -673,19 +673,6 @@ function multiSkillPresentationItem(item, tools, contextCost) {
   };
 }
 
-function packageSourceBadge(item) {
-  const name = item.sourceType === "git" ? sourceDisplay(item.sourceId) : item.sourceId;
-  return item.trust === "trusted" ? `${name} · Trusted` : name;
-}
-
-function sourceDisplay(sourceId) {
-  try {
-    return findSource(sourceId)?.display || sourceId;
-  } catch {
-    return sourceId;
-  }
-}
-
 function packageItemBase(item, contextCost) {
   return {
     id: item.id,
@@ -700,7 +687,7 @@ function packageItemBase(item, contextCost) {
     // a card shows, its trust, and the collection a source derived for it.
     tab: item.tab || null,
     sourceId: item.sourceId || null,
-    sourceBadge: item.tab && item.tab !== "system" ? packageSourceBadge(item) : null,
+    sourceBadge: sourceBadge(item),
     trust: item.trust || null,
     collection: item.collection || null,
     urls: item.urls || [],
