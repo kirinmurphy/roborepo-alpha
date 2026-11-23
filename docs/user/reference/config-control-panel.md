@@ -89,8 +89,8 @@ applies each installable resource; the enable/disable switch dispatches on `reso
 A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 
 - Enabling it turns on each package it includes (dependencies first) and then its own resources.
-  Only the package you turned on is recorded; an included package stays on while any package you turned
-  on still requires it, and turns off with the last one.
+  Only the package you turned on is recorded; an included package stays on while any package you
+  turned on still includes it, and turns off with the last one.
 - A **composite** package lists only `requires`, so it bundles other packages under one toggle.
 - A composite reports itself enabled only when every included package, and any resources of its
   own, are enabled.
@@ -100,8 +100,8 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
   on, the button reads **Done**. Turning a package on there opens no further list of its own
   recommendations. The terminal setup
   wizard asks nothing: after it applies your choices it prints one line,
-  `recommended (not enabled): code-style, plan-suite, test-harness — enable with: roborepo package enable <id>`,
-  naming what the packages you selected recommend that is still off.
+  `recommended (not enabled): test-harness, plan-suite, code-style — enable with: roborepo package enable <id>`
+  after you select `/session-close`, naming what the packages you selected recommend that is still off.
 - Nesting is flattened. A package's included packages are everything it requires, directly or
   through another included package. The Config page and terminal call these **included**; the
   manifest field is `requires`. Its recommendations are its own plus those of every package it
@@ -125,9 +125,9 @@ while `session-close` is still on.
 
 A selectable included package with `catalog` visibility keeps its own row. Dependency-only
 packages appear under **Includes** in their parents' source popups instead. Clicking a package's
-name opens its source popup, which lists its visible requirements; each name there opens that
-package's source, and **Back** returns to the package that requires it. A package with no source
-of its own opens a contents view that lists only its requirements; if all of them are hidden, its
+name opens its source popup, which lists its visible included packages; each name there opens
+that package's source, and **Back** returns to the package that includes it. A package with no
+source of its own opens a contents view that lists only its included packages; if all of them are hidden, its
 name opens nothing.
 
 A row with included or recommended packages shows a **Package Dependencies** button. It opens

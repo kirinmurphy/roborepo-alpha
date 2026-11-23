@@ -27,8 +27,8 @@ exact failure this loop exists to catch.
 
 A paired skill constrains validation, not only drafting: when a document tells a reader how to
 build something, the rules governing that construction are in scope. Within a paired skill, only
-the references that actually apply are required — `javascript-typescript/references/framework-less-markup.md` matters when the
-document covers DOM structure, and not otherwise.
+the references that actually apply are required: a reference about one kind of construction
+matters when the document covers that construction, and not otherwise.
 
 Reuse rules and references already available in context; do not reread unchanged guidance for
 each pass. A fresh-context Validator must receive or read the applicable rules it lacks. When

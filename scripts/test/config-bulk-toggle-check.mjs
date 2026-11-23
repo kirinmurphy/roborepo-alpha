@@ -227,7 +227,7 @@ try {
   assert.equal(sharedOff.status, 200, `required-only batch disable: ${sharedOff.message}`);
   const sharedOffById = new Map(sharedOff.results.map((r) => [r.id, r]));
   assert.equal(sharedOffById.get("bulk-shared").skipped, true, "a required-only selectable member is skipped by bulk disable");
-  assert.equal(sharedOffById.get("bulk-shared").message, "required by another selected package");
+  assert.equal(sharedOffById.get("bulk-shared").message, "included in another selected package");
   assert.deepEqual(
     sharedOffById.get("bulk-shared-parent").outcomes.map((o) => [o.id, o.outcome]).sort(),
     [["bulk-shared", "disabled"], ["bulk-shared-parent", "disabled"]],

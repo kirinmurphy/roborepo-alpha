@@ -557,7 +557,7 @@ function warnUnavailableRequirements(order, catalog) {
     for (const dep of fullCatalog.find((p) => p.id === id)?.requires || []) {
       if (available.has(dep)) continue;
       const reason = unavailablePackageReason(fullCatalog.find((p) => p.id === dep) || {}) || "not in the catalog";
-      console.warn(`  warn: ${id} requires ${dep}, which is skipped (${reason})`);
+      console.warn(`  warn: ${id} includes ${dep}, which is skipped (${reason})`);
     }
   }
 }

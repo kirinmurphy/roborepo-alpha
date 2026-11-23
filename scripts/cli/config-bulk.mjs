@@ -96,7 +96,7 @@ export async function applyBulkPackageChange(ids, enabled) {
       }
       const selection = packageSelectionStates(catalog).get(id);
       if (selection !== "selected") {
-        const message = selection === "required" ? "required by another selected package" : "no change";
+        const message = selection === "required" ? "included in another selected package" : "no change";
         results.push({ id, changed: false, ok: true, skipped: selection === "required", message, outcomes: [] });
         continue;
       }
