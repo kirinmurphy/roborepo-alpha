@@ -203,14 +203,18 @@ Codex only, unset); and the command does not change who `gh` acts as. Under Clau
 before you ran `roborepo github setup` has none, so its `gh` acts as you and `gh api` stays denied
 until you start a new session. Codex starts its hooks without its shells' variables, so under Codex
 an unset `GH_CONFIG_DIR` is accepted. If the hook inherits `GH_TOKEN`, `GITHUB_TOKEN`,
-`GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or `GH_HOST` (exported in your shell profile, say),
-`gh` acts as that token's owner rather than the bot, so `gh api` stays denied. A command that assigns, exports, or unsets
+`GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or `GH_HOST`, `gh` acts as that token's owner rather
+than the bot, so `gh api` stays denied. This works only when the hook can see the variable: a Claude
+hook shares the session's environment, but a Codex hook does not see a variable exported only in your
+shell profile, so keep such tokens out of Codex's shells (`shell_environment_policy`). A command that assigns, exports, or unsets
 `GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or
 `GH_HOST` anywhere in it (`=` or `+=`), or runs `gh` through `env`, keeps `gh api` denied. So does a
 `gh api` call whose command names a merge: a `pulls/<n>/merge`, `merges`, or `merge-upstream` path,
 or a `mergePullRequest`, `enablePullRequestAutoMerge`, `enqueuePullRequest`, or `mergeBranch`
-mutation, in an argument, a heredoc, or a variable set in the same command. Only a query read from
-a file is not seen. The bot's write role would let it merge an approved pull request, but agents
+mutation, written literally in an argument, a heredoc, or a variable set in the same command. A name
+the shell builds (`${M}PullRequest`, `$(printf merge)PullRequest`) or a query read from a file is not
+seen. The check reads the whole command, so a merge name anywhere in it, even in an unrelated `grep`,
+keeps a `gh api` in the same command denied. The bot's write role would let it merge an approved pull request, but agents
 never merge a pull request (`merge-pull-requests`): you merge it on GitHub.
 
 The workflow an agent should follow:

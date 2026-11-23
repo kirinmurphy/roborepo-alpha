@@ -351,14 +351,21 @@ for (const [command, expected] of cases) {
   const codexOptions = { toolName: "exec_command", hookPath: path.join(codexHooks, "protected-branch-push.mjs"), key: "cmd" };
   for (const options of [{}, codexOptions]) {
     const label = options.hookPath ? "Codex" : "Claude";
-    for (const command of ["gh api repos/o/r", "gh api graphql -f query=x", "gh -R o/r api repos/o/r/pulls"]) {
+    for (const command of [
+      "gh api repos/o/r", "gh api graphql -f query=x", "gh -R o/r api repos/o/r/pulls",
+      // Reads that mention merge state are not merges.
+      "gh api repos/o/r/pulls/12 --jq .mergeable",
+      "gh api repos/o/r/pulls --jq '.[].merged_at'",
+      "gh api graphql -f query='{ repository(owner: \"o\", name: \"r\") { pullRequest(number: 1) { mergeable mergeStateStatus mergeQueueEntry { id } } } }'",
+      "git log --merges -1 && gh api repos/o/r",
+    ]) {
       assert.equal(decide(command, { ...options, env: asAgent }), "defer", `${label} allows as agent: ${command}`);
       // Codex hooks never see the shell's GH_CONFIG_DIR; a Claude hook without it belongs to a session
       // whose gh acts as the user.
       assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "" } }), options.hookPath ? "defer" : "deny", `${label} with the hook's GH_CONFIG_DIR unset: ${command}`);
       assert.equal(decide(command, { ...options, env: { ...asAgent, GH_CONFIG_DIR: path.join(tmp, "other-gh") } }), "deny", `${label} denies other GH_CONFIG_DIR: ${command}`);
       // gh prefers an inherited token or host over the bot's config dir.
-      for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "GH_HOST"]) {
+      for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"]) {
         assert.equal(decide(command, { ...options, env: { ...asAgent, [name]: "x" } }), "deny", `${label} denies with ${name} inherited: ${command}`);
       }
       assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled, GH_CONFIG_DIR: path.join(notInstalled, "github-agent", "gh") } }), "deny", `${label} denies without the installed identity: ${command}`);
