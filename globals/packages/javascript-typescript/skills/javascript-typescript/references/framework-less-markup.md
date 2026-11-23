@@ -66,7 +66,8 @@ Signals it's NOT worth promoting (keep it a plain function):
 - Use shadow DOM only when the element must be isolated from CSS it does not control: a widget
   embedded in third-party pages, a component library shared across apps, or a container for
   untrusted or user-supplied HTML. Expose styling through CSS custom properties and `::part()`,
-  and use `<slot>` when callers supply content.
+  and use `<slot>` when callers supply content. Shadow DOM isolates styles, not scripts:
+  untrusted HTML still needs sanitizing or a sandboxed `<iframe>`.
 - Data in via properties (`el.record = value`), not attributes, for anything that isn't a plain
   string (objects, callbacks). Attributes are fine for small string values that benefit from being
   visible in the DOM (an id, a label).
@@ -75,7 +76,9 @@ Signals it's NOT worth promoting (keep it a plain function):
   keep it dependency-free so it can be reused without pulling in the page's wiring code.
 - Prefer dispatching a bubbling `CustomEvent` for "something happened, caller decides what to do"
   over the element importing and calling an app-level function directly — this avoids a layering
-  inversion where a reusable component depends on page-specific orchestration code.
+  inversion where a reusable component depends on page-specific orchestration code. An event
+  dispatched inside a shadow root needs `composed: true` as well as `bubbles: true` to reach
+  outside listeners; or dispatch it from the host element.
 - Re-render model: "set a property, rebuild the whole subtree" (`replaceChildren` on change), not
   `attributeChangedCallback`/`observedAttributes` fine-grained patching, unless the project already
   has a stronger reason to need partial updates.
