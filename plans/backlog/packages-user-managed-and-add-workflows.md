@@ -140,7 +140,7 @@ identity, collision resolution, remote artifacts, and installation provenance. T
 creation, grouping, receipts, export, and removal UX on those contracts. [[74h2tlim]] owns profile
 containment and backup; agree source/record boundaries before any path migration. Remote registry
 implementation is not required merely to begin characterizing shipped local add primitives. The
-portal add screen's GitHub path needs [[jdsobwn]] Stage 4b (the `git` source and trusted catalog);
+portal add screen's GitHub path needs [[jdsobwn]] Stage 4 (the `git` source and trusted catalog);
 local adds do not.
 
 ## Proposed Behavior
@@ -254,7 +254,7 @@ flowchart TD
 
 The preview names the repo, the commit, and each package that will appear, using the grouping
 rules in [[jdsobwn]]. The receipt after install is the same receipt the CLI prints. Fetching,
-pinning, and integrity checks belong to the `git` source in [[jdsobwn]] Stage 4b; this plan owns
+pinning, and integrity checks belong to the `git` source in [[jdsobwn]] Stage 4; this plan owns
 the screen.
 
 The Custom tab's Add button opens the same typed flows as `roborepo add` for local folders and
@@ -708,7 +708,7 @@ the source is moved or the shell starts from a different directory.
 
 ### Phase 3b - Portal Add
 
-Needs [[jdsobwn]] Stage 4b for the GitHub path.
+Needs [[jdsobwn]] Stage 4 for the GitHub path.
 
 - [ ] Add the Add button to the Custom and Third Party tabs.
 - [ ] Build the Third Party add screen: paste-a-URL field and trusted catalog list.
