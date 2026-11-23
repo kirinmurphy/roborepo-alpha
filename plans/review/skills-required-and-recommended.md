@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Review renewed at commit 279cc4c0 after the user merged main; it awaits the user's approval of that commit, then merge pull request 76 and run `/plan-close`.
+next_action: Approved at commit 279cc4c0; merge pull request 76 on GitHub, then run `/plan-close` on this plan (rerun `/plan-review` first if main moves before the merge).
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -527,6 +527,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
   test:portal-ui` 279 passed.
 - CI run 45216287139 at 279cc4c0: ubuntu `check` and `windows-installer` passed; the macOS job was
   cancelled after 15 minutes waiting for a runner, with no steps run, and its re-run passed.
+
+- Approval of 279cc4c0: the user replied "Approve 279cc4c0" in the /plan-review session on 2026-11-23.
 
 ### Result
 - Status: complete
