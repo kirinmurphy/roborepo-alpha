@@ -1103,5 +1103,5 @@ Relevant current RoboRepo files:
 | [[bysyzl1e]] Bundle Skills That Only Work Together | Landed dependency | Package and collection definitions used by the source-format table |
 | [[o9zwxuav]] Track What You Turned On, What It Pulls In, and What Is Installed | Landed dependency | Owns selected roots and dependency closure in `package-state.mjs`; this plan adds source-qualified references to those records without changing their semantics |
 | [[f5exs0bd]] Serve Official Packages From a Registry | Follow-up, depends on this plan | Official registry, unbundling, uninstall scopes |
-| [[user-managed-packages-and-add-workflows]] Add, Organize, and Remove Custom and Third-Party Packages | Backlog, depends on Stage 4 (it calls it Stage 4b, the number before the split) | Renders the tabs and the GitHub add screen; decides user-created collection storage |
+| [[user-managed-packages-and-add-workflows]] Add, Organize, and Remove Custom and Third-Party Packages | Backlog, depends on Stage 4 | Renders the tabs and the GitHub add screen; decides user-created collection storage |
 | [[74h2tlim]] Preserve User Data Across Installations and Macs | Backlog | Portable profile containment and backup; agree which new state files are portable before it migrates storage |
