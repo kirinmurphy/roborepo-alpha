@@ -100,10 +100,11 @@ function agentIdentityActive() {
 
 // Whether any command in `text`, nested ones included, could make gh act as someone other than the
 // identity: it assigns, exports, unsets, or otherwise names one of GH_IDENTITY_VARIABLES
-// (`GH_TOKEN=x gh api`, `unset GH_CONFIG_DIR`, `env -u GH_CONFIG_DIR`), or runs gh through `env`.
+// (`GH_TOKEN=x gh api`, `export GH_TOKEN+=x`, `unset GH_CONFIG_DIR`, `env -u GH_CONFIG_DIR`), or runs
+// gh through `env`.
 function changesGhIdentity(text) {
   const names = GH_IDENTITY_VARIABLES.join('|')
-  const namesVariable = new RegExp(`^(?:--unset=|-u)?(?:${names})(?:=|$)|\\$\\{(?:${names}):?=`)
+  const namesVariable = new RegExp(`^(?:--unset=|-u)?(?:${names})(?:\\+?=|$)|\\$\\{(?:${names}):?=`)
   for (const words of splitCommands(exposeNestedCommands(withoutComments(text)))) {
     if (words.some((word) => namesVariable.test(word))) return true
     const gh = words.findIndex((word) => path.basename(word) === 'gh')
@@ -517,6 +518,15 @@ function classifyPush(cwd, args) {
   return defaultKnown ? VERIFIED : unknownDefault(remote)
 }
 
+// REST paths and GraphQL mutations that merge, named anywhere in a `gh api` call. Agents never merge
+// (merge-pull-requests), and the bot's write role lets it merge an approved pull request, so the
+// agent lift keeps these denied. It reads the command line only: a query passed in a file is not
+// seen.
+const API_MERGES = /(?:^|\/)pulls\/[^/\s]+\/merge\b|(?:^|\/)merges\b|\b(?:mergePullRequest|enablePullRequestAutoMerge|mergeBranch)\b/
+function mergesThroughApi(args) {
+  return args.some((arg) => API_MERGES.test(arg))
+}
+
 // gh with its options removed, matched against the host's denied list.
 function classifyGh(args) {
   const words = []
@@ -527,7 +537,7 @@ function classifyGh(args) {
   const { denied: deniedList, allowedAsAgent } = HOST_CLIS.github
   const denied = deniedList.find((prefix) => prefix.every((word, k) => words[k] === word))
   if (!denied) return null
-  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive()) return null
+  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive() && !mergesThroughApi(args)) return null
   return {
     decision: 'deny',
     reason: `roborepo: \`gh ${denied.join(' ')}\` acts on GitHub without going through git, so the protected-branch guards cannot check it. Run it yourself.`,
@@ -944,7 +954,7 @@ function changedDirectory(cwd, args) {
 function programIndex(words) {
   let i = 0
   for (;;) {
-    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
+    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[i])) i += 1
     if (!SHELL_KEYWORDS.has(words[i])) return i
     const valueOptions = WRAPPER_VALUE_OPTIONS[words[i]]
     i += 1
@@ -1146,7 +1156,7 @@ function classifyCommand(text, startCwd) {
   let onlyVerifiedPushes = true
   for (const words of splitCommands(withoutComments(text), { parens: true })) {
     let i = 0
-    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
+    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[i])) i += 1
     const plain = i === 0
     const program = words[i] && path.basename(words[i])
     if (program === 'cd' && plain && words[i + 1] && !/[$`~<>]/.test(words[i + 1]) && words.length === 2) {
@@ -1286,7 +1296,7 @@ function simpleCommands(text) {
 // behind any assignments, wrappers, or keywords. `((`, `$((`, and `=(` open arithmetic or an array,
 // not a command. Words and gaps stop at an operator or newline, so each command start scans only its
 // own command and the time stays linear. It reads text from `maskQuotedOperators`.
-const SUBSTITUTED_PROGRAM = /(?:^|[;&|\n]|(?<![(=$])\((?!\()|\$\((?!\())[ \t]*(?:[A-Za-z_]\w*=[^\s;&|()]*[ \t]+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)[ \t]+(?:-[^\s;&|()]+[ \t]+)*)*"?(?:\$\(|`)/
+const SUBSTITUTED_PROGRAM = /(?:^|[;&|\n]|(?<![(=$])\((?!\()|\$\((?!\())[ \t]*(?:[A-Za-z_]\w*\+?=[^\s;&|()]*[ \t]+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)[ \t]+(?:-[^\s;&|()]+[ \t]+)*)*"?(?:\$\(|`)/
 
 // Whether some line of `text` starts a program that could run a heredoc's body or a file it wrote:
 // a shell, a script runner or interpreter, a program the shell fills in (`$SHELL`, `$(which sh)`),

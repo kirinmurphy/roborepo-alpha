@@ -318,6 +318,9 @@ cases.push(
   // Agents never merge a pull request (merge-pull-requests), in either flag position.
   ["gh -R owner/repo pr merge 12 --admin", "deny"],
   ["gh pr merge 12", "deny"],
+  // bash's `NAME+=value` is a leading assignment too, so the program after it is still checked.
+  ["X+=1 gh pr merge 12", "deny"],
+  ["X+=1 git push origin main", "deny"],
   ["gh -R owner/repo pr create --head feat", "defer"],
   ["gh pr view 12", "defer"],
 );
@@ -374,10 +377,20 @@ for (const [command, expected] of cases) {
       "GH_CONFIG_DIR=/x; gh api repos/o/r",
       "bash -c 'unset GH_CONFIG_DIR; gh api repos/o/r'",
       "(export GH_TOKEN=abc; gh api repos/o/r)",
+      "export GH_TOKEN+=$OTHER; gh api repos/o/r",
+      "GITHUB_TOKEN+=x gh api repos/o/r",
     ]) {
       assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} denies a command that changes gh's identity: ${command}`);
     }
-    for (const command of ["gh auth token", "gh -R o/r pr merge 12", "gh secret set X", "gh release create v1", "gh workflow run x"]) {
+    for (const command of [
+      "gh auth token", "gh -R o/r pr merge 12", "gh secret set X", "gh release create v1", "gh workflow run x",
+      // Merging through the API is still merging, which agents never do.
+      "gh api -X PUT repos/O/R/pulls/12/merge",
+      "gh api --method PUT /repos/O/R/pulls/12/merge -f merge_method=squash",
+      "gh api repos/O/R/merges -f base=main -f head=feature",
+      "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+      "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+    ]) {
       assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} still denies as agent: ${command}`);
     }
   }
