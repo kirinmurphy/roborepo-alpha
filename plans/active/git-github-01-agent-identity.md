@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Owner answers the Open question on when the push hooks may lift the gh api deny; then rerun /plan-execute to apply it, submit for review, and open the PR. Separately, the owner runs the guided setup from this branch (node scripts/cli/main.mjs github setup) to store the bot token and turn the identity on
+next_action: Run the validation pass over 445fece6, submit for review, merge main in and update PR 82. Separately, the owner runs the guided setup from this branch (node scripts/cli/main.mjs github setup) to store the bot token and turn the identity on
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -523,7 +523,7 @@ phases build, so run them before Phase 3.
 - [x] The setup printed the sign-up and token pages instead of opening them — fixed: opened with the platform opener, still printed (a60d58a9)
 - [x] The docs did not say turning the package off leaves the bot's token in `hosts.yml` — fixed: says what remains and how to remove it (a60d58a9)
 
-- [ ] The `gh api` lift also applies when the hook's own `GH_CONFIG_DIR` is unset (meant for Codex, whose hooks may not see `shell_environment_policy` values); under Claude a session started before the identity was on has no `GH_CONFIG_DIR`, so `gh api` would run as the user, an admin — escalated, see Open questions
+- [x] The `gh api` lift also applies when the hook's own `GH_CONFIG_DIR` is unset (meant for Codex, whose hooks may not see `shell_environment_policy` values); under Claude a session started before the identity was on has no `GH_CONFIG_DIR`, so `gh api` would run as the user, an admin — owner chose an exact match under Claude; fixed (445fece6)
 
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
@@ -664,32 +664,18 @@ Manual, on the real repo, after Phase 6:
 
 ## Open questions
 
-### When the push hooks may lift the `gh api` deny
-
-Blocks: submitting the plan for review.
-
-Today both hook copies (Claude and Codex share one byte-identical file) lift the deny when the
-identity's Git config file is installed, the command does not change gh's identity, and the hook's
-own `GH_CONFIG_DIR` is unset or exactly the agent dir. The "unset" case exists because Codex hooks
-may not receive the `shell_environment_policy` values that give Codex shells `GH_CONFIG_DIR`; that
-has not been checked. Under Claude, a session started before the identity was turned on has no
-`GH_CONFIG_DIR` in its shell or its hook, so `gh` there acts as the user, an admin, and the lift would
-let `gh api` run as the admin. Claude runs `gh` outside its sandbox (`gh *` is excluded), so the
-keychain deny does not blunt this.
-
-| Option | Pros | Cons |
-| --- | --- | --- |
-| **A. Require an exact `GH_CONFIG_DIR` match under Claude** (recommended) | Closes the admin path for any Claude shell without the bot config | The hook must tell Claude from Codex (from the hook input, or by splitting the shared file), and the byte-identical parity test changes |
-| B. Keep the rule and record the reasoning | No code change | Leaves the admin window open for sessions started before setup, and for any Claude shell missing the variable |
-
-Recommendation: A. If a check shows Codex hooks do receive `GH_CONFIG_DIR`, require the exact match
-in both harnesses and keep the one shared file.
-
-Why blocked rather than decided: A changes how the two harness hooks relate (shared file vs. harness
-detection), and B accepts a security window; both are the owner's call.
+None open.
 
 ## Decision Log
 
+- November 23, 2026 (user decision): the push hooks lift the `gh api` deny under Claude only when
+  the hook's `GH_CONFIG_DIR` is exactly the agent's gh folder; a Claude session started before setup
+  keeps `gh api` denied until restarted. Codex keeps accepting an unset `GH_CONFIG_DIR`: its source
+  (`codex-rs/hooks/src/registry.rs`, `command_runner.rs` on main) starts command hooks with the Codex
+  process's own environment, not the `shell_environment_policy` values its shells get. The one shared
+  hook file tells the harnesses apart by where it is installed (`forCodex`). Alternative: keep the
+  unset-or-exact rule in both, which left Claude sessions started before setup running `gh api` as
+  the admin. Done in 445fece6.
 - November 5, 2026: the user chose no-prompt feature-branch pushes for both Claude and Codex, and
   approved adding these requirements here after being told they open the GitHub hosts as a narrow
   exception to the strict host networking in the credential protection plan. `~/.ssh` stays denied.
