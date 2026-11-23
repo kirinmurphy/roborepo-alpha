@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Review renewed at commit c63f38db after the user's latest changes; it awaits the user's approval of that commit, then merge pull request 76 and run `/plan-close`.
+next_action: Review renewed at commit 279cc4c0 after the user merged main; it awaits the user's approval of that commit, then merge pull request 76 and run `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -517,10 +517,21 @@ requires nor recommends (prose-only references in the "Package relationships" ta
   fixed in c63f38db or accepted.
 - CI run 45116314032 at c63f38db (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
 
+- Base `main` moved to 9f69af65 (#78, agent temporary-file folders); the user merged it in
+  279cc4c0. It touched separate parts of files this branch also changed (store rows in
+  portal/config/templates.js and scripts/cli/config.mjs, docs/internal/config-panel-internals.md),
+  and its edit to tool-call-optimization's rules landed in the archived copy; the same guidance now
+  ships as the always-on temporary-files rule. No conflict markers or stale references.
+- At 279cc4c0: 23 affected checks, `package validate` (17), `skill audit --check`, `skill
+  render-commands --check`, `skill triggers --check`, `doctor.sh --quiet` (98); `npm run
+  test:portal-ui` 279 passed.
+- CI run 45216287139 at 279cc4c0: ubuntu `check` and `windows-installer` passed; the macOS job was
+  cancelled after 15 minutes waiting for a runner, with no steps run, and its re-run passed.
+
 ### Result
 - Status: complete
-- Reviewed implementation commit: c63f38dbb9a35f24fd5375bbfe491be05e4575f7
-- Base commit: d66dcfce6abd923f3f836d142b04a745e725ffae
+- Reviewed implementation commit: 279cc4c0452e3f5ca6aa5cc36720256a1507e824
+- Base commit: 9f69af65dae770b451d706d8ffa03f8c986cd75b
 
 ### Approval
 - Decision: approved
