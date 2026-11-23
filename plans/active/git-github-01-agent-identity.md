@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Owner answers the Open question on built-up GraphQL merge queries; then rerun /plan-execute to apply it, submit for review, merge main in and update PR 82. Separately, the owner runs the guided setup from this branch (node scripts/cli/main.mjs github setup) to store the bot token and turn the identity on
+next_action: Rerun /plan-execute to submit for review, merge main in, and update PR 82. Separately, the owner runs the guided setup (roborepo github setup) to store the bot token and turn the identity on
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -585,7 +585,7 @@ items are fixes found along the way that the token work depends on.
 
 - [x] With the identity on, the hooks lift every `gh api`, so a heredoc or same-command variable query naming `mergePullRequest`, or the `enqueuePullRequest` mutation, merges a pull request although agents never merge — fixed (ead9425f)
 - [x] The docs claim only a file-read query escapes the merge check, and promise the inherited-token check under Codex, whose hooks never see profile-exported variables — fixed (654b3a86)
-- [ ] A merge mutation name the shell builds (`${M}PullRequest`, `$(printf merge)PullRequest`) is not seen, so the bot could merge through `gh api` by deliberate obfuscation — escalated, see Open questions
+- [x] A merge mutation name the shell builds (`${M}PullRequest`, `$(printf merge)PullRequest`) is not seen, so the bot could merge through `gh api` by deliberate obfuscation — owner chose to keep it a documented limitation (654b3a86 documents it)
 
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
@@ -757,27 +757,14 @@ Manual, on the real repo, after Phase 6:
 
 ## Open questions
 
-### Whether the merge check should refuse built-up GraphQL queries
-
-Blocks: submitting the plan for review.
-
-With the bot identity on, the push hooks allow `gh api` but deny calls whose command names a merge
-(REST `pulls/<n>/merge`, `merges`, `merge-upstream`; GraphQL `mergePullRequest`,
-`enablePullRequestAutoMerge`, `enqueuePullRequest`, `mergeBranch`), in arguments, heredocs, or
-same-command variables. A name the shell assembles (`M=merge; ... ${M}PullRequest`) or a query read
-from a file is not seen, so an agent that deliberately obfuscates could merge an approved pull request
-as the bot. GitHub still enforces the required approval; the gap is only the "agents never merge" rule.
-
-| Option | Pros | Cons |
-| --- | --- | --- |
-| **A. Keep it a documented limitation** (recommended) | Ordinary `gh api graphql` with variables or `-F query=@file` keeps working; matches the hooks' other text checks, which also stop mistakes, not determined evasion | A deliberately built query can merge an already-approved pull request |
-| B. Deny any `gh api graphql` whose query uses `$`, a backtick, or `@file` | Closes the built-name path | Blocks legitimate queries built from variables or files; agents fall back to asking you |
-
-Why blocked rather than decided: it trades agent capability against a security rule, which the owner
-decides.
+None open.
 
 ## Decision Log
 
+- November 23, 2026 (user decision): a merge name the shell builds (`${M}PullRequest`) or a query read
+  from a file stays a documented limitation of the hooks' `gh api` merge check. Alternative: deny any
+  `gh api graphql` query using `$`, a backtick, or `@file`, which would also block legitimate queries.
+  The gap needs deliberate evasion, and GitHub still requires the owner's approval before any merge.
 - November 23, 2026 (user decision): token expiry is handled inside this plan. A rerun of
   `roborepo github setup` renews the token rather than a separate `renew` command; status and doctor
   warn 14 days ahead (was 7) and note a token without an expiry date; the package adds an agent rule
