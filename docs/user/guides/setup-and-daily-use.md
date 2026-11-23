@@ -71,8 +71,9 @@ The setup walks you through each step and skips the ones already done:
 
 1. Create a GitHub account for the bot, in a private window (guided).
 2. Invite the bot to the repo as a collaborator with write access, not admin (automatic, as you).
-3. Create a classic token for the bot with only `repo` and `read:org`, an expiry, and no `workflow`
-   (guided, with the exact scopes shown), then paste it at a hidden prompt.
+3. Create a classic token for the bot with only `repo` and `read:org`, an expiry (90 days is a
+   good default), and no `workflow` (guided, with the exact scopes shown), then paste it at a
+   hidden prompt.
 4. Accept the invite (automatic, as the bot).
 5. Run `roborepo protect` if the repo needs it (it asks first), so the bot is not on any bypass list.
 6. Check everything, then enable the package. A failed check leaves it off.
@@ -80,6 +81,23 @@ The setup walks you through each step and skips the ones already done:
 The token is stored in plaintext, mode 0600, under `~/.roborepo/github-agent/gh`, because neither
 Claude's nor Codex's sandbox can read the macOS keychain. Any process you run, agents included, can
 read it, so the bot's limited role and the token's expiry are what bound the damage.
+
+### Renew the bot's token
+
+`roborepo doctor` and `roborepo github status` show a note when the token has 14 days or fewer
+left, and one for a token with no expiry date. Once GitHub stops accepting the token, because it
+expired or was revoked, agent pushes and `gh` calls fail with "Authentication failed" or "Bad
+credentials", and the agent tells you to renew it. Agents never fall back to your own credentials.
+
+To renew, run the setup again in your own terminal:
+
+```sh
+roborepo github setup
+```
+
+It recognizes the bot from the saved login and asks only for a new token. It opens your token list;
+sign in as the bot, open the "RoboRepo agents" token, and choose **Regenerate token**, which keeps
+its scopes. Paste the new value at the hidden prompt. Every other step reports itself already done.
 
 Turning the package off stops agents using the bot but leaves its files behind: the plaintext token
 in `~/.roborepo/github-agent/gh/hosts.yml`, plus `ca-bundle.crt` and `gitconfig.local` next to it.

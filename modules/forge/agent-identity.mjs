@@ -10,7 +10,9 @@ import { githubClient } from "./github.mjs";
 import { readProtection } from "./protection.mjs";
 
 export const AGENT_IDENTITY_PACKAGE_ID = "github-agent-identity";
-const EXPIRING_DAYS = 7;
+// How early status and doctor start warning that the bot's token is about to expire. Two weeks
+// leaves room to notice the note between doctor runs.
+export const EXPIRING_DAYS = 14;
 const BROAD_SCOPES = ["workflow", "admin:org", "delete_repo"];
 const REQUIRED_SCOPES = ["repo", "read:org"];
 const SETUP_FIX = "Run roborepo github setup in your own terminal.";
@@ -76,27 +78,35 @@ export const agentHostsFile = (stateDir) => path.join(agentGhConfigDir(stateDir)
 
 // What the bot's hosts.yml says, without ever returning the token: `loggedIn` when it has a
 // github.com entry, `hasToken` when that entry holds a non-empty oauth_token (the token is in the
-// file rather than the keychain). The file is read as the small indented YAML gh writes.
+// file rather than the keychain), and `user`, the login gh saved with it (null when absent). The
+// saved login names the bot even after GitHub stops accepting its token, which is what lets setup
+// renew a token without asking which account the bot is. The file is read as the small indented
+// YAML gh writes.
 export function readAgentHosts(stateDir) {
   let text;
   try {
     text = fs.readFileSync(agentHostsFile(stateDir), "utf8");
   } catch {
-    return { loggedIn: false, hasToken: false };
+    return { loggedIn: false, hasToken: false, user: null };
   }
   let inEntry = false;
   let loggedIn = false;
   let hasToken = false;
+  let user = null;
+  const value = (raw) => raw.trim().replace(/^["']|["']$/g, "");
   for (const line of text.split(/\r?\n/)) {
     if (/^\S/.test(line)) {
       inEntry = /^["']?github\.com["']?\s*:/.test(line);
       if (inEntry) loggedIn = true;
     } else if (inEntry) {
-      const match = /^\s+oauth_token\s*:\s*(.*)$/.exec(line);
-      if (match && match[1].trim().replace(/^["']|["']$/g, "") !== "") hasToken = true;
+      const token = /^\s+oauth_token\s*:\s*(.*)$/.exec(line);
+      if (token && value(token[1]) !== "") hasToken = true;
+      // Only the entry's own `user:` line, at the indent of oauth_token, not one nested under `users:`.
+      const named = /^ {4}user\s*:\s*(.*)$/.exec(line);
+      if (named && value(named[1]) !== "") user = value(named[1]);
     }
   }
-  return { loggedIn, hasToken };
+  return { loggedIn, hasToken, user };
 }
 
 // The result's `state` is `not-set-up`, `healthy`, `problem`, or `unavailable` (`reason` says why).
@@ -168,8 +178,13 @@ function finish(result, problems) {
   return { ...result, problems, state: blocking ? "problem" : "healthy" };
 }
 
+// A token without an expiry date is only advice: it works, but nothing bounds how long a leaked
+// copy keeps working. GitHub sends the expiry header for any token that has an expiry date.
 function checkExpiry(expiresAt, problems) {
-  if (!expiresAt) return;
+  if (!expiresAt) {
+    problems.push(problem("no-expiry", "The bot's token never expires, so a leaked copy would keep working.", "Regenerate it with an expiry date (90 days is a good default), then run roborepo github setup in your own terminal.", "warn"));
+    return;
+  }
   const msLeft = expiresAt.getTime() - Date.now();
   if (msLeft <= 0) problems.push(problem("expired", "The bot's token has expired.", SETUP_FIX));
   else if (msLeft < EXPIRING_DAYS * 86_400_000) {

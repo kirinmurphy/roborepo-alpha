@@ -23,6 +23,8 @@ const stateRoot = path.join(root, "state");
 const ghDir = path.join(stateRoot, "github-agent", "gh");
 const TOKEN = "ghp_statuscheck0123456789";
 const BOT = "robo-bot";
+// A token with an expiry date well beyond the warning window, so it draws no note.
+const FAR_EXPIRY = "2099-01-01 00:00:00 UTC";
 // ROBOREPO_SYSTEM_CA_BUNDLE replaces the system CA bundle search with one fixture file.
 const systemCa = path.join(root, "system-ca.pem");
 fs.writeFileSync(systemCa, "fixture bundle\n");
@@ -59,7 +61,7 @@ try {
     if (enabled) fs.writeFileSync(path.join(stateRoot, "enabled-packages.json"), JSON.stringify({ schemaVersion: 2, packages: ["github-agent-identity"], disabled: [] }));
     gh.setState(fakeGitHubState({
       rulesets: structuredClone(managed),
-      tokens: { [TOKEN]: { login: BOT, scopes: ["repo", "read:org"], expires: null, expired: false, ...token } },
+      tokens: { [TOKEN]: { login: BOT, scopes: ["repo", "read:org"], expires: FAR_EXPIRY, expired: false, ...token } },
       collaborators: [{ login: BOT, permission: "push" }],
       ...overrides,
     }));
@@ -133,12 +135,24 @@ try {
   expectLine(0, /^GitHub agent identity check skipped \(GitHub could not be reached\)$/);
 
   // A token close to expiry is advice: the status stays healthy and exits 0, doctor hints.
-  const soon = new Date(Date.now() + 3 * 86_400_000).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
-  start({ token: { expires: soon } });
+  // The warning starts two weeks out: 13 days left is a note, 15 is not.
+  const inDays = (days) => new Date(Date.now() + days * 86_400_000).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+  start({ token: { expires: inDays(3) } });
   expectLine(1, /expires in 3 days/);
   let status = node("scripts/cli/main.mjs", ["github", "status"]);
   assert.equal(status.status, 0, status.stdout + status.stderr);
   assert.match(status.stdout, /healthy for example\/project: agents act as robo-bot\.\n {2}Note: .*expires in 3 days/);
+  start({ token: { expires: inDays(13) } });
+  expectLine(1, /expires in 13 days/);
+  start({ token: { expires: inDays(15) } });
+  expectLine(0, /^GitHub agent identity: agents act as robo-bot on example\/project$/);
+  // A token with no expiry date works but gets a note naming the setup command.
+  start({ token: { expires: null } });
+  expectLine(1, /token never expires.* — regenerate it with an expiry date.*roborepo github setup/);
+  const noExpiry = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
+  assert.equal(noExpiry.state, "healthy", "a token without expiry is advice, not a problem");
+  assert.ok(noExpiry.problems.some((item) => item.id === "no-expiry" && item.severity === "warn"));
+  console.log("✓ Expiry notes start 14 days out, and a token without an expiry date gets a note.");
   // The CA bundle copy Codex's sandbox reads: missing or different from the system's is a warning.
   for (const ca of ["stale", "missing"]) {
     start({ ca });

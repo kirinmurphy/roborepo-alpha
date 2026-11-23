@@ -28,6 +28,8 @@ const ghDir = path.join(stateRoot, "github-agent", "gh");
 const TOKEN = "ghp_setupcheck9876543210abcdef";
 const OTHER_TOKEN = "ghp_someoneelse1234567890";
 const BOT = "robo-bot";
+// An expiry date well beyond the warning window, so the final check adds no note.
+const FAR_EXPIRY = "2099-01-01 00:00:00 UTC";
 
 try {
   const gh = createFakeGh(root);
@@ -68,7 +70,7 @@ try {
     fs.writeFileSync(path.join(home, ".claude", "settings.json"), "{}");
     fs.copyFileSync(path.join(repoRoot, "generated", "codex", "config.toml"), path.join(home, ".codex", "config.toml"));
     gh.setState(fakeGitHubState({
-      tokens: { [TOKEN]: { login: BOT, scopes: ["repo", "read:org"], expires: null, expired: false }, [OTHER_TOKEN]: { login: "someone-else", scopes: ["repo", "read:org"], expires: null, expired: false } },
+      tokens: { [TOKEN]: { login: BOT, scopes: ["repo", "read:org"], expires: FAR_EXPIRY, expired: false }, [OTHER_TOKEN]: { login: "someone-else", scopes: ["repo", "read:org"], expires: FAR_EXPIRY, expired: false } },
       ...overrides,
     }));
     gh.clearCalls();
@@ -128,6 +130,32 @@ try {
   assert.doesNotMatch(result.stdout, /Bot account login:|Paste the token|Protect the plans/);
   assert.ok(!gh.calls().some((call) => call.method === "PUT" || call.method === "PATCH" || call.method === "POST" || call.argv[0] === "auth"), "a rerun changes nothing");
   console.log("✓ A rerun prints every step as already done and makes no change.");
+
+  // The token expires (or is revoked): a rerun renews it for the saved bot without the new-account
+  // steps, asks only for the token, and leaves every other step alone.
+  const RENEWED = "ghp_renewedtoken000111222333";
+  const expiredState = gh.readState();
+  expiredState.tokens[TOKEN].expired = true;
+  expiredState.tokens[RENEWED] = { login: BOT, scopes: ["repo", "read:org"], expires: FAR_EXPIRY, expired: false };
+  gh.setState(expiredState);
+  gh.clearCalls();
+  result = await setup(`${RENEWED}\n`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /✓ Bot account: robo-bot \(GitHub no longer accepts its saved token/);
+  assert.doesNotMatch(result.stdout, /Bot account login:|github\.com\/signup|Protect the plans/);
+  assert.deepEqual(opened, ["https://github.com/settings/tokens"], "renewal opens the token list, where Regenerate is");
+  assert.match(result.stdout, /Regenerate token/);
+  assert.match(result.stdout, /Token stored; signed in as robo-bot/);
+  for (const step of ["Invitation", "Invitation accepted", "Branch protection", "Package on"]) {
+    assert.match(result.stdout, new RegExp(`✓ ${step}.*: already done`), `renewal: ${step}`);
+  }
+  assert.ok(fs.readFileSync(path.join(ghDir, "hosts.yml"), "utf8").includes(RENEWED), "the new token replaced the old one");
+  assert.ok(!(result.stdout + result.stderr).includes(RENEWED), "the renewed token is never printed");
+  assert.ok(!gh.calls().some((call) => call.method === "PUT" || call.method === "PATCH"), "renewal sends no invitation and accepts none");
+  console.log("✓ An expired token is renewed for the saved bot: only the token is asked for, every other step is already done.");
+  const restored = gh.readState();
+  restored.tokens[TOKEN].expired = false;
+  gh.setState(restored);
 
   // A token kept only in the keychain is not done: setup asks again and stores it in hosts.yml.
   fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    user: ${BOT}\n`);

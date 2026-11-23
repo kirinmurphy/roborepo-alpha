@@ -242,6 +242,9 @@ The package works through two settings in agent shells only:
   through the agents' `GIT_CONFIG_*` variables, clears inherited credential helpers, has
   `gh auth git-credential` answer for github.com, and rewrites SSH remotes to HTTPS.
 
+It also adds a short rule to the agents' instructions: when `git` or `gh` fails authentication, the
+bot's token has likely expired, so the agent stops and asks you to rerun `roborepo github setup`.
+
 ## When Installed Hooks Run
 
 Claude Code has no per-hook approval like Codex's. Instead, an interactive session holds every hook

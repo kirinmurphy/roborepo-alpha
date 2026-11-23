@@ -8,7 +8,7 @@ import readline from "node:readline";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient, runGh } from "../../modules/forge/github.mjs";
 import {
-  AGENT_IDENTITY_PACKAGE_ID, agentGhConfigDir, agentHostsFile, readAgentHosts, readAgentIdentity, refreshCaBundle,
+  AGENT_IDENTITY_PACKAGE_ID, EXPIRING_DAYS, agentGhConfigDir, agentHostsFile, readAgentHosts, readAgentIdentity, refreshCaBundle,
 } from "../../modules/forge/agent-identity.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
@@ -87,8 +87,17 @@ async function guidedSetup({ input, open, io, cwd }) {
   // 2. The bot account.
   const hosts = readAgentHosts(stateDir);
   let botLogin = null;
+  let renewing = false;
   if (hosts.loggedIn) botLogin = await githubClient.login(bot).catch(() => null);
-  if (botLogin) {
+  // GitHub no longer accepts the saved token (it expired or was revoked), but hosts.yml still names
+  // the bot, so this run renews the token instead of walking through creating an account.
+  if (!botLogin && hosts.user && !sameLogin(hosts.user, userLogin)) {
+    botLogin = await githubClient.accountLogin(user, hosts.user);
+    renewing = Boolean(botLogin);
+  }
+  if (renewing) {
+    io.log(`✓ Bot account: ${botLogin} (GitHub no longer accepts its saved token, so you will paste a new one)`);
+  } else if (botLogin) {
     done(`Bot account (${botLogin})`);
   } else {
     io.log("Agents act as a separate GitHub account, not as you.");
@@ -113,7 +122,7 @@ async function guidedSetup({ input, open, io, cwd }) {
   if (tokenOk) {
     done("Token");
   } else {
-    await storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin: hosts.loggedIn });
+    await storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin: hosts.loggedIn, renewing });
   }
 
   // 5. The bot accepts the invitation.
@@ -199,14 +208,22 @@ function refused(what) {
   };
 }
 
-async function storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin }) {
+async function storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin, renewing }) {
   const hosts = readAgentHosts(stateDir);
   if (hadLogin && !hosts.hasToken) {
     io.log("The saved login keeps its token in the keychain, so it is replaced.");
   }
-  io.log(`Sign in as ${botLogin} in the private window, then open https://github.com/settings/tokens/new (a classic token).`);
-  open("https://github.com/settings/tokens/new");
-  io.log('Note: "RoboRepo agents". Expiry: your choice. Scopes: repo and read:org only (not workflow).');
+  if (renewing) {
+    // Regenerating keeps the token's note and scopes and only issues a new value and expiry.
+    io.log(`Sign in as ${botLogin} in a private window, then open https://github.com/settings/tokens.`);
+    open("https://github.com/settings/tokens");
+    io.log('Open the "RoboRepo agents" token and choose Regenerate token, or make a new classic token with only the repo and read:org scopes.');
+  } else {
+    io.log(`Sign in as ${botLogin} in the private window, then open https://github.com/settings/tokens/new (a classic token).`);
+    open("https://github.com/settings/tokens/new");
+    io.log('Note: "RoboRepo agents". Scopes: repo and read:org only (not workflow).');
+  }
+  io.log(`Expiry: 90 days is a good default. roborepo doctor and roborepo github status warn ${EXPIRING_DAYS} days before it ends; renew by rerunning roborepo github setup.`);
   io.log("Do not paste the token into an agent chat.");
   io.log(`Agents' sandboxes cannot read the keychain, so the token is stored in ${agentHostsFile(stateDir)}.`);
   const token = (await input.askHidden("Paste the token (input hidden): ")).trim();

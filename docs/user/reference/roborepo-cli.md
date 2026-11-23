@@ -356,8 +356,8 @@ for the walkthrough and [Claude Hooks](claude-hooks.md#acting-as-a-github-bot) f
 
 | Command | What it does |
 | --- | --- |
-| `roborepo github setup` | Guided, interactive setup: create the bot account, invite it as a collaborator, create a classic token (`repo` and `read:org`, with an expiry), paste it at a hidden prompt, accept the invite, run `roborepo protect` if needed (it asks), check everything, then enable the package. Reruns skip finished steps; a failed check leaves the package off. Run it in your own terminal: agents are denied it so the token never enters a transcript. |
-| `roborepo github status [--json]` | Read-only report on whether the identity is set up and healthy. Agents may run it. |
+| `roborepo github setup` | Guided, interactive setup: create the bot account, invite it as a collaborator, create a classic token (`repo` and `read:org`, with an expiry), paste it at a hidden prompt, accept the invite, run `roborepo protect` if needed (it asks), check everything, then enable the package. Reruns skip finished steps; a failed check leaves the package off. When GitHub no longer accepts the saved token (expired or revoked), a rerun renews it for the same bot and asks only for the new token ([Renew the bot's token](../guides/setup-and-daily-use.md#renew-the-bots-token)). Run it in your own terminal: agents are denied it so the token never enters a transcript. |
+| `roborepo github status [--json]` | Read-only report on whether the identity is set up and healthy, including a note when the token has 14 days or fewer left or has no expiry date. Agents may run it. |
 
 `roborepo doctor` adds a line for the same check; set `ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1` to skip
 it.
