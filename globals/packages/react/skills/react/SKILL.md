@@ -17,9 +17,9 @@ Apply this only after confirming the repo or touched files use React.
 | `code-style` | requires | The work places a component, hook, or helper: who owns it and where it lives | Ownership and placement rules |
 
 Say which paired skills applied and which did not. A skipped skill and a forgotten one look the
-same otherwise. Each row follows the paired-skill rule in Skill Loading: a `recommends` row whose
-skill the session does not list is skipped and named once in the report. Never ask the user to
-enable a package.
+same otherwise. Each row follows the paired-skill rule in Skill Loading: a `requires` row is always
+available, and a `recommends` row whose skill the session does not list is skipped and named once
+in the report. Never ask the user to enable a package.
 
 ## Stack Detection
 

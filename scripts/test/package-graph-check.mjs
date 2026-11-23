@@ -65,5 +65,14 @@ assert.deepEqual(recommendedClosure(flat, "app"), ["extra", "lint", "docs"],
 assert.deepEqual(recommendedClosure(flat, "extra"), ["more"], "a recommended package's requirements are not recommendations");
 assert.deepEqual(recommendedClosure(flat, "heavy"), [], "no recommendations anywhere in the closure");
 assert.deepEqual(recommendedClosure(flat, "ghost"), [], "an unknown package recommends nothing");
+// Branched requirements: a direct requirement's recommendations come before a deeper one's.
+const branched = [
+  { id: "top", requires: ["a", "b"] },
+  { id: "a", recommends: ["ra"] },
+  { id: "b", requires: ["c"], recommends: ["rb"] },
+  { id: "c", recommends: ["rc"] },
+  { id: "ra" }, { id: "rb" }, { id: "rc" },
+];
+assert.deepEqual(recommendedClosure(branched, "top"), ["ra", "rb", "rc"], "nearest requirements first, in declared order");
 
 console.log("ok: package graph helpers");

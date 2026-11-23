@@ -37,14 +37,23 @@ export function requiredClosure(nodes, rootIds) {
 // turns on, and a recommended package's requirements come with it when it is turned on.
 export function recommendedClosure(nodes, rootId) {
   const byId = nodeMap(nodes);
-  const required = requiredClosure(byId, [rootId]);
-  const skip = new Set(required);
+  if (!byId.has(rootId)) return [];
+  const skip = new Set(requiredClosure(byId, [rootId]));
   const out = [];
-  // Nearest first: requiredClosure lists dependencies before their dependents, so reversed it walks
-  // from the package outward.
-  for (const id of [rootId, ...required.filter((dep) => dep !== rootId).reverse()]) {
+  // Nearest first: breadth-first over `requires`, in declared order, so a direct requirement's
+  // recommendations come before those of anything it requires in turn.
+  const queue = [rootId];
+  const seen = new Set(queue);
+  while (queue.length) {
+    const id = queue.shift();
     for (const rec of edges(byId.get(id), "recommends")) {
       if (!skip.has(rec) && !out.includes(rec)) out.push(rec);
+    }
+    for (const dep of edges(byId.get(id), "requires")) {
+      if (byId.has(dep) && !seen.has(dep)) {
+        seen.add(dep);
+        queue.push(dep);
+      }
     }
   }
   return out;
