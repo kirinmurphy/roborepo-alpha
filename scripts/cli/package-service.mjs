@@ -126,6 +126,7 @@ export function addSource({ location, id = null }) {
   } catch (err) {
     throw new PackageServiceError(err.message, { code: "usage" });
   }
+  refuseReusedSourceId(id || normalized.defaultId, normalized.url);
   const existing = sources.find((record) => record.type === "git" && record.url === normalized.url);
   if (existing) throw new PackageServiceError(`${normalized.display} is already the package source ${existing.id}`, { code: "refused" });
   const sourceId = id || normalized.defaultId;
@@ -160,6 +161,19 @@ function addPathSource(folder, id, sources) {
   return { source: sourceSummary(record, []), packages: availableFromSource(record).map((pkg) => pkg.id), trusted: false, collisions: newCollisions() };
 }
 
+// A source id that installed packages still name belongs to those packages' repository. Reusing
+// it for another repository would let a later update replace one repo's content with another's
+// under an unchanged name.
+function refuseReusedSourceId(sourceId, url) {
+  const named = Object.values(readPackageLock().packages).filter((entry) => entry.sourceId === sourceId);
+  if (named.some((entry) => entry.url && entry.url !== url)) {
+    throw new PackageServiceError(
+      `installed packages still name source ${sourceId} for another repository (${named.map((entry) => entry.packageId).join(", ")}); choose another --id or remove them first`,
+      { code: "refused" },
+    );
+  }
+}
+
 // IDs two live sources now offer with no recorded choice: until the user picks one, the catalog
 // refuses to load, so `source add` says so at once.
 function newCollisions() {
@@ -180,6 +194,12 @@ export function removeSource(sourceId, { keepInstalled = false } = {}) {
     throw new PackageServiceError(`package source ${record.id} cannot be removed${record.id === LOCAL_SOURCE_ID ? "; disable it instead" : ""}`, { code: "refused" });
   }
   const installed = Object.values(readPackageLock().packages).filter((entry) => entry.sourceId === record.id).map((entry) => entry.packageId);
+  if (installed.length > 0 && keepInstalled && record.type !== "git") {
+    throw new PackageServiceError(
+      `package source ${record.id} is a folder; its packages are used in place and cannot stay installed without it. Remove them first with \`roborepo package remove <package>\``,
+      { code: "refused", details: { installed } },
+    );
+  }
   if (installed.length > 0 && !keepInstalled) {
     throw new PackageServiceError(
       `package source ${record.id} has installed packages: ${installed.join(", ")}. Remove them first with \`roborepo package remove <package>\`, or pass --keep-installed to keep them installed without a source`,
@@ -211,6 +231,7 @@ export function refreshSources(sourceId = null) {
     if (record.type !== "git") return { id: record.id, live: true, changed: false };
     try {
       const { catalog, changed, previousRevision } = runRefresh(record);
+      pruneGitCache(record.id, [catalog.revision, ...Object.values(readPackageLock().packages).filter((entry) => entry.sourceId === record.id).map((entry) => entry.resolved)]);
       return { id: record.id, changed, revision: catalog.revision, previousRevision: previousRevision ?? null, packages: catalog.packages.map((item) => item.packageId) };
     } catch (err) {
       if (sourceId) throw toServiceError(err);
@@ -464,6 +485,9 @@ export async function updatePackage(reference, { confirmed = false, reapply = nu
   }
   const record = findSource(current.sourceId);
   if (!record) throw new PackageServiceError(`package source ${current.sourceId} no longer exists; the installed copy stays as it is`, { code: "unavailable" });
+  if (current.url && record.url !== current.url) {
+    throw new PackageServiceError(`${qualifiedName(current.sourceId, packageId)} was installed from ${current.url}, but source ${record.id} now points at ${record.url}; remove the package and install it again to switch repositories`, { code: "refused" });
+  }
   const refreshed = runRefresh(record);
   const latest = refreshed.catalog.revision;
   const name = qualifiedName(current.sourceId, packageId);
@@ -583,6 +607,11 @@ export function packageView({ includeAvailable = true } = {}) {
       for (const pkg of availableFromSource(record)) {
         const existing = rows.find((row) => row.id === pkg.id && row.sourceId === pkg.sourceId);
         if (existing) {
+          const installedUrl = lock.packages[existing.id]?.url;
+          if (installedUrl && installedUrl !== record.url) {
+            existing.sourceChanged = true;
+            continue;
+          }
           existing.latestRevision = latest;
           existing.updateAvailable = Boolean(existing.revision && latest && existing.revision !== latest);
           continue;

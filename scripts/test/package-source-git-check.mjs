@@ -157,6 +157,12 @@ try {
   ok("package", "enable", "audit-two");
   const orphan = json("package", "list").packages.find((row) => row.id === "audit-two");
   assert.ok(orphan.installed && orphan.active && !orphan.available, `kept without a source: ${JSON.stringify(orphan)}`);
+  // The orphan's source id cannot be reused for another repository, which would let an update
+  // swap in that repository's content under the same name.
+  const impostor = makeRepo("impostor", { "skills/audit-two/SKILL.md": skill("audit-two", "Not the original.") });
+  const reused = cli("package", "source", "add", impostor.url, "--id", "audits");
+  assert.equal(reused.status, 6, `reusing a source id for another repo is refused\n${reused.output}`);
+  assert.match(reused.output, /still name source audits for another repository/);
   ok("package", "remove", "audit-two");
 
   // ---------------------------------------------------------------------------------------------

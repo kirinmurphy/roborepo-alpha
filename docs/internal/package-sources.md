@@ -84,9 +84,9 @@ works without a separate install: the apply step records it (see The lock).
 | 3 | Otherwise a single candidate is used. |
 | 4 | Otherwise the ID is a **collision**: `loadPackageCatalog` throws, naming every candidate and both fixes (a replace override, or `package install <source>/<id>`). |
 
-A lock record whose source no longer offers the package leaves the ID **unresolved**: it is left
+A lock record whose source no longer offers the package (another source still does, or the recorded source was disabled, removed, or lost its folder) leaves the ID **unresolved**: it is left
 out of the catalog, another source's same-ID package is never substituted, `package reconcile`
-keeps its selection and applied records, and doctor reports it.
+keeps its selection and applied records, and doctor reports it. A `builtin` record is the exception: a package that left the built-in library is retired, and reconcile forgets it and its lock record.
 
 The override outranks a lock record because the user edits it directly; lock records are written
 by RoboRepo.
@@ -208,7 +208,7 @@ data and throw `PackageServiceError` with a `code`:
 | `listSources`, `sourceInfo`, `addSource`, `removeSource`, `setSourceEnabled`, `refreshSources`, `trustedCatalog` | Source management |
 | `listAvailablePackages`, `resolvePackageReference` | Every (source, package) pair; one pick per the reference rules |
 | `previewInstall`, `installPackage` | Contents summary of the package and every package the install brings, then the install. Installing a package already installed from the same source never moves its pin; it reports a newer revision for `update` |
-| `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed; re-apply an active package |
+| `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed; re-apply an active package. Refused when the source now points at a different repository than the installed copy came from |
 | `removePackage` | Refuse System; disable an active package first; delete the record and any copy |
 | `packageView` | Rows with `tab`, `sourceId`, `sourceBadge`, `trust`, `collection`, `available`, `installed`, `active`, `revision`, `latestRevision`, `updateAvailable`, `removable` |
 

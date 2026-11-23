@@ -235,6 +235,13 @@ export function resolvePackageCandidates(candidates, { overrides = readWorkspace
     if (group.length === 1) packages.push(group[0]);
     else collisions.push({ id, candidates: group.map((pkg) => pkg.qualifiedName) });
   }
+  // A live install whose source offers nothing under its ID any more: the source was disabled or
+  // removed, or its folder is gone. Reported unresolved so its selection survives reconcile. A
+  // built-in package that left the library is retired, not unresolved, and reconcile forgets it.
+  for (const record of Object.values(lock.packages)) {
+    if (record.kind !== "live" || byId.has(record.packageId) || record.sourceId === BUILTIN_SOURCE_ID) continue;
+    unresolved.push({ id: record.packageId, sourceId: record.sourceId, reason: `source ${record.sourceId} no longer provides ${record.packageId}`, candidates: [] });
+  }
   return { packages, collisions, unresolved };
 }
 

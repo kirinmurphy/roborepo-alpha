@@ -7,6 +7,7 @@ import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs
 import { composePackageCatalog, loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { recordLiveInstall } from "./package-install-store.mjs";
+import { removeLockRecord } from "./package-lock.mjs";
 import { migrateBareIdPackageStateWithReport } from "./package-provenance-migration.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { ensureClaudeMcpPermission } from "./mcp-claude.mjs";
@@ -739,7 +740,11 @@ export async function reconcileEnabledPackages(rest = []) {
   }
   if (reconciled === 0) console.log("reconcile: no enabled packages");
   cleanupPackageProjections({ dryRun });
-  if (!dryRun) forgetPackageIds(stale);
+  if (!dryRun) {
+    forgetPackageIds(stale);
+    // A retired package's lock record goes with it; nothing can resolve from it again.
+    for (const id of stale) removeLockRecord(id);
+  }
   return [...changedPackageIds];
 }
 

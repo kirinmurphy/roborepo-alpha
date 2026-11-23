@@ -92,8 +92,21 @@ try {
   assert.equal(cli("package", "source", "info", "nope").status, 2);
   assert.equal(cli("package", "source", "remove", "local").status, 6);
   assert.equal(cli("package", "source", "disable", "builtin").status, 6);
+  // A folder source disabled under an active package: the package is unresolved, not forgotten.
+  // Reconcile keeps its selection, doctor fails it, and re-enabling the source brings it back.
+  ok("package", "enable", "team-pkg");
+  const keep = cli("package", "source", "remove", "team", "--keep-installed");
+  assert.equal(keep.status, 6, `a folder source cannot keep its packages without the folder\n${keep.output}`);
   ok("package", "source", "disable", "team");
   assert.ok(!json("package", "list").packages.some((row) => row.sourceId === "team"), "a disabled source offers nothing");
+  assert.match(ok("package", "reconcile"), /package team-pkg is unresolved/);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(roots.stateRoot, "enabled-packages.json"), "utf8")).packages.includes("team-pkg"), "reconcile keeps the selection");
+  const doctor = runModules(roots.env, { d: "scripts/cli/package-provenance-doctor.mjs" }, "return d.packageProvenanceFindings();");
+  assert.ok(doctor.ok && doctor.value.some((f) => f.level === "fail" && /team-pkg is unresolved/.test(f.message)), JSON.stringify(doctor));
+  ok("package", "source", "enable", "team");
+  assert.ok(json("package", "list").packages.find((row) => row.id === "team-pkg").active, "re-enabling the source resolves it again");
+  ok("package", "remove", "team-pkg");
+  ok("package", "source", "disable", "team");
   ok("package", "source", "remove", "team");
   assert.ok(fs.existsSync(path.join(team, "team-pkg")), "removing a path source leaves its folder");
 } finally {
