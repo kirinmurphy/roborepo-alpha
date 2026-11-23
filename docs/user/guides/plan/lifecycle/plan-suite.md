@@ -266,7 +266,7 @@ A new review runs these steps:
 1. for an `active/` plan, runs the completion preflight, and moves the plan to `review/` only if it
    passes;
 2. merges the base branch into the feature branch with `roborepo plans sync-base`, which does
-   nothing when base has nothing new; on a conflict the merge pauses for a careful resolution, and
+   nothing when base has nothing new or already holds the branch's merged pull request; on a conflict the merge pauses for a careful resolution, and
    `roborepo plans sync-base --continue` commits it once no conflicts or conflict markers remain;
 3. runs the repository's checks, and reruns each failure on the base branch: a failure the base has
    too is recorded as a base failure, not a finding;

@@ -447,6 +447,20 @@ try {
     assert.equal((await inspectBranchLanding(main, "feature")).landed, true, "a cherry-picked branch is landed");
   }
   {
+    // Base merged back into a branch after its pull request landed: the branch now forks from base's
+    // tip, with no base commit after the fork, yet base holds all of its content.
+    const { main, worktree } = repository("merged-back");
+    commit(worktree, "feature.txt", "feature\n");
+    git(main, "merge", "--squash", "feature");
+    git(main, "commit", "-qm", "squash feature");
+    git(worktree, "merge", "-q", "--no-ff", "-m", "Merge main into feature", "main");
+    const mergedBack = await inspectBranchLanding(main, "feature");
+    assert.equal(mergedBack.landed, true, mergedBack.reason);
+    assert.equal(mergedBack.absorbingCommit, git(main, "rev-parse", "HEAD"), "the fork itself absorbs the branch");
+    commit(worktree, "extra.txt", "new branch work\n");
+    assert.equal((await inspectBranchLanding(main, "feature")).reason, "not absorbed", "branch work after the merge-back is unlanded");
+  }
+  {
     const { main, worktree } = repository("recorded");
     commit(worktree, "feature.txt", "feature\n");
     commit(main, "base.txt", "base moved\n");

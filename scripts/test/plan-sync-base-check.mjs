@@ -3,7 +3,8 @@
 // worktree. Covers a branch already up to date, a clean merge, a stale base fast-forwarded from its
 // upstream (checked out clean, checked out dirty, checked out nowhere, diverged, fetch failing,
 // tracking ref missing, local upstream, symbolic base), a
-// conflict that pauses without losing work and then continues, and every refusal.
+// conflict that pauses without losing work and then continues, a branch base already absorbed
+// (nothing merged), and every refusal.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -151,6 +152,20 @@ try {
   assert.equal(continued.state, "merged");
   assert.equal(git(wt.path, "rev-list", "--parents", "-n", "1", "HEAD").split(" ").length, 3);
   assert.equal(read(path.join(wt.path, "src/shared.txt")), "line one from base and the branch\n", "the resolution is what was committed");
+
+  // After the branch's pull request merged, base moving on is not merged back into the branch: base
+  // already holds its work, and a merge-back would be a commit its approval never covered.
+  const landedWt = worktree(root, "feat/landed");
+  commit(landedWt.path, "Landed feature", { "src/landed.txt": "landed\n" });
+  git(root, "merge", "--quiet", "--squash", "feat/landed");
+  git(root, "commit", "--quiet", "-m", "Squash-merge feat/landed");
+  const absorbing = git(root, "rev-parse", "HEAD");
+  commit(root, "Base moves after landing", { "src/after-landing.txt": "after\n" });
+  const landedTip = git(landedWt.path, "rev-parse", "HEAD");
+  const skipped = json(sync(landedWt.path), "sync of a landed branch");
+  assert.equal(skipped.state, "landed");
+  assert.equal(skipped.absorbingCommit, absorbing, "the report names the base commit that absorbed the branch");
+  assert.equal(git(landedWt.path, "rev-parse", "HEAD"), landedTip, "a landed branch gets no merge commit");
 
   console.log("plan sync-base: ok");
 } finally {
