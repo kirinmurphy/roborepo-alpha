@@ -1,6 +1,6 @@
 ---
 id: jdsobwn
-next_action: Start Stage 0 with /plan-execute: write characterization tests for today's built-in and workspace package catalog, including the replace-override collision rule, before adding source adapters.
+next_action: Run /plan-review on this plan. Implementation, validation, and docs are done and the pull request is open; the Trusted Catalog Curation decision is still open (the catalog ships empty), and the Decision Log entry on recorded requirements is worth confirming.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["user-managed-packages-and-add-workflows", "f5exs0bd", "o9zwxuav", "74h2tlim"]
@@ -796,13 +796,13 @@ with its focused checks passing.
 
 **Goal:** lock down the behavior that source refactoring must preserve. No new architecture lands.
 
-- [ ] Extend `scripts/test/package-catalog-check.mjs` to cover built-in/workspace discovery, a
+- [x] Extend `scripts/test/package-catalog-check.mjs` to cover built-in/workspace discovery, a
       duplicate workspace ID, the same-ID conflict error, and the `replace` override taking effect.
-- [ ] Characterize the package descriptor fields consumed by CLI, portal, and harness filtering,
+- [x] Characterize the package descriptor fields consumed by CLI, portal, and harness filtering,
       including `origin`.
-- [ ] Characterize enable, disable, and apply for one package from each origin, including how a
+- [x] Characterize enable, disable, and apply for one package from each origin, including how a
       `requires` edge resolves across origins.
-- [ ] Run every characterization against temporary app, state, and workspace roots; never the real
+- [x] Run every characterization against temporary app, state, and workspace roots; never the real
       configuration.
 
 Checks:
@@ -818,16 +818,16 @@ node scripts/test/package-default-enabled-check.mjs
 
 **Goal:** replace origin-specific catalog branching with configured source adapters while preserving behavior.
 
-- [ ] Add the source configuration schema and the normalized source and package descriptor shapes,
+- [x] Add the source configuration schema and the normalized source and package descriptor shapes,
       including `sourceId` and the derived collection field.
-- [ ] Add a source registry that instantiates adapters by type.
-- [ ] Wrap `globals/packages` in the temporary `bundled` adapter and the workspace packages folder in
+- [x] Add a source registry that instantiates adapters by type.
+- [x] Wrap `globals/packages` in the temporary `bundled` adapter and the workspace packages folder in
       the `path` adapter.
-- [ ] Refactor `package-catalog.mjs` to compose adapter results instead of reading two hard-coded
+- [x] Refactor `package-catalog.mjs` to compose adapter results instead of reading two hard-coded
       origins, keeping manifest validation and harness compatibility filtering after normalization.
-- [ ] Make collision results explicit per Collision Behavior, keeping the `replace` override rule.
-- [ ] Keep the `origin` field, or migrate every consumer of it in the same stage.
-- [ ] Add focused checks for the source registry, the `path` adapter, the `bundled` adapter, and
+- [x] Make collision results explicit per Collision Behavior, keeping the `replace` override rule.
+- [x] Keep the `origin` field, or migrate every consumer of it in the same stage.
+- [x] Add focused checks for the source registry, the `path` adapter, the `bundled` adapter, and
       collision resolution; register them in `scripts/test/check-groups.json`.
 
 Place the domain code beside the existing package modules unless a clearer package-domain location
@@ -840,15 +840,15 @@ pass unchanged; no remote source exists.
 
 **Goal:** make source identity durable.
 
-- [ ] Persist source configuration under `stateRoot` and register its path in `state-paths.mjs`.
-- [ ] Create the default `builtin` and `local` source records on first read. `builtin` carries
+- [x] Persist source configuration under `stateRoot` and register its path in `state-paths.mjs`.
+- [x] Create the default `builtin` and `local` source records on first read. `builtin` carries
       `official` trust and maps to the System tab; `local` carries `local` trust and maps to Custom.
-- [ ] Add source-qualified references to `enabled-packages.json` and `applied-packages.json`
+- [x] Add source-qualified references to `enabled-packages.json` and `applied-packages.json`
       through `package-state.mjs`, and add the provenance lock.
-- [ ] Use atomic, schema-validated reads and writes.
-- [ ] Add the one-time migration from bare-ID state, as Existing Enabled Packages describes.
-- [ ] Teach `doctor` to report invalid or missing sources, unresolved provenance, and path-source drift.
-- [ ] Cover schema round trips, an interrupted write, ambiguous same-ID migration, a missing source,
+- [x] Use atomic, schema-validated reads and writes.
+- [x] Add the one-time migration from bare-ID state, as Existing Enabled Packages describes.
+- [x] Teach `doctor` to report invalid or missing sources, unresolved provenance, and path-source drift.
+- [x] Cover schema round trips, an interrupted write, ambiguous same-ID migration, a missing source,
       and no silent substitution.
 
 Exit criteria: every active package can answer "which source did this come from?"; the choice
@@ -858,14 +858,14 @@ survives restart; removing or reordering sources cannot silently retarget an ins
 
 **Goal:** create a local install boundary before any network source.
 
-- [ ] Add managed install directories under `stateRoot`.
-- [ ] Add an install service that materializes a concrete resolution before activation.
-- [ ] Record `path` sources as live paths without copying user content.
-- [ ] Keep resolving `bundled` packages through `appRoot`.
-- [ ] Make activation accept a resolved local package reference instead of doing discovery itself.
-- [ ] Validate a package immediately before it becomes installable or activatable.
-- [ ] Add install, update, and remove primitives at the service layer.
-- [ ] Cover install idempotence, removing an inactive and an active package, a `path` source never
+- [x] Add managed install directories under `stateRoot`.
+- [x] Add an install service that materializes a concrete resolution before activation.
+- [x] Record `path` sources as live paths without copying user content.
+- [x] Keep resolving `bundled` packages through `appRoot`.
+- [x] Make activation accept a resolved local package reference instead of doing discovery itself.
+- [x] Validate a package immediately before it becomes installable or activatable.
+- [x] Add install, update, and remove primitives at the service layer.
+- [x] Cover install idempotence, removing an inactive and an active package, a `path` source never
       copied or deleted as managed state, and a failed materialization leaving the prior record intact.
 
 Exit criteria: discovery and activation are separate operations; installs have explicit ownership;
@@ -875,17 +875,17 @@ source adapters never mutate harness state.
 
 **Goal:** let a user add a third-party skill from a public GitHub repo, by URL or from the trusted catalog.
 
-- [ ] Implement the `git` adapter for public GitHub repos: resolve to a commit SHA, download that
+- [x] Implement the `git` adapter for public GitHub repos: resolve to a commit SHA, download that
       commit's archive into staged storage, hash the materialized tree, then promote it atomically.
-- [ ] Group the repo's skills by the source-format table (plugin, Agent Skills folders, RoboRepo package).
-- [ ] Report a contents summary before install: skills, rules, hooks, scripts, and permissions found.
-- [ ] Ship the trusted catalog as a JSON data file in the application, `{ schemaVersion: 1,
+- [x] Group the repo's skills by the source-format table (plugin, Agent Skills folders, RoboRepo package).
+- [x] Report a contents summary before install: skills, rules, hooks, scripts, and permissions found.
+- [x] Ship the trusted catalog as a JSON data file in the application, `{ schemaVersion: 1,
       entries: [{ repo, commit, description }] }`, read by the `git` source as its list of known
       repos. Ship it with the entries the Trusted Catalog Curation decision approves; an empty list is
       valid, and tests use fixture entries.
-- [ ] Mark trusted catalog entries `trusted` and pasted URLs `unverified`.
-- [ ] Make update resolve the latest commit and show what changed before moving the pin.
-- [ ] Test against a fixture Git server or local bare repo, never the public internet: a URL resolves
+- [x] Mark trusted catalog entries `trusted` and pasted URLs `unverified`.
+- [x] Make update resolve the latest commit and show what changed before moving the pin.
+- [x] Test against a fixture Git server or local bare repo, never the public internet: a URL resolves
       to an exact SHA in the lock; each grouping rule yields the expected packages; the summary lists
       a hook found in the repo; a moved branch changes nothing until an explicit update; an
       unreachable repo or invalid URL fails without writing state.
@@ -897,16 +897,16 @@ catalog entries install through the `git` adapter; every installed Git package r
 
 **Goal:** make the model understandable and controllable without editing JSON.
 
-- [ ] Add source list, add, remove, refresh, and info operations to the shared package service, and
+- [x] Add source list, add, remove, refresh, and info operations to the shared package service, and
       expose them through the CLI, reusing existing `roborepo package` commands where they fit.
-- [ ] Add available, installed, active, source, and update fields to CLI package output, keeping the
+- [x] Add available, installed, active, source, and update fields to CLI package output, keeping the
       default output concise.
-- [ ] Expose each package's tab (System, Custom, Third Party) and source badge in the shared package
+- [x] Expose each package's tab (System, Custom, Third Party) and source badge in the shared package
       view that the portal reads.
-- [ ] Add the explicit collision and disambiguation flow.
-- [ ] Add install, update, and remove distinct from enable and disable; refuse remove for System
+- [x] Add the explicit collision and disambiguation flow.
+- [x] Add install, update, and remove distinct from enable and disable; refuse remove for System
       packages in the service so the CLI and portal agree.
-- [ ] Cover source operations, non-interactive error codes, same-ID collision, a source becoming
+- [x] Cover source operations, non-interactive error codes, same-ID collision, a source becoming
       unavailable while its installed package stays usable, a refused System remove, and a `path`
       remove that leaves the folder intact.
 
@@ -915,9 +915,9 @@ and portal read the same domain state.
 
 ### Stage 6 — Documentation and Release Checks
 
-- [ ] Update every document in Documentation impact.
-- [ ] Run the focused package checks, `npm run test:package-install`, and `npm test`.
-- [ ] Leave the bare-ID migration in place; a later release removes it once no supported install
+- [x] Update every document in Documentation impact.
+- [x] Run the focused package checks, `npm run test:package-install`, and `npm test`.
+- [x] Leave the bare-ID migration in place; a later release removes it once no supported install
       still has bare-ID state.
 
 ## Testing Strategy
@@ -963,26 +963,26 @@ Do not create one giant source test if focused tests produce clearer failure rec
 
 ## Acceptance Criteria
 
-- [ ] Package catalog discovery is driven by configured source adapters rather than hard-coded built-in/workspace branches.
-- [ ] The existing workspace is represented through the normal `path` source model.
-- [ ] Multiple package sources can be configured at once.
-- [ ] Same-ID packages from multiple sources cannot silently override one another, and an existing
+- [x] Package catalog discovery is driven by configured source adapters rather than hard-coded built-in/workspace branches.
+- [x] The existing workspace is represented through the normal `path` source model.
+- [x] Multiple package sources can be configured at once.
+- [x] Same-ID packages from multiple sources cannot silently override one another, and an existing
       workspace `replace` override keeps its effect.
-- [ ] Active and installed packages persist source provenance, and existing selections migrate
+- [x] Active and installed packages persist source provenance, and existing selections migrate
       without changing what is enabled.
-- [ ] Discovery, installation, and activation are separate service operations.
-- [ ] Installed packages activate offline.
-- [ ] CLI and portal consume the same normalized package/source domain state.
-- [ ] Every package maps to exactly one tab (System, Custom, Third Party), and System packages cannot
+- [x] Discovery, installation, and activation are separate service operations.
+- [x] Installed packages activate offline.
+- [x] CLI and portal consume the same normalized package/source domain state.
+- [x] Every package maps to exactly one tab (System, Custom, Third Party), and System packages cannot
       be removed from the CLI or portal.
-- [ ] A public GitHub repo URL can be added, resolves to a pinned commit, and installs only after its
+- [x] A public GitHub repo URL can be added, resolves to a pinned commit, and installs only after its
       contents summary is shown.
-- [ ] The trusted catalog ships with RoboRepo, and its entries install with a `trusted` label while
+- [x] The trusted catalog ships with RoboRepo, and its entries install with a `trusted` label while
       other URLs install as `unverified`.
-- [ ] A repo with two or more Agent Skills folders appears as a collection derived from the source.
-- [ ] Current package lifecycle and harness compatibility behavior remains covered by regression tests.
-- [ ] Focused package checks, `npm run test:package-install`, and `npm test` pass.
-- [ ] The documents in Documentation impact describe package sources, provenance, and installation
+- [x] A repo with two or more Agent Skills folders appears as a collection derived from the source.
+- [x] Current package lifecycle and harness compatibility behavior remains covered by regression tests.
+- [x] Focused package checks, `npm run test:package-install`, and `npm test` pass.
+- [x] The documents in Documentation impact describe package sources, provenance, and installation
       versus activation.
 
 ## Risks and Mitigations
@@ -1045,6 +1045,60 @@ The implementation should treat these as settled unless new repository constrain
   a workspace package win over a built-in one by explicit user action, which is what Collision
   Behavior requires; keeping it avoids breaking existing workspaces.
 
+- **2026-11-23: Default sources are synthesized on read, written on first change.** Stage 2 said
+  to create the `builtin` and `local` records "on first read". Writing state from a read path would
+  create `package-sources.json` on every catalog load, including portal reads and tests that point
+  at the real state root. Reads now return the two defaults and the file is written the first time
+  a source changes. Considered: writing on first read (rejected for the side effect).
+- **2026-11-23: Source configuration file name.** `<stateRoot>/package-sources.json`, beside
+  `enabled-packages.json`, with the managed store under `<stateRoot>/packages/` (lock, catalogs,
+  cache, installed). Resolves the open decision "Source Configuration File Name".
+- **2026-11-23: The lock is the persisted source choice.** Resolution order: workspace `replace`
+  override, then lock record, then single candidate, else a collision. The override outranks a
+  lock record because the user edits it directly. Every apply of a live package writes its lock
+  record; `disable` keeps it; `remove` deletes it. Considered: a separate "choices" file (a second
+  record of the same fact).
+- **2026-11-23: Selection records keep bare IDs plus a `sources` map.** `enabled-packages.json` and
+  `applied-packages.json` keep their ID lists and gain `sources: { id: sourceId }`, so every
+  existing reader keeps working. Considered: qualified strings in the lists (breaks every reader of
+  bare IDs, which the plan's risk table warns against).
+- **2026-11-23: An unresolved collision still fails catalog load.** Same as today for a
+  built-in/workspace clash without an override; the message now also names
+  `package install <source>/<id>`. A git package cannot cause one, because installing it is the
+  explicit choice. Considered: dropping colliding IDs from the catalog silently (hides packages).
+- **2026-11-23: Git transport uses the `git` CLI, and `file://` URLs are accepted.** Fetching one
+  commit with `git fetch --depth 1` gives an exact SHA without a tar parser; RoboRepo already
+  requires Git. `file://` covers local mirrors and lets tests use fixture repos instead of the
+  internet. Prompts and credential helpers are off, so private repos fail instead of hanging.
+  Considered: downloading GitHub's archive tarball (needs a tar implementation and a host-specific
+  API).
+- **2026-11-23: A trusted source updates to the catalog's reviewed commit,** not the branch head,
+  so "Trusted" keeps meaning "reviewed". An unverified source updates to the default branch head.
+- **2026-11-23: Repos containing a symbolic link are refused,** since a copied link could expose
+  any file on the machine to a harness.
+- **2026-11-23: Manifest-less skills use a new `added-skills` category** ("Added Skills"), so they
+  never borrow a category that describes something else.
+- **2026-11-23: Remove disables an active package first,** through the normal `disable`
+  lifecycle, and removes nothing if the package stays on because another package requires it.
+  Installing a package from a different source while it is active is refused until it is disabled.
+- **2026-11-23: Exit codes for non-interactive use:** 2 usage, 3 ambiguous, 4 confirmation
+  required, 5 unavailable, 6 refused, 7 invalid.
+- **2026-11-23: The migration runs from write paths only** (`package enable`, `disable`,
+  `reconcile`), never from a read, and keeps a version-1 registry's version so its list keeps its
+  meaning.
+- **2026-11-23: Uninstall removes `package-sources.json` and `packages/`,** like the selection and
+  applied records it already removes. A path source's folder is never under the state root.
+- **2026-11-23: A requirement already recorded from another source stops an install.** Collision
+  rule 7 (resolve within the requiring package's source first) and rule 2 (keep a recorded source)
+  conflict when a Git repo offers a package whose requirement ID is recorded from another source.
+  The install now refuses with the ambiguity error (exit 3) and asks for an explicit qualified
+  install, so no recorded choice changes without the user naming it. Alternative not chosen:
+  silently prefer the recorded source, which installs a different package than the repo expects.
+  The Validator escalated this; the refusal is the conservative choice that leaves both outcomes
+  one explicit command away. Revisit in `/plan-review` if you prefer the alternative.
+- **2026-11-23: No `package search` or `package info` command.** The Stage 5 checklist does not ask
+  for them; `package list --available` and `package inspect` cover listing and detail.
+
 ## Open Decisions
 
 These are resolved during the relevant stage and do not change the architecture above.
@@ -1054,9 +1108,13 @@ These are resolved during the relevant stage and do not change the architecture 
 Who adds a repo to the trusted catalog, what review it gets, and how often reviewed commits are
 refreshed. This decides how much "Trusted" actually promises.
 
+Still open. `manifests/inventory/trusted-package-sources.json` ships with no entries, which the
+plan allows; the trusted path is exercised with fixture entries. Adding the first real entry is a
+data change once this is decided.
+
 ### Source Configuration File Name
 
-Choose the final file name/location to match current `stateRoot` configuration conventions. Do not encode source configuration in workspace package manifests.
+Resolved 2026-11-23: `<stateRoot>/package-sources.json` (see Decision Log).
 
 
 ## Documentation impact
@@ -1072,6 +1130,61 @@ Update each document as its stage lands:
 | `docs/internal/cli-internals.md` | Package service boundary and the new state files |
 
 Keep the source configuration and lock schemas in one technical reference and link to it.
+
+## Not tested
+
+- [x] A public GitHub repo (cloudflare/security-audit-skill) adds, installs pinned to the remote
+      default-branch commit, enables, and removes over real HTTPS. — Verified by agent 2026-11-23 at
+      e8991756: scripted CLI run with throwaway HOME, state, and workspace → install without `--yes`
+      exited 4 after printing the skill and its four scripts; with `--yes` the lock recorded
+      c1c8a8c1471069fb0e188eeaff69b8e8db6564a8, equal to `git ls-remote … HEAD`; enable linked the
+      skill into ~/.claude and ~/.codex; remove disabled it and deleted the copy.
+- [x] The interactive confirmation for an unverified install accepts and declines through a real
+      terminal. — Verified by agent 2026-11-23 at e8991756: `expect` session on
+      `roborepo package install tty/tty-skill` → "n" printed "not installed" and wrote no lock; "y"
+      installed at the fixture commit.
+
+## Review
+
+### Findings
+- [x] Packages pulled in through `requires` from an unverified source installed without their contents being shown — fixed (71eb5ae4)
+- [x] Reinstalling an installed git package after a refresh moved its pin without the update diff or a re-apply — fixed (71eb5ae4)
+- [x] Installed copies were never checked against an expected content hash — fixed (71eb5ae4)
+- [x] The Config view kept its own copy of the source badge rule — fixed (71eb5ae4)
+- [x] A trusted source dropped from the trusted catalog refreshed to the unreviewed branch head — fixed (a8b102a1)
+- [x] A path package whose source was disabled, removed, or deleted vanished silently and reconcile dropped its selection — fixed (5adc3897)
+- [x] Reusing a source id for another repository let `update` replace a package with that repository's content — fixed (5adc3897)
+- [x] A bare install name whose recorded source stopped offering it was silently retargeted to another source — fixed (eb158bd2)
+- [x] Docs and a comment said source collections are never stored, though they are cached with the pinned revision — fixed (eb158bd2)
+- [x] A confirmed update re-resolved the branch head, so it could install a commit other than the one shown — fixed (6975e905)
+- [x] An update that dropped a skill left it installed in the harnesses — fixed (d727daac)
+- [x] `package remove` of a package another active package requires crashed with a stack trace instead of exit 6 — fixed (d727daac)
+- [x] A new local package hidden by a recorded built-in source was ignored without any report — fixed (d727daac, dd329bbc)
+- [x] Reinstalling a git package whose copy went missing moved its pin to the listing's newer commit — fixed (e97f8dfa)
+- [x] `package dev add-skill` could write into a managed git copy — fixed (e97f8dfa)
+- [x] `package list` did not show unresolved packages — fixed (e97f8dfa)
+- [x] `npm test` evidence predated the last code changes — rerun at e97f8dfa
+- [x] Installing a Git package replaced a requirement recorded from another source with the repo's own same-ID package — escalated by the Validator; resolved under the Decision Policy by refusing (exit 3), see Decision Log (41b7416e)
+- [x] The contents summary showed config patches only as "config change" — fixed (41b7416e)
+- [x] The contents summary omitted runtime assets — fixed (41b7416e)
+- [x] Removing a copied package another installed package required left a dangling requirement and broke catalog load — fixed (e8991756), not revalidated by a Validator pass (cap reached)
+- [x] Disabling or removing a folder source whose package another source's package required broke catalog load — fixed (e8991756), not revalidated by a Validator pass (cap reached)
+
+### Verification
+- Validation pass 1 at aba9cc6f (fresh-context subagent): 1 blocking, 4 actionable fix findings, all fixed.
+- Validation pass 2 at 71eb5ae4 (fresh-context subagent): 1 blocking, 1 actionable fix finding, both fixed.
+- Validation pass 3 at 5adc3897 (fresh-context subagent): 1 blocking, 1 actionable fix finding, both fixed.
+- Validation pass 4 at eb158bd2 (fresh-context subagent): 1 actionable fix finding, fixed.
+- Validation pass 5 at 6975e905 (fresh-context subagent): 3 actionable fix findings, all fixed.
+- `npm test` outside the command sandbox at 6975e905: 427 passed, 0 failed.
+- `npm test` outside the command sandbox at e97f8dfa: 427 passed, 0 failed.
+- Validation pass 6 at dd329bbc (fresh-context subagent): 4 actionable fix findings, all fixed.
+- Validation pass 7 at e97f8dfa (fresh-context subagent): 2 actionable fix findings and 1 escalated finding, all resolved; one note (replace override in reference resolution) also fixed.
+- Validation pass 8 at 41b7416e (fresh-context subagent): 1 blocking, 1 actionable fix finding, both fixed in e8991756 and covered by new checks in package-resolution-check and package-source-git-check. The eight-pass cap ended the loop, so those fixes were not revalidated by a fresh pass; `/plan-review` runs its own Validator.
+- At e8991756: all package checks, managed-uninstall, cli-command-catalog, docs-reference → ok; `bash scripts/doctor.sh --quiet` → passed; `git diff main...HEAD --check` → clean; `npm run test:package-install` → ok.
+- `npm test` outside the command sandbox: 427 passed, 0 failed (run against the tree after a8b102a1's changes). Inside the sandbox, 13 plan-store, developer-runtime, and PTY checks fail on Git-worktree writes, process listing, and PTY allocation the sandbox blocks.
+- `npm run test:package-install`: ok.
+- Base failure: `scripts/test/cli-surface-integration-check.mjs` ("menu title duplicated after redraw") fails inside the command sandbox on `main` too, because the sandbox cannot allocate a PTY; it passes on this branch outside the sandbox.
 
 ## References
 
