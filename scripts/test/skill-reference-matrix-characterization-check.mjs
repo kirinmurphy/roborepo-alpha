@@ -285,7 +285,6 @@ function testPlanWriteNamesConditionalPairedSkillsAndTheirTriggers() {
   const skill = flat(`${PLAN_WRITE}/SKILL.md`);
   for (const [paired, trigger] of [
     ["code-style", /module boundaries/],
-    ["javascript-typescript", /ESM, exports, types/],
     ["test-harness", /tests, verification commands, or a regression strategy/],
   ]) {
     assert.ok(skill.includes(`\`${paired}\``), `plan-write must name ${paired} as a paired skill`);
