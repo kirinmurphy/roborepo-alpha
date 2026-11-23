@@ -7,13 +7,22 @@ const SHELL_NAME = /^roborepo-disposable-(landing|preservation)-[A-Za-z0-9]+$/;
 // An earlier call's folder is swept only once it has sat unchanged this long, so a concurrent
 // call whose folder is still empty because its assessment has barely started is never touched.
 const SHELL_MIN_AGE_MS = 60 * 60 * 1000;
+// Temp roots already swept by this process. The sweep changes the process working directory while
+// it runs (see sweepEmptyShells), and a long-lived process such as the Runtime service calls
+// withTemporaryStorage once per known worktree, so each root is swept at most once per process: an
+// async fs call already in flight with a relative path is exposed to that window once, not on
+// every call. Shells left after that wait for the next process.
+const sweptRoots = new Set();
 
 // Own creation and cleanup together: callers cannot accidentally nominate a worktree for deletion.
 export async function withTemporaryStorage(purpose, assess, {
   fsApi = fs, warn = (message) => console.warn(message), tmpRoot = os.tmpdir(), now = Date.now(),
 } = {}) {
   if (!["landing", "preservation"].includes(purpose)) throw new Error("unsupported temporary storage purpose");
-  sweepEmptyShells(tmpRoot, { fsApi, now });
+  if (!sweptRoots.has(tmpRoot)) {
+    sweptRoots.add(tmpRoot);
+    sweepEmptyShells(tmpRoot, { fsApi, now });
+  }
   const temporary = fsApi.mkdtempSync(path.join(tmpRoot, `${PREFIX}${purpose}-`));
   const identity = fsApi.lstatSync(temporary);
   let result;
@@ -39,10 +48,10 @@ export async function withTemporaryStorage(purpose, assess, {
 }
 
 // When the sandbox denies removing a folder, cleanup leaves verified empty directory shells behind
-// with a warning. Each later call removes the shells earlier calls left: a folder with this
-// prefix, holding nothing but directories, unchanged for an hour. Removal is rmdir from the deepest
-// folder up, which can only ever remove empty directories, so a folder that gained a file or link
-// is left alone.
+// with a warning. The first call in a later process removes the shells earlier calls left: a folder
+// with this prefix, holding nothing but directories, unchanged for an hour. Removal is rmdir from
+// the deepest folder up, which can only ever remove empty directories, so a folder that gained a
+// file or link is left alone.
 //
 // A path-based rmdir follows links in every component but the last, so a shell or ancestor swapped
 // for a link between a check and the rmdir would steer it into the link's target. Each removal
