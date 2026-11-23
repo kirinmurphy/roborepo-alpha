@@ -365,6 +365,16 @@ None. Both earlier questions were answered by the user; see the Decision Log.
 - [x] `--check` hinted while a reset could still remove a quiet folder (mixed quiet and busy
       folders) — fixed: it fails whenever something is removable (5fe2a57b)
 - [x] The portal showed a spared over-cap store with no label — fixed (5fe2a57b)
+- [x] `docs/internal/testing.md` named the runs folder `roborepo-tests/`, not the per-account
+      `roborepo-tests-<uid>/` — fixed in review (0ea0bfe5)
+- [x] The test runs root claimed 0700 but never enforced it on an existing folder — fixed in review
+      (414af39b)
+- [x] The empty-shell sweep did nothing under a linked temp root (macOS `/tmp`) — fixed in review
+      (414af39b)
+- [x] The CLI reference's Scratch Folders section omitted the kept newest folder and the pr-body
+      location note — fixed in review (0ea0bfe5)
+- [x] The review record stopped at 5fe2a57b; the pull-request follow-ups 0755751d..8c6a8f92 were
+      unvalidated — covered by review Validator pass 1 at 9a3b92ad
 
 ### Verification
 
@@ -400,6 +410,26 @@ None. Both earlier questions were answered by the user; see the Decision Log.
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently on `main` too (1 of 5
   direct runs at 46f37fbc, "single-repo refresh should leave other cached ahead repos in the main
   list"), a PTY timing race in the remote-sync menu.
+- Review (2026-11-23): `main` at d66dcfce merged cleanly (9a3b92ad); it touched only plan-suite
+  skill text.
+- Review Validator pass 1 at 9a3b92ad (fresh-context subagent): 5 `fix`, 0 `escalate`; no
+  deletion-safety defect in the post-5fe2a57b commits.
+- Review Validator pass 2 at 0ea0bfe5 (fresh-context subagent): clean; it confirmed the linked-root
+  test fails with the old `lstat`.
+- At 0ea0bfe5: `run-tmpdir-check`, `worktree-lifecycle-check`, `docs-reference-check` passed;
+  pre-push `doctor` passed (100 checks). At 9a3b92ad: `claude-sandbox-projection`,
+  `codex-plans-store-grants`, `delivery-operations`, `maintenance-stores`, `retention-policy`,
+  `run-tmpdir`, `scratch-command`, `worktree-lifecycle`, `permission-rule-home-path`,
+  `agent-run-coverage`, `agent-permission-defaults`, `docs-reference` checks passed (three only
+  outside the Claude sandbox, which refuses `.git/worktrees` writes).
+- CI for PR #78 at 0ea0bfe5: `check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer`
+  passed.
+
+### Result
+
+- Status: complete
+- Reviewed implementation commit: 0ea0bfe52b95e1308d19ea2330e0d947360f00e3
+- Base commit: d66dcfce6abd923f3f836d142b04a745e725ffae
 
 ## Documentation impact
 
