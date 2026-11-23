@@ -61,7 +61,8 @@ const PLANS_STORE_BRANCH = 'repo-plans'
 
 const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
 // Git hosts whose CLI can act on the host without going through git, so the push guards cannot check
-// it. Each entry names the CLI and the command prefixes denied; a second host is a new entry.
+// it. Each entry names the CLI and the command prefixes denied. Only `github` exists today, and the
+// classifier reads it by name, so a second host also needs its CLI wired into classifyCommand.
 // The `github` list covers the change-github-directly and merge-pull-requests behaviors in
 // agent-permissions.json; a test keeps the first equal to this list.
 const HOST_CLIS = {
