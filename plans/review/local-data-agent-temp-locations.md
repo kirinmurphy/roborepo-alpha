@@ -431,6 +431,11 @@ None. Both earlier questions were answered by the user; see the Decision Log.
 - Reviewed implementation commit: 0ea0bfe52b95e1308d19ea2330e0d947360f00e3
 - Base commit: d66dcfce6abd923f3f836d142b04a745e725ffae
 
+### Approval
+- Decision: approved
+- Reviewed implementation commit: 0ea0bfe52b95e1308d19ea2330e0d947360f00e3
+- Confirmed by: human
+
 ## Documentation impact
 
 Also updated, as the implementation newly affected them: `docs/user/reference/architecture.md`,
