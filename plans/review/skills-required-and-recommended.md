@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Approved at 843701dd and landed in main as 1604eab8; run `/plan-close`.
+next_action: Approved at 843701dd, but `plans close` reports landed: unconfirmed: 843701dd merged main into the branch after it landed, so the landing scan has no main commits after the fork to check. Either reset the branch to 279cc4c0 and re-record approval of 279cc4c0, or fix the landing check, then rerun `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -691,3 +691,6 @@ cascading-disable dialog, required packages are called "included" wherever a per
 - Closure refused 2026-11-23: after these checks the branch gained 843701dd, a merge of main at
   9ad6fab7 whose tree equals main, and `roborepo plans close` reported the approval of 279cc4c0
   stale (changed paths are #80's four files). Resolved by `/plan-review` and the user's approval of 843701dd.
+- Closure refused again 2026-11-23: `roborepo plans close` reported landed: unconfirmed (not
+  absorbed). The branch tip 843701dd forks from main at 9ad6fab7, so no main commit after the fork
+  exists to absorb it, although its tree equals main at 9ad6fab7.
