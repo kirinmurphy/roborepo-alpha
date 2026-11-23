@@ -524,7 +524,7 @@ export async function enablePackage(rest, changed = new Set()) {
     console.log(`[dry-run] would enable: ${pkg.label}`);
     console.log(`  [dry-run] mark package selected in registry`);
     for (const id of order) {
-      if (id !== pkg.id) console.log(`  [dry-run] would enable required package: ${id}`);
+      if (id !== pkg.id) console.log(`  [dry-run] would enable included package: ${id}`);
       await applyPackageComponents(catalog.find((p) => p.id === id), { dryRun: true });
     }
     return { ok: true, outcomes: [], recommendations: disabledRecommendations(pkg, catalog, order), changedPackageIds: [] };
@@ -533,7 +533,7 @@ export async function enablePackage(rest, changed = new Set()) {
   console.log(`enabling: ${pkg.label}`);
   setPackageEnabled(pkg.id, true, loadPackageCatalog({ includeUnavailable: true }));
   const blocked = await applyInOrder(order, catalog, async (target) => {
-    if (target.id !== pkg.id) console.log(`enabling required package: ${target.label}`);
+    if (target.id !== pkg.id) console.log(`enabling included package: ${target.label}`);
     changed.add(target.id);
     await applyPackageComponents(target);
   });
@@ -751,7 +751,7 @@ export async function disablePackage(rest, changed = new Set()) {
   const keepers = rootsRequiring(catalog, pkg.id, roots);
   if (!isRoot && keepers.length && !cascade) {
     throw new PackageMutationError(
-      `cannot disable ${pkg.id}; it is on because selected packages require it: ${keepers.join(", ")}\n` +
+      `cannot disable ${pkg.id}; it is on because selected packages include it: ${keepers.join(", ")}\n` +
       `rerun with --cascade to disable them too`,
     );
   }
@@ -773,20 +773,20 @@ export async function disablePackage(rest, changed = new Set()) {
     console.log(`[dry-run] would disable: ${pkg.label}`);
     for (const id of deselect) console.log(`  [dry-run] mark ${id} deselected in registry`);
     for (const id of order) await removePackageComponents(catalog.find((p) => p.id === id), { dryRun: true });
-    if (keptOnBy.length) console.log(`  [dry-run] ${pkg.id} would stay on: required by ${keptOnBy.join(", ")}`);
+    if (keptOnBy.length) console.log(`  [dry-run] ${pkg.id} would stay on: included in ${keptOnBy.join(", ")}`);
     return { ok: true, outcomes: [], keptOnBy, changedPackageIds: [] };
   }
 
   console.log(`disabling: ${pkg.label}`);
   for (const id of deselect) setPackageEnabled(id, false, catalog);
   const blocked = await applyInOrder(order, catalog, async (target) => {
-    if (target.id !== pkg.id) console.log(`disabling ${deselect.includes(target.id) ? "dependent" : "no longer required"} package: ${target.label}`);
+    if (target.id !== pkg.id) console.log(`disabling ${deselect.includes(target.id) ? "dependent" : "no longer included"} package: ${target.label}`);
     changed.add(target.id);
     await removePackageComponents(target);
   });
   const outcomes = probeOutcomes(catalog, order, blocked);
   printOutcomes(outcomes);
-  if (keptOnBy.length) console.log(`  ${pkg.id} stays on: required by ${keptOnBy.join(", ")}`);
+  if (keptOnBy.length) console.log(`  ${pkg.id} stays on: included in ${keptOnBy.join(", ")}`);
   return { ok: blocked.size === 0, outcomes, keptOnBy, changedPackageIds: [...changed] };
 }
 

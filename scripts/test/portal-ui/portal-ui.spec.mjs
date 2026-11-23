@@ -161,7 +161,7 @@ test.describe("Agents page", () => {
     const sessionCloseRow = section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) });
     await sessionCloseRow.getByRole("button", { name: "Package Dependencies" }).click();
     const popover = sessionCloseRow.locator(".package-deps");
-    await expect(popover.locator(".package-deps-head")).toHaveText(["Required Packages", "Recommended Packages"]);
+    await expect(popover.locator(".package-deps-head")).toHaveText(["Included Packages", "Recommended Packages"]);
     await expect(popover.locator("[data-slot=requires] .package-deps-label")).toHaveText([chained.label, dependency.label]);
     await expect(popover.locator("[data-slot=recommends] .package-deps-label")).toHaveText([companion.label]);
     await expect(popover.locator("[data-slot=recommends] .package-deps-state")).toHaveText(["off"]);
@@ -227,7 +227,7 @@ test.describe("Agents page", () => {
     await expect(modal.locator("button.modal-requires-item")).toHaveCount(0);
     await modal.locator("#modal-close").click();
 
-    // A package with no requirements shows no Requires line.
+    // A package with no requirements shows no Includes line.
     await page.locator(".item-label", { hasText: companion.label }).first().click();
     await expect(modal.locator("#modal-requires")).toBeHidden();
     await modal.locator("#modal-close").click();

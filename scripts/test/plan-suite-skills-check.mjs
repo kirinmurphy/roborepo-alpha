@@ -632,8 +632,10 @@ validatePackageCatalog(catalog);
 
 const byId = new Map(catalog.map((pkg) => [pkg.id, pkg]));
 assert.ok(byId.has(PLAN_SUITE_PACKAGE), `catalog missing package: ${PLAN_SUITE_PACKAGE}`);
-assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).requires, ["technical-writing", "implementation-review", "test-harness", "code-style"], `${PLAN_SUITE_PACKAGE} requires`);
-assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).recommends, ["javascript-typescript", "feature-verification"], `${PLAN_SUITE_PACKAGE} recommends`);
+assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).requires, ["technical-writing", "implementation-review", "test-harness", "code-style", "feature-verification"], `${PLAN_SUITE_PACKAGE} requires`);
+assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).recommends || [], [], `${PLAN_SUITE_PACKAGE} recommends nothing`);
+assert.deepEqual(byId.get("technical-writing").recommends, ["code-style", "test-harness"], "technical-writing recommends");
+assert.deepEqual(byId.get("implementation-review").recommends, ["code-style"], "implementation-review recommends");
 assert.deepEqual(byId.get("javascript-typescript").requires, ["code-style"], "javascript-typescript requires");
 assert.deepEqual(byId.get("javascript-typescript").recommends || [], [], "javascript-typescript recommends nothing");
 assert.deepEqual(byId.get("react").requires, ["javascript-typescript", "code-style"], "react requires");

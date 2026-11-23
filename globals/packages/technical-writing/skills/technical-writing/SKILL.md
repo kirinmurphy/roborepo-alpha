@@ -24,7 +24,6 @@ whole workflow or recursively load its dependencies; apply each trigger to the a
 | Skill | Relationship | Load when | Contributes |
 | --- | --- | --- | --- |
 | `code-style` | recommends | The document specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints the guidance must respect |
-| `javascript-typescript` | recommends | The document prescribes JS/TS implementation choices — ESM, exports, types, framework-less DOM structure; not merely a JS/TS path | Language and markup conventions the guidance must not contradict |
 | `test-harness` | recommends | The document proposes tests, verification commands, or a regression strategy; not recording existing test results | Test selection and observable-behavior assertions |
 
 This skill is agnostic to document-specific workflows. Apply content, structure, and ownership

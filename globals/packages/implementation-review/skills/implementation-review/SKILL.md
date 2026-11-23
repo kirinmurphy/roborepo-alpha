@@ -38,7 +38,6 @@ Load these when the scope calls for them; do not wait to be asked for them by na
 | Skill | Relationship | Load when | Contributes |
 | --- | --- | --- | --- |
 | `code-style` | recommends | The scope places code: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints the convention checks apply |
-| `javascript-typescript` | recommends | The scope changes JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
 
 ## Checklist
 

@@ -33,7 +33,6 @@ Load these as part of the review; do not wait to be asked for them by name.
 | `technical-writing` | requires | **Always**: promotion rewrites plan prose | Section content, representation, and reader clarity |
 | `test-harness` | requires | The plan proposes tests, verification commands, or a regression strategy | Test selection and observable-behavior assertions |
 | `code-style` | requires | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
-| `javascript-typescript` | recommends | The plan touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
 
 Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
 a `recommends` row whose skill the session does not list is skipped and named once in the final report.

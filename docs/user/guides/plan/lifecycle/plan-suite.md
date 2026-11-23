@@ -452,16 +452,16 @@ Suite commands load helper skills, each from its own package. The suite declares
 
 | Package | Relationship | What it means for you |
 | --- | --- | --- |
-| `technical-writing`, `test-harness`, `implementation-review`, `code-style` | Required | Enabling `plan-suite` turns them on, and they stay on while it is on |
-| `javascript-typescript`, `feature-verification` | Recommended | Offered once when you enable `plan-suite`; never turned on for you |
+| `technical-writing`, `test-harness`, `implementation-review`, `code-style`, `feature-verification` | Included | Enabling `plan-suite` turns them on, and they stay on while it is on |
 
 `implementation-review` holds the review rubric that `/plan-execute`, `/plan-review`, `/plan-close`,
 and `/session-close` share. It has no toggle or command of its own: the Agents page lists it under
-**Requires** when you open the Development Planning Lifecycle or `/session-close` card.
+**Included Packages** when you open the Development Planning Lifecycle or `/session-close` card's
+Package Dependencies.
 
-A command loads a recommended skill when the work calls for it and it is on. When it is off, the
-command continues without it and names the skip once in its report ("Skipped
-`feature-verification`: not enabled"). No command asks you to enable a package while it runs.
+The suite recommends nothing beyond what it includes. A command loads an included skill when the
+work calls for it, for example `feature-verification` only when delivered behavior needs a
+demonstration. No command asks you to enable a package while it runs.
 
 ## Open The Plans Page
 

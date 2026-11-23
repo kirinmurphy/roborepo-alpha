@@ -302,7 +302,7 @@ for (const pkgId of packageIds) {
     assert.deepEqual(effective(), ["dep-leaf", "dep-shared"], "a directly selected dependency survives its parent");
     ok("package", "enable", "dep-parent-a");
     out = ok("package", "disable", "dep-shared");
-    assert.match(out, /dep-shared stays on: required by dep-parent-a/);
+    assert.match(out, /dep-shared stays on: included in dep-parent-a/);
     assert.ok(!registry().packages.includes("dep-shared"), "the root is removed");
     assert.deepEqual(effective(), ["dep-leaf", "dep-parent-a", "dep-shared"], "the dependency stays effective through its parent");
 
@@ -310,7 +310,7 @@ for (const pkgId of packageIds) {
     const before = fs.readFileSync(registryFile, "utf8");
     const refused = run("package", "disable", "dep-leaf");
     assert.equal(refused.status, 2, "disabling a derived-only dependency is refused");
-    assert.match(refused.stderr, /it is on because selected packages require it: dep-parent-a/);
+    assert.match(refused.stderr, /it is on because selected packages include it: dep-parent-a/);
     assert.equal(fs.readFileSync(registryFile, "utf8"), before, "a refused disable changes nothing");
     out = ok("package", "disable", "dep-leaf", "--cascade");
     assert.deepEqual(effective(), [], "--cascade turns the dependency off with its parents");

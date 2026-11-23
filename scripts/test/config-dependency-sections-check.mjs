@@ -102,7 +102,7 @@ try {
 
   const printed = run(cli, "config", "status");
   assert.doesNotMatch(printed, /Required dependencies/, "config status prints no required list");
-  assert.match(printed, /\[x\] Deps deps-planner\n {6}Dependency section fixture\n {6}requires: Deps deps-leaf, Deps deps-review\n/,
+  assert.match(printed, /\[x\] Deps deps-planner\n {6}Dependency section fixture\n {6}includes: Deps deps-leaf, Deps deps-review\n/,
     "config status names a row's requirements under it");
   assert.doesNotMatch(printed, /Recommended dependencies/, "config status prints no section recommended list");
   assert.match(printed, /\n {6}recommends: Deps deps-companion \(off\), Deps deps-sibling \(off\)\n/,

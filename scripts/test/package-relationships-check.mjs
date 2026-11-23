@@ -22,22 +22,21 @@ const run = (...args) => {
 };
 const roots = () => JSON.parse(fs.readFileSync(path.join(stateRoot, "enabled-packages.json"), "utf8")).packages;
 const status = (id) => JSON.parse(run("package", "status", id, "--json"));
-const REQUIRED = ["implementation-review", "technical-writing", "test-harness", "code-style"];
+const REQUIRED = ["implementation-review", "technical-writing", "test-harness", "code-style", "feature-verification"];
 
 try {
   const out = run("package", "enable", "plan-suite");
   assert.deepEqual(roots(), ["plan-suite"], "only plan-suite is recorded as a selection");
   for (const id of REQUIRED) assert.equal(status(id).status, "enabled", `${id} is on through plan-suite`);
-  assert.match(out, /recommended \(not enabled\): javascript-typescript, feature-verification\n/, "a non-interactive enable lists the recommendations");
-  for (const id of ["javascript-typescript", "feature-verification"]) {
-    assert.equal(status(id).enabled, false, `${id} is offered, never enabled`);
-  }
+  // Everything plan-suite and what it includes recommend, it already includes.
+  assert.doesNotMatch(out, /recommended \(not enabled\)/, "plan-suite has nothing left to recommend");
+  assert.equal(status("javascript-typescript").enabled, false, "javascript-typescript is neither included nor turned on");
 
   // Recommendations are flattened: session-close offers its own and those of implementation-review,
   // which it requires, except what is already on.
   run("package", "disable", "plan-suite");
   const closeOut = run("package", "enable", "session-close");
-  assert.match(closeOut, /recommended \(not enabled\): test-harness, plan-suite, code-style, javascript-typescript\n/,
+  assert.match(closeOut, /recommended \(not enabled\): test-harness, plan-suite, code-style\n/,
     "session-close offers its own recommendations and those of what it requires");
   run("package", "disable", "session-close");
   run("package", "enable", "plan-suite");

@@ -11,8 +11,7 @@
     "order": 5
   },
   "recommends": [
-    "code-style",
-    "javascript-typescript"
+    "code-style"
   ],
   "resources": [
     {

@@ -960,6 +960,7 @@ dialog#config-modal .modal-path {
   background: none;
   color: var(--ink);
   font: inherit;
+  font-size: var(--text-xs);
   text-align: left;
   cursor: pointer;
 }

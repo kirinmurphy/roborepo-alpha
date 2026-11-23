@@ -14,8 +14,9 @@ Each snapshot package carries `selectable`, `selection` (`selected`, `required`,
 `catalog` from the normal rows. Each package row carries `requires[]`: its transitive required
 packages as references (`id`, `label`, `active`, and the `inspect` target and cost their own row
 would have). These references do not suppress a selectable catalog-visible package's own row.
-The source popup lists a row's references under **Requires**, each opening that package's source
-with **Back** to the row. `roborepo config status` prints them as a `requires:` line under the row.
+The source popup lists a row's references under **Includes** (the UI's word for `requires`), each
+opening that package's source with **Back** to the row. `roborepo config status` prints them as an
+`includes:` line under the row.
 Each row also
 carries `recommends[]`: its flattened recommendations (`recommendedClosure`: its own and those of
 every package it requires, minus what it requires), less hidden or non-selectable ones, as references with the same fields plus their own `requires[]`. The row's

@@ -12,10 +12,7 @@
     "technical-writing",
     "implementation-review",
     "test-harness",
-    "code-style"
-  ],
-  "recommends": [
-    "javascript-typescript",
+    "code-style",
     "feature-verification"
   ],
   "resources": [

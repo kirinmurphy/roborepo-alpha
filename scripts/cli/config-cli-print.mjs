@@ -113,7 +113,7 @@ export function printConfigStatus(view) {
         console.log(`  ${check(item.active)} ${item.label}${badges}`);
         if (item.description) console.log(`      ${item.description}`);
         if (item.note) console.log(`      ${item.note}`);
-        if (item.requires?.length) console.log(`      requires: ${item.requires.map((ref) => ref.label).join(", ")}`);
+        if (item.requires?.length) console.log(`      includes: ${item.requires.map((ref) => ref.label).join(", ")}`);
         if (item.recommends?.length) console.log(`      recommends: ${item.recommends.map((ref) => `${ref.label}${ref.active ? "" : " (off)"}`).join(", ")}`);
         if (!item.active && item.hint) console.log(`      → ${item.hint}`);
       }

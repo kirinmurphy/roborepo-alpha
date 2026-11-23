@@ -196,7 +196,7 @@ export async function mutatePackage(id, enabled, { dryRun = false } = {}) {
 // One line for the portal toast: the target's own outcome, plus what kept it on or went wrong.
 function mutationMessage(id, enabled, result) {
   const own = result.outcomes.find((entry) => entry.id === id);
-  if (result.keptOnBy?.length) return `${id} stays on: required by ${result.keptOnBy.join(", ")}`;
+  if (result.keptOnBy?.length) return `${id} stays on: included in ${result.keptOnBy.join(", ")}`;
   const failed = result.outcomes.find((entry) => entry.outcome === "blocked" || entry.outcome === "partial");
   if (failed) return `${failed.outcome}: ${failed.id}${failed.message ? ` (${failed.message})` : ""}`;
   return `${own?.outcome || (enabled ? "enabled" : "disabled")}: ${id}`;
