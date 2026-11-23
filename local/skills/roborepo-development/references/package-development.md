@@ -45,9 +45,9 @@ Four ways skills relate, by what the user controls:
 
 | Concept | What the user controls | Example | Declared by |
 | --- | --- | --- | --- |
-| **Package** | One switch. Every resource in it turns on and off together. | `plan-suite`, `caveman` | `package.config.json` |
+| **Package** | One switch. Every resource in it turns on and off together. | `plan-suite`, `usage-statusline` | `package.config.json` |
 | **Collection** | Each member has its own switch, plus Select All / Deselect All for the group | None built in today; the portal still renders the switch for any such category | A category with `bulkToggle: true` in `manifests/inventory/package-categories.json` |
-| **Category** | Each member has its own switch, with no group switch | Code Conventions; Development Workflows (`plan-suite` and `session-close`) | A category without `bulkToggle` |
+| **Category** | Each member has its own switch, with no group switch | Code Conventions; Monitoring (`usage-statusline` and `capture-dense-bash`) | A category without `bulkToggle` |
 | **Dependency** | Nothing directly. It turns on because a selected package `requires` it, and off with the last one. A `selectable: false` package is only ever a dependency. | A package named in another's `requires` | `requires` in the parent manifest |
 
 **A package holds skills that are only correct together; a collection holds skills that are useful
@@ -121,14 +121,14 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `description` | yes | non-empty; shown in portal |
 | `lifecycle` | no (defaults `optional`) | `optional` or `system` (`PACKAGE_LIFECYCLES`) |
 | `defaultEnabled` | no (defaults `false`) | boolean; see Default-selection semantics below |
-| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (including `token-optimization`, `monitoring`, `skills-dev-lifecycle`, `skills-writing`, `skills-code-quality`, `code-conventions`, `chat-time-output`, `additional-agents-md-rules`, and `integrations`) |
+| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (`code-conventions`, `chat-time-output`, `skills-dev-lifecycle`, `skills-code-quality`, `skills-writing`, `integrations`, and `monitoring`, in page order) |
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; they join the effective set automatically. Cycle-checked, missing-id-checked, no self-reference |
 | `recommends` | no | array of package IDs; offered once when the parent is enabled (portal and interactive CLI ask, scripts and the setup wizard print one line), never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
 | `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse, except that `disable` removes one still recorded as a root (an older registry, or a manifest that later set `selectable: false`). Cannot combine with `defaultEnabled: true`, and needs `presentation.visibility` `dependency` or `hidden` (a `catalog` row would have no switch) |
 | `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Includes** in the source popup of each package that requires it), or `hidden` (no UI row) |
 | `resources` | yes | array — see Resource types |
-| `urls` | no | optional array shown in portal (see e.g. `caveman`) |
+| `urls` | no | optional array of `{ label, url }` links shown in the portal |
 
 There is no `.schema.json` file — validation is hand-rolled JS, not JSON Schema. Do not add one
 speculatively; the current approach is deliberate (see `validatePackageCatalog`).
@@ -186,7 +186,7 @@ Codex). Adding a harness never means adding a method for one package's setting.
 | `set` | Writes the value when the key is absent, already equal, or recorded as RoboRepo's. An unmanaged different value is left and reported as a conflict. The prior state is recorded in `owned-scalars-state.mjs`. | Restores the recorded prior value, or removes a key RoboRepo introduced. A value changed since enable is left. |
 | `union` | Adds the missing items to the list at `path`. With `delimiter` the list is a delimited string; `"path"` means the OS path-list separator. | Removes only the package's items; an emptied list loses its key. |
 
-- `path` is an array of keys, so `["enabledPlugins", "caveman@caveman"]` needs no escaping. In
+- `path` is an array of keys, so `["enabledPlugins", "example@marketplace"]` needs no escaping. In
   TOML, `[...table, key]` addresses `key` under `[table]`.
 - Two packages may not `set` the same path; `validatePackageCatalog` claims each one.
 - `label` names the component in package status and in "Installed outside RoboRepo" badges.

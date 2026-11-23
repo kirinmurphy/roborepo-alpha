@@ -16,11 +16,12 @@ import { startHermeticPortal } from "./lib/portal-cleanup.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 
-// The packages the Plans onboarding banner enables in one request: plan-suite and session-close,
-// the members of the Development Workflows section. That section has no Select All switch, so the
-// banner is the endpoint's caller; the endpoint itself takes any package ids. Cheap skill-only
-// packages — fast to enable/disable, no MCP/service side effects on a bare fixture HOME.
-const SECTION_IDS = ["plan-suite", "session-close"];
+// The Plans onboarding banner enables plan-suite, the one member of the Development Workflows
+// section, through this endpoint; the endpoint itself takes any package ids. The batches below use
+// the Writing Assistants packages: cheap skill-only packages, fast to enable/disable, with no
+// MCP/service side effects on a bare fixture HOME.
+const BANNER_IDS = ["plan-suite"];
+const SECTION_IDS = ["case-study-pack", "technical-writing"];
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-config-bulk-"));
 const home = tmp;
@@ -78,11 +79,14 @@ async function postBulk(ids, enabled) {
 
 async function snapshotSection() {
   const snap = await (await fetch(`${base}/api/config`)).json();
-  const section = (snap.behaviorView || []).find((s) => s.categoryId === "skills-dev-lifecycle");
-  assert.ok(section, "skills-dev-lifecycle section should be in behaviorView");
-  assert.equal(section.bulkToggle, false, "Development Workflows ships no Select All switch");
-  assert.deepEqual(section.items.map((item) => item.id).sort(), [...SECTION_IDS].sort(),
+  const lifecycle = (snap.behaviorView || []).find((s) => s.categoryId === "skills-dev-lifecycle");
+  assert.ok(lifecycle, "skills-dev-lifecycle section should be in behaviorView");
+  assert.equal(lifecycle.bulkToggle, false, "Development Workflows ships no Select All switch");
+  assert.deepEqual(lifecycle.items.map((item) => item.id), BANNER_IDS,
     "the Development Workflows section holds exactly the onboarding banner's packages");
+  const section = (snap.behaviorView || []).find((s) => s.categoryId === "skills-writing");
+  assert.deepEqual(section.items.map((item) => item.id).sort(), [...SECTION_IDS].sort(),
+    "the Writing Assistants section holds the batch's packages");
   const byId = new Map(section.items.map((item) => [item.id, item.active]));
   return { section, byId };
 }
@@ -108,10 +112,10 @@ try {
   for (const id of SECTION_IDS) assert.equal(byId.get(id), true, `${id} still on after no-op batch`);
 
   // ── mixed -> enable-all: pre-disable one row individually, then batch-enable ──
-  runNode([cli, "package", "disable", "plan-suite"], "individual disable of one member");
+  runNode([cli, "package", "disable", "case-study-pack"], "individual disable of one member");
   ({ byId } = await snapshotSection());
-  assert.equal(byId.get("plan-suite"), false, "plan-suite off after individual toggle");
-  assert.equal(byId.get("session-close"), true, "session-close untouched");
+  assert.equal(byId.get("case-study-pack"), false, "case-study-pack off after individual toggle");
+  assert.equal(byId.get("technical-writing"), true, "technical-writing untouched");
 
   res = await postBulk(SECTION_IDS, true);
   assert.equal(res.status, 200);
@@ -135,9 +139,9 @@ try {
   assert.equal(bad.status, 400, "malformed body rejected");
 
   // ── individual endpoint still works beside the batch one ──
-  runNode([cli, "package", "enable", "plan-suite"], "individual enable still works");
+  runNode([cli, "package", "enable", "case-study-pack"], "individual enable still works");
   ({ byId } = await snapshotSection());
-  assert.equal(byId.get("plan-suite"), true, "individual toggle path unaffected by bulk endpoint");
+  assert.equal(byId.get("case-study-pack"), true, "individual toggle path unaffected by bulk endpoint");
 
   // ── in-flight lock, deterministic: two same-tick invocations in-process. The first sets the
   // module flag synchronously before its first await, so the second must get 409. Runs under the

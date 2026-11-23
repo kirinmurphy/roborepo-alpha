@@ -21,7 +21,7 @@ import { loadSlashCommandPlan } from "../cli/slash-commands.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 const normalize = (text) => text.replace(/\s+/g, " ");
-// The plan skills ship in one package; session-close is its own.
+// The plan skills ship in one package; other skills are each their own.
 const PLAN_SUITE_PACKAGE = "plan-suite";
 const packageOf = (id) => (id.startsWith("plan-") ? PLAN_SUITE_PACKAGE : id);
 const readSkill = (id) => normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", packageOf(id), "skills", id, "SKILL.md"), "utf8"));
@@ -310,7 +310,6 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "`NOT_TESTED_UNEXPLAINED`",
     "`roborepo plans submit` and `plans preflight` refuse the second",
   ]);
-  includesAll("session-close", readSkill("session-close"), ["Run a check an agent can run instead of listing it", "`Needs a person: <why>`"]);
   includesAll("feature-verification", readSkill("feature-verification"), ["Run `roborepo browser run --serve` as a bare call"]);
   const write = readSkill("plan-write");
   assert.ok(write.includes("Change a plan only through `roborepo plans save`"), "plan-write: writes through the store, not before editing");
@@ -442,14 +441,14 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // relationship, never prompts to enable a package, and /plan-close repairs agent-resolvable gaps
 // before refusing. ---
 {
-  const suite = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
+  const suite = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"];
   for (const id of suite) {
     const skill = readSkill(id);
     includesAll(`${id} paired skills`, skill, ["## Paired Skills", "| Skill | Relationship | Load when | Contributes |", "the paired-skill rule in Skill Loading", "Never ask the user to enable a package"]);
     for (const phrase of ["Enable it, or skip it", "host's skill/package manager"]) {
       assert.ok(!skill.includes(phrase), `${id}: paired skills no longer run an enable-or-skip check ("${phrase}")`);
     }
-    if (id !== "session-close") includesAll(`${id} plan naming`, skill, ["Name the plan by its H1 title, with its id in parentheses on first mention only"]);
+    includesAll(`${id} plan naming`, skill, ["Name the plan by its H1 title, with its id in parentheses on first mention only"]);
     if (["plan-promote", "plan-execute"].includes(id)) {
       const report = id === "plan-execute"
         ? readPackageFile("plan-suite/skills/plan-execute/references/final-report.md")
@@ -594,7 +593,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "A silent pass is indistinguishable from a skipped one",
     "Functionality gaps", "Naming and intuitiveness", "Project-pattern conformance",
   ]);
-  for (const id of ["plan-execute", "plan-review", "plan-close", "session-close"]) {
+  for (const id of ["plan-execute", "plan-review", "plan-close"]) {
     const skill = readSkill(id);
     assert.ok(skill.includes("`implementation-review`"), `${id}: references implementation-review`);
     for (const phrase of [...CONVENTION_CHECK_PHRASES, "## Risk Checkpoints", "database schema and migrations"]) {
@@ -605,11 +604,6 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Then run `implementation-review` over the plan-owned implementation",
     "makes the plan incomplete at the verdict",
     "`test-harness` decides which checks those are",
-  ]);
-  includesAll("session-close review", readSkill("session-close"), [
-    "Run `implementation-review` over the scoped files",
-    "are must-fix items in step 5's handoff",
-    "Skip this step only if there is no code diff this session",
   ]);
 }
 
@@ -639,8 +633,7 @@ assert.deepEqual(byId.get("implementation-review").recommends, ["code-style"], "
 assert.deepEqual(byId.get("javascript-typescript").requires, ["code-style"], "javascript-typescript requires");
 assert.deepEqual(byId.get("javascript-typescript").recommends || [], [], "javascript-typescript recommends nothing");
 assert.deepEqual(byId.get("react").requires, ["javascript-typescript", "code-style"], "react requires");
-assert.deepEqual(byId.get("session-close").requires, ["implementation-review"], "session-close requires");
-assert.deepEqual(byId.get("session-close").recommends, ["test-harness", "plan-suite"], "session-close recommends");
+assert.ok(!byId.has("session-close"), "session-close is archived, out of the catalog");
 const review = byId.get("implementation-review");
 assert.equal(review.selectable, false, "implementation-review is dependency-only");
 assert.equal(review.presentation.visibility, "dependency", "implementation-review has no Config row");

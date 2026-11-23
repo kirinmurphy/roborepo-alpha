@@ -5,8 +5,8 @@
 //   it when disabled.
 // - The rules load every turn, so they stay within their size budget and never repeat a sentence
 //   the always-on shared fragments already say.
-// - With caveman enabled too, the precedence paragraph that keeps outcome, decisions, and evidence
-//   status is still rendered.
+// - The precedence paragraph that keeps outcome, decisions, and evidence status under a caveman
+//   mode (the caveman package is archived; the external plugin can still enable one) is rendered.
 // - The marker packages stand alone: no `requires`, and each states its own placement.
 // - No live file still names the old `response-shape` package.
 import assert from "node:assert/strict";
@@ -40,11 +40,10 @@ for (const sentence of sentences(rules)) {
   assert.ok(!shared.includes(sentence), `response-output repeats a shared fragment: "${sentence}"`);
 }
 
-// ---- Caveman coexistence ----
-const both = normalize(renderRulesPreview("claude", ["response-output", "caveman"]));
-assert.ok(both.includes("Use caveman full by default."), "caveman's own rule renders");
-assert.ok(both.includes("an enabled caveman mode counts as one"), "the caveman precedence sentence renders beside caveman");
-assert.ok(both.includes("Marking something unverified is evidence status, not hedging."));
+// ---- Caveman precedence ----
+const alone = normalize(renderRulesPreview("claude", ["response-output"]));
+assert.ok(alone.includes("an enabled caveman mode counts as one"), "the caveman precedence sentence renders");
+assert.ok(alone.includes("Marking something unverified is evidence status, not hedging."));
 
 // ---- Marker packages stand alone ----
 const catalog = loadPackageCatalog({ includeUnavailable: true });

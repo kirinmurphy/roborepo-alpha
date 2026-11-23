@@ -78,7 +78,7 @@ export async function bundleCommand(args) {
 }
 
 // Interactive onboarding, organized around the four user-facing behavior sections that the /agents
-// web portal shows (Token Optimization, Commands, Code Conventions, Permissions) rather than the
+// web portal shows (Code Conventions, Development Workflows, Monitoring, Permissions) rather than the
 // internal bundle list. Each toggleable item drives the same config-mutate primitives the web POST
 // endpoints use, so terminal and web stay in lockstep. Permissions are read-only here.
 // Non-TTY (headless) keeps applying the default configuration, the same set install wires up.
@@ -119,12 +119,6 @@ function markOnboarded() {
 // import cycle (telemetry.mjs → presets.mjs). Returns { ok, message }.
 async function applyItemToggle(section, item, enabled) {
   if (item.toggle === "package") return mutatePackage(item.id, enabled);
-  if (section.category === "Token Optimization") {
-    // caveman and telemetry are packages (telemetry via a service component), so they route through
-    // the one generic package mutate.
-    if (["caveman", "telemetry"].includes(item.id)) return mutatePackage(item.id, enabled);
-    return { ok: false, message: `${item.label} is managed elsewhere (not toggleable here)` };
-  }
   if (section.category === "Chat-Time Output") {
     // The three inline chat-note behaviors are rules packages; route through the generic mutate.
     return mutatePackage(item.id, enabled);
@@ -386,7 +380,7 @@ function printIntroWelcome() {
   console.log("Main commands");
   console.log("  roborepo web        manage your settings online");
   console.log("  roborepo package manage    choose which behaviors are enabled");
-  console.log("  roborepo package enable X   turn on a package (caveman, telemetry, ...)");
+  console.log("  roborepo package enable X   turn on a package (telemetry, test-harness, ...)");
   console.log("  roborepo update     re-apply config after pulling changes");
   console.log("");
   console.log("Run `roborepo --help` for all commands.");

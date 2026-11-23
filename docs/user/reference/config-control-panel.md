@@ -103,8 +103,8 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
   on, the button reads **Done**. Turning a package on there opens no further list of its own
   recommendations. The terminal setup
   wizard asks nothing: after it applies your choices it prints one line,
-  `recommended (not enabled): test-harness, plan-suite, code-style — enable with: roborepo package enable <id>`
-  after you select `/session-close`, naming what the packages you selected recommend that is still off.
+  `recommended (not enabled): code-style, test-harness — enable with: roborepo package enable <id>`
+  after you select Technical Writing, naming what the packages you selected recommend that is still off.
 - Nesting is flattened. A package's included packages are everything it requires, directly or
   through another included package. The Config page and terminal call these **included**; the
   manifest field is `requires`. Its recommendations are its own plus those of every package it
@@ -120,11 +120,10 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 
 For example, `plan-suite` (Development Planning Lifecycle) includes `technical-writing`,
 `test-harness`, `implementation-review`, `code-style`, and `feature-verification`, and has nothing
-left to recommend. `session-close` includes `implementation-review` and recommends `test-harness`
-and `plan-suite`; through `implementation-review` it also lists `code-style` as a recommendation.
-`react` includes `javascript-typescript`, which includes `code-style`. Turning on `plan-suite`
-turns on its five included packages; turning off `plan-suite` leaves `implementation-review` on
-while `session-close` is still on.
+left to recommend. `technical-writing` includes nothing and recommends `code-style` and
+`test-harness`. `react` includes `javascript-typescript`, which includes `code-style`. Turning on
+`plan-suite` turns on its five included packages; turning off `plan-suite` leaves `code-style` on
+while `javascript-typescript` is still on.
 
 A selectable included package with `catalog` visibility keeps its own row. Dependency-only
 packages appear under **Includes** in their parents' source popups instead. Clicking a package's
@@ -172,16 +171,14 @@ The panel renders these sections:
   Feature Verification also lives here: its skill has agents verify finished work themselves and
   show the evidence in the conversation (screenshots inline and the steps they took), and it unlocks `roborepo browser` for screenshots and recordings of local
   web apps. Playwright is installed only on first browser use, with your approval.
-- **Token Optimization** — package-level controls such as the Caveman package. Manage Telemetry
-  from **Settings** or **Tokens**.
-- **Monitoring** — packages that observe agent activity and usage.
-- **Development Workflows** — **Development Planning Lifecycle** and `/session-close` each have
-  their own toggle. The `plan-suite` toggle enables all seven plan commands, including
-  `/plan-suite-init` for repository setup.
+- **Development Workflows** — **Development Planning Lifecycle** has one toggle that enables all
+  seven plan commands, including `/plan-suite-init` for repository setup.
 - **Skills - Code Quality** — skills that check and improve code against project patterns.
 - **Writing Assistants** — long-form writing workflows and structured documentation.
-- **Additional Agent Rules** — Branch Safety and Capture Dense Bash.
 - **Integrations** — optional connections between RoboRepo and supported tools.
+- **Monitoring** — the last package section: packages that observe agent activity and usage,
+  **Usage Statusline** and **Capture Dense Bash**. Manage Telemetry from **Settings** or
+  **Tokens**.
 - **Permissions** — flat behavior and command buckets. Named behaviors and arbitrary commands can
   be set to `allow`, `ask`, `deny`, or reset to the manifest default. They render as one merged
   list split by authorship rather than by kind: entries the user customized appear first, each

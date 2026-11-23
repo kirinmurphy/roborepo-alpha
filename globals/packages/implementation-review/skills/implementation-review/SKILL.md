@@ -1,11 +1,11 @@
 ---
 name: implementation-review
-description: "Use when a lifecycle workflow (/plan-execute, /plan-review, /plan-close, or /session-close) reviews implementation quality: it supplies the scope and requirements, and this skill supplies the review rubric, risk checkpoints, severities, finding classes, and report format. Do not use for drafting code, reviewing prose-only documents, choosing tests (test-harness), or ad hoc review requests outside those workflows."
+description: "Use when a lifecycle workflow (/plan-execute, /plan-review, or /plan-close) reviews implementation quality: it supplies the scope and requirements, and this skill supplies the review rubric, risk checkpoints, severities, finding classes, and report format. Do not use for drafting code, reviewing prose-only documents, choosing tests (test-harness), or ad hoc review requests outside those workflows."
 ---
 
 # Implementation Review
 
-The one review rubric that `/plan-execute`, `/plan-review`, `/plan-close`, and `/session-close` use.
+The one review rubric that `/plan-execute`, `/plan-review`, and `/plan-close` use.
 The caller owns the loop: who reviews, how many passes run, where findings are recorded, and what a
 finding blocks. This skill owns what a pass checks and how it reports.
 
@@ -23,8 +23,8 @@ finding blocks. This skill owns what a pass checks and how it reports.
 
 | Input | Example |
 | --- | --- |
-| Scope | A plan's implementation (`git diff <base>...HEAD`), or the files a session edited |
-| Requirements | A plan's acceptance criteria and `## Documentation impact`; for a session, what the user asked for |
+| Scope | A plan's implementation (`git diff <base>...HEAD`) |
+| Requirements | A plan's acceptance criteria and `## Documentation impact` |
 | Gate evidence | CI's result for the head commit, or the affected checks' commands and output |
 | Loaded paired skills | The caller's paired skills that applied to this work |
 

@@ -76,9 +76,9 @@ Examples:
   the rubric checks changed code for flow and cohesion, data and state, and
   comments and abstractions, plus risk checkpoints; length alone is never a
   finding. `plan-review` applies the same rubric once more after syncing base,
-  fixes in the same session, and records human approval; `plan-close` and
-  `session-close` use it too. `implementation-review` is a dependency-only
-  package that `plan-suite` and `session-close` require.
+  fixes in the same session, and records human approval; `plan-close` uses
+  it too. `implementation-review` is a dependency-only package that
+  `plan-suite` requires.
   Deterministic plan rules live in `roborepo plans validate`, the lifecycle
   transitions (`roborepo plans promote|start|submit|reopen|close|archive`),
   `roborepo plans init|show|save|approve|config namespaces`, and
@@ -86,8 +86,6 @@ Examples:
   instead of composing Git commands. The lifecycle itself is declared in
   `manifests/platform/plan-lifecycle.json`.
 - `tighten`: explicit-only review/fix workflow behind `/tighten`.
-- `session-close`: explicit-only session close-out workflow (review, docs, commit,
-  handoff note) behind `/session-close`.
 
 ## Skill-Backed Slash Commands
 
@@ -117,7 +115,6 @@ Current generated examples:
 - `/plan-close` -> `plan-close`
 - `/plan-archive` -> `plan-archive`
 - `/tighten` -> `tighten`
-- `/session-close` -> `session-close`
 
 ## Standalone Slash Commands
 

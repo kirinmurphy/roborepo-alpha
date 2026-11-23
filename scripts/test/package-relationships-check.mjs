@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // The built-in catalog's skill relationships, end to end in a temporary home: enabling plan-suite
-// turns on what it requires without recording it as a selection, implementation-review stays on
-// while either parent that requires it is on, and a required skill missing from disk shows the
-// parent as unhealthy. The generic dependency engine is covered by fixture packages in
+// turns on what it requires without recording it as a selection, they leave with it, react brings
+// javascript-typescript and code-style, and a required skill missing from disk shows the parent as
+// unhealthy. The generic dependency engine is covered by fixture packages in
 // package-lifecycle-check.mjs; this pins the real manifests.
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -32,22 +32,15 @@ try {
   assert.doesNotMatch(out, /recommended \(not enabled\)/, "plan-suite has nothing left to recommend");
   assert.equal(status("javascript-typescript").enabled, false, "javascript-typescript is neither included nor turned on");
 
-  // Recommendations are flattened: session-close offers its own and those of implementation-review,
-  // which it requires, except what is already on.
+  // What plan-suite includes leaves with it.
   run("package", "disable", "plan-suite");
-  const closeOut = run("package", "enable", "session-close");
-  assert.match(closeOut, /recommended \(not enabled\): test-harness, plan-suite, code-style\n/,
-    "session-close offers its own recommendations and those of what it requires");
-  run("package", "disable", "session-close");
-  run("package", "enable", "plan-suite");
+  for (const id of REQUIRED) assert.equal(status(id).enabled, false, `${id} leaves with plan-suite`);
 
-  // Both lifecycle packages require implementation-review; it leaves with the last of them.
-  run("package", "enable", "session-close");
-  run("package", "disable", "plan-suite");
-  assert.equal(status("implementation-review").status, "enabled", "session-close keeps implementation-review on");
-  assert.equal(status("technical-writing").enabled, false, "plan-suite's other requirements leave with it");
-  run("package", "disable", "session-close");
-  assert.equal(status("implementation-review").enabled, false, "disabling both parents removes implementation-review");
+  // react includes javascript-typescript, which includes code-style.
+  run("package", "enable", "react");
+  assert.deepEqual(roots(), ["react"], "only react is recorded as a selection");
+  for (const id of ["javascript-typescript", "code-style"]) assert.equal(status(id).enabled, true, `${id} is on through react`);
+  run("package", "disable", "react");
 
   // A required skill missing from disk leaves its parent unhealthy rather than silently degraded.
   run("package", "enable", "plan-suite");

@@ -51,9 +51,10 @@ export function generatePrompt(action, keys, mode = "repository-aware") {
   );
 }
 
-// The packages the plan suite needs: plan-suite and session-close. The onboarding banner enables them as one unit
-// through the config bulk endpoint (/api/config/packages/bulk): one preflight, one reconcile pass.
-export const PLAN_SUITE_PACKAGES = ["plan-suite", "session-close"];
+// The packages the plan suite needs: plan-suite, which brings what it includes. The onboarding banner
+// enables them as one unit through the config bulk endpoint (/api/config/packages/bulk): one
+// preflight, one reconcile pass.
+export const PLAN_SUITE_PACKAGES = ["plan-suite"];
 
 export function enablePlanSuitePackages() {
   return portalPostJson("/api/config/packages/bulk", {

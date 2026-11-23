@@ -62,12 +62,12 @@ test.describe("Agents page", () => {
 
   test("a package with one skill keeps its command label and opens its source directly", async ({ page }) => {
     await page.goto("/agents");
-    const single = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) });
+    const single = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/case-study$/ }) });
     await expect(single).toHaveCount(1);
     await expect(single.locator(".badge", { hasText: /skills$/ })).toHaveCount(0);
     await single.locator(".item-label").click();
     const modal = page.locator("dialog#config-modal");
-    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator("#modal-path")).toContainText("case-study/SKILL.md");
     await expect(modal.locator(".package-contents")).toHaveCount(0);
     await expect(modal.locator("#modal-back")).toBeHidden();
     await modal.locator("#modal-close").click();
@@ -108,7 +108,9 @@ test.describe("Agents page", () => {
     await expect(page.locator(".packages-intro p")).toHaveText("Extend your harness config. Toggling a package below writes it into every active harness's configuration.");
     // Settings owns the token telemetry toggle; the Agents page does not repeat it.
     await expect(page.getByText("Token Telemetry", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Monitoring", { exact: true })).toHaveCount(0);
+    // Monitoring shows its other packages, never the telemetry row.
+    const monitoring = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Monitoring" }) });
+    await expect(monitoring.locator(".item-label")).toHaveText(["Usage Statusline", "Capture Dense Bash"]);
     await expect(page.getByText("The following elements have a high token use:", { exact: true })).toHaveCount(0);
     await expect(page.locator("#main [data-slot=supported]")).toHaveText("Supported Harnesses: Claude Code, Codex");
     await expect(page.getByRole("button", { name: "Check for harnesses" })).toHaveAttribute("data-btn", "cta");
@@ -124,13 +126,14 @@ test.describe("Agents page", () => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const byId = new Map(snapshot.packages.map((pkg) => [pkg.id, pkg]));
     const planSuite = byId.get("plan-suite");
-    const sessionClose = byId.get("session-close");
+    // case-study-pack stands in for a second Development Workflows row: one command, one skill.
+    const sessionClose = byId.get("case-study-pack");
     const dependency = byId.get("technical-writing");
     const companion = byId.get("tighten");
     const chained = byId.get("code-style");
     expect(planSuite && sessionClose && dependency && companion && chained, "fixture packages exist").toBeTruthy();
     // The edges a dependency-only package would add: one dependency shared by two rows, a chain
-    // past it (session-close -> technical-writing -> code-style), and one recommendation that is off.
+    // past it (case-study -> technical-writing -> code-style), and one recommendation that is off.
     planSuite.requires = ["technical-writing"];
     planSuite.recommends = [];
     sessionClose.requires = ["technical-writing"];
@@ -144,7 +147,10 @@ test.describe("Agents page", () => {
       presentation: { ...dependency.presentation, visibility: "dependency" },
     });
     Object.assign(companion, { enabled: false, selection: "off" });
-    Object.assign(sessionClose, { enabled: false, selection: "off" });
+    Object.assign(sessionClose, {
+      enabled: false, selection: "off",
+      presentation: { ...sessionClose.presentation, category: "skills-dev-lifecycle" },
+    });
     snapshot.behaviorView = buildBehaviorView(snapshot);
     await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
 
@@ -158,14 +164,14 @@ test.describe("Agents page", () => {
 
     // A row's Dependencies popover lists what it requires and what it recommends, each
     // with its state; while the row is off, a note says the recommendations are offered on enable.
-    const sessionCloseRow = section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) });
+    const sessionCloseRow = section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/case-study$/ }) });
     await sessionCloseRow.getByRole("button", { name: "Dependencies" }).click();
     const popover = sessionCloseRow.locator(".package-deps");
     await expect(popover.locator(".package-deps-head")).toHaveText(["Included Packages", "Recommended Packages"]);
     await expect(popover.locator("[data-slot=requires] .package-deps-label")).toHaveText([chained.label, dependency.label]);
     await expect(popover.locator("[data-slot=recommends] .package-deps-label")).toHaveText([companion.label]);
     await expect(popover.locator("[data-slot=recommends] .package-deps-state")).toHaveText(["off"]);
-    await expect(popover.locator("[data-slot=note]")).toHaveText("You will be prompted to add them when enabling /session-close.");
+    await expect(popover.locator("[data-slot=note]")).toHaveText("You will be prompted to add them when enabling /case-study.");
     // Each entry opens that package's detail.
     await popover.locator(".package-deps-entry", { hasText: companion.label }).click();
     await expect(page.locator("dialog#config-modal #modal-path")).toContainText("tighten");
@@ -174,7 +180,7 @@ test.describe("Agents page", () => {
     // A package's popup lists what it requires; each name opens that package's source, and Back
     // returns to the package that requires it.
     const modal = page.locator("dialog#config-modal");
-    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/case-study$/ }) }).locator(".item-label").click();
     await expect(modal.locator("#modal-requires")).toBeVisible();
     await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
     await modal.locator(".modal-requires-item", { hasText: dependency.label }).click();
@@ -188,7 +194,7 @@ test.describe("Agents page", () => {
     await expect(modal.locator("#modal-path")).toContainText("technical-writing/SKILL.md");
     await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label]);
     await modal.locator("#modal-back").click();
-    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator("#modal-path")).toContainText("case-study/SKILL.md");
     await expect(modal.locator(".modal-requires-item")).toHaveText([chained.label, dependency.label]);
     await modal.locator("#modal-close").click();
 
@@ -201,7 +207,7 @@ test.describe("Agents page", () => {
     sessionClose.requires = ["plan-suite"];
     snapshot.behaviorView = buildBehaviorView(snapshot);
     await page.reload();
-    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/case-study$/ }) }).locator(".item-label").click();
     await modal.locator(".modal-requires-item", { hasText: planSuite.label }).click();
     await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
     await expect(modal.locator("#modal-back")).toBeVisible();
@@ -214,15 +220,15 @@ test.describe("Agents page", () => {
     await modal.locator("#modal-back").click();
     await expect(modal.locator("#modal-title")).toHaveText(planSuite.label);
     await modal.locator("#modal-back").click();
-    await expect(modal.locator("#modal-path")).toContainText("session-close/SKILL.md");
+    await expect(modal.locator("#modal-path")).toContainText("case-study/SKILL.md");
     await modal.locator("#modal-close").click();
 
     // A required package with no source to open is listed as plain text, not a button.
     const readOnly = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle")
-      .items.find((item) => item.id === "session-close");
+      .items.find((item) => item.id === "case-study-pack");
     readOnly.requires = [{ id: "mcp-only", label: "MCP Only", active: true, inspect: null, contextCost: null, builtIn: true }];
     await page.reload();
-    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) }).locator(".item-label").click();
+    await section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/case-study$/ }) }).locator(".item-label").click();
     await expect(modal.locator("span.modal-requires-item")).toHaveText("MCP Only");
     await expect(modal.locator("button.modal-requires-item")).toHaveCount(0);
     await modal.locator("#modal-close").click();
@@ -235,7 +241,7 @@ test.describe("Agents page", () => {
 
   test("a package with only requirements opens its dependency references", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
-    const parent = snapshot.packages.find((pkg) => pkg.id === "session-close");
+    const parent = snapshot.packages.find((pkg) => pkg.id === "case-study-pack");
     const dependency = snapshot.packages.find((pkg) => pkg.id === "technical-writing");
     Object.assign(parent, { requires: [dependency.id], resources: [], components: [], skillIds: [] });
     Object.assign(dependency, { selectable: false, presentation: { ...dependency.presentation, visibility: "dependency" } });
@@ -257,8 +263,8 @@ test.describe("Agents page", () => {
 
   test("a group switch counts only rows it can act on, and hides when none are left", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
-    const section = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-dev-lifecycle");
-    expect(section?.items.length, "fixture needs the Development Workflows rows").toBeGreaterThanOrEqual(2);
+    const section = snapshot.behaviorView.find((entry) => entry.categoryId === "skills-writing");
+    expect(section?.items.length, "fixture needs the Writing Assistants rows").toBeGreaterThanOrEqual(2);
     section.bulkToggle = true;
     const [first, ...rest] = section.items;
     Object.assign(first, { active: true, selection: "selected" });
@@ -2755,8 +2761,8 @@ test.describe("Plans card commands", () => {
 });
 
 test.describe("Plans onboarding", () => {
-  const SUITE = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
-  const SUITE_PACKAGES = ["plan-suite", "session-close"];
+  const SUITE = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"];
+  const SUITE_PACKAGES = ["plan-suite"];
 
   test("each suite command's details button opens that command's skill", async ({ page }) => {
     await page.goto("/plans");
@@ -2773,7 +2779,7 @@ test.describe("Plans onboarding", () => {
     }
   });
 
-  test("the enable button turns on the plan-suite and session-close packages in one request", async ({ page }) => {
+  test("the enable button turns on the plan-suite package in one request", async ({ page }) => {
     await page.goto("/plans");
     const token = await page.locator("meta[name=cli-portal-token]").getAttribute("content");
     const bulk = page.waitForRequest((request) => request.url().endsWith("/api/config/packages/bulk") && request.method() === "POST");

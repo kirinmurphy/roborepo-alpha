@@ -33,8 +33,12 @@ assert(
   !catalog.some((pkg) => pkg.origin === "built-in" && pkg.defaultEnabled),
   "built-in packages should all be off by default",
 );
-for (const id of ["telemetry", "caveman", "plan-suite", "session-close"]) {
+for (const id of ["telemetry", "plan-suite", "usage-statusline", "capture-dense-bash"]) {
   assert(packageIds.has(id), `missing package: ${id}`);
+}
+// Archived packages live under globals/packages-archived/ and stay out of the catalog.
+for (const id of ["caveman", "tool-call-optimization", "session-close", "branch-safety"]) {
+  assert(!packageIds.has(id), `archived package is still in the catalog: ${id}`);
 }
 const planSuite = catalog.find((pkg) => pkg.id === "plan-suite");
 assert(planSuite, "missing package: plan-suite");
@@ -42,7 +46,7 @@ assert(!(planSuite.urls || []).length, "Plan Suite should not expose external li
 assert(!packageIds.has("code-intel"), "Code Intelligence composite package should not be present");
 
 const slashNames = loadSlashCommandPlan().commands.map((command) => command.name).sort();
-for (const name of ["case-study", "plan-write", "tighten", "session-close", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "plan-suite-init"]) {
+for (const name of ["case-study", "plan-write", "tighten", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "plan-suite-init"]) {
   assert(slashNames.includes(name), `missing slash command: ${name}`);
 }
 
@@ -92,9 +96,8 @@ assert(snapshot.behaviorView.filter((section) => section.categoryId).slice(0, 2)
 "Code Conventions and Chat-Time Output should be the first two package sections");
 assert(sections.get("Chat-Time Output").items.slice(0, 2).map((item) => item.id).join(",") === "response-output,feature-verification",
   "Response Output and Feature Verification should lead Chat-Time Output");
-const tokenItems = sections.get("Token Optimization").items.map((item) => item.id);
-assert(tokenItems.indexOf("caveman") < tokenItems.indexOf("tool-call-optimization"),
-  "Caveman Plugin should precede Tool Call Optimization");
+assert(!sections.has("Token Optimization") && !sections.has("Additional Agent Rules"),
+  "Token Optimization and Additional Agent Rules are gone");
 assert(sections.get("Code Conventions").items.at(-1)?.id === "tighten", "tighten should be last in Code Conventions");
 assert(sections.get("Code Conventions").items.findIndex((item) => item.id === "react")
   < sections.get("Code Conventions").items.findIndex((item) => item.id === "test-harness"),
@@ -102,15 +105,13 @@ assert(sections.get("Code Conventions").items.findIndex((item) => item.id === "r
 assert(sections.get("Code Conventions").items.findIndex((item) => item.id === "test-harness")
   < sections.get("Code Conventions").items.findIndex((item) => item.id === "supabase-integration-testing"),
 "Test Harness should precede Supabase Integration Testing");
-assert(sections.get("Additional Agent Rules").items.map((item) => item.id).join(",") === "branch-safety,capture-dense-bash",
-  "Additional Agent Rules should contain Branch Safety and Capture Dense Bash in order");
-assert(snapshot.behaviorView.findIndex((section) => section.category === "Additional Agent Rules")
-  > snapshot.behaviorView.findIndex((section) => section.category === "Chat-Time Output"),
-"Additional Agent Rules should follow Chat-Time Output");
-assert(snapshot.behaviorView.filter((section) => section.categoryId).at(-1)?.category === "Additional Agent Rules",
-  "Additional Agent Rules should be the final package section");
-assert(sections.get("Development Workflows").items.map((item) => item.id).join(",") === "plan-suite,session-close",
-  "the Development Workflows section holds the plan-suite package, then session-close");
+// Telemetry is controlled from Settings, so the Config page hides its row; the view still lists it.
+assert(sections.get("Monitoring").items.map((item) => item.id).filter((id) => id !== "telemetry").join(",") === "usage-statusline,capture-dense-bash",
+  "Monitoring should contain Usage Statusline and Capture Dense Bash in order");
+assert(snapshot.behaviorView.filter((section) => section.categoryId).at(-1)?.category === "Monitoring",
+  "Monitoring should be the final package section");
+assert(sections.get("Development Workflows").items.map((item) => item.id).join(",") === "plan-suite",
+  "the Development Workflows section holds the plan-suite package");
 assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows has no Select All switch");
 
 // A package with several skills is labeled by its package label, carries no skill-count badge, and
@@ -144,8 +145,8 @@ assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows
   assert(entrySum >= suite.contextCost.onDemandTokens, "entry costs cover the package cost");
   if (!suite.contextCost.harnessesDiffer) assert(entrySum === suite.contextCost.onDemandTokens, "entry costs add up to the package cost when harnesses agree");
 
-  const single = items.get("session-close");
-  assert(single.label === "/session-close" && single.inspect?.kind === "command-skill",
+  const single = sections.get("Writing Assistants").items.find((item) => item.id === "case-study-pack");
+  assert(single.label === "/case-study" && single.inspect?.kind === "command-skill",
     "a single-skill package keeps its command label and command-skill inspect target");
   assert(!single.badges.some((badge) => /skills$/.test(badge)), "a single-skill package gets no skill-count badge");
 }

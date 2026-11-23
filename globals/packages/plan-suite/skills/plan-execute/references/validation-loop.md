@@ -10,7 +10,7 @@ it, and it judges from the plan and the diff rather than from the implementer's 
 
 This file is how `/plan-execute` runs the Validator and acts on its report. What the Validator
 checks, and how it rates and classes a finding, is the `implementation-review` skill's rubric, which
-`/plan-review`, `/plan-close`, and `/session-close` apply too. `plan-suite` requires that package, so
+`/plan-review` and `/plan-close` apply too. `plan-suite` requires that package, so
 the skill is always available here: load it before the first pass.
 
 ## Running the Validator

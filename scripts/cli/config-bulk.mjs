@@ -1,5 +1,5 @@
 // Bulk enable/disable of a set of packages: a bulkToggle section's Select All switch, or the Plans
-// onboarding banner's plan-suite and session-close. One HTTP request carries the whole set; this
+// onboarding banner's plan-suite. One HTTP request carries the whole set; this
 // module applies it as ONE unit:
 //
 //   preflight (validate every id against the simulated target set) -> diff vs current state ->

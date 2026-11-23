@@ -93,4 +93,3 @@ position against a watcher, and session launching is still a stub.
 | Paired-skill check | Settle required skills at `/plan-promote`, while the user is present. Build on `ejsc769o` |
 | End-to-end evals | Add the full plan flow to `0jped168`, since text pins cannot prove it works |
 | Worktree-entry hook | Added to `46qth5z8` only if agents keep using `change_directory` after the rule change |
-| `/session-close` no-push rule | Left as is, because the user does not use the command. Revisit if it conflicts with the delivery rule in practice |

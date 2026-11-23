@@ -1,4 +1,4 @@
-// <config-item></config-item> — one row in a standard config section (Token Optimization,
+// <config-item></config-item> — one row in a standard config section (Monitoring,
 // Commands, Code Conventions, Chat-Time Output), or in the post-enable recommendations dialog. A
 // row's required packages travel with its inspect click, so the source popup can list them, and a
 // row with required or recommended packages gets a Dependencies popover listing both. Set
