@@ -674,6 +674,7 @@ reads status and opens the terminal.
 - Validation pass 6 at ead9425f and f3192485 (fresh-context subagent): 2 actionable doc findings fixed, test notes added; one escalate open
 - Phase 8 targeted checks at b39f969e: `repository-agent-identity-check.mjs`, `hook-review-launch-check.mjs`, `github-setup-check.mjs`, `github-identity-status-check.mjs` pass; portal UI `agent-identity.spec.mjs` 6/6; `doctor.sh --quiet` passed (99 checks)
 - Validation pass 7 at b39f969e (fresh-context subagent): 1 actionable finding, fixed in d3345f4e; two notes (label wording, fixed in the same commit; focus re-reads for a repo left un-renewed, kept as designed)
+- Validation pass 8 at d3345f4e (fresh-context subagent): clean; loop ended at the eight-pass cap with no fixes left unvalidated
 - Codex TLS: the CA read grants added in 35f1b186 did not work (`/**/*.pem` deny wins); replaced by the CA bundle copy in 8565a475
 
 ## Not tested
