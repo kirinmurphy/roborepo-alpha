@@ -220,7 +220,6 @@ export function createConfigModal() {
 export function createRecommendationsDialog() {
   const dialogEl = document.getElementById("recommendations-modal");
   const titleEl = document.getElementById("recommendations-title");
-  const leadEl = document.getElementById("recommendations-lead");
   const listEl = document.getElementById("recommendations-list");
   const doneEl = document.getElementById("recommendations-done");
   let current = null; // { ids, rowFor, renderRow, settle }
@@ -252,8 +251,7 @@ export function createRecommendationsDialog() {
   // its row element.
   function ask(packageLabel, recommendations, { rowFor, renderRow }) {
     finish();
-    titleEl.textContent = `${packageLabel} is on`;
-    leadEl.textContent = `These packages work well with ${packageLabel}. Turn on any you want:`;
+    titleEl.textContent = `Additional packages recommended for ${packageLabel}`;
     return new Promise((settle) => {
       current = { ids: recommendations.map((rec) => rec.id), rowFor, renderRow, settle };
       refresh();

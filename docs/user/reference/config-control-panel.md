@@ -132,7 +132,7 @@ is hidden when none are left.
 
 A package may also hold several skills. They turn on and off together with the package's one
 toggle; there is no switch for a single skill inside it. Its card shows the package name, never one
-of its commands, and an `<n> skills` badge beside its cost chips. Clicking the name opens a
+of its commands, with no skill-count badge. Clicking the name opens a
 contents view in the source dialog: the package's startup and when-loaded totals, a summary line
 such as `7 skills · 1 rules fragment`, and one row per skill (its command, or its skill ID when it
 has none, a one-line description, and its own cost), followed by a row for the package's rules or

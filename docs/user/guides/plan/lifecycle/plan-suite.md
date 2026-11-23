@@ -95,7 +95,7 @@ package because it is useful in any chat.
 The Plans page shows an onboarding banner until the suite is enabled. Its button enables both
 packages at once, and each command in the list has a **Details** button that shows that command's
 skill. The Agents page shows them under **Development Workflows**: a **Development Planning
-Lifecycle** card with a `7 skills` badge, and a **/session-close** card, each with its own toggle.
+Lifecycle** card and a **/session-close** card, each with its own toggle.
 Click the Development Planning Lifecycle card's name to list its seven skills and its rules
 fragment, each of which opens its source.
 

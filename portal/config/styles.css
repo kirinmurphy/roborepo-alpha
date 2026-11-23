@@ -912,9 +912,10 @@ dialog#config-modal .modal-path {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  border: none;
-  background: none;
-  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--raised);
+  padding: 1px 6px;
   color: var(--dim);
   font: inherit;
   font-size: var(--text-2xs);
@@ -923,6 +924,7 @@ dialog#config-modal .modal-path {
 .package-deps-trigger .menu-button-trigger:hover,
 .package-deps-trigger .menu-button-trigger[aria-expanded="true"] {
   color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
 }
 .package-deps {
   min-width: 240px;
@@ -976,6 +978,7 @@ dialog#config-modal .modal-path {
   flex: 1;
 }
 .package-deps-state {
+  margin-left: 16px;
   color: var(--dim);
   font-size: var(--text-2xs);
 }
@@ -986,13 +989,9 @@ dialog#config-modal .modal-path {
   font-size: var(--text-2xs);
 }
 
-/* Post-enable recommendations dialog: the page's own rows between the lead and the footer. */
+/* Post-enable recommendations dialog: the page's own rows between the head and the footer. */
 .recommendations-body {
   padding: 18px 20px 20px;
-}
-.recommendations-lead {
-  margin: 0 0 12px;
-  color: var(--desc-dim);
 }
 .recommendations-footer {
   display: flex;

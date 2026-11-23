@@ -113,7 +113,7 @@ assert(sections.get("Development Workflows").items.map((item) => item.id).join("
   "the Development Workflows section holds the plan-suite package, then session-close");
 assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows has no Select All switch");
 
-// A package with several skills is labeled by its package label, carries a skill-count badge, and
+// A package with several skills is labeled by its package label, carries no skill-count badge, and
 // opens a contents view whose entries each carry the inspect target a single-skill card would have.
 // A single-skill package keeps today's shape: its command label and command-skill inspect target.
 {
@@ -121,7 +121,7 @@ assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows
   const suite = items.get("plan-suite");
   assert(suite.label === "Development Planning Lifecycle", `plan-suite card label should be its package label, got ${suite.label}`);
   assert(suite.description !== sections.get("Development Workflows").description, "the package and its category describe different things");
-  assert(suite.badges.includes("7 skills"), `plan-suite card should carry a 7 skills badge: ${suite.badges}`);
+  assert(!suite.badges.some((badge) => /skills?$/.test(badge)), `plan-suite card should carry no skill-count badge: ${suite.badges}`);
   assert(suite.inspect?.kind === "package-contents", "plan-suite card label should open the contents view");
   assert(suite.inspect.summary === "7 skills · 1 rules fragment", `contents summary: ${suite.inspect.summary}`);
   const entries = suite.inspect.entries;

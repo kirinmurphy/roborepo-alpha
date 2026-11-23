@@ -26,7 +26,7 @@ test.describe("Agents page", () => {
     await page.goto("/agents");
     const suite = page.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^Development Planning Lifecycle$/ }) });
     await expect(suite).toHaveCount(1);
-    await expect(suite.locator(".badge", { hasText: /^7 skills$/ })).toBeVisible();
+    await expect(suite.locator(".badge", { hasText: /skills$/ })).toHaveCount(0);
 
     await suite.locator(".item-label").click();
     const modal = page.locator("dialog#config-modal");
@@ -158,6 +158,7 @@ test.describe("Agents page", () => {
     const sessionCloseRow = section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) });
     await sessionCloseRow.getByRole("button", { name: "Package Dependencies" }).click();
     const popover = sessionCloseRow.locator(".package-deps");
+    await expect(popover.locator(".package-deps-head")).toHaveText(["Required Packages", "Recommended Packages"]);
     await expect(popover.locator("[data-slot=requires] .package-deps-label")).toHaveText([chained.label, dependency.label]);
     await expect(popover.locator("[data-slot=recommends] .package-deps-label")).toHaveText([companion.label]);
     await expect(popover.locator("[data-slot=recommends] .package-deps-state")).toHaveText(["off"]);
@@ -297,6 +298,7 @@ test.describe("Agents page", () => {
     await row.getByRole("checkbox").dispatchEvent("click");
     const dialog = page.locator("dialog#recommendations-modal");
     await expect(dialog).toBeVisible();
+    await expect(dialog.locator("#recommendations-title")).toHaveText(`Additional packages recommended for ${target.label}`);
     // The page's own row: its label, its description, and its switch.
     const recommendation = dialog.locator("config-item");
     await expect(recommendation.locator(".item-label")).toHaveText(tighten.label);

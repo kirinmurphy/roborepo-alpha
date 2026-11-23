@@ -72,7 +72,6 @@
         </div>
       </div>
       <div class="modal-body recommendations-body">
-        <p class="recommendations-lead" id="recommendations-lead"></p>
         <div class="recommendations-list" id="recommendations-list"></div>
       </div>
       <div class="modal-footer recommendations-footer">
@@ -90,11 +89,11 @@
     <template id="tpl-package-dependencies">
       <div class="package-deps">
         <section class="package-deps-group" data-slot="requires-group" hidden>
-          <h4 class="package-deps-head">Required</h4>
+          <h4 class="package-deps-head">Required Packages</h4>
           <ul class="package-deps-list" data-slot="requires"></ul>
         </section>
         <section class="package-deps-group" data-slot="recommends-group" hidden>
-          <h4 class="package-deps-head">Recommended</h4>
+          <h4 class="package-deps-head">Recommended Packages</h4>
           <ul class="package-deps-list" data-slot="recommends"></ul>
           <p class="package-deps-note" data-slot="note" hidden></p>
         </section>

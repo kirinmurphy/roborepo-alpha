@@ -616,7 +616,7 @@ function packagePresentationItem(item, tools, contextCost = null, { hasVisibleRe
 }
 
 // The card for a package with several skills: always the package label (never one of its
-// commands), a skill-count badge, and a `package-contents` inspect target whose entries each carry
+// commands), and a `package-contents` inspect target whose entries each carry
 // the inspect object that resource would have had on a card of its own.
 function multiSkillPresentationItem(item, tools, contextCost) {
   const toolById = new Map(tools.map((tool) => [tool.id, tool]));
@@ -650,7 +650,7 @@ function multiSkillPresentationItem(item, tools, contextCost) {
   return {
     ...packageItemBase(item, contextCost),
     label: item.label,
-    badges: [`${item.skillIds.length} skills`, ...statusBadges(item)],
+    badges: statusBadges(item),
     inspect: {
       kind: "package-contents",
       id: item.id,
