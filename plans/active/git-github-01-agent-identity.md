@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Run the validation pass over 445fece6, submit for review, merge main in and update PR 82. Separately, the owner runs the guided setup from this branch (node scripts/cli/main.mjs github setup) to store the bot token and turn the identity on
+next_action: Owner answers the Open question on built-up GraphQL merge queries; then rerun /plan-execute to apply it, submit for review, merge main in and update PR 82. Separately, the owner runs the guided setup from this branch (node scripts/cli/main.mjs github setup) to store the bot token and turn the identity on
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -525,11 +525,18 @@ phases build, so run them before Phase 3.
 
 - [x] The `gh api` lift also applies when the hook's own `GH_CONFIG_DIR` is unset (meant for Codex, whose hooks may not see `shell_environment_policy` values); under Claude a session started before the identity was on has no `GH_CONFIG_DIR`, so `gh api` would run as the user, an admin — owner chose an exact match under Claude; fixed (445fece6)
 
+- [x] With the identity on, the hooks lift every `gh api`, so a heredoc or same-command variable query naming `mergePullRequest`, or the `enqueuePullRequest` mutation, merges a pull request although agents never merge — fixed (ead9425f)
+- [x] The docs claim only a file-read query escapes the merge check, and promise the inherited-token check under Codex, whose hooks never see profile-exported variables — fixed (654b3a86)
+- [ ] A merge mutation name the shell builds (`${M}PullRequest`, `$(printf merge)PullRequest`) is not seen, so the bot could merge through `gh api` by deliberate obfuscation — escalated, see Open questions
+
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
 - Validation pass 1 at 43a377d4 (fresh-context subagent): 10 findings above, all fixed
 - Validation pass 2 at 8565a475 (fresh-context subagent): 5 findings above, all fixed
 - Validation pass 3 at a60d58a9 (fresh-context subagent, implementation-review rubric): clean apart from one escalate; its comment note fixed in 1b34375a
+- Validation pass 4 at 445fece6 (fresh-context subagent): clean; its doc-wording note fixed in 9a18caee
+- Validation pass 5 at 9a18caee (fresh-context subagent): 2 actionable findings, fixed in ead9425f
+- Validation pass 6 at ead9425f and f3192485 (fresh-context subagent): 2 actionable doc findings fixed, test notes added; one escalate open
 - Codex TLS: the CA read grants added in 35f1b186 did not work (`/**/*.pem` deny wins); replaced by the CA bundle copy in 8565a475
 
 ## Not tested
@@ -664,7 +671,24 @@ Manual, on the real repo, after Phase 6:
 
 ## Open questions
 
-None open.
+### Whether the merge check should refuse built-up GraphQL queries
+
+Blocks: submitting the plan for review.
+
+With the bot identity on, the push hooks allow `gh api` but deny calls whose command names a merge
+(REST `pulls/<n>/merge`, `merges`, `merge-upstream`; GraphQL `mergePullRequest`,
+`enablePullRequestAutoMerge`, `enqueuePullRequest`, `mergeBranch`), in arguments, heredocs, or
+same-command variables. A name the shell assembles (`M=merge; ... ${M}PullRequest`) or a query read
+from a file is not seen, so an agent that deliberately obfuscates could merge an approved pull request
+as the bot. GitHub still enforces the required approval; the gap is only the "agents never merge" rule.
+
+| Option | Pros | Cons |
+| --- | --- | --- |
+| **A. Keep it a documented limitation** (recommended) | Ordinary `gh api graphql` with variables or `-F query=@file` keeps working; matches the hooks' other text checks, which also stop mistakes, not determined evasion | A deliberately built query can merge an already-approved pull request |
+| B. Deny any `gh api graphql` whose query uses `$`, a backtick, or `@file` | Closes the built-name path | Blocks legitimate queries built from variables or files; agents fall back to asking you |
+
+Why blocked rather than decided: it trades agent capability against a security rule, which the owner
+decides.
 
 ## Decision Log
 
