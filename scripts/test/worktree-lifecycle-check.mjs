@@ -60,6 +60,7 @@ import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
 // its empty folders; an unchanged shell is still removed deepest first.
 {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shell-swap-"));
+  const cwdBefore = process.cwd();
   try {
     const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
     const shell = path.join(tmpRoot, "roborepo-disposable-landing-Swap01");
@@ -88,6 +89,29 @@ import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
     fs.utimesSync(shell, old, old);
     assert.deepEqual(sweepEmptyShells(tmpRoot), [shell], "an unchanged shell is removed");
     assert.ok(!fs.existsSync(shell));
+
+    // The swap lands after every check, immediately before the rmdir itself. The removal runs from
+    // inside the verified parent, so it still removes the scanned folder, never the link's target.
+    fs.mkdirSync(path.join(shell, "objects", "pack"), { recursive: true });
+    [path.join(shell, "objects", "pack"), path.join(shell, "objects"), shell].forEach((folder) => fs.utimesSync(folder, old, old));
+    fs.mkdirSync(path.join(elsewhere, "objects", "pack"), { recursive: true });
+    let swappedLate = false;
+    const lateSwap = {
+      ...fs,
+      rmdirSync(target) {
+        if (!swappedLate) {
+          swappedLate = true;
+          fs.renameSync(shell, `${shell}-moved`);
+          fs.symlinkSync(elsewhere, shell);
+        }
+        fs.rmdirSync(target);
+      },
+    };
+    sweepEmptyShells(tmpRoot, { fsApi: lateSwap });
+    assert.ok(swappedLate, "the swap ran");
+    assert.ok(fs.existsSync(path.join(elsewhere, "objects", "pack")), "the link's target keeps its empty folder");
+    assert.ok(!fs.existsSync(path.join(`${shell}-moved`, "objects", "pack")), "the scanned folder is the one removed");
+    assert.equal(process.cwd(), cwdBefore, "the sweep restores the working directory");
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }

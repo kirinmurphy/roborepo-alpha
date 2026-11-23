@@ -42,50 +42,77 @@ export async function withTemporaryStorage(purpose, assess, {
 // with a warning. Each later call removes the shells earlier calls left: a folder with this
 // prefix, holding nothing but directories, unchanged for an hour. Removal is rmdir from the deepest
 // folder up, which can only ever remove empty directories, so a folder that gained a file or link
-// is left alone. Before each removal the folder and every ancestor up to the shell must still be the
-// directory that was scanned: a shell or ancestor replaced by a link in between would otherwise
-// steer rmdir into the link's target, so that shell is left. A denied removal is left silently for
-// a later call; the original call already warned about it.
-export function sweepEmptyShells(tmpRoot = os.tmpdir(), { fsApi = fs, now = Date.now() } = {}) {
+// is left alone.
+//
+// A path-based rmdir follows links in every component but the last, so a shell or ancestor swapped
+// for a link between a check and the rmdir would steer it into the link's target. Each removal
+// therefore runs from inside the folder's parent: chdir there, confirm `.` is the directory that was
+// scanned, and rmdir the bare name. The working directory holds that directory itself, not its path,
+// so swapping an ancestor afterwards cannot redirect the rmdir. A parent that no longer matches
+// stops that shell. Node exposes no rmdir relative to a directory handle, hence the chdir; the sweep
+// is synchronous and restores the working directory before it returns, and where chdir is
+// unavailable (a worker thread) it sweeps nothing. A denied removal is left silently for a later
+// call; the original call already warned about it.
+export function sweepEmptyShells(tmpRoot = os.tmpdir(), {
+  fsApi = fs, now = Date.now(), chdir = (directory) => process.chdir(directory), cwd = () => process.cwd(),
+} = {}) {
   const swept = [];
   let names;
+  let root;
   try {
     names = fsApi.readdirSync(tmpRoot);
+    root = fsApi.lstatSync(tmpRoot);
   } catch {
     return swept;
   }
-  for (const name of names) {
-    if (!SHELL_NAME.test(name)) continue;
-    const shell = path.join(tmpRoot, name);
-    const folders = emptyShellFolders(shell, fsApi);
-    if (!folders || folders.some((folder) => now - folder.mtimeMs < SHELL_MIN_AGE_MS)) continue;
-    const scanned = new Map(folders.map((folder) => [folder.path, folder]));
-    try {
-      let complete = true;
-      for (const folder of folders.reverse()) {
-        if (!chainUnchanged(folder.path, shell, scanned, fsApi)) {
-          complete = false;
-          break;
+  let original;
+  try {
+    original = cwd();
+  } catch {
+    return swept; // The working directory is gone; there is nowhere to come back to.
+  }
+  try {
+    for (const name of names) {
+      if (!SHELL_NAME.test(name)) continue;
+      const shell = path.join(tmpRoot, name);
+      const folders = emptyShellFolders(shell, fsApi);
+      if (!folders || folders.some((folder) => now - folder.mtimeMs < SHELL_MIN_AGE_MS)) continue;
+      const scanned = new Map(folders.map((folder) => [folder.path, folder]));
+      scanned.set(tmpRoot, { dev: root.dev, ino: root.ino });
+      try {
+        let complete = true;
+        for (const folder of folders.reverse()) {
+          if (!removeFromParent(folder, scanned, fsApi, chdir)) {
+            complete = false;
+            break;
+          }
         }
-        fsApi.rmdirSync(folder.path);
+        if (complete) swept.push(shell);
+      } catch {
+        // Denied, changed underneath, or chdir unavailable (a worker thread); a later call tries again.
       }
-      if (complete) swept.push(shell);
-    } catch {
-      // Denied or changed underneath; the next call tries again.
     }
+  } finally {
+    try { chdir(original); } catch { /* The original folder went away meanwhile. */ }
   }
   return swept;
 }
 
-// True when `folder` and each ancestor up to `shell` is still the real directory that was scanned.
-function chainUnchanged(folder, shell, scanned, fsApi) {
-  for (let current = folder; ; current = path.dirname(current)) {
-    const recorded = scanned.get(current);
-    let stat;
-    try { stat = fsApi.lstatSync(current); } catch { return false; }
-    if (!recorded || !stat.isDirectory() || stat.dev !== recorded.dev || stat.ino !== recorded.ino) return false;
-    if (current === shell) return true;
-  }
+// rmdir `folder` by its bare name from inside its parent, once `.` is confirmed to be the scanned
+// parent and the name still the scanned folder. False when either changed.
+function removeFromParent(folder, scanned, fsApi, chdir) {
+  const parent = scanned.get(path.dirname(folder.path));
+  if (!parent) return false;
+  chdir(path.dirname(folder.path));
+  if (!sameDirectory(fsApi.lstatSync("."), parent)) return false;
+  const name = path.basename(folder.path);
+  if (!sameDirectory(fsApi.lstatSync(name), folder)) return false;
+  fsApi.rmdirSync(name);
+  return true;
+}
+
+function sameDirectory(stat, recorded) {
+  return stat.isDirectory() && stat.dev === recorded.dev && stat.ino === recorded.ino;
 }
 
 // Every folder in the tree, parents before children, or null when anything but a directory is in it.

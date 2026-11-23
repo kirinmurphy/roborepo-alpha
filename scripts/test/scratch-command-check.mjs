@@ -10,6 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { isBodyLocation } from "../cli/delivery.mjs";
+import { bodyLocationNote } from "../cli/scratch.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -98,6 +99,21 @@ try {
   const linked = run(["linked"]);
   assert.equal(linked.status, 1, "a link in place of a folder is refused");
   assert.equal(linked.stdout, "", "no path is printed for a refused folder");
+
+  // ---- pr-body location: the note, with explicit roots, independent of where fixtures live ----
+  const acceptedRoot = fs.realpathSync(stateRoot);
+  const insideFolder = path.join(scratch, "gy8ncs9u");
+  assert.equal(bodyLocationNote(insideFolder, [acceptedRoot]), null, "no note for a folder under an accepted root");
+  const otherRoot = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-scratch-other-")));
+  try {
+    assert.match(bodyLocationNote(insideFolder, [otherRoot]) ?? "", /outside what `roborepo delivery pr-body` reads/,
+      "a folder under no accepted root gets the note");
+    assert.match(bodyLocationNote(insideFolder, []) ?? "", /outside what/, "with no accepted roots every folder gets the note");
+    assert.match(bodyLocationNote(`${acceptedRoot}-sibling`, [acceptedRoot]) ?? "", /outside what/,
+      "a sibling sharing the root's name prefix is outside it");
+  } finally {
+    fs.rmSync(otherRoot, { recursive: true, force: true });
+  }
 
   // ---- pr-body location: the note appears exactly when pr-body would refuse the folder ----
   // Each fixture's expectation comes from the accepted roots, so the check holds wherever TMPDIR

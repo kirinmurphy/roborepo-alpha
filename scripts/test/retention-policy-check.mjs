@@ -196,6 +196,15 @@ try {
   assert.equal(lone.act, false, "the newest folder is never removed for size");
   assert.equal(lone.reason, "over cap, nothing removable");
   assert.equal(describeFolderSet({ dirPath: loneDir, now: NOW }).sparedBytes, 1500, "the kept newest folder counts as spared");
+  // Past the age limit as well: age selects it, the guard keeps it, and the verdict still names the
+  // overage rather than calling the store within policy.
+  const agedDir = path.join(tempRoot, "folder-set-lone-aged");
+  writeAgedFolder(agedDir, "only", 30 * DAY, 1500);
+  const lonePastAge = measureFolderSet({ dirPath: agedDir, policy: { maxAgeDays: 14, maxBytes: 1000 }, now: NOW });
+  assert.equal(lonePastAge.act, false, "the guard keeps a lone folder past the age limit");
+  assert.equal(lonePastAge.reason, "over cap, nothing removable");
+  assert.equal(describeFolderSet({ dirPath: agedDir, now: NOW }).sparedBytes, 1500, "the kept aged folder counts as spared");
+
   writeAgedFolder(loneDir, "older", 3 * 60 * 60 * 1000, 600);
   assert.equal(describeFolderSet({ dirPath: loneDir, now: NOW }).sparedBytes, 1500, "an older quiet folder stays removable");
 

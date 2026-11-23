@@ -305,7 +305,7 @@ export function checkStoreBounds() {
   for (const store of health.filter((entry) => entry.spared)) {
     console.log(
       `hint: ${store.id} is ${formatBytes(store.bytes)}, over its ${formatBytes(store.maxBytes)} cap, but`
-      + ` ${KEPT_FOLDERS_TEXT}; age cleanup still removes it once unchanged for ${store.maxAgeDays} days`,
+      + ` ${KEPT_FOLDERS_TEXT}`,
     );
   }
   const over = health.filter((store) => store.over);
@@ -333,7 +333,6 @@ export function storeHealth() {
       bytes,
       sparedBytes,
       maxBytes: policy.maxBytes,
-      maxAgeDays: policy.maxAgeDays,
       over,
       spared: capped && !over,
       path: path.relative(stateDir, store.target),

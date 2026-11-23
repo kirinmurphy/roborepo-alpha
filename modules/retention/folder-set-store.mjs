@@ -59,8 +59,10 @@ export function measureFolderSet({
   const victims = entries.filter((entry) => doomed.has(entry.path));
   if (victims.length === 0) {
     // Over the cap with nothing to remove: the overage is in recently changed folders or in the
-    // newest folder, which the final-entry guard keeps.
-    const overCap = resolved.maxBytes !== null && total > resolved.maxBytes;
+    // newest folder, which the final-entry guard keeps even past the age limit. Nothing is removed,
+    // so every entry is retained and counts, not only the age survivors.
+    const retained = entries.reduce((sum, entry) => sum + entry.bytes, 0);
+    const overCap = resolved.maxBytes !== null && retained > resolved.maxBytes;
     const reason = overCap ? "over cap, nothing removable" : "within-policy";
     return { act: false, dropCount: 0, reason, files: [], entries: [] };
   }

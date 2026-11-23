@@ -39,18 +39,23 @@ function runScratch(args) {
   try {
     const folder = openScratchFolder(store.target, args[0]);
     pruneScratch(store, folder);
-    if (!isBodyLocation(folder)) {
-      console.error(
-        `scratch: note: this folder is outside what \`roborepo delivery pr-body\` reads (an overridden`
-        + " ROBOREPO_STATE_ROOT or HOME moved it); write a PR body file in the system temp folder instead",
-      );
-    }
+    const note = bodyLocationNote(folder);
+    if (note) console.error(note);
     console.log(folder);
     return 0;
   } catch (error) {
     console.error(`scratch: ${error.message}`);
     return 1;
   }
+}
+
+// The note printed when `folder` is outside what `roborepo delivery pr-body` reads, or null. `roots`
+// defaults to pr-body's own; a test passes explicit roots so the outside case is covered wherever
+// the checkout and TMPDIR live.
+export function bodyLocationNote(folder, roots) {
+  if (isBodyLocation(folder, roots)) return null;
+  return `scratch: note: this folder is outside what \`roborepo delivery pr-body\` reads (an overridden`
+    + " ROBOREPO_STATE_ROOT or HOME moved it); write a PR body file in the system temp folder instead";
 }
 
 export function openScratchFolder(root, name, { now = new Date() } = {}) {
