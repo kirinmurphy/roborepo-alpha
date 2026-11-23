@@ -8,6 +8,7 @@ match what you find in code, trust the code and fix this doc.
 
 - Package anatomy
 - Package, collection, category, dependency
+- Package sources and provenance
 - Manifest schema (`package.config.json`)
 - Resource types
 - Ownership and conflict behavior (current, not aspirational)
@@ -76,6 +77,33 @@ target, and `context-cost.mjs` reports each resource's share under `contextCost.
 A package with no source of its own (no skill, command, or rules) gets the same target with no
 entries when it has a visible requirement, so its label opens a contents view that lists only
 its **Requires**; when every requirement is hidden, the label opens nothing.
+
+## Package sources and provenance
+
+Packages are discovered through **sources**, not two hard-coded folders. `builtin` (type
+`bundled`, `globals/packages/`) and `local` (type `path`, the workspace `packages/`) always exist;
+users add other folders (`path`) and public GitHub repos (`git`). Every catalog package carries
+`sourceId`, `sourceType`, `trust`, `tab`, `qualifiedName` (`<source>/<id>`), `revision`, and
+`collection`; `origin` stays for older readers.
+
+- **Adapters** (`package-source-adapters.mjs`) implement `list()`, `resolve(id)`,
+  `materialize(resolution)`. They return raw entries; `normalizePackageEntry` in
+  `package-catalog.mjs` runs the one manifest validation every source shares. Add a source type
+  by registering an adapter, never by branching on type in the catalog.
+- **Same-ID resolution** (`resolvePackageCandidates`): a workspace `replace` override picks
+  `local`; otherwise a lock record picks its source; otherwise a single candidate wins; otherwise
+  it is a collision the user settles with `package install <source>/<id>`. A recorded source that
+  stops offering the package leaves it unresolved; nothing is substituted.
+- **The `replace` override is a persisted source choice.** Keep honoring it; it is how existing
+  workspaces already override a built-in package.
+- **Derived collections:** a git repo with two or more Agent Skills folders yields one package per
+  skill, each carrying `collection: { id, title }` computed at read time. Nothing stores it.
+- **Install vs. activate:** `package install` records (live) or copies (git) a package and writes
+  a lock record; `enable` applies it. Applying a live package also writes its lock record.
+- Domain operations belong in `package-service.mjs`; CLI handlers and portal routes call it.
+
+Schemas, the store layout, exit codes, and doctor findings:
+[`docs/internal/package-sources.md`](../../../../docs/internal/package-sources.md).
 
 ## Manifest schema (`package.config.json`)
 
@@ -314,14 +342,16 @@ accurate `package.config.json` automatically renders a complete portal card.
 | --- | --- |
 | `roborepo package dev create <id> [--kind=empty\|auto-skill\|skill-command\|standalone-command] [--description=...] [--command=...] [--default-enabled=true]` | Scaffolds a new package into `globals/packages/<id>/` (dev checkout) or the user workspace packages dir (package mode). Refuses to overwrite an existing package. Prints the created path. |
 | `roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=...]` | Adds a skill to an existing package: `skills/<skill-id>/SKILL.md`, a `skill` resource placed after the package's other skills (manual with a slash-command entrypoint under `--command`, auto otherwise; a workspace package's command never installs, since only built-in packages get generated wrappers, and the command says so), and an empty `skill-triggers.json` entry to fill. Refuses a skill ID, or with `--command` a command name, that any package already claims, and a built-in package in package mode. Restores the package if the result does not validate. |
-| `roborepo package list` | Lists packages grouped by category with concise live enabled/disabled status. |
+| `roborepo package list [--available] [--json]` | Lists packages grouped by category with concise live enabled/disabled status, the source of any non-built-in package, and pending updates. `--json` prints `packageView()`. |
+| `roborepo package install\|update\|remove <ref>` | The install lifecycle, separate from enable/disable (`scripts/cli/package-source-command.mjs` over `package-service.mjs`). |
+| `roborepo package source list\|add\|remove\|enable\|disable\|refresh\|info\|trusted` | Package sources. See "Package sources and provenance". |
 | `roborepo package inspect <id>` | Prints full manifest JSON for one package. |
 | `roborepo package status <id> [--json]` | Shows one package's desired and live state. |
 | `roborepo package validate [id]` | Runs `validatePackageCatalog`; scope to one package or the whole catalog. |
 | `roborepo package dev validate [id]` | Validates package source while developing. |
 | `roborepo package enable <id>` | Records `<id>` as a selected root and **applies live immediately**, with everything it requires — see Apply behavior below. Prints a probed outcome per package; lists (or, in a terminal, offers) recommendations that are off. |
 | `roborepo package disable <id> [--cascade]` | Removes the root and **applies live immediately**, removing packages that leave the effective set. Refuses a package that is on only through a parent unless `--cascade`. |
-| `roborepo package reconcile` | Re-applies every currently-enabled package and removes each package RoboRepo installed that left the effective set, never one it did not install (full reconciliation entry point — see Apply behavior). |
+| `roborepo package reconcile` | Re-applies every currently-enabled package and removes each package RoboRepo installed that left the effective set, never one it did not install (full reconciliation entry point — see Apply behavior). An unresolved package (its recorded source stopped offering it) keeps its records and is reported. |
 | `roborepo package adopt-live [--dry-run]` | Detects externally-installed (unmanaged) package behavior and marks it enabled in the registry without re-installing it. |
 
 Add these rows to `docs/user/reference/roborepo-cli.md` and to
@@ -364,6 +394,10 @@ last write) — a legitimate, distinct reconciliation case, not a gap in the ena
   in a temporary home to check for stale live state, and round-trips the `fixture-tool` package to
   check that every live-config resource type appears on enable and is fully removed on disable.
 - `scripts/test/test-cli.sh` — broad CLI smoke test; covers package/workspace paths.
+- `scripts/test/package-source-registry-check.mjs`, `package-provenance-check.mjs`,
+  `package-resolution-check.mjs`, `package-source-git-check.mjs` — sources and adapters, same-ID
+  resolution, the lock and migration, install/update/remove, and git sources against local fixture
+  repos. They build mini app roots with `scripts/test/fixtures/package-sources.mjs`.
 
 Minimum test bar for a new or changed package: it must load cleanly through
 `loadPackageCatalog`/`validatePackageCatalog` (covered generically by `package-catalog-check.mjs`

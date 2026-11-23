@@ -34,7 +34,7 @@ let caseId = 0;
 
 // Disposable machine state roborepo created — managed uninstall must remove all of it.
 const OWNED_STATE_ENTRIES = [
-  "command-overrides.json", "enabled-packages.json", "applied-packages.json", "telemetry", "telemetry-backups", "backups",
+  "command-overrides.json", "enabled-packages.json", "applied-packages.json", "package-sources.json", "packages", "telemetry", "telemetry-backups", "backups",
   "presets", "rules", "config-state", "harnesses", "repositories", "usage", "capture", "portal",
   "skills", "package-runtime", "install-state.json", "app-root.json", "initialization.json",
   "experimental.json",

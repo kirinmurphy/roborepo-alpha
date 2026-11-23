@@ -1,0 +1,168 @@
+#!/usr/bin/env node
+// Package provenance: enable records each package's source in the selection and applied records
+// and a lock record behind it; the records survive a restart; bare-ID state migrates without
+// changing what is selected, and an ambiguous ID is reported instead of guessed; an interrupted or
+// corrupt write is reported, never read as empty; a recorded source that stops offering a package
+// leaves it unresolved, and reconcile neither forgets it nor applies another source's package.
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { liveClaudeRules, makeSourceRoots, runCli, runModules, writeReplaceOverride, writeRulesPackage } from "./fixtures/package-sources.mjs";
+
+const MODULES = {
+  c: "scripts/cli/package-catalog.mjs",
+  s: "scripts/cli/package-sources.mjs",
+  l: "scripts/cli/package-lock.mjs",
+  m: "scripts/cli/package-provenance-migration.mjs",
+  d: "scripts/cli/package-provenance-doctor.mjs",
+};
+
+function within(roots) {
+  const run = (body) => {
+    const result = runModules(roots.env, MODULES, body);
+    assert.ok(result.ok, result.error);
+    return result.value;
+  };
+  const ok = (...args) => {
+    const result = runCli(roots.env, args);
+    assert.equal(result.status, 0, `${args.join(" ")} should succeed\n${result.output}`);
+    return result.output;
+  };
+  const json = (name) => JSON.parse(fs.readFileSync(path.join(roots.stateRoot, name), "utf8"));
+  return { run, ok, json };
+}
+
+// Enable records sources; the records round-trip through a fresh process.
+{
+  const roots = makeSourceRoots("roborepo-provenance-enable-");
+  const { run, ok, json } = within(roots);
+  try {
+    writeRulesPackage(roots.builtInDir, "prov-builtin");
+    writeRulesPackage(roots.workspaceDir, "prov-local", { requires: ["prov-builtin"] });
+    ok("package", "enable", "prov-local");
+    assert.deepEqual(json("enabled-packages.json").sources, { "prov-local": "local" });
+    assert.deepEqual(json("applied-packages.json").sources, { "prov-builtin": "builtin", "prov-local": "local" });
+    const lock = run(`return l.readPackageLock();`);
+    assert.deepEqual(Object.keys(lock.packages).sort(), ["prov-builtin", "prov-local"]);
+    const local = lock.packages["prov-local"];
+    assert.equal(local.kind, "live");
+    assert.equal(local.sourceId, "local");
+    assert.equal(local.resolved, path.join(roots.workspaceDir, "prov-local"));
+    assert.match(local.fingerprint, /^sha256-[0-9a-f]{64}$/);
+    // Disable keeps the install record: disabled is still installed.
+    ok("package", "disable", "prov-local");
+    assert.ok(run(`return Boolean(l.readPackageLock().packages["prov-local"]);`), "disable keeps the lock record");
+    assert.deepEqual(json("enabled-packages.json").sources, { "prov-local": "local" }, "an explicit deselection keeps its source");
+
+    // Schema round trip of a source list.
+    const extra = path.join(roots.tmp, "extra");
+    fs.mkdirSync(extra);
+    const written = run(`
+      s.writeSourceConfig([...s.readSourceConfig().sources, { id: "extra", type: "path", path: ${JSON.stringify(extra)}, trust: "local", enabled: false }]);
+      return s.readSourceConfig();
+    `);
+    assert.equal(written.persisted, true);
+    assert.deepEqual(written.sources.map((r) => [r.id, r.enabled]), [["builtin", true], ["local", true], ["extra", false]]);
+
+    // Doctor: a local edit since apply is a hint, not a failure.
+    ok("package", "enable", "prov-local");
+    fs.appendFileSync(path.join(roots.workspaceDir, "prov-local", "rules.md"), "edited\n");
+    const findings = run(`return d.packageProvenanceFindings();`);
+    assert.ok(findings.some((f) => f.level === "hint" && /prov-local changed since it was applied/.test(f.message)), JSON.stringify(findings));
+    assert.ok(!findings.some((f) => f.level === "fail"), JSON.stringify(findings));
+    // A configured path source whose folder is gone fails doctor.
+    fs.rmSync(extra, { recursive: true });
+    run(`s.writeSourceConfig(s.readSourceConfig().sources.map((r) => r.id === "extra" ? { ...r, enabled: true } : r)); return true;`);
+    const missing = run(`return d.packageProvenanceFindings();`);
+    assert.ok(missing.some((f) => f.level === "fail" && /package source extra: folder does not exist/.test(f.message)), JSON.stringify(missing));
+  } finally {
+    roots.cleanup();
+  }
+}
+
+// An interrupted write leaves a temp file beside the lock; the lock still reads as before. A
+// truncated lock is reported, not read as empty.
+{
+  const roots = makeSourceRoots("roborepo-provenance-interrupted-");
+  const { run } = within(roots);
+  try {
+    run(`l.writeLockRecord({ sourceId: "local", packageId: "kept", kind: "live", resolved: "/x" }); return true;`);
+    const lockFile = path.join(roots.stateRoot, "packages", "package-lock.json");
+    fs.writeFileSync(path.join(path.dirname(lockFile), ".package-lock.json.999.1.tmp"), "{ \"schemaVersion\": 1, \"pack");
+    assert.deepEqual(Object.keys(run(`return l.readPackageLock().packages;`)), ["kept"], "a stray temp file is ignored");
+    fs.writeFileSync(lockFile, "{ \"schemaVersion\": 1, \"pack");
+    const broken = runModules(roots.env, MODULES, `return l.readPackageLock();`);
+    assert.ok(!broken.ok && /invalid package lock/.test(broken.error), broken.error);
+    const findings = run(`return d.packageProvenanceFindings();`);
+    assert.ok(findings.some((f) => f.level === "fail" && /invalid package lock/.test(f.message)), JSON.stringify(findings));
+  } finally {
+    roots.cleanup();
+  }
+}
+
+// Bare-ID migration: sources are recorded without changing the lists, a version-1 registry keeps
+// its version, an ambiguous ID is reported and left unrecorded, and an override counts as a choice.
+{
+  const roots = makeSourceRoots("roborepo-provenance-migration-");
+  const { run, json } = within(roots);
+  try {
+    writeRulesPackage(roots.builtInDir, "mig-builtin");
+    writeRulesPackage(roots.builtInDir, "mig-shared");
+    writeRulesPackage(roots.workspaceDir, "mig-local");
+    writeRulesPackage(roots.workspaceDir, "mig-shared");
+    fs.mkdirSync(roots.stateRoot, { recursive: true });
+    const registry = { schemaVersion: 1, packages: ["mig-builtin", "mig-shared"], disabled: ["mig-local"] };
+    fs.writeFileSync(path.join(roots.stateRoot, "enabled-packages.json"), JSON.stringify(registry));
+    fs.writeFileSync(path.join(roots.stateRoot, "applied-packages.json"), JSON.stringify({ packages: ["mig-builtin", "mig-shared"] }));
+
+    assert.equal(run(`return m.needsProvenanceMigration();`), true);
+    const dry = run(`return m.migrateBareIdPackageState({ dryRun: true });`);
+    assert.equal(dry.migrated, false);
+    assert.equal(json("enabled-packages.json").sources, undefined, "a dry run writes nothing");
+
+    const result = run(`return m.migrateBareIdPackageState();`);
+    assert.deepEqual(result.ambiguous, [{ id: "mig-shared", candidates: ["builtin/mig-shared", "local/mig-shared"] }]);
+    const after = json("enabled-packages.json");
+    assert.deepEqual(after.packages, registry.packages, "selected ids unchanged");
+    assert.deepEqual(after.disabled, registry.disabled, "deselections unchanged");
+    assert.equal(after.schemaVersion, 1, "a version-1 registry keeps its version, so its list keeps its meaning");
+    assert.deepEqual(after.sources, { "mig-builtin": "builtin", "mig-local": "local" }, "the ambiguous id gets no source");
+    assert.deepEqual(json("applied-packages.json").packages, ["mig-builtin", "mig-shared"]);
+    assert.deepEqual(Object.keys(run(`return l.readPackageLock().packages;`)), ["mig-builtin"], "only resolvable applied packages get lock records");
+    assert.equal(run(`return m.needsProvenanceMigration();`), false, "migration runs once");
+
+    // The same state with an override: the override is the recorded choice.
+    fs.writeFileSync(path.join(roots.stateRoot, "enabled-packages.json"), JSON.stringify(registry));
+    fs.writeFileSync(path.join(roots.stateRoot, "applied-packages.json"), JSON.stringify({ packages: ["mig-builtin", "mig-shared"] }));
+    fs.rmSync(path.join(roots.stateRoot, "packages"), { recursive: true, force: true });
+    writeReplaceOverride(roots.workspace, ["mig-shared"]);
+    const overridden = run(`return m.migrateBareIdPackageState();`);
+    assert.deepEqual(overridden.ambiguous, []);
+    assert.equal(json("enabled-packages.json").sources["mig-shared"], "local");
+    assert.equal(run(`return l.readPackageLock().packages["mig-shared"].sourceId;`), "local");
+  } finally {
+    roots.cleanup();
+  }
+}
+
+// A recorded source stops offering the package: no substitution, and reconcile keeps the records.
+{
+  const roots = makeSourceRoots("roborepo-provenance-missing-source-");
+  const { run, ok, json } = within(roots);
+  try {
+    writeRulesPackage(roots.workspaceDir, "moved", { marker: "local copy" });
+    ok("package", "enable", "moved");
+    fs.rmSync(path.join(roots.workspaceDir, "moved"), { recursive: true });
+    writeRulesPackage(roots.builtInDir, "moved", { marker: "builtin copy" });
+    const out = ok("package", "reconcile");
+    assert.match(out, /package moved is unresolved/);
+    assert.deepEqual(json("enabled-packages.json").packages, ["moved"], "reconcile does not forget an unresolved package");
+    assert.ok(!liveClaudeRules(roots.home).includes("builtin copy"), "the other source's package is not applied");
+    const findings = run(`return d.packageProvenanceFindings();`);
+    assert.ok(findings.some((f) => f.level === "fail" && /package moved is unresolved/.test(f.message)), JSON.stringify(findings));
+  } finally {
+    roots.cleanup();
+  }
+}
+
+console.log("ok: package provenance records, migration, and unresolved sources");

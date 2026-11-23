@@ -4,8 +4,10 @@ import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageM
 import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { forgetPackageIds, readEnabledPackagesRegistry, readAppliedPackageIds, selectedRootIds, setPackageApplied, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
 import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
-import { loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
+import { composePackageCatalog, loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
+import { recordLiveInstall } from "./package-install-store.mjs";
+import { migrateBareIdPackageStateWithReport } from "./package-provenance-migration.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { ensureClaudeMcpPermission } from "./mcp-claude.mjs";
 import { configFileMcpProviders, ensureConfigFileMcp, removeConfigFileMcp } from "./mcp-config-file.mjs";
@@ -60,8 +62,16 @@ export function packageCommand(args = []) {
       return reconcileEnabledPackages(rest);
     case "adopt-live":
       return adoptLivePackages({ dryRun: rest.includes("--dry-run") });
+    case "install":
+      return import("./package-source-command.mjs").then((m) => m.packageInstallCommand(rest));
+    case "update":
+      return import("./package-source-command.mjs").then((m) => m.packageUpdateCommand(rest));
+    case "remove":
+      return import("./package-source-command.mjs").then((m) => m.packageRemoveCommand(rest));
+    case "source":
+      return import("./package-source-command.mjs").then((m) => m.packageSourceCommand(rest));
     default:
-      console.error("usage: roborepo package list|inspect|status|create|add-skill|enable|disable|validate|reconcile|adopt-live");
+      console.error("usage: roborepo package list|inspect|status|install|update|remove|source|create|add-skill|enable|disable|validate|reconcile|adopt-live");
       process.exit(2);
   }
 }
@@ -313,9 +323,21 @@ function commandBody(name, description) {
   return `---\ndescription: ${description}\n---\n\n# /${name}\n\n${description}\n`;
 }
 
-function listPackages() {
+// Grouped by category, one line per package: its state, its name, and, for a package that is not
+// from the built-in library, where it comes from. `--available` adds packages a git source offers
+// that are not installed; `--json` prints the full view (available, installed, active, source,
+// tab, revision, update) that the portal reads.
+async function listPackages(rest = []) {
+  const { packageView } = await import("./package-service.mjs");
+  const view = packageView({ includeAvailable: true });
+  if (rest.includes("--json")) {
+    console.log(JSON.stringify(view, null, 2));
+    return;
+  }
+  const showAvailable = rest.includes("--available");
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const states = buildPackageLiveState(catalog);
+  const rows = new Map(view.packages.filter((row) => catalog.some((pkg) => pkg.id === row.id && pkg.sourceId === row.sourceId)).map((row) => [row.id, row]));
   const categories = readPackageCategories();
   const byCategory = new Map(categories.map((category) => [category.id, { ...category, packages: [] }]));
   for (const pkg of catalog) {
@@ -330,9 +352,27 @@ function listPackages() {
     console.log(`\n${category.label}`);
     for (const pkg of category.packages.sort((a, b) => (a.presentation.order ?? 0) - (b.presentation.order ?? 0) || a.id.localeCompare(b.id))) {
       const status = states.get(pkg.id)?.status || "disabled";
-      console.log(`  ${status.padEnd(8)} ${packageListLabel(pkg)}`);
+      const row = rows.get(pkg.id);
+      console.log(`  ${status.padEnd(8)} ${packageListLabel(pkg)}${sourceSuffix(row)}`);
     }
   }
+  const notInstalled = view.packages.filter((row) => !row.installed && row.sourceType === "git");
+  if (notInstalled.length === 0) return;
+  if (!showAvailable) {
+    console.log(`\n${notInstalled.length} more available from package sources; list them with \`roborepo package list --available\``);
+    return;
+  }
+  console.log("\nAvailable to install");
+  for (const row of notInstalled) console.log(`  ${row.qualifiedName.padEnd(32)} ${row.label}${row.trust === "trusted" ? " [trusted]" : ""}`);
+}
+
+// " [source]" for a package outside the built-in library, plus a note when an update is waiting.
+function sourceSuffix(row) {
+  if (!row) return "";
+  const parts = [];
+  if (row.tab !== "system") parts.push(row.sourceBadge || row.sourceId);
+  if (row.updateAvailable) parts.push("update available");
+  return parts.length ? ` [${parts.join(", ")}]` : "";
 }
 
 function packageListLabel(pkg) {
@@ -516,7 +556,10 @@ export async function enablePackage(rest, changed = new Set()) {
   const pkg = catalog.find((p) => p.id === pkgId);
   if (!pkg) throw unknownPackageError(pkgId, catalog);
   if (!pkg.selectable) throw notSelectableError(pkg, catalog, "enable");
-  if (!dryRun) assertHarnessWriteAllowed();
+  if (!dryRun) {
+    assertHarnessWriteAllowed();
+    migrateBareIdPackageStateWithReport();
+  }
 
   const order = requiredClosure(catalog, [pkg.id]);
   warnUnavailableRequirements(order, catalog);
@@ -575,7 +618,10 @@ function disabledRecommendations(pkg, catalog, effectiveIds) {
 // Apply one package's resources to every harness. Used by enable and by reconcile, which
 // re-applies effective packages without touching the registry.
 async function applyPackageComponents(pkg, { dryRun = false } = {}) {
-  if (!dryRun) setPackageApplied(pkg.id, true);
+  if (!dryRun) {
+    setPackageApplied(pkg.id, true, pkg);
+    recordLiveInstall(pkg);
+  }
   const servicePromises = [];
   for (const component of pkg.components) {
     switch (component.type) {
@@ -636,17 +682,38 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
   if (servicePromises.length) await Promise.all(servicePromises);
 }
 
+// Re-apply one effective package from its current catalog entry, for when its installed copy
+// moved (an update to a new revision). Returns false when the package is not effective.
+export async function reapplyPackage(pkgId) {
+  assertHarnessWriteAllowed();
+  const catalog = loadPackageCatalog({ includeUnavailable: true });
+  const pkg = catalog.find((entry) => entry.id === pkgId);
+  if (!pkg || !effectiveEnabledIds(catalog).includes(pkgId)) return false;
+  await applyPackageComponents(pkg);
+  return true;
+}
+
 export async function reconcileEnabledPackages(rest = []) {
   const dryRun = rest.includes("--dry-run");
-  if (!dryRun) assertHarnessWriteAllowed();
+  if (!dryRun) {
+    assertHarnessWriteAllowed();
+    migrateBareIdPackageStateWithReport();
+  }
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const enabledIds = effectiveEnabledIds(catalog);
   const known = new Set(catalog.map((pkg) => pkg.id));
   // A retired or renamed package can sit in either registry list or the applied record. All are
   // dropped, not moved to `disabled`: the catalog no longer has the package, so there is nothing
   // left to disable.
+  // An ID whose recorded source no longer offers it is unresolved, not retired: it keeps its
+  // records until the user reinstalls it from a source or removes it.
+  const unresolved = new Map(composePackageCatalog().unresolved.map((entry) => [entry.id, entry]));
   const registry = readEnabledPackagesRegistry();
-  const stale = [...new Set([...registry.packages, ...registry.disabled, ...readAppliedPackageIds()])].filter((id) => !known.has(id));
+  const listed = [...new Set([...registry.packages, ...registry.disabled, ...readAppliedPackageIds()])].filter((id) => !known.has(id));
+  for (const id of listed.filter((entry) => unresolved.has(entry))) {
+    console.warn(`  warn: package ${id} is unresolved (${unresolved.get(id).reason}); kept. Reinstall it with \`roborepo package install <source>/${id}\` or remove it with \`roborepo package remove ${id}\`.`);
+  }
+  const stale = listed.filter((id) => !unresolved.has(id));
   for (const id of stale) {
     console.warn(`${dryRun ? "  [dry-run] would remove" : "  remove"} stale package not in catalog: ${id}`);
   }
@@ -754,7 +821,10 @@ export async function disablePackage(rest, changed = new Set()) {
       `rerun with --cascade to disable them too`,
     );
   }
-  if (!dryRun) assertHarnessWriteAllowed();
+  if (!dryRun) {
+    assertHarnessWriteAllowed();
+    migrateBareIdPackageStateWithReport();
+  }
 
   const deselect = [...(isRoot || !keepers.length ? [pkg.id] : []), ...(cascade ? keepers : [])];
   const registry = readEnabledPackagesRegistry();

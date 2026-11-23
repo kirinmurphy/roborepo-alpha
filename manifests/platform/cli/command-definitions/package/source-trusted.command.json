@@ -1,0 +1,20 @@
+{
+  "path": [
+    "package",
+    "source",
+    "trusted"
+  ],
+  "kind": "command",
+  "title": "Trusted catalog",
+  "description": "List the trusted catalog of vetted repositories",
+  "order": 80,
+  "usage": "roborepo package source trusted [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageSourceCommand",
+    "prependArgs": [
+      "trusted"
+    ]
+  }
+}

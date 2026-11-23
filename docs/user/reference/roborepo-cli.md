@@ -84,7 +84,7 @@ RoboRepo configuration in place. See [Uninstall](../guides/install-workflows.md#
 
 | Command | What it does |
 | --- | --- |
-| `roborepo package list` | Lists packages grouped by category with live enabled/disabled status. |
+| `roborepo package list [--available] [--json]` | Lists packages grouped by category with live enabled/disabled status. A package that is not from the built-in library shows its source, and `update available` when its source has a newer revision. `--available` adds packages a Git source offers that are not installed; `--json` prints every package's source, tab, trust, and available, installed, active, and update state. |
 | `roborepo package inspect <id>` | Prints the full manifest for one package. |
 | `roborepo package enable <id>` | Enables a package and applies it immediately — permissions, hooks, rules, MCP, and commands install without a separate `roborepo update`. Packages it requires turn on with it. Prints one checked result per package: `enabled`, `partial` (some pieces did not land; named), or `blocked` (applying stopped on an error; exits 1). |
 | `roborepo package disable <id> [--cascade]` | Disables a package and removes its owned contributions immediately, along with any package that was on only because it required it. See [Dependencies](#package-dependencies). |
@@ -95,6 +95,46 @@ RoboRepo configuration in place. See [Uninstall](../guides/install-workflows.md#
 | `roborepo package dev add-skill <package-id> <skill-id> [--command] [--description=...]` | Adds a skill to an existing package: its `SKILL.md`, its resource entry (with a slash command under `--command`, which installs only for built-in packages), and an empty trigger fixture to fill. Refuses a skill ID or command another package already claims, and leaves the package unchanged if the result does not validate. |
 
 Most users only need `list`, `inspect`, `enable`, and `disable`.
+
+### Package sources and installing
+
+Packages come from **sources**. Two always exist: `builtin`, the library that ships with RoboRepo,
+and `local`, your workspace `packages/` folder. You can add another local folder or a public
+GitHub repository. A package is **available** when a source offers it, **installed** when RoboRepo
+has it, and **active** when it is enabled. Installing never enables, and refreshing a source never
+installs.
+
+| Command | What it does |
+| --- | --- |
+| `roborepo package source list [--json]` | Lists sources with their tab, trust, and how many packages each offers and has installed. |
+| `roborepo package source add <github-url\|folder> [--id <id>]` | Adds a GitHub repo (`https://github.com/<owner>/<repo>`) or a local folder. A repo is fetched at one commit and listed; nothing is installed. A repo in RoboRepo's trusted catalog is added as **trusted** and pinned to its reviewed commit; any other repo is **unverified**. |
+| `roborepo package source refresh [source]` | Fetches the newest listing of one or every Git source. Installed packages keep their commit until you update them. Offline, it fails and keeps the last listing. |
+| `roborepo package source info <source>` | Shows one source and the packages it offers. |
+| `roborepo package source enable\|disable <source>` | Turns a source's listing on or off. Packages already installed from it stay usable. `builtin` cannot be disabled. |
+| `roborepo package source remove <source> [--keep-installed]` | Removes a source. Refused while packages are installed from it, unless `--keep-installed` keeps them installed without a source. Never deletes your files. `builtin` and `local` cannot be removed. |
+| `roborepo package source trusted` | Lists the trusted catalog of vetted repos. |
+| `roborepo package install <package\|source/package> [--yes]` | Installs a package without enabling it. For a Git package it first prints what the package contains (skills, rules, hooks, scripts, permissions); a package from an **unverified** source asks for confirmation, or needs `--yes` in a script. A local package is used in place, never copied. |
+| `roborepo package update <package> [--yes]` | Moves a Git package to its source's newest revision (for a trusted source, the newest reviewed commit), after showing which files change. An enabled package is re-applied. |
+| `roborepo package remove <package>` | Removes an installed package, disabling it first if it is on. A built-in (System) package cannot be removed; disable it instead. Removing a local package forgets RoboRepo's record and leaves your folder. |
+
+When two sources offer the same package name, RoboRepo never picks one for you:
+
+```text
+Multiple sources provide "code-style":
+
+  builtin/code-style
+  local/code-style
+
+Choose a qualified package name.
+```
+
+Install the one you want by its qualified name (`roborepo package install local/code-style`);
+later commands keep using that choice. A workspace `replace` override in
+`overrides/resources.json` also counts as choosing `local`.
+
+Exit codes for scripts: `2` usage, `3` ambiguous name, `4` needs confirmation (`--yes`), `5`
+source unreachable, `6` refused, `7` invalid package. Schemas and internals are in
+[Package Sources, Provenance, and the Install Store](../../internal/package-sources.md).
 
 ### Package dependencies
 

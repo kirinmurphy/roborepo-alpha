@@ -1,0 +1,25 @@
+{
+  "path": [
+    "package",
+    "update"
+  ],
+  "kind": "command",
+  "title": "Update package",
+  "description": "Move an installed package to its source's newest revision",
+  "order": 37,
+  "usage": "roborepo package update <package> [--yes] [--json]",
+  "arguments": [
+    {
+      "name": "package",
+      "required": true,
+      "interactive": {
+        "prompt": "Package"
+      }
+    }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageUpdateCommand"
+  }
+}

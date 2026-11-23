@@ -48,6 +48,12 @@
       "order": 50
     },
     {
+      "id": "added-skills",
+      "label": "Added Skills",
+      "description": "Skills added from a Git repository that ships no RoboRepo package manifest.",
+      "order": 55
+    },
+    {
       "id": "additional-agents-md-rules",
       "label": "Additional Agent Rules",
       "order": 60

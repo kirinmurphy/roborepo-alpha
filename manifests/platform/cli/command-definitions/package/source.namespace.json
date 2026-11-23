@@ -1,0 +1,10 @@
+{
+  "path": [
+    "package",
+    "source"
+  ],
+  "kind": "namespace",
+  "title": "Package sources",
+  "description": "List, add, and refresh the places packages come from",
+  "order": 90
+}

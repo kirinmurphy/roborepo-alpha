@@ -1,0 +1,29 @@
+{
+  "path": [
+    "package",
+    "source",
+    "add"
+  ],
+  "kind": "command",
+  "title": "Add source",
+  "description": "Add a GitHub repository or local folder as a package source",
+  "order": 20,
+  "usage": "roborepo package source add <github-url|folder> [--id <id>] [--json]",
+  "arguments": [
+    {
+      "name": "location",
+      "required": true,
+      "interactive": {
+        "prompt": "Repository URL or folder"
+      }
+    }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageSourceCommand",
+    "prependArgs": [
+      "add"
+    ]
+  }
+}

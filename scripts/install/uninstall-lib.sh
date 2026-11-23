@@ -453,6 +453,10 @@ remove_runtime_state() {
   remove_path "${state_dir}/command-overrides.json" "remove"
   remove_path "${state_dir}/enabled-packages.json" "remove"
   remove_path "${state_dir}/applied-packages.json" "remove"
+  # Package sources and the managed package store (lock, catalog caches, installed copies). A path
+  # source's folder is never under here, so this removes no user-authored package.
+  remove_path "${state_dir}/package-sources.json" "remove"
+  remove_path "${state_dir}/packages" "remove"
   remove_path "${state_dir}/telemetry" "remove"
   remove_path "${state_dir}/telemetry-backups" "remove"
   remove_path "${state_dir}/backups" "remove"
@@ -595,6 +599,8 @@ check_no_active_remnants() {
     "${state_dir}/command-overrides.json" \
     "${state_dir}/enabled-packages.json" \
     "${state_dir}/applied-packages.json" \
+    "${state_dir}/package-sources.json" \
+    "${state_dir}/packages" \
     "${state_dir}/telemetry" \
     "${state_dir}/telemetry-backups" \
     "${state_dir}/backups" \

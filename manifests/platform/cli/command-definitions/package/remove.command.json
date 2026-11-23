@@ -1,0 +1,25 @@
+{
+  "path": [
+    "package",
+    "remove"
+  ],
+  "kind": "command",
+  "title": "Remove package",
+  "description": "Remove an installed package, disabling it first if it is on",
+  "order": 55,
+  "usage": "roborepo package remove <package> [--json]",
+  "arguments": [
+    {
+      "name": "package",
+      "required": true,
+      "interactive": {
+        "prompt": "Package"
+      }
+    }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageRemoveCommand"
+  }
+}

@@ -64,7 +64,8 @@ the user's live harness config, some in repo manifests, some in RoboRepo state.
 
 | Noun | What it is | Source of truth |
 | --- | --- | --- |
-| **Package** | A named feature made of typed resources | `globals/packages/<package>/package.config.json`; live config (enabled state) |
+| **Package** | A named feature made of typed resources | `package.config.json` in its source (the built-in library, the workspace, another folder, or an installed Git copy); live config (enabled state) |
+| **Package source** | Where a package comes from; decides its tab (System, Custom, Third Party) and the source badge on its card | `~/.roborepo/package-sources.json`; `~/.roborepo/packages/package-lock.json` (which source each installed package came from) |
 | **Resource** | One typed unit of a package's install or presentation | the package config |
 | **Skill** | A shared or native skill, inspected without flattening harness-specific metadata | package-owned `skills/<name>` source or system skill source; `~/.roborepo/skills/<name>` (managed cache); installed harness skill directories (harness install state) |
 | **Permission behavior** | A named behavior or arbitrary command set to `allow`, `ask`, `deny`, or `default` | `manifests/inventory/agent-permissions.json` (defaults); `~/.roborepo/command-overrides.json` (personal overrides); live config (active render) |
@@ -83,6 +84,23 @@ applies each installable resource; the enable/disable switch dispatches on `reso
 | `plugin` | `extraKnownMarketplaces` + `enabledPlugins[id]` | harness downloads the plugin on its next launch |
 | `service` | A registered async handler's bespoke install | e.g. telemetry's spool + capture hooks |
 | `skill` | A shared-skill link into harness skill dirs | reuses the skill linker |
+
+### Package sources and tabs
+
+Every package item in the view carries where it came from, so the portal can split packages into
+three tabs instead of one list. The tab follows the package's source:
+
+| Tab | Packages | Source types | Turn off | Remove |
+| --- | --- | --- | --- | --- |
+| **System** | RoboRepo's own library | `builtin` | Disable | Never offered |
+| **Custom** | Packages you keep in a local folder, including the workspace | `path` | Disable | Forgets RoboRepo's record; never your folder |
+| **Third Party** | Packages from someone else's GitHub repo | `git` | Disable | Deletes the installed copy and its record |
+
+Each item has `tab`, `sourceId`, `trust`, and `sourceBadge` (null for System; the source name for
+the rest, with ` · Trusted` for a repo from the trusted catalog), plus `collection` when a source
+groups several skills. Categories and collections still apply inside each tab. The tab split and
+the add-from-GitHub screen are rendered by a later change; today the fields are in the view data
+and in `roborepo package list --json`. Commands: [Package sources and installing](roborepo-cli.md#package-sources-and-installing).
 
 ### Package composition
 

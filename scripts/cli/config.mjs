@@ -18,6 +18,7 @@ import {
 } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageSelectionStates } from "./package-state.mjs";
+import { findSource } from "./package-sources.mjs";
 import { bundleSelectionStates, selectedBundleRoots } from "./bundle-selection.mjs";
 import { recommendedBy, requiredBy, requiredClosure } from "./package-graph.mjs";
 import { inspectSkill, skillInventorySource } from "./skill-inventory.mjs";
@@ -179,6 +180,11 @@ export function readConfigSnapshot() {
     id: pkg.id,
     label: pkg.label,
     origin: pkg.origin,
+    sourceId: pkg.sourceId,
+    sourceType: pkg.sourceType,
+    trust: pkg.trust,
+    tab: pkg.tab,
+    collection: pkg.collection || null,
     description: pkg.description || null,
     status: packageLiveState.get(pkg.id)?.status || "disabled",
     catalogStatus: pkg.status || "available",
@@ -667,6 +673,19 @@ function multiSkillPresentationItem(item, tools, contextCost) {
   };
 }
 
+function packageSourceBadge(item) {
+  const name = item.sourceType === "git" ? sourceDisplay(item.sourceId) : item.sourceId;
+  return item.trust === "trusted" ? `${name} · Trusted` : name;
+}
+
+function sourceDisplay(sourceId) {
+  try {
+    return findSource(sourceId)?.display || sourceId;
+  } catch {
+    return sourceId;
+  }
+}
+
 function packageItemBase(item, contextCost) {
   return {
     id: item.id,
@@ -677,6 +696,13 @@ function packageItemBase(item, contextCost) {
     toggle: item.selectable === false ? null : "package",
     selection: item.selection || "off",
     builtIn: item.origin === "built-in",
+    // Where the package came from: its portal tab (system, custom, third-party), the source badge
+    // a card shows, its trust, and the collection a source derived for it.
+    tab: item.tab || null,
+    sourceId: item.sourceId || null,
+    sourceBadge: item.tab && item.tab !== "system" ? packageSourceBadge(item) : null,
+    trust: item.trust || null,
+    collection: item.collection || null,
     urls: item.urls || [],
     resources: item.resources || item.components || [],
     note: item.status === "external" ? externalNote(externalComponentLabels(item.componentStatus)) : null,
