@@ -13,35 +13,89 @@ worktree:
 
 Give every agent session a title that starts with the plan-workflow stage it is in, so a person
 running many Claude and Codex sessions at once can tell them apart in the sidebar or session
-picker. Claude sessions are retitled automatically by a hook; harnesses that cannot set a title
-get the same identifier through the copied portal prompt and a paste-ready rename line.
+picker. The intended mechanism for Claude is a hook that sets the title; two trials, listed below,
+confirm how much of Claude that hook can cover. Harnesses with no way to set a title get the same
+identifier through the copied portal prompt and a rename line the person can paste.
 
 ## Context
 
 A plan moves through the plan-suite commands (`/plan-write`, `/plan-promote`, `/plan-execute`,
 `/plan-review`, `/plan-close`, `/plan-archive`), often in several sessions and sometimes several
-commands in one session. Each harness titles a session from its first prompt, so two sessions
-working on different stages of different plans get titles that do not say which stage or which
-plan they belong to. The user reported being confused by these titles while running sessions in
-parallel.
+commands in one session. Claude generates a session's title from its first prompt (*docs*; the
+evidence labels are explained under Current state). How Codex generates one was not confirmed.
+Neither title says which stage or which plan the session belongs to. The user reported being
+confused by these titles while running sessions in parallel.
 
 ## Goals
 
 - A session's title names the current stage and the plan, in one fixed format.
 - The title follows the session when it moves to another stage.
 - The behavior exists only while the plan-suite package is enabled.
-- The mechanism for setting a title lives in the harness provider; shared code only asks for it.
+- The harness-specific way of setting a title lives with that harness's code; shared code only
+  asks for it.
 - Harnesses with no way to set a title still show the identifier to the person and the agent.
 
 ## Non-goals
 
-- Setting titles automatically in Codex or Gemini. Neither offers a way today; see "Stage Titles on
-  Harnesses That Cannot Set Them Yet" (`96r9wbj0`).
-- Changing the session launcher described in "Session Launching — Milestone 1"
-  (`plan-session-launching-milestone-1`). Passing a title at launch is a later addition there.
-- Renaming sessions that already exist.
+- Setting titles automatically in Codex or Gemini. Codex offers no way today and Gemini has not
+  been investigated; "Stage Titles for Codex and Gemini Sessions" (`96r9wbj0`) owns both.
+- Changing the session launcher planned in "Session Launching — Milestone 1"
+  (`plan-session-launching-milestone-1`). That plan does not mention titles, and this one does not
+  add them to it.
+- Retitling a session that receives no further prompt. A title changes only when a prompt arrives
+  or the agent acts.
 
-## Title format
+## Terms
+
+| Term | Meaning |
+| --- | --- |
+| Harness | An agent tool RoboRepo configures: Claude (CLI and desktop app), Codex, Gemini |
+| Harness provider | RoboRepo's code and manifest for one harness, under `scripts/harnesses/<id>/` and `globals/harnesses/<id>/provider.json` |
+| Capability | A named feature a provider's manifest declares the harness supports, listed in `scripts/harnesses/contract.mjs` |
+| Adapter group | The set of functions a provider must supply for a capability it declares |
+| Plan snapshot | The in-memory list of a repository's plans that `modules/plan-suite/index.mjs` builds from the plan store; it resolves a plan id to its title |
+| Copied portal prompt | The text the Plans page puts on the clipboard for a plan action, built by `buildPrompt()` |
+
+## Current state
+
+Evidence labels: *docs* means read in the harness's official documentation on 2026-11-23 and not
+exercised. *checked* means read in this repository at the reviewed commit, or, for the Claude
+desktop app, read on 2026-11-23 in the descriptions of the two session tools the app gives an
+agent: one that renames a session and one that starts another session.
+
+| Harness | Agent can rename its session | Hook can set the title | Title at launch |
+| --- | --- | --- | --- |
+| Claude desktop app | Yes, with the rename tool. If the person named the session, the app asks them first; a session with nobody present to answer refuses the rename (*checked*) | Unknown | Yes, a parent session passes a title of up to 60 characters (*checked*) |
+| Claude Code CLI | No documented way (*docs*) | Yes: a hook may return `hookSpecificOutput.sessionTitle` on `UserPromptSubmit`, and receives a title the person set as `session_title` (*docs*) | Yes, `claude -n "<name>"` (*docs*) |
+| Codex | No documented way (*docs*) | None documented (*docs*) | No; requested in openai/codex issue 44422 (*docs*) |
+| Gemini | Not investigated | Not investigated | Not investigated |
+
+In the Claude CLI and in Codex the person can rename a session by typing `/rename <name>` (*docs*).
+
+Repository structure this plan builds on (*checked*):
+
+| Existing piece | Location | Use here |
+| --- | --- | --- |
+| Package hook resources, one per harness | `"type": "hooks"` entries such as those in `globals/packages/telemetry/package.config.json` | plan-suite gains one; it has none today |
+| A package hook that calls the CLI | `globals/packages/telemetry/hooks-claude.json` runs `roborepo telemetry capture …` on `UserPromptSubmit` | Same shape for the title hook |
+| Package rules | `globals/packages/plan-suite/rules.md`, loaded in every session while the package is on | Holds the agent-facing rule |
+| Capabilities and their required functions | `HARNESS_CAPABILITIES` and `CAPABILITY_REQUIRED_METHODS` in `scripts/harnesses/contract.mjs` | Gains a `session-title` capability |
+| Copied portal prompts | `buildPrompt()` in `modules/plan-suite/index.mjs`, called from `scripts/cli/plans.mjs` | Gains a title line |
+
+## Trials first
+
+Two facts about Claude are unknown and decide how much the hook covers. Each is a short manual
+check with a throwaway hook in a scratch settings file. The design below is written for two "yes"
+answers; the last column says what changes otherwise.
+
+| Trial | If yes | If no |
+| --- | --- | --- |
+| A. Does a hook-returned title take effect in the Claude desktop app, not only the CLI? | The hook covers both | In the desktop app the agent sets the title with its rename tool, as the rule already instructs |
+| B. Does `UserPromptSubmit` fire with the text of a typed `/plan-execute …` prompt? | The hook covers typed commands | The hook covers only copied prompts, which carry a title line. A typed command in the Claude CLI gets no stage title; record that as a known gap |
+
+## Proposed design
+
+### Title format
 
 | Session kind | Title | Description comes from |
 | --- | --- | --- |
@@ -50,99 +104,91 @@ parallel.
 | Work with no plan | `Quick Change: <description>` | The agent's short description of the change |
 
 The whole title is at most 60 characters, the limit the Claude desktop app sets on a title passed
-when one session starts another. A longer description is cut at a word boundary and ends with `…`.
-The plan id never appears: ids are opaque and titles are for people.
+at launch. A longer description is cut at a word boundary and ends with `…`. The plan id never
+appears: ids are opaque and titles are for people.
 
-## Current state
+### How a title reaches a session
 
-Facts marked *docs* were read in the harness's official documentation on 2026-11-23 and have not
-been exercised; facts marked *checked* were read in this repository or in the tool's own definition.
-
-| Harness | Agent can rename its session | Hook or config can set the title | Title at launch |
-| --- | --- | --- | --- |
-| Claude desktop app | Yes, a rename tool; a title the user set needs their approval, and unattended sessions decline (*checked*) | Not known; see Trials first | Yes, a parent session passes a title of up to 60 characters (*checked*) |
-| Claude Code CLI | No documented way (*docs*) | Yes: a hook may return `hookSpecificOutput.sessionTitle` on `UserPromptSubmit` and on `SessionStart`, and receives the current user-set title as `session_title` (*docs*) | Yes, `claude -n "<name>"` (*docs*) |
-| Codex | No documented way (*docs*) | None found (*docs*) | No; requested in openai/codex issue 44422 (*docs*) |
-| Gemini | Not investigated | Not investigated | Not investigated |
-
-Both CLIs let the person rename a session by typing `/rename <name>` (*docs*).
-
-Relevant repository structure (*checked* at the reviewed commit):
-
-| Existing piece | Location | Use here |
+| Path | Works in | Covers |
 | --- | --- | --- |
-| Package hook resources, per harness | `"type": "hooks"` entries such as `globals/packages/telemetry/package.config.json` | plan-suite gains one; it has none today |
-| A package hook that calls the CLI | `globals/packages/telemetry/hooks-claude.json` runs `roborepo telemetry capture …` on `UserPromptSubmit` | Same shape for the title hook |
-| Package rules | `globals/packages/plan-suite/rules.md`, loaded in every session while the package is on | Holds the agent-facing rule |
-| Provider capabilities and required methods | `HARNESS_CAPABILITIES` and `CAPABILITY_REQUIRED_METHODS` in `scripts/harnesses/contract.mjs` | Gains a `session-title` capability |
-| Placeholder adapters | `stubAdapterGroups` and `isStubAdapter` in `scripts/harnesses/stub-adapter.mjs` | Codex and Gemini use them |
-| Copied portal prompts | `buildPrompt()` in `modules/plan-suite/index.mjs`, called from `scripts/cli/plans.mjs` | Gains a title line |
+| Hook | Claude, subject to the trials | Any prompt that carries a title line or opens with a plan command |
+| Copied portal prompt | Every harness | Shows the identifier to the agent and the person; in Claude it also feeds the hook |
+| Rule | Every harness | Sub-task launches, `Quick Change:`, stages the agent starts itself, and the paste-ready rename line |
 
-## Proposed design
-
-One function owns the format. Three paths deliver it: a hook where the harness supports one, the
-copied prompt everywhere, and a rule for what neither can see.
+The hook path, when a prompt is submitted in Claude:
 
 ```mermaid
-flowchart TD
-  Prompt["Prompt submitted in Claude"] -->|"fires"| Hook["plan-suite hook: roborepo plans session-title"]
-  Hook -->|"asks for stage and plan"| Formatter["Title formatter"]
-  Hook -->|"asks how to return a title"| Provider["Claude provider: sessionTitle adapter"]
-  Provider -->|"returns hook output"| Claude["Claude sets the session title"]
-  Portal["Copied portal prompt"] -->|"carries a title line from"| Formatter
-  Rule["plan-suite rule"] -->|"tells the agent to apply"| Formatter
+sequenceDiagram
+  participant Claude
+  participant Command as roborepo plans session-title
+  participant Formatter as Title formatter
+  participant Provider as Claude provider
+  Claude->>Command: sends the prompt and any title the person set
+  Command->>Formatter: requests the title for this stage and plan
+  Formatter-->>Command: returns the title
+  Command->>Provider: requests hook output for the title
+  Provider-->>Command: returns the output text
+  Command-->>Claude: prints the output, which sets the title
 ```
 
 ### Title formatter
 
-A pure function in `modules/plan-suite/` takes a session kind (a plan command, sub-task, or quick
-change) and a description, and returns the title in the format above, including the length cut.
-The hook, the prompt builder, and the tests all call it, so the format is written once.
+A pure module in `modules/plan-suite/` exports the three prefixes, a function that builds a title
+from a session kind and a description (including the length cut), and a function that says whether
+a given title already carries one of the prefixes. The command and the prompt builder call it. The
+rule text has to state the format in words for the agent, so a test compares the prefixes written
+in `globals/packages/plan-suite/rules.md` with the module's.
 
 ### Provider capability
 
-Add `session-title` to the provider contract, with adapter group `sessionTitle` and one method,
-`hookOutput({ title, event, currentTitle })`. It returns the text the harness expects a hook to
-print in order to set the title, or nothing when the title must stay as it is.
+Add `session-title` to the provider contract, with adapter group `sessionTitle` and one function,
+`hookOutput({ title })`, which returns the text the harness expects a hook to print in order to
+set that title.
 
-| Provider | Implementation |
+| Provider | Declares `session-title` |
 | --- | --- |
-| Claude | Real. Returns the `hookSpecificOutput.sessionTitle` output for `UserPromptSubmit`. Returns nothing when `currentTitle` is a title the user set that does not already carry one of the three prefixes, so a hand-written name is never replaced |
-| Codex, Gemini | Declared and stubbed with `stubAdapterGroups`, as their other unimplemented groups are. Callers skip a stub with `isStubAdapter` |
+| Claude | Yes. `hookOutput` returns the `hookSpecificOutput.sessionTitle` output |
+| Codex, Gemini | No. `docs/internal/harness-provider-interface.md` requires that a capability be declared only when the harness supports it, so an undeclared capability is how "not supported yet" is expressed |
+
+The provider only renders output. Deciding whether to set a title stays in the shared command.
 
 ### Hook, scoped to the package
 
 `globals/packages/plan-suite/` gains a `hooks-claude.json` and a matching `hooks` resource with
 `"harness": "claude"` in `package.config.json`. The hook runs a new command,
-`roborepo plans session-title --harness claude --event UserPromptSubmit`, on every submitted prompt.
-The command is the orchestrator:
+`roborepo plans session-title --harness claude`, on `UserPromptSubmit`. The command orchestrates:
 
 1. Read the hook input from standard input.
-2. Find the stage and plan: a title line in the prompt wins; otherwise a leading plan command plus
-   the plan the prompt names, resolved through the plan snapshot.
-3. If neither is present, print nothing and exit 0, so non-plan prompts are untouched.
-4. Format the title, ask the harness provider for the hook output, and print it.
+2. Find the stage and plan. A title line in the prompt wins. Otherwise use a leading plan command
+   plus the plan the prompt names, looked up in the plan snapshot (this branch depends on trial B).
+3. If neither is present, or the harness's provider does not declare `session-title`, print
+   nothing and exit 0.
+4. If the person set a title and it carries none of the three prefixes, print nothing and exit 0,
+   so a hand-written name is never replaced. A title that carries a prefix is replaced, which is
+   how the title follows a session to its next stage.
+5. Build the title, request the hook output from the provider, and print it.
 
 The command never fails a prompt: any error exits 0 with no output. Disabling plan-suite removes
-the hook with the package's other resources.
+the hook along with the package's other resources.
 
 ### Rule, scoped to the package
 
-One section in `globals/packages/plan-suite/rules.md` gives the format and four instructions:
+One section in `globals/packages/plan-suite/rules.md` states the format and these instructions:
 
-- When a plan command starts and the title does not already show that stage, set it if the harness
-  gives the agent a way to rename its own session.
+- When a plan command starts and you have a tool that renames your own session, set the stage
+  title with it.
 - When starting another session for part of a plan's work, pass `/plan sub-task: <task>` as its
   title if the launch accepts one.
 - On the first file edit in a session that is not working a plan, set `Quick Change: <description>`
-  if the agent can rename its own session.
-- When the agent cannot rename the session, print one line the person can paste, `/rename <title>`,
-  once per stage, and continue without waiting.
+  if you have a tool that renames your own session.
+- If you have no such tool: in Claude Code do nothing more, because a hook sets stage titles there;
+  in any other harness print one line the person can paste, `/rename <title>`, once per stage, and
+  continue without waiting.
 
 ### Copied prompts
 
-`buildPrompt()` adds one line after the command line, for prompts that open with a plan command and
-select exactly one plan:
+`buildPrompt()` adds one line after the command line when the prompt opens with a plan command and
+selects exactly one plan:
 
 ```text
 /plan-execute
@@ -151,26 +197,14 @@ Session title: /plan-execute: Session Titles Show the Workflow Stage
 Work with plan `gcfw77cq` at `plans/ready/session-stage-titles.md` in repository `roborepo`.
 ```
 
-In Claude the hook reads this line and needs no plan lookup. In any other harness the agent and the
-person both see the identifier, and the rule tells the agent what to do with it.
-
-## Trials first
-
-Two facts decide the hook's final shape and are not yet known. Each is a short manual check with a
-throwaway hook in a scratch settings file.
-
-| Trial | If yes | If no |
-| --- | --- | --- |
-| Does a hook-returned title take effect in the Claude desktop app, not only the CLI? | One mechanism covers both | The desktop app relies on the rule and the agent's rename tool |
-| Does `UserPromptSubmit` fire with the text of a typed `/plan-execute …` prompt? | The hook covers typed commands | The hook covers only copied prompts with a title line; typed commands rely on the rule |
-
 ## Implementation plan
 
-- [ ] Run both trials and record the results in this plan's Decision Log.
-- [ ] Add the title formatter and its tests.
-- [ ] Add the `session-title` capability to the contract, the Claude implementation, and the Codex
-      and Gemini stubs; declare it in the three provider manifests under `globals/harnesses/`.
-- [ ] Add `roborepo plans session-title` and register it in the CLI command catalog.
+- [ ] Run trials A and B and record the results in this plan's Decision Log.
+- [ ] Add the title formatter module and its tests.
+- [ ] Add the `session-title` capability to `scripts/harnesses/contract.mjs`, implement it in
+      `scripts/harnesses/claude/`, and declare it in `globals/harnesses/claude/provider.json`.
+- [ ] Add `roborepo plans session-title` in `scripts/cli/plans.mjs` and register it with a command
+      definition under `manifests/platform/cli/command-definitions/`, as `plans stop-servers` is.
 - [ ] Add the plan-suite hook resource and `hooks-claude.json`.
 - [ ] Add the rule section to `globals/packages/plan-suite/rules.md`.
 - [ ] Add the title line to `buildPrompt()`.
@@ -178,25 +212,27 @@ throwaway hook in a scratch settings file.
 
 ## Validation
 
-Scripted checks, each asserting output a person or harness would see:
+Scripted checks, each asserting output a person or a harness would see:
 
 - The formatter returns the three formats, cuts a long description at 60 characters on a word
   boundary, and leaves a short one unchanged.
-- `roborepo plans session-title` given recorded hook input prints the Claude title output for a
-  prompt with a title line and for a typed plan command; prints nothing for an ordinary prompt, for
-  a user-set title, and for malformed input; and always exits 0.
-- The provider contract accepts all three providers with `session-title` declared, and the Codex
-  and Gemini methods report as stubs.
-- `buildPrompt()` includes the title line for one plan with a plan command, and omits it for no
-  command, a retired command, several plans, and portable mode's unchanged cases (extend
-  `scripts/test/plan-suite-check.mjs`).
-- Enabling and disabling plan-suite adds and removes the hook in a simulated Claude config
-  (the existing hook composition checks).
-- The repository health check, because the change touches package defaults, harness config, and a
-  shared provider contract.
+- `roborepo plans session-title --harness claude`, given recorded hook input, prints the Claude
+  title output for a prompt with a title line and for a typed plan command.
+- Stage change: given a current title of `/plan-execute: <plan>` and a `/plan-review` prompt for
+  the same plan, it prints the `/plan-review: <plan>` title.
+- It prints nothing for an ordinary prompt, for a person-set title without a prefix, for malformed
+  input, and for `--harness codex`; it exits 0 in every case.
+- The prefixes written in `globals/packages/plan-suite/rules.md` match the formatter's.
+- `buildPrompt()` includes the title line for one plan with a plan command, and omits it with no
+  command, with a command name that is no longer a plan command, and with several plans. These
+  extend `scripts/test/plan-suite-check.mjs`.
+- Enabling and disabling plan-suite adds and removes the hook in a simulated Claude config,
+  extending `scripts/test/hook-composition-check.mjs`.
+- `npm test`, the smoke suite, locally; CI runs the full gate (`npm run check`) because the change
+  touches package defaults, harness config, and the shared provider contract.
 
-One check needs a person: after install, typing a plan command in the Claude CLI and in the desktop
-app shows the new title in the session list.
+One check needs a person: after install, a plan command in the Claude CLI and in the desktop app
+shows the new title in the session list.
 
 ## Documentation impact
 
@@ -206,17 +242,18 @@ app shows the new title in the session list.
 | `docs/user/reference/claude-hooks.md` | List the plan-suite title hook |
 | `docs/user/reference/plans-portal.md` | Note the title line in copied prompts |
 | `docs/user/reference/roborepo-cli.md` | Add `roborepo plans session-title` |
+| `docs/user/guides/harnesses/supported-harnesses.md` | Add `session-title` to the capability table |
 | `docs/internal/harness-provider-interface.md` | Add the `session-title` capability |
 
 ## Risks
 
-- **The hook runs on every prompt.** It must be fast and silent. The command exits before loading
+- **The hook runs on every prompt.** It must be fast and silent. The command exits before building
   the plan snapshot unless the prompt carries a title line or opens with a plan command.
 - **Claude's own retitling.** Claude replaces a generated title when a plan is accepted in its plan
-  mode (*docs*). The next plan-command prompt sets the stage title again; a session that never
-  receives another prompt keeps Claude's title.
-- **Agent-dependent paths.** Sub-task and Quick Change titles depend on the agent following the
-  rule, so they will sometimes be missed. The hook-driven path does not have this weakness.
+  mode (*docs*). The next plan-command prompt sets the stage title again; a session that receives
+  no further prompt keeps Claude's title.
+- **Agent-dependent paths.** Sub-task and `Quick Change:` titles depend on the agent following the
+  rule, so they will sometimes be missed. The hook path does not have this weakness.
 
 ## Open questions
 
@@ -227,9 +264,11 @@ app shows the new title in the session list.
 
 - Hook plus rule, both inside the plan-suite package, chosen by the user over a rule alone or a
   small skill required by every plan command (2026-11-23).
-- The title mechanism is a provider capability with stubs for Codex and Gemini, at the user's
-  direction, so shared code never carries one harness's hook format (2026-11-23).
-- Copied portal prompts carry the title as the harness-neutral fallback, and Codex sessions also
-  get a paste-ready rename line, at the user's direction (2026-11-23).
-- `Quick Change:` is set by the agent on its first edit rather than guessed from the first prompt,
-  which would mislabel sessions that only ask a question (user's choice, 2026-11-23).
+- The harness-specific title mechanism is a provider capability, at the user's direction, so shared
+  code never carries one harness's hook format (2026-11-23).
+- Codex and Gemini leave the capability undeclared instead of declaring it with placeholder
+  functions, following the provider guide's rule; the user agreed (2026-11-23).
+- Copied portal prompts carry the title as the harness-neutral fallback, and sessions outside
+  Claude also get a paste-ready rename line, at the user's direction (2026-11-23).
+- `Quick Change:` is set by the agent on its first edit, not guessed from the first prompt, which
+  would mislabel sessions that only ask a question (user's choice, 2026-11-23).
