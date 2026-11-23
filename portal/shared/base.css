@@ -1145,10 +1145,21 @@ dialog.portal-dialog[open] {
 dialog.portal-dialog::backdrop {
   background: var(--backdrop);
 }
-/* The title row fills the head, so the close button sits at its right edge. */
+/* The title row fills the head and never wraps: the close button keeps a fixed column at its right
+ * edge, top-aligned, and a long title wraps within the space left of it. */
 dialog.portal-dialog .modal-head-main {
   flex: 1;
   min-width: 0;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+dialog.portal-dialog .modal-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  /* Centers a one-line title on the close button's height. */
+  line-height: 1.4;
+  padding-top: 3px;
 }
 dialog.portal-dialog .modal-footer {
   padding: 12px 16px;
