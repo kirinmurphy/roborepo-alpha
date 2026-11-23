@@ -46,6 +46,16 @@ try {
   assert.equal(closeRunTmpdir(base), false, "close refuses a folder the helper did not name");
   assert.ok(fs.existsSync(base));
 
+  // An existing root made wider than 0700 is narrowed; a root replaced by a link is refused.
+  if (process.platform !== "win32") {
+    fs.chmodSync(root, 0o777);
+    closeRunTmpdir(openRunTmpdir({ base }));
+    assert.equal(fs.statSync(root).mode & 0o777, 0o700, "an existing wide root is made private");
+  }
+  const linkedBase = fs.mkdtempSync(path.join(base, "linked-"));
+  fs.symlinkSync(victim, runsRoot(linkedBase));
+  assert.throws(() => openRunTmpdir({ base: linkedBase }), /not a folder/, "a runs root replaced by a link is refused");
+
   console.log("ok: test runs use and remove their own TMPDIR, sweeping only finished runs");
 } finally {
   fs.rmSync(base, { recursive: true, force: true });

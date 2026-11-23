@@ -61,7 +61,9 @@ export function sweepEmptyShells(tmpRoot = os.tmpdir(), {
   let root;
   try {
     names = fsApi.readdirSync(tmpRoot);
-    root = fsApi.lstatSync(tmpRoot);
+    // stat, not lstat: the scan confirms the root as `.` after chdir, which is the link's target when
+    // the temp root is itself a link (macOS /tmp, os.tmpdir()'s fallback when TMPDIR is unset).
+    root = fsApi.statSync(tmpRoot);
   } catch {
     return swept;
   }

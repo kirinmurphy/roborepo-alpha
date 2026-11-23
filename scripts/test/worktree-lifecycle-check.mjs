@@ -56,6 +56,26 @@ import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
   }
 }
 
+// A temp root reached through a link (macOS /tmp) is still swept.
+{
+  const realRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shell-linked-root-"));
+  const linkedRoot = `${realRoot}-link`;
+  const cwdBefore = process.cwd();
+  try {
+    fs.symlinkSync(realRoot, linkedRoot);
+    const old = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const shell = path.join(realRoot, "roborepo-disposable-landing-Link01");
+    fs.mkdirSync(shell);
+    fs.utimesSync(shell, old, old);
+    assert.deepEqual(sweepEmptyShells(linkedRoot), [path.join(linkedRoot, path.basename(shell))], "a shell under a linked temp root is swept");
+    assert.ok(!fs.existsSync(shell));
+    assert.equal(process.cwd(), cwdBefore, "the working directory is restored");
+  } finally {
+    fs.rmSync(linkedRoot, { force: true });
+    fs.rmSync(realRoot, { recursive: true, force: true });
+  }
+}
+
 // A shell replaced by a link between the scan and the removal is left, and the link's target keeps
 // its empty folders; an unchanged shell is still removed deepest first.
 {

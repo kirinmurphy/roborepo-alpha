@@ -39,10 +39,21 @@ function accountKey() {
 export function openRunTmpdir({ pid = process.pid, base = os.tmpdir(), isAlive = processAlive } = {}) {
   const root = runsRoot(base);
   fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+  ensurePrivateRoot(root);
   sweepFinishedRuns(root, isAlive);
   const dir = path.join(root, `run-${pid}-${Date.now()}`);
   fs.mkdirSync(dir);
   return dir;
+}
+
+// mkdir's mode applies only when it creates the folder, so an existing root is checked here: it must
+// be a real folder this account owns, and is narrowed to 0700 if it was made wider.
+function ensurePrivateRoot(root) {
+  const stat = fs.lstatSync(root);
+  if (!stat.isDirectory()) throw new Error(`${root} is not a folder; refusing to use it for test runs`);
+  const uid = process.getuid?.();
+  if (uid !== undefined && stat.uid !== uid) throw new Error(`${root} belongs to another account; refusing to use it for test runs`);
+  if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) fs.chmodSync(root, 0o700);
 }
 
 export function closeRunTmpdir(dir) {
