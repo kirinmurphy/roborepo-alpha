@@ -2,8 +2,7 @@
 id: 96r9wbj0
 next_action: First find out whether Gemini can already set a session title and record it in this plan; if it can, or once Codex gains a way, run /plan-promote, and otherwise this plan waits on the harnesses
 blocked_by: []
-depends_on:
-  - gcfw77cq
+depends_on: []
 related: ["gcfw77cq", "plan-session-launching-milestone-1"]
 reviewed_commit: 7cffabe79b2ff859b78b5f702e1a3e4e73802e74
 worktree:
@@ -17,6 +16,10 @@ Claude sessions do after "Session Titles Show the Workflow Stage" (`gcfw77cq`). 
 deliberately parked. Codex offers no way to set a session title from a hook, a launch flag, or the
 agent. Gemini has not been investigated, and that investigation is the one task that does not
 wait. The rest starts when either harness has a mechanism.
+
+This plan follows "Session Titles Show the Workflow Stage" and builds on what it ships: the title
+format, the `session-title` capability, and the rename-line rule. Start it only after that plan is
+complete.
 
 ## Context
 
