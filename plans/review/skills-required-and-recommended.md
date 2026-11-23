@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Review of 843701dd (main merged into the branch after pull request 76 landed) is complete; awaiting human approval of 843701dd, then `/plan-close`.
+next_action: Approved at 843701dd and landed in main as 1604eab8; run `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -543,6 +543,8 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - Validator pass at 843701dd over 279cc4c0..843701dd (fresh-context subagent): clean; #80 touches no
   manifest, skill, rule, audit, wizard, Config page, or doc of record this plan owns.
 
+- Approval of 843701dd: the user replied "Approve 843701dd" in the /plan-close session on 2026-11-23.
+
 ### Result
 - Status: complete
 - Reviewed implementation commit: 843701ddb880e16c3a8913591eefee610735d53e
@@ -682,9 +684,10 @@ cascading-disable dialog, required packages are called "included" wherever a per
 - `## Not tested`: both entries cleared with evidence before approval. Every `## Review` finding is
   checked off with its resolution.
 - `roborepo plans validate ejsc769o`: 0 findings before closure.
-- `roborepo plans approval ejsc769o`: fresh at 279cc4c0452e3f5ca6aa5cc36720256a1507e824.
+- `roborepo plans approval ejsc769o`: fresh at 843701ddb880e16c3a8913591eefee610735d53e (renewed after
+  the refusal below; 843701dd is a merge of main whose tree equals main at 9ad6fab7).
 - `roborepo plans landed ejsc769o`: landed, newly scanned.
 - Absorbing commit: 1604eab84a69511b795a930ed333dc936d18e4b9
 - Closure refused 2026-11-23: after these checks the branch gained 843701dd, a merge of main at
   9ad6fab7 whose tree equals main, and `roborepo plans close` reported the approval of 279cc4c0
-  stale (changed paths are #80's four files).
+  stale (changed paths are #80's four files). Resolved by `/plan-review` and the user's approval of 843701dd.
