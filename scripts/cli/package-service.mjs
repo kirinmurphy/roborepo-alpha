@@ -481,7 +481,9 @@ function installOne(pkg, lock) {
 // trusted catalog has reviewed). Returns the change for the caller to show; nothing moves until
 // the caller passes `confirmed` after showing it. A live package is used in place, so "update"
 // re-records it.
-export async function updatePackage(reference, { confirmed = false, reapply = null } = {}) {
+// `expectedRevision` is the revision the caller showed the user; when given, the update moves to
+// exactly that revision, so a branch that moved during the prompt cannot slip in unreviewed.
+export async function updatePackage(reference, { confirmed = false, expectedRevision = null, reapply = null } = {}) {
   const lock = readPackageLock();
   const { packageId, sourceId } = parsePackageReference(reference);
   const current = lock.packages[packageId];
@@ -497,7 +499,7 @@ export async function updatePackage(reference, { confirmed = false, reapply = nu
   if (current.url && record.url !== current.url) {
     throw new PackageServiceError(`${qualifiedName(current.sourceId, packageId)} was installed from ${current.url}, but source ${record.id} now points at ${record.url}; remove the package and install it again to switch repositories`, { code: "refused" });
   }
-  const refreshed = runRefresh(record);
+  const refreshed = runRefresh(record, expectedRevision ? { revision: expectedRevision } : {});
   const latest = refreshed.catalog.revision;
   const name = qualifiedName(current.sourceId, packageId);
   if (latest === current.resolved) return { qualifiedName: name, changed: false, revision: latest };

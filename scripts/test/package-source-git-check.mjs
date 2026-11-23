@@ -126,7 +126,16 @@ try {
   assert.match(pending.output, /changed: .*skills\/audit-one\/SKILL\.md/);
   assert.equal(lock()["audit-one"].resolved, skillsRepo.first);
   const oldCopy = lock()["audit-one"].installedPath;
-  const updated = json("package", "update", "audit-one", "--yes");
+  // The branch moves again while the user reads the change for `second`: the confirmed update
+  // still lands on `second`, the commit they saw.
+  skillsRepo.commit({ "skills/audit-one/SKILL.md": skill("audit-one", "Unreviewed third change.") });
+  const confirmedUpdate = runModules(roots.env, { svc: "scripts/cli/package-service.mjs", pk: "scripts/cli/packages.mjs" }, `
+    const log = console.log; console.log = console.error;
+    try { return await svc.updatePackage("audit-one", { confirmed: true, expectedRevision: ${JSON.stringify(second)}, reapply: pk.reapplyPackage }); }
+    finally { console.log = log; }
+  `);
+  assert.ok(confirmedUpdate.ok, confirmedUpdate.error);
+  const updated = confirmedUpdate.value;
   assert.equal(updated.to, second);
   assert.equal(updated.reapplied, true, "an active package is re-applied from its new copy");
   assert.equal(lock()["audit-one"].resolved, second);

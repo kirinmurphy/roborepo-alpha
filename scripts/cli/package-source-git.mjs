@@ -435,9 +435,12 @@ function gitSource(record) {
   const entries = () => {
     const catalog = readGitCatalog(record.id);
     if (!catalog) return [];
-    return catalog.packages.map((item) => {
+    // A listing whose cached files were deleted offers nothing until the next refresh, rather than
+    // breaking every listing of every source.
+    return catalog.packages.flatMap((item) => {
       const root = path.join(revisionCacheDir(record.id, catalog.revision), "packages", item.packageId);
       const file = path.join(root, "package.config.json");
+      if (!fs.existsSync(file)) return [];
       return { sourceId: record.id, packageId: item.packageId, root, file, config: readManifest(file), collection: item.collection, revision: catalog.revision, contents: item.contents, integrity: item.integrity || null };
     });
   };

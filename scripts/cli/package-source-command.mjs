@@ -184,12 +184,17 @@ export function packageUpdateCommand(rest = []) {
       const change = err.details.change;
       printChange(change);
       if (!interactive(flags) || !(await confirm(`Move ${change.qualifiedName} to ${short(change.to)}?`))) throw err;
-      result = await updatePackage(reference, { confirmed: true, reapply: reapplyPackage });
+      result = await updatePackage(reference, { confirmed: true, expectedRevision: change.to, reapply: reapplyPackage });
+      result.shown = true;
     }
     if (flags.has("json")) return emitJson(result);
     if (result.live) console.log(`${result.qualifiedName}: ${result.message}`);
     else if (!result.changed) console.log(`${result.qualifiedName}: up to date at ${short(result.revision)}`);
-    else console.log(`updated ${result.qualifiedName}: ${short(result.from)} -> ${short(result.to)}${result.reapplied ? " (re-applied)" : ""}`);
+    else {
+      // With --yes the change was never shown before it was made; show it now.
+      if (!result.shown) printChange(result);
+      console.log(`updated ${result.qualifiedName}: ${short(result.from)} -> ${short(result.to)}${result.reapplied ? " (re-applied)" : ""}`);
+    }
   }, flags);
 }
 
