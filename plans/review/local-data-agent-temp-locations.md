@@ -451,3 +451,28 @@ Also updated, as the implementation newly affected them: `docs/user/reference/ar
   time this lands, add the scratch folder there.
 - The rule fragment is the reader-facing doc for agents; `globals/packages/test-harness` and
   `tool-call-optimization` text changes with it.
+
+## Completion
+
+Closed 2026-11-23. Agents now have two places for temporary files: Claude's session scratchpad, and
+`~/.roborepo/scratch/<name>/` from `roborepo scratch <name>`, which both harnesses' sandboxes can
+write. The scratch folder is a retention store: folders unchanged for 14 days are pruned whenever
+an agent asks for scratch space, with a 500 MB backstop that spares folders changed in the last
+hour. `roborepo maintenance stores reset --dry-run` previews any store's cleanup. Test runs get a
+per-run `TMPDIR` that is removed afterwards, `withTemporaryStorage` clears its own empty leftover
+folders, and `delivery pr-body` accepts a body from the scratch folder. A shared Temporary Files
+rule tells Claude and Codex agents where to write. Merged to `main` through
+kirinmurphy/roborepo-alpha#78.
+
+## Verification
+
+- Completion gate: CI run 45215948032 on `main` at 9f69af65 passed (`check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer`)
+- Merge commit 9f69af65 has the same tree as the approved commit 0ea0bfe5 (fd51f7ca)
+- Implementation review (fresh-context subagent) of `d66dcfce..9f69af65` against this plan: no blocking or actionable findings. It reran `retention-policy-check`, `maintenance-stores-check`, and `claude-sandbox-projection-check` (passed), and read `scratch-command-check`, `delivery-operations-check`, `run-tmpdir-check`, `worktree-lifecycle-check`, and `codex-plans-store-grants-check` without running them
+- Review notes, handled in kirinmurphy/roborepo-alpha#80 outside this plan: no test removes an aged top-level link from the scratch store; no check asserts the Temporary Files fragment renders into the Claude and Codex rules; the empty-shell sweep calls `process.chdir` while the Runtime service runs it in-process
+- Plan claims checked against `main`: every implementation task, `## Not tested` entry, and `## Review` finding is checked off; the scratch store in `modules/retention/registry.mjs`, `~/.roborepo/scratch` in `CLAUDE_SANDBOX_WRITABLE_PATHS` and `CODEX_SANDBOX_WRITABLE_PATHS` (rendered into `generated/codex/config.toml`), the scratch body root in `scripts/cli/delivery.mjs`, the per-run `TMPDIR` in `run-checks.mjs` and `test-cli.sh`, the shell sweep in `temporary-storage.mjs`, and the Temporary Files section in `generated/claude/CLAUDE.md` and `generated/codex/AGENTS.md` are present
+- Docs of record checked against the landed code: `docs/user/reference/roborepo-cli.md`, `docs/internal/testing.md`, and `docs/user/reference/config-control-panel.md` match. The other docs under `## Documentation impact` landed unchanged from the reviewed commit and were not rechecked
+- Approval: fresh; approved commit 0ea0bfe52b95e1308d19ea2330e0d947360f00e3, confirmed by a human
+- Landing: newly scanned; branch `local-data-agent-temp-locations` absorbed into `main` by the squash merge
+- Absorbing commit: 9f69af65dae770b451d706d8ffa03f8c986cd75b
+- Not verified: Codex enforcement on Linux and Windows; the Codex sandbox was measured only on macOS
