@@ -1,6 +1,6 @@
 ---
 id: 96r9wbj0
-next_action: Waiting on Codex or Gemini to offer a way to set a session title; when one ships, check it against the options table in this plan and run /plan-promote
+next_action: First find out whether Gemini can already set a session title and record it in this plan; if it can, or once Codex gains a way, run /plan-promote, and otherwise this plan waits on the harnesses
 blocked_by: []
 depends_on:
   - gcfw77cq
@@ -15,7 +15,8 @@ worktree:
 Make Codex and Gemini sessions show the plan-workflow stage in their titles automatically, as
 Claude sessions do after "Session Titles Show the Workflow Stage" (`gcfw77cq`). This plan is
 deliberately parked. Codex offers no way to set a session title from a hook, a launch flag, or the
-agent, and Gemini's options have not been investigated; work starts when either has one.
+agent. Gemini has not been investigated, and that investigation is the one task that does not
+wait. The rest starts when either harness has a mechanism.
 
 ## Context
 
@@ -26,10 +27,10 @@ that plan matter here:
 | --- | --- |
 | Title hook | In Claude, a hook runs `roborepo plans session-title` on each prompt and Claude sets the title from its output |
 | `session-title` capability | A feature a harness's RoboRepo provider (its code under `scripts/harnesses/<id>/` and manifest under `globals/harnesses/<id>/`) declares when the harness can set a title. Only Claude declares it. Two provider functions sit behind it: `sessionTitle.readHookInput` reads the prompt and current title from the harness's hook input, and `sessionTitle.hookOutput` returns the hook output text that sets a title |
-| Rename-line rule | A rule in `globals/packages/plan-suite/rules.md` telling an agent that cannot rename its session to print `/rename <title>` for the person to paste, in every harness except Claude Code |
+| Rename-line rule | A rule in `globals/packages/plan-suite/rules.md` telling a Codex agent, which cannot rename its session, to print `/rename <title>` for the person to paste. The rule prints nothing in Claude Code, where the hook sets the title, or in Gemini, where a rename command is not confirmed |
 
-Outside Claude the person therefore pastes a rename line at each stage. This plan removes that
-step for a harness once the harness can set the title itself.
+In Codex the person therefore pastes a rename line at each stage, and in Gemini nothing sets the
+title. This plan closes both gaps once the harness can set the title itself.
 
 ## Goals
 
@@ -65,8 +66,9 @@ For whichever harness gains a mechanism:
 | Launch flag only | Add the title to the launch arguments built by the session launcher. The launcher is not built yet: it is planned in "Session Launching — Milestone 1" (`plan-session-launching-milestone-1`), which this option would then depend on. The launcher's prompt states that the title is already set, and the rule tells the agent to skip the rename line when the prompt says so. Sessions started by hand keep the rename line |
 | Agent-callable rename | None. The earlier rule already tells an agent with a rename tool to use it |
 
-When a harness's title is set by a hook, add that harness beside Claude Code in the rename-line
-rule's "do nothing more" case, so the agent stops printing the line there.
+When Codex's title is set by a hook, move Codex beside Claude Code in the rename-line rule's "do
+nothing more" case, so the agent stops printing the line there. If the Gemini investigation finds
+a rename command but no automatic mechanism, add Gemini to the rule's rename-line case.
 
 ## Implementation plan
 
