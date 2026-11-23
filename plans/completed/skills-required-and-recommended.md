@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Approved at 843701dd and landed in main; run `/plan-close`.
+next_action:
 blocked_by: []
 depends_on:
   - o9zwxuav
