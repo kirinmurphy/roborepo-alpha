@@ -4,7 +4,7 @@ import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageM
 import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { forgetPackageIds, readEnabledPackagesRegistry, readAppliedPackageIds, selectedRootIds, setPackageApplied, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
 import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
-import { composePackageCatalog, loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
+import { composePackageCatalog, loadPackageCatalog, shadowedMessage, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { recordLiveInstall } from "./package-install-store.mjs";
 import { removeLockRecord } from "./package-lock.mjs";
@@ -357,6 +357,7 @@ async function listPackages(rest = []) {
       console.log(`  ${status.padEnd(8)} ${packageListLabel(pkg)}${sourceSuffix(row)}`);
     }
   }
+  for (const entry of view.shadowed || []) console.log(`\nnote: ${shadowedMessage(entry)}`);
   const notInstalled = view.packages.filter((row) => !row.installed && row.sourceType === "git");
   if (notInstalled.length === 0) return;
   if (!showAvailable) {
@@ -691,6 +692,9 @@ export async function reapplyPackage(pkgId) {
   const pkg = catalog.find((entry) => entry.id === pkgId);
   if (!pkg || !effectiveEnabledIds(catalog).includes(pkgId)) return false;
   await applyPackageComponents(pkg);
+  // Skills or commands the old revision had and the new one dropped are no longer owned by any
+  // package; the same cleanup reconcile runs removes them.
+  cleanupPackageProjections();
   return true;
 }
 

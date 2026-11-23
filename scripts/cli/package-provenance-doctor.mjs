@@ -11,7 +11,7 @@ import fs from "node:fs";
 import { isMainModule } from "./roots.mjs";
 import { readSourceConfig, sourceDirectory } from "./package-sources.mjs";
 import { readPackageLock } from "./package-lock.mjs";
-import { collisionMessage, composePackageCatalog } from "./package-catalog.mjs";
+import { collisionMessage, composePackageCatalog, shadowedMessage } from "./package-catalog.mjs";
 import { hashPackageTree } from "./package-install-store.mjs";
 import { needsProvenanceMigration } from "./package-provenance-migration.mjs";
 import { readAppliedRecord } from "./package-state.mjs";
@@ -51,6 +51,7 @@ export function packageProvenanceFindings() {
     return findings;
   }
   for (const collision of composed.collisions) fail(collisionMessage(collision));
+  for (const entry of composed.shadowed || []) hint(shadowedMessage(entry));
   for (const entry of composed.unresolved) {
     fail(`package ${entry.id} is unresolved: ${entry.reason}. Reinstall it with \`roborepo package install <source>/${entry.id}\` or remove it with \`roborepo package remove ${entry.id}\``);
   }

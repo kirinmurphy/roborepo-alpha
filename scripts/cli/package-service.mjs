@@ -499,6 +499,9 @@ export async function updatePackage(reference, { confirmed = false, expectedRevi
   if (current.url && record.url !== current.url) {
     throw new PackageServiceError(`${qualifiedName(current.sourceId, packageId)} was installed from ${current.url}, but source ${record.id} now points at ${record.url}; remove the package and install it again to switch repositories`, { code: "refused" });
   }
+  if (expectedRevision && record.trust === "trusted" && expectedRevision !== trustedEntryFor(record.url)?.commit) {
+    throw new PackageServiceError(`${record.id} is trusted only at its reviewed commit; ${expectedRevision.slice(0, 12)} is not it`, { code: "refused" });
+  }
   const refreshed = runRefresh(record, expectedRevision ? { revision: expectedRevision } : {});
   const latest = refreshed.catalog.revision;
   const name = qualifiedName(current.sourceId, packageId);
@@ -588,7 +591,15 @@ export async function removePackage(reference, { disable = null } = {}) {
   if (active.has(packageId)) {
     if (!disable) throw new PackageServiceError(`${packageId} is active; disable it first`, { code: "refused" });
     const roots = selectedRootIds(composed.packages, readEnabledPackagesRegistry());
-    const result = await disable(packageId);
+    let result;
+    try {
+      result = await disable(packageId);
+    } catch (err) {
+      // The enable/disable lifecycle refuses, for example, a package another active package
+      // requires. That is a refusal here too, with its exit code, not a crash.
+      if (err?.name !== "PackageMutationError") throw err;
+      throw new PackageServiceError(`${err.message}\nnothing was removed`, { code: "refused" });
+    }
     disabled = true;
     const after = safeCompose().packages;
     if (effectiveEnabledIds(after).includes(packageId)) {
@@ -639,6 +650,7 @@ export function packageView({ includeAvailable = true } = {}) {
     packages: rows,
     collisions: composed.collisions,
     unresolved: composed.unresolved,
+    shadowed: composed.shadowed,
   };
 }
 

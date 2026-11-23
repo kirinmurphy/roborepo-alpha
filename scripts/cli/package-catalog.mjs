@@ -219,6 +219,7 @@ export function resolvePackageCandidates(candidates, { overrides = readWorkspace
   const packages = [];
   const collisions = [];
   const unresolved = [];
+  const shadowed = [];
   for (const [id, group] of byId) {
     const local = group.find((pkg) => pkg.sourceId === LOCAL_SOURCE_ID);
     if (local && hasReplaceOverride("package", id, overrides)) {
@@ -228,7 +229,13 @@ export function resolvePackageCandidates(candidates, { overrides = readWorkspace
     const recorded = lock.packages[id];
     if (recorded) {
       const chosen = group.find((pkg) => pkg.sourceId === recorded.sourceId);
-      if (chosen) packages.push(chosen);
+      if (chosen) {
+        packages.push(chosen);
+        // Other sources' packages with this ID stay out, by the recorded choice. They are reported
+        // so a newly authored package is never ignored without a word.
+        const hidden = group.filter((pkg) => pkg !== chosen).map((pkg) => pkg.qualifiedName);
+        if (hidden.length) shadowed.push({ id, chosen: chosen.qualifiedName, hidden });
+      }
       else unresolved.push({ id, sourceId: recorded.sourceId, reason: `source ${recorded.sourceId} no longer provides ${id}`, candidates: group.map((pkg) => pkg.qualifiedName) });
       continue;
     }
@@ -242,7 +249,7 @@ export function resolvePackageCandidates(candidates, { overrides = readWorkspace
     if (record.kind !== "live" || byId.has(record.packageId) || record.sourceId === BUILTIN_SOURCE_ID) continue;
     unresolved.push({ id: record.packageId, sourceId: record.sourceId, reason: `source ${record.sourceId} no longer provides ${record.packageId}`, candidates: [] });
   }
-  return { packages, collisions, unresolved };
+  return { packages, collisions, unresolved, shadowed };
 }
 
 // The resolved catalog plus what could not be resolved. Most callers want loadPackageCatalog;
@@ -251,6 +258,10 @@ export function composePackageCatalog({ sources, lock = readPackageLock(), overr
   const listed = listPackageCandidates({ sources, lock });
   const resolved = resolvePackageCandidates(listed.candidates, { overrides, lock });
   return { ...resolved, unresolved: [...listed.unresolved, ...resolved.unresolved], candidates: listed.candidates };
+}
+
+export function shadowedMessage({ id, chosen, hidden }) {
+  return `${hidden.join(", ")} ${hidden.length === 1 ? "is" : "are"} not used: ${id} is recorded as ${chosen}. To use ${hidden[0]} instead, run \`roborepo package install ${hidden[0]}\` or add a typed package replace override`;
 }
 
 export function collisionMessage({ id, candidates }) {

@@ -102,6 +102,20 @@ try {
   writeRulesPackage(roots.workspaceDir, "sys-pkg", { label: "Local sys" });
   assert.deepEqual(json("package", "list").packages.filter((row) => row.id === "sys-pkg").map((row) => row.qualifiedName), ["builtin/sys-pkg"]);
   assert.match(ok("package", "install", "sys-pkg"), /builtin\/sys-pkg/);
+  // ...but the hidden package is never ignored without a word.
+  assert.match(ok("package", "list"), /note: local\/sys-pkg is not used: sys-pkg is recorded as builtin\/sys-pkg/);
+  const shadowHint = runModules(roots.env, { d: "scripts/cli/package-provenance-doctor.mjs" }, "return d.packageProvenanceFindings();");
+  assert.ok(shadowHint.ok && shadowHint.value.some((f) => f.level === "hint" && /local\/sys-pkg is not used/.test(f.message)), JSON.stringify(shadowHint));
+
+  // Removing a package another active package requires is a refusal with its exit code.
+  writeRulesPackage(roots.workspaceDir, "req-child");
+  writeRulesPackage(roots.workspaceDir, "req-parent", { requires: ["req-child"] });
+  ok("package", "enable", "req-parent");
+  const required = cli("package", "remove", "req-child");
+  assert.equal(required.status, 6, `removing a required package is refused\n${required.output}`);
+  assert.match(required.output, /nothing was removed/);
+  assert.ok(!/\n\s+at /.test(required.output), "no stack trace");
+  assert.ok(lock()["req-child"], "the record stays");
 
   // Source commands: unknown source and a default source's removal are refused with exit codes.
   assert.equal(cli("package", "source", "info", "nope").status, 2);

@@ -187,6 +187,18 @@ try {
   const pluginPreview = cli("package", "install", "reviews/review-kit");
   assert.match(pluginPreview.output, /skills: review-a, review-b/);
   assert.match(pluginPreview.output, /plugin files not installed: plugin\/hooks\/hooks\.json/, "plugin hooks are named, not installed");
+  // An update that drops a skill removes it from the harnesses, not just from the copy.
+  ok("package", "install", "reviews/review-kit", "--yes");
+  ok("package", "enable", "review-kit");
+  assert.ok(fs.existsSync(path.join(roots.stateRoot, "skills", "review-b")));
+  fs.rmSync(path.join(pluginRepo.dir, "skills", "review-b"), { recursive: true });
+  pluginRepo.commit({});
+  ok("package", "source", "refresh", "reviews");
+  assert.match(ok("package", "update", "review-kit", "--yes"), /removed: [^\n]*skills\/review-b\/SKILL\.md[\s\S]*re-applied/);
+  assert.ok(!fs.existsSync(path.join(roots.stateRoot, "skills", "review-b")), "the dropped skill is removed");
+  assert.ok(!fs.existsSync(path.join(roots.home, ".claude", "skills", "review-b")), "and unlinked from the harness");
+  assert.ok(fs.existsSync(path.join(roots.stateRoot, "skills", "review-a")), "the kept skill stays");
+  ok("package", "remove", "review-kit");
 
   // A RoboRepo package keeps its own manifest; its hooks resource shows in the summary.
   const manifestRepo = makeRepo("robo-pack", {
@@ -221,6 +233,12 @@ try {
   assert.equal(lock()["trusted-skill"].resolved, reviewed);
   const trustedRow = json("package", "list").packages.find((row) => row.id === "trusted-skill");
   assert.match(trustedRow.sourceBadge, /· Trusted$/);
+  // A trusted package cannot be moved to any commit but the reviewed one.
+  const offReview = runModules(roots.env, { svc: "scripts/cli/package-service.mjs" }, `
+    try { await svc.updatePackage("trusted-skill", { confirmed: true, expectedRevision: ${JSON.stringify(trustedRepo.head())} }); return "moved"; }
+    catch (err) { return err.code; }
+  `);
+  assert.ok(offReview.ok && offReview.value === "refused", JSON.stringify(offReview));
   // The repo leaves the trusted catalog: refresh refuses instead of moving to the unreviewed head.
   const trustedCatalogFile = path.join(roots.appRoot, "manifests", "inventory", "trusted-package-sources.json");
   const savedCatalog = fs.readFileSync(trustedCatalogFile, "utf8");
