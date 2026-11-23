@@ -93,13 +93,18 @@ async function handleToggle(item, enabled, { offer = true } = {}) {
 
 // An enable that left recommended packages off lists them as ordinary rows, whose switches apply
 // at once and re-render the page the same way any toggle does.
+// A recommendation with no row on the page has no switch to show, so it is left out, and the
+// dialog does not open when none remain.
 function offerRecommendations(item, recommendations) {
-  return recommendationsDialog.ask(item.label, recommendations, {
+  const shown = recommendations.filter((rec) => packageRow(rec.id));
+  if (shown.length === 0) return Promise.resolve();
+  return recommendationsDialog.ask(item.label, shown, {
     rowFor: packageRow,
     renderRow: (row) => tmpl.configItemElement(row, {
       onInspect: openSourceModal,
       onToggle: (target, enabled) => handleToggle(target, enabled, { offer: false }),
       onDependency: openDependency,
+      offersOnEnable: false,
       contextCost: lastSnapshot?.contextCost || null,
     }),
   });

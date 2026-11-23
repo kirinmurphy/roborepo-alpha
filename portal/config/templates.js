@@ -383,7 +383,9 @@ export function requiredReference(ref, onSelect) {
 // with whether it is on. Selecting one hands onSelect a reference carrying its own required
 // references, so its detail can list them too. A required reference names its requirements by id
 // (requiredIds) within the row's closure; a recommended one already carries its own.
-export function packageDependencies(item, onSelect) {
+// `offersOnEnable: false` is for rows whose switch opens no offer (the recommendations dialog's),
+// so their note would promise one that never comes.
+export function packageDependencies(item, onSelect, { offersOnEnable = true } = {}) {
   const node = tpl("tpl-package-dependencies");
   const requires = item.requires || [];
   const recommends = item.recommends || [];
@@ -400,7 +402,7 @@ export function packageDependencies(item, onSelect) {
   node.querySelector('[data-slot="recommends-group"]').hidden = recommends.length === 0;
   // The offer happens when the package is turned on, so the note only applies while it is off.
   const note = node.querySelector('[data-slot="note"]');
-  if (!item.active && recommends.some((ref) => !ref.active)) {
+  if (offersOnEnable && !item.active && recommends.some((ref) => !ref.active)) {
     note.textContent = `You will be prompted to add them when enabling ${item.label}.`;
     note.hidden = false;
   }

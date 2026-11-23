@@ -326,6 +326,9 @@ test.describe("Agents page", () => {
     const [parent, first, child] = rows;
     expect(child, "fixture needs three disabled packages").toBeTruthy();
     const offers = new Map([[parent.id, [first]], [first.id, [child]]]);
+    // `first` recommends `child`, so its row has a Package Dependencies popover.
+    const firstRow = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.id === first.id);
+    firstRow.recommends = [{ id: child.id, label: child.label, active: false, inspect: null, builtIn: true, requires: [] }];
     const posts = [];
     await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
     await page.route("**/api/config/packages", (route) => {
@@ -345,6 +348,10 @@ test.describe("Agents page", () => {
     await expect.poll(() => posts.map((change) => change.id)).toEqual([parent.id, first.id]);
     // Still the parent's offer: the child is never offered from inside the dialog.
     await expect(dialog.locator("config-item .item-label")).toHaveText([first.label]);
+    // So the row's popover there does not promise an offer on enable.
+    await dialog.getByRole("button", { name: "Package Dependencies" }).click();
+    await expect(dialog.locator(".package-deps [data-slot=recommends] .package-deps-label")).toHaveText([child.label]);
+    await expect(dialog.locator(".package-deps [data-slot=note]")).toBeHidden();
   });
 
   test("explains a package whose pieces were installed outside RoboRepo", async ({ page }) => {
