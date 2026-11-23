@@ -85,6 +85,13 @@ multi-skill package such as `plan-suite`, the skills' needs combine in one manif
 one skill requires is required by the package. References between skills in the same package are
 not relationships.
 
+Nesting is flattened for presentation and offers, never in manifests. A package's required list is
+its `requires` closure (`requiredClosure`); its recommended list is its own `recommends` plus those
+of every package it requires, less anything it requires (`recommendedClosure`). The Config page's
+Package Dependencies and the enable-time offer both read the flattened lists. A recommended
+package's requirements come with it when it is turned on; its own recommendations are not offered
+on the parent's behalf. Manifests and `## Paired Skills` rows still declare only direct edges.
+
 `roborepo skill audit` warns (never errors) when the two disagree, or when the shape looks wrong: an
 unconditional cross-package load (a row whose `Load when` starts with "Always", or a prose
 instruction to load a skill the table does not declare) that neither package requires; two packages

@@ -36,10 +36,11 @@ function fixture(id, config = {}) {
 // deps-planner -> deps-review (dependency-only) -> deps-leaf (other category, transitive)
 // deps-closer -> deps-review; recommends deps-companion (other category) and deps-leaf (also required)
 // deps-sibling is a row in the same section that deps-closer recommends; deps-companion -> deps-leaf
+// deps-review recommends deps-sibling, so deps-planner lists it through its requirement
 fixture("deps-planner", { requires: ["deps-review"] });
 fixture("deps-closer", { requires: ["deps-review"], recommends: ["deps-companion", "deps-leaf", "deps-sibling", "deps-hidden"] });
 fixture("deps-sibling");
-fixture("deps-review", { selectable: false, requires: ["deps-leaf"], presentation: { visibility: "dependency" } });
+fixture("deps-review", { selectable: false, requires: ["deps-leaf"], recommends: ["deps-sibling"], presentation: { visibility: "dependency" } });
 fixture("deps-leaf", { presentation: { category: "token-optimization" } });
 fixture("deps-companion", { requires: ["deps-leaf"], presentation: { category: "token-optimization" } });
 fixture("deps-hidden", { presentation: { visibility: "hidden" } });
@@ -95,7 +96,9 @@ try {
   assert.ok(companion.inspect, "a recommendation carries the inspect target its detail opens");
   assert.deepEqual(companion.requires.map((ref) => ref.id), ["deps-leaf"],
     "a recommendation carries its own requirements, so its detail can list them");
-  assert.deepEqual(byId.get("deps-planner").recommends, [], "a row with no recommendations references none");
+  assert.deepEqual(byId.get("deps-planner").recommends.map((ref) => ref.id), ["deps-sibling"],
+    "a row lists the recommendations of what it requires, flattened into its own list");
+  assert.deepEqual(byId.get("deps-sibling").recommends, [], "a row with no recommendations references none");
 
   const printed = run(cli, "config", "status");
   assert.doesNotMatch(printed, /Required dependencies/, "config status prints no required list");

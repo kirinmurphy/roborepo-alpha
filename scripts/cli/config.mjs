@@ -19,7 +19,7 @@ import {
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageSelectionStates } from "./package-state.mjs";
 import { bundleSelectionStates, selectedBundleRoots } from "./bundle-selection.mjs";
-import { recommendedBy, requiredBy, requiredClosure } from "./package-graph.mjs";
+import { recommendedBy, recommendedClosure, requiredBy, requiredClosure } from "./package-graph.mjs";
 import { inspectSkill, skillInventorySource } from "./skill-inventory.mjs";
 import { readLiveRulesFile } from "./config-live-rules.mjs";
 import { buildRootConfigView } from "./root-config-view.mjs";
@@ -549,16 +549,15 @@ function visibleRequiredPackages(item, packages) {
     .filter((pkg) => pkg && pkg.presentation?.visibility !== "hidden");
 }
 
-// Each row's recommended packages, as references its Package Dependencies popover lists: the
-// package's direct `recommends`, minus packages it requires (they turn on anyway) and hidden or
-// non-selectable ones, which the enable-time offer never names either. Each reference carries its
-// own required references, so opening it shows the next link of the chain.
+// Each row's recommended packages, as references its Package Dependencies popover lists: its own
+// and those of the packages it requires, flattened into one list (recommendedClosure), minus
+// hidden or non-selectable ones, which the enable-time offer never names either. Each reference
+// carries its own required references, so opening it shows what comes with it.
 function recommendedReferences(item, packages, presentationItem) {
   const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const required = new Set(requiredClosure(packages, [item.id]));
-  return (byId.get(item.id)?.recommends || [])
+  return recommendedClosure(packages, item.id)
     .map((id) => byId.get(id))
-    .filter((pkg) => pkg && pkg.selectable && !required.has(pkg.id) && pkg.presentation?.visibility !== "hidden")
+    .filter((pkg) => pkg && pkg.selectable && pkg.presentation?.visibility !== "hidden")
     .map((pkg) => {
       const row = presentationItem(pkg);
       return {

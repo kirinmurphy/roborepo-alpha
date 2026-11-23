@@ -36,7 +36,7 @@ whole workflow or recursively load its dependencies; apply each trigger to the a
 | Skill | Relationship | Load when | Contributes |
 | --- | --- | --- | --- |
 | `technical-writing` | requires | Creating a plan or substantively revising requirements, design, or explanatory prose; not sync-only evidence updates | Section ordering, representation, anti-patterns, reader clarity, and the Creator/Validator loop. Knows nothing about lifecycle or frontmatter, so it never overrides a rule from this skill |
-| `code-style` | recommends | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
+| `code-style` | requires | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
 | `javascript-typescript` | recommends | The plan prescribes JS/TS implementation choices — ESM, exports, types, framework-less DOM; not merely a JS/TS path | Language and markup conventions the plan must not contradict |
 | `test-harness` | requires | The plan proposes tests, verification commands, or a regression strategy; not recording existing test results | Test selection and observable-behavior assertions |
 

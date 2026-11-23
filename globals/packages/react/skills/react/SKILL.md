@@ -7,6 +7,20 @@ description: Use when working on React, Next.js, Remix, Vite React, or any repo 
 
 Apply this only after confirming the repo or touched files use React.
 
+## Paired Skills
+
+**Load these as part of the work; do not wait to be asked for them by name.**
+
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `javascript-typescript` | requires | Always: React components, hooks, and tests are JS/TS | Module, function, type, and lint conventions this skill builds on |
+| `code-style` | requires | The work places a component, hook, or helper: who owns it and where it lives | Ownership and placement rules |
+
+Say which paired skills applied and which did not. A skipped skill and a forgotten one look the
+same otherwise. Each row follows the paired-skill rule in Skill Loading: a `recommends` row whose
+skill the session does not list is skipped and named once in the report. Never ask the user to
+enable a package.
+
 ## Stack Detection
 
 Treat React as present when any strong marker exists:

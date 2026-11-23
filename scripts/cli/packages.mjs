@@ -3,7 +3,7 @@ import path from "node:path";
 import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageMode, initializeWorkspace } from "./paths.mjs";
 import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { forgetPackageIds, readEnabledPackagesRegistry, readAppliedPackageIds, selectedRootIds, setPackageApplied, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
-import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
+import { recommendedClosure, requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
 import { loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
@@ -562,11 +562,12 @@ function warnUnavailableRequirements(order, catalog) {
   }
 }
 
-// Visible selectable recommendations of `pkg` that are not effective. Offered, never applied here: only
-// the portal and the interactive terminal command ask the user.
+// Visible selectable recommendations of `pkg`, its own and those of the packages it requires, that
+// are not effective. Offered, never applied here: only the portal and the interactive terminal
+// command ask the user.
 export function disabledRecommendations(pkg, catalog, effectiveIds) {
   const effective = new Set(effectiveIds);
-  return (pkg.recommends || [])
+  return recommendedClosure(catalog, pkg.id)
     .map((id) => catalog.find((p) => p.id === id))
     .filter((dep) => dep && dep.selectable && dep.presentation?.visibility !== "hidden" && !effective.has(dep.id))
     .map((dep) => ({ id: dep.id, label: dep.label, description: dep.description }));

@@ -135,6 +135,9 @@ test.describe("Agents page", () => {
     planSuite.recommends = [];
     sessionClose.requires = ["technical-writing"];
     dependency.requires = ["code-style"];
+    // Recommendations flatten across requirements, so the chain recommends nothing of its own here.
+    dependency.recommends = [];
+    chained.recommends = [];
     sessionClose.recommends = ["tighten"];
     Object.assign(dependency, {
       selectable: false, selection: "required", enabled: true,

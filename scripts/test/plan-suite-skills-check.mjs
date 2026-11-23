@@ -623,8 +623,11 @@ validatePackageCatalog(catalog);
 
 const byId = new Map(catalog.map((pkg) => [pkg.id, pkg]));
 assert.ok(byId.has(PLAN_SUITE_PACKAGE), `catalog missing package: ${PLAN_SUITE_PACKAGE}`);
-assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).requires, ["technical-writing", "implementation-review", "test-harness"], `${PLAN_SUITE_PACKAGE} requires`);
-assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).recommends, ["code-style", "javascript-typescript", "feature-verification"], `${PLAN_SUITE_PACKAGE} recommends`);
+assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).requires, ["technical-writing", "implementation-review", "test-harness", "code-style"], `${PLAN_SUITE_PACKAGE} requires`);
+assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).recommends, ["javascript-typescript", "feature-verification"], `${PLAN_SUITE_PACKAGE} recommends`);
+assert.deepEqual(byId.get("javascript-typescript").requires, ["code-style"], "javascript-typescript requires");
+assert.deepEqual(byId.get("javascript-typescript").recommends || [], [], "javascript-typescript recommends nothing");
+assert.deepEqual(byId.get("react").requires, ["javascript-typescript", "code-style"], "react requires");
 assert.deepEqual(byId.get("session-close").requires, ["implementation-review"], "session-close requires");
 assert.deepEqual(byId.get("session-close").recommends, ["test-harness", "plan-suite"], "session-close recommends");
 const review = byId.get("implementation-review");

@@ -8,8 +8,7 @@
     "category": "code-conventions",
     "order": 20
   },
-  "recommends": [
-    "react",
+  "requires": [
     "code-style"
   ],
   "resources": [

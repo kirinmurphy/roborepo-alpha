@@ -84,7 +84,7 @@ whole workflow or recursively load its dependencies; apply each trigger to the a
 | --- | --- | --- | --- |
 | `implementation-review` | requires | **Always**: step 3's Validator pass | The review rubric, severities, finding classes, and report format |
 | `test-harness` | requires | Judging test coverage, running checks, or deciding whether a gap needs a test | Test selection and observable-behavior assertions |
-| `code-style` | recommends | Reviewing where code was placed: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
+| `code-style` | requires | Reviewing where code was placed: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
 | `technical-writing` | requires | Authoring or substantially revising explanatory documentation, requirements, or design prose during a fix | Section content and reader clarity |
 
 Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and

@@ -8,6 +8,10 @@
     "category": "code-conventions",
     "order": 20
   },
+  "requires": [
+    "javascript-typescript",
+    "code-style"
+  ],
   "resources": [
     {
       "type": "skill",

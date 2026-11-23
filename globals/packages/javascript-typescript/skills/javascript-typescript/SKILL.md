@@ -1,6 +1,6 @@
 ---
 name: javascript-typescript
-description: "Use when working on TypeScript, JavaScript, ECMAScript modules, TSX/JSX utility code, lint/type errors, exports/imports, helper functions, type safety, or JS/TS code style. Pair with react when touched files contain React components or hooks."
+description: "Use when working on TypeScript, JavaScript, ECMAScript modules, TSX/JSX utility code, lint/type errors, exports/imports, helper functions, type safety, or JS/TS code style. React work uses the react skill, which builds on this one."
 ---
 
 # JavaScript TypeScript
@@ -13,8 +13,7 @@ Apply this when the repo or touched files use JavaScript or TypeScript.
 
 | Skill | Relationship | Load when | Contributes |
 | --- | --- | --- | --- |
-| `code-style` | recommends | The work places a helper, module, or export: who owns it and where it lives | Ownership and placement rules this skill defers to |
-| `react` | recommends | A touched file contains a component, a hook, JSX/TSX markup, or client state | Component and hook conventions, effect and state rules, and React-specific test shape |
+| `code-style` | requires | The work places a helper, module, or export: who owns it and where it lives | Ownership and placement rules this skill defers to |
 
 Say which paired skills applied and which did not. A skipped skill and a forgotten one look the
 same otherwise. Each row follows the paired-skill rule in Skill Loading: a `recommends` row whose

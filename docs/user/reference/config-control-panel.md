@@ -100,8 +100,13 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
   on, the button reads **Done**. Turning a package on there opens no further list of its own
   recommendations. The terminal setup
   wizard asks nothing: after it applies your choices it prints one line,
-  `recommended (not enabled): code-style, javascript-typescript — enable with: roborepo package enable <id>`,
+  `recommended (not enabled): javascript-typescript, feature-verification — enable with: roborepo package enable <id>`,
   naming what the packages you selected recommend that is still off.
+- Nesting is flattened. A package's required packages are everything it requires, directly or
+  through another required package. Its recommendations are its own plus those of every package it
+  requires, less anything it requires; that one list is what its Package Dependencies show and
+  what enabling it offers. A recommended package's own requirements come with it when you turn it
+  on, and its own recommendations are not offered on the parent's behalf.
 
 - A **dependency-only** package has no toggle of its own (`selectable: false`) and no row either
   (`presentation.visibility: "dependency"`); it turns on and off with the packages that require it.
@@ -110,10 +115,12 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
   without a toggle.
 
 For example, `plan-suite` (Development Planning Lifecycle) requires `technical-writing`,
-`test-harness`, and `implementation-review`, and recommends `code-style`, `javascript-typescript`,
+`test-harness`, `implementation-review`, and `code-style`, and recommends `javascript-typescript`
 and `feature-verification`. `session-close` requires `implementation-review` and recommends
-`test-harness` and `plan-suite`. Turning on `plan-suite` turns on its three requirements; turning
-off `plan-suite` leaves `implementation-review` on while `session-close` is still on.
+`test-harness` and `plan-suite`; through `implementation-review` it also lists `code-style` and
+`javascript-typescript` as recommendations. `react` requires `javascript-typescript`, which requires
+`code-style`. Turning on `plan-suite` turns on its four requirements; turning off `plan-suite`
+leaves `implementation-review` on while `session-close` is still on.
 
 A selectable required package with `catalog` visibility keeps its own row. Dependency-only
 packages appear under **Requires** in their parents' source popups instead. Clicking a package's

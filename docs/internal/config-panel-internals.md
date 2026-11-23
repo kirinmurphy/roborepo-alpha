@@ -17,8 +17,8 @@ would have). These references do not suppress a selectable catalog-visible packa
 The source popup lists a row's references under **Requires**, each opening that package's source
 with **Back** to the row. `roborepo config status` prints them as a `requires:` line under the row.
 Each row also
-carries `recommends[]`: its direct `recommends`, minus packages it requires and hidden or
-non-selectable ones, as references with the same fields plus their own `requires[]`. The row's
+carries `recommends[]`: its flattened recommendations (`recommendedClosure`: its own and those of
+every package it requires, minus what it requires), less hidden or non-selectable ones, as references with the same fields plus their own `requires[]`. The row's
 Package Dependencies popover lists both, each opening that package's source; `config status`
 prints a `recommends:` line. Rows carry `selection` so the group switch counts only rows it can act
 on.

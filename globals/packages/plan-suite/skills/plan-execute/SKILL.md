@@ -52,7 +52,7 @@ Load these by subject matter while implementing; do not wait to be asked for the
 | --- | --- | --- | --- |
 | `implementation-review` | requires | Every Validator pass (see Validation Loop) | The review rubric, severities, finding classes, and report format |
 | `test-harness` | requires | The work adds or changes tests, verification commands, or fixtures | Test selection and observable-behavior assertions |
-| `code-style` | recommends | The work places code: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
+| `code-style` | requires | The work places code: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
 | `javascript-typescript` | recommends | The work touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
 | `feature-verification` | recommends | Delivered UI, server, API, CLI, permission, or performance behavior needs a demonstration beyond routine test reporting | Select and show the fastest sufficient behavioral evidence; reuse existing captures and execution output |
 

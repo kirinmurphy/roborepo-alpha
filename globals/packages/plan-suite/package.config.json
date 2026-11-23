@@ -11,10 +11,10 @@
   "requires": [
     "technical-writing",
     "implementation-review",
-    "test-harness"
+    "test-harness",
+    "code-style"
   ],
   "recommends": [
-    "code-style",
     "javascript-typescript",
     "feature-verification"
   ],

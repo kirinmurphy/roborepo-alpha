@@ -452,8 +452,8 @@ Suite commands load helper skills, each from its own package. The suite declares
 
 | Package | Relationship | What it means for you |
 | --- | --- | --- |
-| `technical-writing`, `test-harness`, `implementation-review` | Required | Enabling `plan-suite` turns them on, and they stay on while it is on |
-| `code-style`, `javascript-typescript`, `feature-verification` | Recommended | Offered once when you enable `plan-suite`; never turned on for you |
+| `technical-writing`, `test-harness`, `implementation-review`, `code-style` | Required | Enabling `plan-suite` turns them on, and they stay on while it is on |
+| `javascript-typescript`, `feature-verification` | Recommended | Offered once when you enable `plan-suite`; never turned on for you |
 
 `implementation-review` holds the review rubric that `/plan-execute`, `/plan-review`, `/plan-close`,
 and `/session-close` share. It has no toggle or command of its own: the Agents page lists it under

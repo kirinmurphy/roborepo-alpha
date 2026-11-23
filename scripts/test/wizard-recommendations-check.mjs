@@ -24,7 +24,7 @@ if (process.env.WIZARD_RECOMMENDATIONS_CHILD) {
   if (process.env.WIZARD_DISABLE_AFTER) {
     steps.push({
       title: "Code Conventions",
-      items: [{ label: "code-style", active: false, wasActive: true, toggleable: true, section: { category: "Code Conventions" }, item: { id: "code-style", toggle: "package" } }],
+      items: [{ label: "javascript-typescript", active: false, wasActive: true, toggleable: true, section: { category: "Code Conventions" }, item: { id: "javascript-typescript", toggle: "package" } }],
     });
   }
   const result = await applyWizardChanges(steps);
@@ -37,8 +37,8 @@ if (process.env.WIZARD_RECOMMENDATIONS_CHILD) {
   fs.writeFileSync(path.join(home, ".codex", "config.toml"), "");
   const env = { ...process.env, HOME: home, ROBOREPO_STATE_ROOT: path.join(home, ".roborepo"), SKIP_MCP: "1", WIZARD_RECOMMENDATIONS_CHILD: "1" };
   try {
-    // code-style starts on, so plan-suite's enable result leaves it out; the wizard then turns it off.
-    const seed = spawnSync(process.execPath, [path.join(path.dirname(self), "../cli/main.mjs"), "package", "enable", "code-style"], { env: { ...env, WIZARD_RECOMMENDATIONS_CHILD: "" }, encoding: "utf8" });
+    // javascript-typescript starts on, so plan-suite's enable result leaves it out; the wizard then turns it off.
+    const seed = spawnSync(process.execPath, [path.join(path.dirname(self), "../cli/main.mjs"), "package", "enable", "javascript-typescript"], { env: { ...env, WIZARD_RECOMMENDATIONS_CHILD: "" }, encoding: "utf8" });
     assert.equal(seed.status, 0, `seed enable should succeed\n${seed.stderr}`);
     const run = spawnSync(process.execPath, [self], { env: { ...env, WIZARD_DISABLE_AFTER: "1" }, encoding: "utf8" });
     assert.equal(run.status, 0, `wizard apply should succeed\n${run.stdout}\n${run.stderr}`);
@@ -47,15 +47,15 @@ if (process.env.WIZARD_RECOMMENDATIONS_CHILD) {
     const lines = run.stdout.split("\n").filter((line) => line.startsWith("recommended (not enabled):"));
     assert.equal(lines.length, 1, `exactly one recommendation line\n${run.stdout}`);
     const named = lines[0].replace("recommended (not enabled): ", "").split(" — ")[0].split(", ");
-    assert.deepEqual(named.sort(), ["code-style", "feature-verification", "javascript-typescript"], "names plan-suite's recommendations that are off");
+    assert.deepEqual(named.sort(), ["feature-verification", "javascript-typescript"], "names plan-suite's recommendations that are off");
     assert.match(lines[0], /roborepo package enable <id>/, "names the command that enables one");
 
     const registry = JSON.parse(fs.readFileSync(path.join(home, ".roborepo", "enabled-packages.json"), "utf8"));
     assert.deepEqual(registry.packages, ["plan-suite"], "only the selected package is recorded as a root");
-    assert.ok(registry.disabled.includes("code-style"), "the wizard's disable of code-style applied");
+    assert.ok(registry.disabled.includes("javascript-typescript"), "the wizard's disable of javascript-typescript applied");
     const applied = JSON.parse(fs.readFileSync(path.join(home, ".roborepo", "applied-packages.json"), "utf8"));
     const appliedIds = (applied.packages || applied).slice().sort();
-    assert.deepEqual(appliedIds, ["implementation-review", "plan-suite", "technical-writing", "test-harness"], "applies plan-suite and its requirements, and no recommendation");
+    assert.deepEqual(appliedIds, ["code-style", "implementation-review", "plan-suite", "technical-writing", "test-harness"], "applies plan-suite and its requirements, and no recommendation");
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
