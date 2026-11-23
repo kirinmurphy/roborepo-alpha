@@ -99,19 +99,24 @@ try {
   assert.equal(linked.status, 1, "a link in place of a folder is refused");
   assert.equal(linked.stdout, "", "no path is printed for a refused folder");
 
-  // ---- pr-body location: a folder pr-body reads gets no note; one an override moved away does ----
-  assert.doesNotMatch(opened.stderr, /outside what `roborepo delivery pr-body` reads/, "a state root under the system temp folder needs no note");
-  // The checkout's ignored .tmp/ is outside every temp root and the account's own scratch folder.
+  // ---- pr-body location: the note appears exactly when pr-body would refuse the folder ----
+  // Each fixture's expectation comes from the accepted roots, so the check holds wherever TMPDIR
+  // and the checkout live.
+  expectBodyNote(opened, path.join(scratch, "gy8ncs9u"));
+  // The checkout's ignored .tmp/ is usually outside every temp root and the account's scratch folder.
   const ignoredTmp = path.join(repoRoot, ".tmp");
   const madeIgnoredTmp = !fs.existsSync(ignoredTmp);
   fs.mkdirSync(ignoredTmp, { recursive: true });
   const outsideState = fs.mkdtempSync(path.join(ignoredTmp, "scratch-state-"));
   try {
+    const movedFolder = path.join(outsideState, "scratch", "gy8ncs9u");
     const moved = run(["gy8ncs9u"], outsideState);
     assert.equal(moved.status, 0, moved.stderr);
-    assert.equal(moved.stdout, `${path.join(outsideState, "scratch", "gy8ncs9u")}\n`, "stdout is still the path alone");
-    assert.match(moved.stderr, /outside what `roborepo delivery pr-body` reads/, "an overridden state root is named");
-    assert.equal(isBodyLocation(path.join(outsideState, "scratch", "gy8ncs9u")), false, "pr-body would refuse it");
+    assert.equal(moved.stdout, `${movedFolder}\n`, "stdout is still the path alone");
+    expectBodyNote(moved, movedFolder);
+    if (isBodyLocation(movedFolder)) {
+      console.log("skip: the checkout is inside a folder pr-body reads, so no overridden state root falls outside it");
+    }
   } finally {
     fs.rmSync(outsideState, { recursive: true, force: true });
     if (madeIgnoredTmp) {
@@ -144,6 +149,12 @@ function sparseFolder(name, at) {
   fs.utimesSync(file, at, at);
   fs.utimesSync(folder, at, at);
   return folder;
+}
+
+function expectBodyNote(result, folder) {
+  const note = /outside what `roborepo delivery pr-body` reads/;
+  if (isBodyLocation(folder)) assert.doesNotMatch(result.stderr, note, `no note for ${folder}, which pr-body reads`);
+  else assert.match(result.stderr, note, `a note for ${folder}, which pr-body would refuse`);
 }
 
 function run(args, root = stateRoot) {
