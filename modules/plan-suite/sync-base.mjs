@@ -1,7 +1,7 @@
 // Merges the base branch into a plan's implementation branch, from that branch's linked worktree.
 // /plan-execute runs it before handing a plan off and /plan-review at the start of every review
-// round, so it does nothing when base has nothing new. It never merges the other way and never
-// resolves a conflict by picking a side.
+// round, so it does nothing when base has nothing new, or when base already absorbed the branch. It
+// never merges the other way and never resolves a conflict by picking a side.
 //
 // First it refreshes the local base from its upstream, so the feature branch takes what the pull
 // request will be compared against. It moves the base only by a pure fast-forward, and only when
@@ -13,6 +13,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fetchTrackingRefs } from "../delivery/operations.mjs";
+import { inspectBranchLanding } from "../repositories/worktree-landed.mjs";
 import { domainError } from "./index.mjs";
 import { PLANS_BRANCH } from "./plan-store.mjs";
 import { currentBranch, git, primaryCheckout, topLevel } from "./plan-git.mjs";
@@ -66,6 +67,12 @@ export async function syncBase({ cwd = process.cwd(), base = "main", continueMer
   const before = git(worktree, ["rev-parse", "HEAD"]).stdout;
   if (git(worktree, ["merge-base", "--is-ancestor", baseCommit, "HEAD"]).ok) {
     return { state: "up-to-date", branch, base, baseUpdate, before, commit: before, conflicts: [] };
+  }
+  // Once the branch's pull request has merged, base already holds its work. Merging base back in
+  // would only add a commit the reviewed approval does not cover.
+  const landing = await inspectBranchLanding(worktree, branch, { base: `refs/heads/${base}` });
+  if (landing.landed) {
+    return { state: "landed", branch, base, baseUpdate, before, commit: before, absorbingCommit: landing.absorbingCommit, conflicts: [] };
   }
   const merged = git(worktree, ["merge", "--no-ff", "--no-edit", "-m", `Merge ${base} into ${branch}`, baseCommit]);
   if (merged.ok) return { state: "merged", branch, base, baseUpdate, before, commit: git(worktree, ["rev-parse", "HEAD"]).stdout, conflicts: [] };
