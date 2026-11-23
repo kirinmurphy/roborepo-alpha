@@ -60,10 +60,12 @@ unreadable. Keep the surface boring so it can be approved once and stay approved
 
 ## Temporary Files and Cleanup
 
-- For scratch work, scaffolding, or throwaway test repos, create under `$TMPDIR`/`/tmp` with
-  `mktemp -d`, never in the project tree.
-- Put the temp-dir creation and its `trap 'rm -rf "$d"' EXIT` cleanup inside a script file rather
-  than composing them inline. The trap still makes cleanup self-contained, and the script keeps the
+- For scratch work, scaffolding, or throwaway test repos, write where the Temporary Files rule
+  says (Claude's session scratchpad, or the folder `roborepo scratch <name>` prints), never in the
+  project tree.
+- A script that needs a directory only for its own run makes it with `mktemp -d` and removes it
+  with `trap 'rm -rf "$d"' EXIT`. Put both inside the script file rather than composing them
+  inline. The trap still makes cleanup self-contained, and the script keeps the
   invoking command a stable, allowlistable prefix.
 - Prefer the trap to a cleanup `rm` after the fact; when you do delete by hand, name the exact path
   you created rather than a glob or a variable.

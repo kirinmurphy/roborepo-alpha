@@ -16,6 +16,7 @@ const repoRoot = path.resolve(here, "..", "..");
 const cli = path.join(repoRoot, "scripts/cli/maintenance-stores.mjs");
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-stores-cli-"));
 const MB = 1024 * 1024;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 try {
   // ---- Listing an empty state root still names every registered store ----
@@ -79,6 +80,121 @@ try {
   assert.match(evidenceBlock, /bound 14d \/ 250\.0MB/, "the evidence store reports both bounds");
   assert.match(evidenceBlock, /2 file\(s\)/, "the evidence count ignores non-evidence files");
 
+  // ---- --dry-run previews a file-set reset and removes nothing ----
+  const beforePreview = fs.readdirSync(snapshots).length;
+  for (let i = 0; i < 40; i += 1) {
+    fs.writeFileSync(path.join(snapshots, `extra_${i}.json`), JSON.stringify({ blob: "z".repeat(200_000) }));
+  }
+  const snapPreview = run(["reset", "telemetry-snapshots", "--dry-run"]);
+  assert.equal(snapPreview.status, 0);
+  assert.match(snapPreview.stdout, /would remove \d+ file\(s\).*dry run, nothing removed/, "a file-set preview says what would go");
+  assert.equal(fs.readdirSync(snapshots).length, beforePreview + 40, "a dry run removes no file");
+  const logPreview = run(["reset", "telemetry-spool-claude", "--all", "--dry-run"]);
+  assert.match(logPreview.stdout, /would clear nothing \(absent\)/, "a log --all preview reports what it would clear");
+
+  // ---- The scratch store: a folder set judged by the newest change inside each folder ----
+  const scratch = path.join(tempRoot, "scratch");
+  const outside = path.join(tempRoot, "outside-target");
+  fs.mkdirSync(outside, { recursive: true });
+  fs.writeFileSync(path.join(outside, "keep.txt"), "must survive");
+  const old = new Date(Date.now() - 30 * DAY_MS);
+  const oldFolder = makeFolder("old-plan", old);
+  makeFolder("recent-topic", new Date());
+  const nestedFolder = makeFolder("old-folder-new-file", old);
+  // A file edited deep inside an old folder: the folder's own time does not move with it.
+  const nestedFile = path.join(nestedFolder, "deep", "notes.md");
+  fs.mkdirSync(path.dirname(nestedFile));
+  fs.writeFileSync(nestedFile, "still in use");
+  fs.utimesSync(path.join(nestedFolder, "deep"), old, old);
+  fs.utimesSync(nestedFolder, old, old);
+  fs.symlinkSync(outside, path.join(scratch, "link-out"));
+
+  const scratchPreview = run(["reset", "scratch", "--dry-run"]);
+  assert.equal(scratchPreview.status, 0);
+  assert.match(scratchPreview.stdout, /would remove 1 folder\(s\) \(age\)/, "only the old folder would go");
+  assert.match(scratchPreview.stdout, /old-plan/);
+  assert.doesNotMatch(scratchPreview.stdout, /old-folder-new-file|recent-topic|link-out/, "folders with recent content are kept");
+  assert.ok(fs.existsSync(oldFolder), "a dry run removes nothing");
+
+  const allPreview = run(["reset", "scratch", "--all", "--dry-run"]);
+  for (const name of ["old-plan", "recent-topic", "old-folder-new-file", "link-out"]) {
+    assert.match(allPreview.stdout, new RegExp(name), `--all --dry-run lists ${name}`);
+  }
+  assert.match(allPreview.stdout, /would clear 4 entries/);
+  assert.equal(fs.readdirSync(scratch).length, 4, "--all --dry-run removes nothing");
+
+  const scratchReset = run(["reset", "scratch"]);
+  assert.equal(scratchReset.status, 0);
+  assert.match(scratchReset.stdout, /removed 1 folder\(s\)/);
+  assert.deepEqual(fs.readdirSync(scratch).sort(), ["link-out", "old-folder-new-file", "recent-topic"], "the reset removes exactly the old folder");
+  assert.ok(fs.existsSync(nestedFile), "a recently edited nested file keeps its folder");
+  assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "must survive", "a link's target is never touched");
+
+  const scratchListed = run([]);
+  assert.match(scratchListed.stdout.slice(scratchListed.stdout.indexOf("Agent scratch") - 200), /3 folder\(s\)/, "list counts scratch folders");
+
+  // A store root replaced by a link is never pruned through.
+  const linkedTarget = path.join(tempRoot, "linked-target");
+  fs.mkdirSync(path.join(linkedTarget, "old"), { recursive: true });
+  fs.utimesSync(path.join(linkedTarget, "old"), old, old);
+  fs.mkdirSync(path.join(linkedTarget, "new"));
+  const realScratch = path.join(tempRoot, "scratch-real");
+  fs.renameSync(scratch, realScratch);
+  fs.symlinkSync(linkedTarget, scratch);
+  const linkedPreview = run(["reset", "scratch", "--dry-run"]);
+  assert.match(linkedPreview.stdout, /is a link, not a real folder; a reset would refuse it/, "the preview matches the refusing reset");
+  assert.doesNotMatch(linkedPreview.stdout, /would remove 1/, "the preview does not list the link target's folders");
+  const linkedAllPreview = run(["reset", "scratch", "--all", "--dry-run"]);
+  assert.match(linkedAllPreview.stdout, /would remove only the link/, "--all --dry-run says only the link goes");
+  const linkedReset = run(["reset", "scratch"]);
+  assert.equal(linkedReset.status, 0);
+  assert.match(linkedReset.stderr, /not a real folder/, "the refusal is reported");
+  assert.ok(fs.existsSync(path.join(linkedTarget, "old")), "a linked store root's target is not pruned");
+  fs.unlinkSync(scratch);
+  fs.renameSync(realScratch, scratch);
+
+  // An overage held in a folder changed in the last hour is a hint, not a failure, and a reset
+  // leaves it; once the folder is quiet, --check fails and the reset removes it. The dry-run case
+  // above left the snapshot store over its cap, so it is reset first to isolate the scratch store.
+  assert.equal(run(["reset", "telemetry-snapshots"]).status, 0);
+  const busy = sparseFolder("busy-writer", new Date());
+  const sparedCheck = run(["--check"]);
+  assert.equal(sparedCheck.status, 0, `--check passes while the overage is in a recently changed folder: ${sparedCheck.stderr}`);
+  assert.match(sparedCheck.stdout, /hint: scratch is .* changed in the last hour/, "--check names the spared overage");
+  assert.match(run(["reset", "scratch", "--dry-run"]).stdout, /over its cap, but a reset can remove none of it.*; nothing would be removed/, "the preview says the overage is kept");
+  assert.equal(run(["reset", "scratch"]).status, 0);
+  assert.ok(fs.existsSync(busy), "a reset leaves the recently changed folder");
+
+  // Mixed: a quiet folder beside the busy one is removable, so --check fails and names the reset,
+  // which removes the quiet folder; what remains is all spared and is a hint again.
+  const quietAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const quietSibling = path.join(scratch, "quiet-sibling");
+  fs.mkdirSync(quietSibling);
+  fs.writeFileSync(path.join(quietSibling, "notes.md"), "done");
+  fs.utimesSync(path.join(quietSibling, "notes.md"), quietAt, quietAt);
+  fs.utimesSync(quietSibling, quietAt, quietAt);
+  const mixedCheck = run(["--check"]);
+  assert.equal(mixedCheck.status, 1, "--check fails while a reset could remove a quiet folder");
+  assert.match(mixedCheck.stderr, /run: roborepo maintenance stores reset scratch/);
+  assert.equal(run(["reset", "scratch"]).status, 0);
+  assert.ok(!fs.existsSync(quietSibling) && fs.existsSync(busy), "the reset removes the quiet folder and spares the busy one");
+  const afterMixed = run(["--check"]);
+  assert.equal(afterMixed.status, 0);
+  assert.match(afterMixed.stdout, /hint: scratch .* a reset can remove none of it: it is in folders changed in the last hour/);
+
+  fs.utimesSync(path.join(busy, "sparse.bin"), quietAt, quietAt);
+  fs.utimesSync(busy, quietAt, quietAt);
+  const quietCheck = run(["--check"]);
+  assert.equal(quietCheck.status, 1, "--check fails once the folder holding the overage is quiet");
+  assert.match(quietCheck.stderr, /fail: scratch .* over its 500\.0MB cap/);
+  assert.equal(run(["reset", "scratch"]).status, 0);
+  assert.ok(!fs.existsSync(busy), "the reset removes the quiet over-cap folder");
+  assert.equal(run(["--check"]).status, 0);
+
+  assert.equal(run(["reset", "scratch", "--all"]).status, 0);
+  assert.ok(!fs.existsSync(scratch), "--all clears the scratch store");
+  assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "must survive", "--all removes the link, not its target");
+
   // ---- Bad input is rejected with usage, not a stack trace ----
   const unknown = run(["reset", "not-a-store"]);
   assert.equal(unknown.status, 2, "an unknown store id exits 2");
@@ -88,9 +204,31 @@ try {
   assert.equal(badSub.status, 2, "an unknown subcommand exits 2");
   assert.ok(badSub.stderr.includes("usage:"), "the error shows usage");
 
-  console.log("ok: maintenance stores (list, reset, --all, --check)");
+  console.log("ok: maintenance stores (list, reset, --all, --dry-run, --check, scratch folder set)");
 } finally {
   fs.rmSync(tempRoot, { recursive: true, force: true });
+}
+
+function makeFolder(name, at) {
+  const folder = path.join(tempRoot, "scratch", name);
+  fs.mkdirSync(folder, { recursive: true });
+  const file = path.join(folder, "file.txt");
+  fs.writeFileSync(file, name);
+  fs.utimesSync(file, at, at);
+  fs.utimesSync(folder, at, at);
+  return folder;
+}
+
+// A scratch folder holding one sparse 600 MB file (over the 500 MB cap alone), last changed `at`.
+function sparseFolder(name, at) {
+  const folder = path.join(tempRoot, "scratch", name);
+  fs.mkdirSync(folder, { recursive: true });
+  const file = path.join(folder, "sparse.bin");
+  fs.writeFileSync(file, "");
+  fs.truncateSync(file, 600 * MB);
+  fs.utimesSync(file, at, at);
+  fs.utimesSync(folder, at, at);
+  return folder;
 }
 
 function run(args) {

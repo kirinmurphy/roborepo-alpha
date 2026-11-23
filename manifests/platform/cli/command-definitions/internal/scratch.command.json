@@ -1,0 +1,14 @@
+{
+  "path": ["scratch"],
+  "kind": "command",
+  "title": "Scratch folder",
+  "description": "Print a temporary folder for agent work, removed 14 days after its last change",
+  "order": 955,
+  "advanced": true,
+  "usage": "roborepo scratch <name>",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/scratch.mjs",
+    "export": "scratchCommand"
+  }
+}

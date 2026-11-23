@@ -87,6 +87,7 @@
     "delivery-operations-check.mjs",
     "protect-check.mjs",
     "doctor-protection-check.mjs",
+    "run-tmpdir-check.mjs",
     "install-drift-check.mjs"
   ]
 }

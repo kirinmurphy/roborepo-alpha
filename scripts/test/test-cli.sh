@@ -31,7 +31,11 @@ for arg in "$@"; do
   esac
 done
 
-work="$(mktemp -d "${TMPDIR:-/tmp}/cli-test.XXXXXX")"
+# Everything this run and its children put in the temp folder lands in the run's own folder,
+# removed by the cleanup trap; a later run sweeps it if this one is killed before the trap runs.
+run_tmpdir="$(node "${repo_root}/scripts/test/lib/run-tmpdir.mjs" open "$$")"
+export TMPDIR="${run_tmpdir}" TEMP="${run_tmpdir}" TMP="${run_tmpdir}"
+work="$(mktemp -d "${TMPDIR}/cli-test.XXXXXX")"
 # An isolated app root carrying the test-only fixture packages (fixture-tool, fixture-docs): the
 # built-in MCP / tool-approval / hook-script packages no shipped package provides.
 fixture_app="$(node "${repo_root}/scripts/test/make-fixture-app-root.mjs")"
@@ -54,6 +58,7 @@ cleanup() {
   chmod -R u+rwx "${work}" 2>/dev/null || true
   rm -rf "${work}" 2>/dev/null || true
   rm -rf "${fixture_app}" 2>/dev/null || true
+  node "${repo_root}/scripts/test/lib/run-tmpdir.mjs" close "${run_tmpdir}" || true
   # Tests run the real CLI against a temp HOME, but appRoot still points at this checkout, so
   # anything rendering root config writes to TRACKED files under generated/ — stamping a temp path
   # into generated/claude/settings.json, which then gets committed by accident. Report it here (in
@@ -2093,6 +2098,10 @@ assert "context-cost: estimator determinism and load classes" \
 # subprocess under a sandboxed ROBOREPO_STATE_ROOT.
 assert "maintenance: stores listing, reset, and doctor --check" \
   node "${repo_root}/scripts/test/maintenance-stores-check.mjs"
+
+# `roborepo scratch <name>` — the agent scratch folder and its prune-on-call cleanup.
+assert "scratch: folder handout, pruning, and name validation" \
+  node "${repo_root}/scripts/test/scratch-command-check.mjs"
 
 # The shared retention engine: policy validation, append-log/file-set measurement, bounded-store
 # guarantee. Measurement only — no store writes here.

@@ -5,7 +5,7 @@
 3. Check whether an existing plan already owns the work.
 4. Create or revise one plan instead of duplicating scope.
 5. **Identity checkpoint — complete before drafting any body content.** See below.
-6. Write the new plan to a file outside the code checkout and run `roborepo plans save <file.md>`,
+6. Write the new plan to a file in a temporary folder outside the code checkout and run `roborepo plans save <file.md>`,
    which puts it in `backlog/`. Save again after each revision.
 7. Add minimal frontmatter from `plan-schema.md`, including an empty `worktree:` line. Do not fill
    it at creation; a backlog plan has no implementation worktree yet.

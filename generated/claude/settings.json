@@ -58,6 +58,7 @@
       "Bash(roborepo delivery retry-ci:*)",
       "Bash(roborepo plans sync-base:*)",
       "Bash(roborepo plans stop-servers:*)",
+      "Bash(roborepo scratch:*)",
       "Bash(npm test:*)",
       "Bash(npm run test:*)",
       "Bash(pnpm test:*)",
@@ -233,7 +234,8 @@
     ],
     "filesystem": {
       "allowWrite": [
-        "~/.npm"
+        "~/.npm",
+        "~/.roborepo/scratch"
       ],
       "allowRead": [
         "/private/etc/ssl/cert.pem",

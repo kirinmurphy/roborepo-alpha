@@ -88,6 +88,27 @@ test.describe("Agents page", () => {
     }
   });
 
+  test("a store over its cap only through recently changed folders is labelled spared, not failed", async ({ page }) => {
+    await page.route("**/api/config", async (route) => {
+      const data = await (await route.fetch()).json();
+      const stores = data.behaviorView.find((section) => section.kind === "stores");
+      const MB = 1024 * 1024;
+      const base = { kind: "store", path: "scratch", maxBytes: 500 * MB };
+      stores.items = [
+        { ...base, id: "scratch", label: "scratch", bytes: 600 * MB, over: false, spared: true },
+        { ...base, id: "scratch-quiet", label: "scratch-quiet", bytes: 700 * MB, over: true, spared: false },
+      ];
+      await route.fulfill({ json: data });
+    });
+    await page.goto("/agents");
+    await page.locator('[data-slot="stores-toggle"]').click();
+    const row = (label) => page.locator(".item").filter({ has: page.locator('[data-slot="label"]', { hasText: new RegExp(`^${label}$`) }) });
+    await expect(row("scratch").locator('[data-slot="size"]')).toHaveText("600.0MB of 500.0MB — over cap, nothing removable");
+    await expect(row("scratch").locator('[data-slot="dot"]')).toHaveClass(/\bon\b/);
+    await expect(row("scratch-quiet").locator('[data-slot="size"]')).toHaveText("700.0MB of 500.0MB — over cap");
+    await expect(row("scratch-quiet").locator('[data-slot="dot"]')).toHaveClass(/\boff\b/);
+  });
+
   test("keeps the high token-use banner hidden", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const activeItem = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.active);
@@ -2093,7 +2114,10 @@ test.describe("repository-first portal Home", () => {
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(panel.locator("a:visible")).toHaveText(NAV_SECONDARY);
     // Outside click and Escape both close it; Escape hands focus back to the trigger.
-    await page.locator("main").click({ position: { x: 5, y: 5 } });
+    // The viewport's bottom-left corner: main's own top-left can sit under the sticky header, which
+    // then takes the click and the test times out.
+    const viewport = page.viewportSize();
+    await page.mouse.click(5, viewport.height - 5);
     await expect(panel).toBeHidden();
     await trigger.click();
     await page.keyboard.press("Escape");

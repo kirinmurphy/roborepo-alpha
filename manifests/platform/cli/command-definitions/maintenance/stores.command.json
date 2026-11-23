@@ -4,7 +4,7 @@
   "title": "Local stores",
   "description": "Show what roborepo keeps on disk and how close each store is to its bound",
   "order": 40,
-  "usage": "roborepo maintenance stores [list | reset <id> [--all]]",
+  "usage": "roborepo maintenance stores [list | reset <id> [--all] [--dry-run]]",
   "onComplete": "returnToSubmenu",
   "continuePrompt": "Press any key to return to maintenance",
   "execution": {

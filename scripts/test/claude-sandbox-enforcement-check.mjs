@@ -48,10 +48,14 @@ const manifest = JSON.parse(fs.readFileSync(new URL("../../manifests/inventory/a
 // write. A temp-folder root would blur the workspace and temp controls, since temp is writable too.
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.homedir(), ".roborepo-claude-sandbox-")));
 const tempProbe = path.join("/private/tmp", `${path.basename(root)}-temp`);
+// The agent scratch store under the real home: writable from the sandbox, unlike the rest of home.
+const scratchDir = path.join(os.homedir(), ".roborepo", "scratch");
+const scratchProbe = path.join(scratchDir, `${path.basename(root).replace(/^\./, "")}-probe`);
 try {
   const workspace = path.join(root, "workspace");
   const remote = path.join(root, "remote.git");
   fs.mkdirSync(workspace);
+  fs.mkdirSync(scratchDir, { recursive: true });
   fs.writeFileSync(path.join(workspace, "key.pem"), "synthetic-credential-canary");
   fs.writeFileSync(path.join(workspace, ".env"), "SYNTHETIC=canary");
   const git = (args, cwd = workspace) => {
@@ -77,6 +81,7 @@ try {
     `check temp-write touch ${JSON.stringify(tempProbe)}`,
     `check workspace-write touch ${JSON.stringify(path.join(workspace, "written"))}`,
     `check home-write touch ${JSON.stringify(path.join(root, "outside"))}`,
+    `check scratch-write touch ${JSON.stringify(scratchProbe)}`,
     `check pem-read cat ${JSON.stringify(path.join(workspace, "key.pem"))}`,
     `check env-read cat ${JSON.stringify(path.join(workspace, ".env"))}`,
     `check ca-read head -c 1 ${CA_BUNDLE}`,
@@ -122,7 +127,7 @@ try {
   runClaude(sandboxed, shellCommand);
   const confined = readResults();
   assert.ok(confined, "the sandboxed probe did not run: sandboxed Bash was not auto-allowed, or the workspace was not writable");
-  const expected = { "temp-write": "ok", "workspace-write": "ok", "home-write": "refused", "pem-read": "refused", "env-read": "refused", "ca-read": "ok", "allowed-host": "ok" };
+  const expected = { "temp-write": "ok", "workspace-write": "ok", "home-write": "refused", "scratch-write": "ok", "pem-read": "refused", "env-read": "refused", "ca-read": "ok", "allowed-host": "ok" };
   assert.deepEqual(confined, expected, "sandboxed controls");
   assert.ok(!fs.existsSync(path.join(root, "outside")), "the home write left no file");
 
@@ -146,10 +151,11 @@ try {
     ...coverage,
     status: "passed",
     date: new Date().toISOString().slice(0, 10),
-    controls: ["temp write", "workspace write", "home write refused", "credential read refused", "CA bundle read", "allowed host connects", "excluded command unsandboxed", "missing-sandbox mutation"],
+    controls: ["temp write", "workspace write", "home write refused", "scratch folder write", "credential read refused", "CA bundle read", "allowed host connects", "excluded command unsandboxed", "missing-sandbox mutation"],
     results: { sandboxed: confined, unsandboxed: leaked },
   }, null, 2));
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
   fs.rmSync(tempProbe, { force: true });
+  fs.rmSync(scratchProbe, { force: true });
 }

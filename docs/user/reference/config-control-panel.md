@@ -215,7 +215,7 @@ Personal changes are stored in `~/.roborepo/command-overrides.json` and layered 
 row to `default` removes the personal override and returns to the repo manifest default for that
 behavior or command.
 
-### Guarded delivery and plan steps
+### Guarded delivery, plan, and scratch steps
 
 These default-allow behaviors cover the named workflow operations.
 
@@ -224,8 +224,10 @@ These default-allow behaviors cover the named workflow operations.
 | `guarded-delivery` | `delivery fetch`, `delivery pr-body`, `delivery pr-ready`, `delivery retry-ci` |
 | `plan-lifecycle` | `plans sync-base`, `plans stop-servers` |
 | `plan-store-commands` | Named plan-store reads, writes, lifecycle transitions, and checks |
+| `scratch-folders` | `scratch <name>` |
 
-The guarded delivery commands validate their repository, branch, and head targets before acting.
+`roborepo scratch` checks the folder name, writes only under `~/.roborepo/scratch/`, and prunes
+scratch folders past the store's bounds without a prompt. The guarded delivery commands validate their repository, branch, and head targets before acting.
 The lifecycle commands retain their transition, synchronization, and process guards. The plan-store
 allow covers shell invocation. The archive and close skills still require their workflow approvals. Raw fetch and GitHub commands follow their
 existing policies, including the prompts for `gh pr edit` and `gh pr ready`, and the denials for
@@ -324,7 +326,7 @@ on it; `merge-pull-requests` does not, since `gh` runs outside it either way:
 
 | Inside the sandbox | Bound |
 | --- | --- |
-| Writes | The session's checkout, the temp folders in `write-scope`, and the npm cache (`~/.npm`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
+| Writes | The session's checkout, the temp folders in `write-scope`, the npm cache (`~/.npm`), and the agent scratch folder (`~/.roborepo/scratch`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
 | Reads | Everything except `read-secrets`, minus the certificate bundles above |
 | Network | Hosts in `reach-allowed-hosts` connect; the address in `reach-claude-log-upload` is refused; any other host prompts |
 
@@ -386,7 +388,8 @@ Reading `main` from a worktree to compare against it is routine and harmless, so
 whole repository family. Writing across checkouts is rare and is how one session overwrites another's
 in-flight work, so writes stay inside the checkout in use and prompt anywhere else.
 
-Codex enforces only the write half of this table. If a repository's `plans/plans-config.json` sets
+Codex enforces only the write half of this table. Every Codex profile that can write also gets
+the agent scratch folder, `~/.roborepo/scratch`. If a repository's `plans/plans-config.json` sets
 `"worktreeRoot": "~/.worktrees"`, Codex also gets write access to that repository's worktree folder,
 `~/.worktrees/<worktreeRepoName>` — not to all of `~/.worktrees` — and to the exact paths in the
 repository's Git directory that a plans commit writes: its objects, the plans worktree's

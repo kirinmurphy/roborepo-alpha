@@ -61,18 +61,57 @@ function temporaryRoots() {
   return [...new Set(candidates.filter((root) => fs.existsSync(root)).map((root) => fs.realpathSync(root)))];
 }
 
+// The agent scratch store, where the Temporary Files rule sends agents instead of /tmp, so a body
+// written there must be accepted. Only the home the account database names counts: $HOME,
+// USERPROFILE, and ROBOREPO_STATE_ROOT are environment variables, and like $TMPDIR above they must
+// not widen what this command reads. (The denylist reads both homes because there a union only
+// refuses more; here it would allow more.) An account with no database entry gets no scratch root.
+// A sandboxed shell can write the scratch folder, so one replaced by a link is ignored rather than
+// followed.
+export function scratchBodyRoots(home = databaseHome()) {
+  if (!home) return [];
+  const root = path.join(home, ".roborepo", "scratch");
+  try {
+    if (!fs.lstatSync(root).isDirectory()) return [];
+    return [fs.realpathSync(root)];
+  } catch {
+    return [];
+  }
+}
+
+// os.userInfo() reads the account database (getpwuid; the profile directory on Windows), never the
+// environment.
+function databaseHome() {
+  try {
+    return os.userInfo().homedir || null;
+  } catch {
+    return null;
+  }
+}
+
+function bodyRoots() {
+  return [...new Set([...temporaryRoots(), ...scratchBodyRoots()])];
+}
+
+// Whether `pr-body` would accept a body file under `folder` by location alone (the denylist and
+// file checks still apply). `roborepo scratch` uses it to warn when an overridden state root or
+// $HOME puts its folder outside these roots; the roots themselves are not widened for it.
+export function isBodyLocation(folder, roots = bodyRoots()) {
+  const resolved = realpathOrSelf(folder);
+  return roots.some((root) => resolved === root || resolved.startsWith(root.endsWith(path.sep) ? root : root + path.sep));
+}
+
 const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
 
 // Agent permissions allow `delivery pr-body` with any argument, and the command reads the file
 // outside the agent's Read tool, so it must enforce what Read would: the body must resolve, after
-// symlinks, to a regular file inside a system temp directory that the `read-secrets` denylist does
-// not name. The file is then opened and its identity rechecked. On Linux the kernel's own path
+// symlinks, to a regular file inside a system temp directory or the agent scratch store that the
+// `read-secrets` denylist does not name. The file is then opened and its identity rechecked. On Linux the kernel's own path
 // for the open descriptor is compared, which closes a path component swapped mid-check. Elsewhere
 // Node has no descriptor-path lookup, so a fresh resolution's device and inode are compared, which
 // narrows that window but cannot close it against repeated timed swaps. Refusals and read errors
 // never print the path.
-function readBodyFile(file) {
-  const roots = temporaryRoots();
+export function readBodyFile(file, roots = bodyRoots()) {
   let resolved;
   try {
     resolved = fs.realpathSync(file);
@@ -80,7 +119,7 @@ function readBodyFile(file) {
     throw new Error("PR body file was not found (path not printed)");
   }
   if (!roots.some((root) => resolved.startsWith(root.endsWith(path.sep) ? root : root + path.sep))) {
-    throw new Error(`PR body file must be inside a system temp directory (${roots.join(" or ") || "none available"})`);
+    throw new Error(`PR body file must be inside a system temp directory or the scratch folder (${roots.join(" or ") || "none available"})`);
   }
   if (isDeniedSecret(resolved)) throw new Error("PR body file matches the read-secrets credential denylist (path not printed)");
   let fd;
