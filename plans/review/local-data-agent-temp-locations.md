@@ -424,6 +424,8 @@ None. Both earlier questions were answered by the user; see the Decision Log.
   outside the Claude sandbox, which refuses `.git/worktrees` writes).
 - CI for PR #78 at 0ea0bfe5: `check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer`
   passed.
+- Approval: the user replied "Approve 0ea0bfe5" in the /plan-review chat on 2026-11-23, after the
+  review packet for that commit.
 
 ### Result
 
