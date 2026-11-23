@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { isBodyLocation } from "../cli/delivery.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
@@ -98,6 +99,30 @@ try {
   assert.equal(linked.status, 1, "a link in place of a folder is refused");
   assert.equal(linked.stdout, "", "no path is printed for a refused folder");
 
+  // ---- pr-body location: a folder pr-body reads gets no note; one an override moved away does ----
+  assert.doesNotMatch(opened.stderr, /outside what `roborepo delivery pr-body` reads/, "a state root under the system temp folder needs no note");
+  // The checkout's ignored .tmp/ is outside every temp root and the account's own scratch folder.
+  const ignoredTmp = path.join(repoRoot, ".tmp");
+  const madeIgnoredTmp = !fs.existsSync(ignoredTmp);
+  fs.mkdirSync(ignoredTmp, { recursive: true });
+  const outsideState = fs.mkdtempSync(path.join(ignoredTmp, "scratch-state-"));
+  try {
+    const moved = run(["gy8ncs9u"], outsideState);
+    assert.equal(moved.status, 0, moved.stderr);
+    assert.equal(moved.stdout, `${path.join(outsideState, "scratch", "gy8ncs9u")}\n`, "stdout is still the path alone");
+    assert.match(moved.stderr, /outside what `roborepo delivery pr-body` reads/, "an overridden state root is named");
+    assert.equal(isBodyLocation(path.join(outsideState, "scratch", "gy8ncs9u")), false, "pr-body would refuse it");
+  } finally {
+    fs.rmSync(outsideState, { recursive: true, force: true });
+    if (madeIgnoredTmp) {
+      try {
+        fs.rmdirSync(ignoredTmp);
+      } catch {
+        // Not empty any more; leave it.
+      }
+    }
+  }
+
   console.log("ok: roborepo scratch (create, prune, keep named folder, refuse bad names)");
 } finally {
   fs.rmSync(stateRoot, { recursive: true, force: true });
@@ -121,9 +146,9 @@ function sparseFolder(name, at) {
   return folder;
 }
 
-function run(args) {
+function run(args, root = stateRoot) {
   return spawnSync(process.execPath, [cli, "scratch", ...args], {
-    env: { ...process.env, ROBOREPO_STATE_ROOT: stateRoot },
+    env: { ...process.env, ROBOREPO_STATE_ROOT: root },
     encoding: "utf8",
   });
 }

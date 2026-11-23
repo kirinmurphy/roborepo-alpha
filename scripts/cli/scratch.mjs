@@ -11,6 +11,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { stateDir } from "./state-paths.mjs";
+import { isBodyLocation } from "./delivery.mjs";
 import {
   SCRATCH_STORE_ID,
   findRetentionStore,
@@ -38,6 +39,12 @@ function runScratch(args) {
   try {
     const folder = openScratchFolder(store.target, args[0]);
     pruneScratch(store, folder);
+    if (!isBodyLocation(folder)) {
+      console.error(
+        `scratch: note: this folder is outside what \`roborepo delivery pr-body\` reads (an overridden`
+        + " ROBOREPO_STATE_ROOT or HOME moved it); write a PR body file in the system temp folder instead",
+      );
+    }
     console.log(folder);
     return 0;
   } catch (error) {

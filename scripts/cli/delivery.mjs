@@ -93,6 +93,14 @@ function bodyRoots() {
   return [...new Set([...temporaryRoots(), ...scratchBodyRoots()])];
 }
 
+// Whether `pr-body` would accept a body file under `folder` by location alone (the denylist and
+// file checks still apply). `roborepo scratch` uses it to warn when an overridden state root or
+// $HOME puts its folder outside these roots; the roots themselves are not widened for it.
+export function isBodyLocation(folder, roots = bodyRoots()) {
+  const resolved = realpathOrSelf(folder);
+  return roots.some((root) => resolved === root || resolved.startsWith(root.endsWith(path.sep) ? root : root + path.sep));
+}
+
 const OPEN_FLAGS = fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0) | (fs.constants.O_NOFOLLOW ?? 0);
 
 // Agent permissions allow `delivery pr-body` with any argument, and the command reads the file
