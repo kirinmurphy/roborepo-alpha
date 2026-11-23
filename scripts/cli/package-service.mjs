@@ -207,6 +207,7 @@ export function removeSource(sourceId, { keepInstalled = false } = {}) {
       { code: "refused", details: { installed } },
     );
   }
+  if (record.enabled) refuseOrphaningDependents(record, "remove");
   writeSourceConfig(sources.filter((entry) => entry.id !== record.id));
   if (record.type === "git") {
     // Installed copies live in the install store, not the cache, so they survive this.
@@ -215,10 +216,36 @@ export function removeSource(sourceId, { keepInstalled = false } = {}) {
   return { removed: record.id, keptInstalled: installed };
 }
 
+// Packages in the catalog, other than `ids` themselves, that require one of `ids`. Taking such a
+// package away would leave a dangling `requires` and stop the whole catalog from loading.
+function dependentsOf(ids, packages = safeCompose().packages) {
+  const leaving = new Set(ids);
+  return packages
+    .filter((pkg) => !leaving.has(pkg.id) && (pkg.requires || []).some((dep) => leaving.has(dep)))
+    .map((pkg) => pkg.qualifiedName);
+}
+
+// A live source's packages that the catalog currently uses from it.
+function packagesUsedFrom(record) {
+  return safeCompose().packages.filter((pkg) => pkg.sourceId === record.id).map((pkg) => pkg.id);
+}
+
+function refuseOrphaningDependents(record, verb) {
+  if (!isLiveSource(record)) return;
+  const dependents = dependentsOf(packagesUsedFrom(record));
+  if (dependents.length > 0) {
+    throw new PackageServiceError(
+      `cannot ${verb} package source ${record.id}: ${dependents.join(", ")} ${dependents.length === 1 ? "requires" : "require"} its packages`,
+      { code: "refused", details: { dependents } },
+    );
+  }
+}
+
 export function setSourceEnabled(sourceId, enabled) {
   const sources = readSourceConfig().sources;
   const record = requireSource(sourceId, sources);
   if (record.id === BUILTIN_SOURCE_ID && !enabled) throw new PackageServiceError("the builtin package source cannot be disabled", { code: "refused" });
+  if (!enabled && record.enabled) refuseOrphaningDependents(record, "disable");
   writeSourceConfig(sources.map((entry) => (entry.id === record.id ? { ...entry, enabled } : entry)));
   return sourceSummary({ ...record, enabled }, Object.values(readPackageLock().packages));
 }
@@ -618,6 +645,14 @@ export async function removePackage(reference, { disable = null } = {}) {
   }
   if (!record && !pkg) throw new PackageServiceError(`${reference} is not installed`, { code: "usage" });
   if (!record) return { qualifiedName: pkg.qualifiedName, removed: false, disabled: false, message: "not installed; nothing to remove" };
+
+  // A copied package leaves the catalog when removed; refuse while another package requires it.
+  if (record.kind === "materialized") {
+    const dependents = dependentsOf([packageId], composed.packages);
+    if (dependents.length > 0) {
+      throw new PackageServiceError(`${packageId} is required by ${dependents.join(", ")}; remove ${dependents.length === 1 ? "it" : "them"} first. Nothing was removed`, { code: "refused", details: { dependents } });
+    }
+  }
 
   const active = new Set(effectiveEnabledIds(composed.packages));
   let disabled = false;

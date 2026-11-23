@@ -117,6 +117,21 @@ try {
   assert.ok(!/\n\s+at /.test(required.output), "no stack trace");
   assert.ok(lock()["req-child"], "the record stays");
 
+  // A folder source whose package another source's package requires cannot be disabled or
+  // removed: the catalog would lose a requirement and stop loading.
+  const libs = path.join(roots.tmp, "libs");
+  writeRulesPackage(libs, "lib-a");
+  writeRulesPackage(roots.workspaceDir, "uses-lib", { requires: ["lib-a"] });
+  ok("package", "source", "add", libs);
+  for (const verb of ["disable", "remove"]) {
+    const refusedSource = cli("package", "source", verb, "libs");
+    assert.equal(refusedSource.status, 6, `${verb}: ${refusedSource.output}`);
+    assert.match(refusedSource.output, /local\/uses-lib requires its packages/);
+  }
+  ok("package", "list");
+  fs.rmSync(path.join(roots.workspaceDir, "uses-lib"), { recursive: true });
+  ok("package", "source", "remove", "libs");
+
   // Source commands: unknown source and a default source's removal are refused with exit codes.
   assert.equal(cli("package", "source", "info", "nope").status, 2);
   assert.equal(cli("package", "source", "remove", "local").status, 6);

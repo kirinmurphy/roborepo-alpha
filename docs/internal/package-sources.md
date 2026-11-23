@@ -207,11 +207,11 @@ data and throw `PackageServiceError` with a `code`:
 
 | Function | Does |
 | --- | --- |
-| `listSources`, `sourceInfo`, `addSource`, `removeSource`, `setSourceEnabled`, `refreshSources`, `trustedCatalog` | Source management |
+| `listSources`, `sourceInfo`, `addSource`, `removeSource`, `setSourceEnabled`, `refreshSources`, `trustedCatalog` | Source management. Disabling or removing a folder source is refused while another source's package requires one of its packages |
 | `listAvailablePackages`, `resolvePackageReference` | Every (source, package) pair; one pick per the reference rules |
 | `previewInstall`, `installPackage` | Contents summary of the package and every package the install brings, then the install. Installing a package already installed from the same source never moves its pin; it reports a newer revision for `update` |
 | `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed; re-apply an active package. Refused when the source now points at a different repository than the installed copy came from |
-| `removePackage` | Refuse System; disable an active package first; delete the record and any copy |
+| `removePackage` | Refuse System; refuse a copied package another package requires; disable an active package first; delete the record and any copy |
 | `packageView` | Rows with `tab`, `sourceId`, `sourceBadge`, `trust`, `collection`, `available`, `installed`, `active`, `revision`, `latestRevision`, `updateAvailable`, `removable` |
 
 A `requires` edge resolves in the requiring package's own source first, then by the reference

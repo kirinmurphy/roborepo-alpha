@@ -284,6 +284,13 @@ try {
   assert.ok(!lock()["dep-root"] && !lock()["dep-hooked"], "nothing installs unconfirmed");
   ok("package", "install", "deps/dep-root", "--yes");
   assert.ok(lock()["dep-root"] && lock()["dep-hooked"], "the dependency installs with its parent once confirmed");
+  // Removing a copied package another installed package requires is refused, so the catalog
+  // never loses a requirement.
+  const orphaning = cli("package", "remove", "dep-hooked");
+  assert.equal(orphaning.status, 6, `${orphaning.output}`);
+  assert.match(orphaning.output, /required by deps\/dep-root/);
+  assert.ok(lock()["dep-hooked"], "nothing was removed");
+  ok("package", "list");
 
   // Install never moves an installed pin, even after a refresh found a newer commit.
   const depsFirst = lock()["dep-root"].resolved;
