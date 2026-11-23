@@ -34,6 +34,11 @@ const includesAll = (label, text, phrases) => {
 const CONVENTION_CHECK_PHRASES = ["Flow and cohesion", "Data and state", "Comments and abstractions", "length alone is never a finding"];
 // Both rubric texts must also keep issues the plan did not cause out of its findings.
 const OUTSIDE_PLAN_PHRASES = ["Issues the plan did not cause are not findings", "`Outside this plan`"];
+// A base failure needs the same check failing on the base branch. An input that only exists there
+// proves nothing: the check can pass on base and still fail on the plan's branch.
+const BASE_FAILURE_EVIDENCE = "the same check fail";
+const assertNoBaseInputLoophole = (label, text) =>
+  assert.ok(!/failing input exists/.test(text), `${label}: a base failure must not rest on a failing input existing on base`);
 
 const SKILLS = {
   "plan-promote": {
@@ -163,7 +168,10 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "without asking the user",
     "eight-pass cap",
   ]);
-  includesAll("validation-loop.md", readPackageFile("plan-suite/skills/plan-execute/references/validation-loop.md"), [
+  const validationLoop = readPackageFile("plan-suite/skills/plan-execute/references/validation-loop.md");
+  assertNoBaseInputLoophole("validation-loop.md", validationLoop);
+  includesAll("validation-loop.md", validationLoop, [
+    BASE_FAILURE_EVIDENCE,
     "## The loop",
     "## The rubric",
     "a check an agent can run is run, not listed",
@@ -326,6 +334,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // --- plan-review: preflight, base synchronization, the check, fixes, the review packet, and approval ---
 {
   const review = readSkill("plan-review");
+  assertNoBaseInputLoophole("plan-review", review);
   includesAll("plan-review push", review, [
     "Every review run that commits to the feature branch",
     "then push the feature branch (see Push the feature branch)",
@@ -338,7 +347,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   // A finding is fixed in the same session by consequence, not by kind of change; only a choice
   // between alternatives, a requirement change, or an unspecified contract change waits for the human.
   includesAll("plan-review check", review.slice(order[2], order[3]), [
-    "A failure the base branch has too is a **base failure**",
+    "A failure is a **base failure** only when that evidence shows the same check failing on the base branch",
     "neither a finding nor a blocker",
     "never an account of the work",
     "Classify every finding by consequence, not size",
