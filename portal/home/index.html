@@ -53,7 +53,21 @@
         </div>
         <div class="repository-roots" data-slot="checkouts"></div>
         <div data-slot="cleanup-notice"></div>
+        <div data-slot="agent-identity"></div>
       </article>
+    </template>
+    <!-- agent-identity.js: the GitHub bot identity's one-line status at the foot of a repo card. -->
+    <template id="tpl-agent-identity-line">
+      <div class="agent-identity-line" role="status">
+        <portal-icon name="github" size="sm" aria-hidden="true"></portal-icon>
+        <span>Agent GitHub account:</span>
+        <span class="agent-identity-state" data-slot="state"></span>
+        <span class="agent-identity-line-text" data-slot="text"></span>
+        <button type="button" data-btn="text" data-slot="details">Details</button>
+      </div>
+    </template>
+    <template id="tpl-agent-identity-link">
+      <li><a data-slot="link" target="_blank" rel="noreferrer"></a> <span data-slot="note"></span></li>
     </template>
     <!-- worktree-dialogs.js: the card-footer offer to turn on automatic worktree cleanup. -->
     <template id="tpl-worktree-cleanup-notice">
@@ -212,6 +226,43 @@
           <button type="button" data-btn="cta" data-slot="confirm">Turn on</button>
         </div>
       </form>
+    </dialog>
+
+    <!-- agent-identity.js: the GitHub bot identity card. It reads status and opens the terminal
+         setup; the token is never typed here. -->
+    <dialog id="agent-identity-dialog" data-dialog-size="md" aria-labelledby="agent-identity-title">
+      <div class="modal-head">
+        <h2 id="agent-identity-title">Agent GitHub account</h2>
+        <portal-close-button data-slot="close" aria-label="Close"></portal-close-button>
+      </div>
+      <div class="modal-body agent-identity-body">
+        <p class="agent-identity-summary" role="status">
+          <strong data-slot="repository"></strong>
+          <span class="agent-identity-state" data-slot="state"></span>
+        </p>
+        <p data-slot="message"></p>
+        <p class="agent-identity-fix" data-slot="fix" hidden></p>
+        <p class="worktree-dialog-help" data-slot="expiry" hidden></p>
+        <div class="agent-identity-command" data-slot="command-row" hidden>
+          <p class="worktree-dialog-help">Run this in your own terminal, in this repo's folder:</p>
+          <div class="agent-identity-command-line">
+            <code data-slot="command"></code>
+            <portal-copy-button data-slot="copy" label="Copy"></portal-copy-button>
+          </div>
+        </div>
+        <p class="worktree-dialog-help" data-slot="launch-note" hidden></p>
+        <details data-slot="guide">
+          <summary>What you do on github.com</summary>
+          <ul class="agent-identity-links" data-slot="links"></ul>
+          <p class="worktree-dialog-help" data-slot="guide-expiry"></p>
+          <p class="worktree-dialog-help" data-slot="token-warning"></p>
+        </details>
+        <div class="item-err" data-slot="error" hidden></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" data-btn="secondary" data-slot="recheck">Check again</button>
+        <button type="button" data-btn="cta" data-slot="open-setup" hidden>Open setup</button>
+      </div>
     </dialog>
 
     {{PLAN_DRAWER}}

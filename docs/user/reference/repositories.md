@@ -129,7 +129,7 @@ competes with a source that would find the repository again.
 
 A repo card's ⋮ menu lists **All Plans**, **Agent Config**, and **Token Activity** (each opens that page already
 filtered to the repo, as `?repo=<key>`), then **Pin**/**Unpin**, **Branch protection** for a repo
-with a Git remote, and **Ignore Repo** (**Forget This Repo** for a repo with no known checkout).
+with a Git remote, **Agent GitHub account** for a repo on github.com, and **Ignore Repo** (**Forget This Repo** for a repo with no known checkout).
 
 ### Branch protection
 
@@ -154,6 +154,35 @@ What the panel offers depends on the signed-in GitHub account:
 **Skip merge rules** asks for confirmation first. It turns off the required approval and the
 required CI checks on the default branch, for everyone who uses the repo; the plans and integrity
 rules stay on. Each button runs the same steps as the matching `roborepo protect` form.
+
+### Agent GitHub account
+
+For a repo on github.com, the card's last line shows whether agents act on GitHub as a separate
+[bot account](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot), and **Details** (or
+**Agent GitHub account** in the menu) opens the full status:
+
+| State | Means |
+| --- | --- |
+| **not set up** | Agents act as you. The card offers **Open setup** |
+| **healthy** | Agents act as the bot, and every check passed |
+| **renew soon** | The bot's token expires within 14 days or has no expiry date. **Open setup** renews it |
+| **token expired**, **needs attention** | A check failed. The card shows what and how to fix it, which is **Open setup** when rerunning the setup fixes it |
+| **not checked** | A check could not run, for example GitHub did not answer; the card says why |
+
+The card shows the same message and fix as `roborepo github status`, the token's expiry date, and
+links to the github.com pages the setup asks you to visit.
+
+**Open setup** opens a terminal running `roborepo github setup` in the repo's folder (macOS). On
+another OS, or when the terminal does not open, the card shows the command to copy instead. The
+token is typed only at that terminal's hidden prompt, never in the portal. When you come back to the
+portal window, the card reads that repo's status again; other repos reuse a result for five minutes.
+
+The card uses two routes. `:id` is the repo's canonical id, percent-encoded:
+
+| Route | Does |
+| --- | --- |
+| `GET /api/repositories/:id/agent-identity` | The status: state, each finding's id, severity, message, and fix, the reason a check could not run, the token's expiry, and whether the one-click setup works here. `{ "applies": false }` for a repo not on github.com. Never a token. `?fresh=1` skips the five-minute cache |
+| `POST /api/repositories/:id/agent-identity/setup` | Opens the setup in a terminal and returns `launched`, or the reason it could not. It takes no body: the command and folder are the server's choice. Like every portal write, it requires the portal's origin and token |
 
 ### Ignore repository
 

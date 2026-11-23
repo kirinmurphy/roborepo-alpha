@@ -77,6 +77,11 @@ The setup walks you through each step and skips the ones already done:
 6. Check everything, then enable the package. A failed check does not turn it on; if it was already
    on, it stays on.
 
+The portal's Home page tracks where this stands for each GitHub repo: the repo card shows the bot
+account's status and the next step, and **Open setup** opens this same setup in a terminal (macOS;
+elsewhere it shows the command to copy). See
+[Agent GitHub account](../reference/repositories.md#agent-github-account).
+
 The token is stored in plaintext, mode 0600, under `~/.roborepo/github-agent/gh`, because neither
 Claude's nor Codex's sandbox can read the macOS keychain. Any process you run, agents included, can
 read it, so the bot's limited role and the token's expiry are what bound the damage.

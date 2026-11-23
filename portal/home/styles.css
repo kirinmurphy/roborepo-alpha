@@ -256,3 +256,33 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 /* The heading's ⚠ sits on the text's center line rather than its baseline, beside the label it marks. */
 .token-warnings-panel .domain-heading { align-items: center; column-gap: 8px; }
 .token-warnings-glyph { color: var(--warn); margin-right: -2px; }
+/* agent-identity.js: the GitHub bot identity's status line at a repo card's foot, and its card. */
+.agent-identity-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 6px 16px;
+  border-top: 1px solid var(--line);
+  color: var(--dim);
+  font-size: var(--text-sm);
+}
+.agent-identity-line-text { flex: 1 1 auto; min-width: 0; }
+.agent-identity-state {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: var(--text-xs);
+}
+.agent-identity-state[data-level="ok"] { color: var(--ok, var(--ink)); }
+.agent-identity-state[data-level="warn"] { color: var(--warn); }
+.agent-identity-state[data-level="problem"] { color: var(--danger); }
+.agent-identity-state[data-level="muted"] { color: var(--dim); }
+.agent-identity-body { display: grid; gap: 12px; font-size: var(--text-sm); }
+.agent-identity-body p { margin: 0; }
+.agent-identity-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.agent-identity-command { display: grid; gap: 4px; }
+.agent-identity-command-line { display: flex; align-items: center; gap: 8px; }
+.agent-identity-command-line code { font-family: var(--mono); overflow-wrap: anywhere; }
+.agent-identity-links { margin: 8px 0; padding-left: 18px; display: grid; gap: 4px; }
+.agent-identity-links span { color: var(--dim); }

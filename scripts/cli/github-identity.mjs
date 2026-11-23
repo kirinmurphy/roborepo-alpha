@@ -11,8 +11,9 @@ const USAGE = "Usage: roborepo github status [--json]";
 // Doctor waits on these reads, so each gives up sooner than an explicit `roborepo github status`.
 const DOCTOR_TIMEOUT_MS = 8000;
 
-export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs } = {}) {
-  const repositoryId = await currentRepositoryId(cwd);
+// `repositoryId` skips reading `cwd`'s origin when the caller already knows the repo (the portal).
+export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs, repositoryId: known = null } = {}) {
+  const repositoryId = known ?? await currentRepositoryId(cwd);
   return readAgentIdentity({ repositoryId, cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled() });
 }
 

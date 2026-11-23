@@ -9,9 +9,10 @@ import readline from "node:readline";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient, runGh } from "../../modules/forge/github.mjs";
 import {
-  AGENT_IDENTITY_PACKAGE_ID, EXPIRING_DAYS, agentGhConfigDir, agentHostsFile, botGhEnv, readAgentHosts, readAgentIdentity,
+  AGENT_IDENTITY_PACKAGE_ID, agentGhConfigDir, agentHostsFile, botGhEnv, readAgentHosts, readAgentIdentity,
   refreshCaBundle, tokenProblems,
 } from "../../modules/forge/agent-identity.mjs";
+import { GITHUB_PAGES, TOKEN_NOTE, TOKEN_SCOPES, expiryAdvice, scopesText } from "../../modules/forge/agent-identity-guide.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
 import { agentIdentityPackageInstalled } from "./agent-identity-package.mjs";
@@ -103,8 +104,8 @@ async function guidedSetup({ input, open, io, cwd }) {
     done(`Bot account (${botLogin})`);
   } else {
     io.log("Agents act as a separate GitHub account, not as you.");
-    io.log("Create one at https://github.com/signup, in a private browser window so your own session stays signed in.");
-    open("https://github.com/signup");
+    io.log(`Create one at ${GITHUB_PAGES.signup}, in a private browser window so your own session stays signed in.`);
+    open(GITHUB_PAGES.signup);
     io.log("Pick any name; it will show on every pull request and comment an agent makes.");
     const typed = (await input.ask("Bot account login: ")).trim();
     if (!typed) stop("No bot account login given.");
@@ -233,15 +234,15 @@ async function storeToken({ input, open, io, cwd, dir, botLogin, hadLogin, renew
   }
   if (renewing) {
     // Regenerating keeps the token's note and scopes and only issues a new value and expiry.
-    io.log(`Sign in as ${botLogin} in a private window, then open https://github.com/settings/tokens.`);
-    open("https://github.com/settings/tokens");
-    io.log('Open the "RoboRepo agents" token and choose Regenerate token, or make a new classic token with only the repo and read:org scopes.');
+    io.log(`Sign in as ${botLogin} in a private window, then open ${GITHUB_PAGES.tokens}.`);
+    open(GITHUB_PAGES.tokens);
+    io.log(`Open the "${TOKEN_NOTE}" token and choose Regenerate token, or make a new classic token with only the ${TOKEN_SCOPES.join(" and ")} scopes.`);
   } else {
-    io.log(`Sign in as ${botLogin} in the private window, then open https://github.com/settings/tokens/new (a classic token).`);
-    open("https://github.com/settings/tokens/new");
-    io.log('Note: "RoboRepo agents". Scopes: repo and read:org only (not workflow).');
+    io.log(`Sign in as ${botLogin} in the private window, then open ${GITHUB_PAGES.newToken} (a classic token).`);
+    open(GITHUB_PAGES.newToken);
+    io.log(`Note: "${TOKEN_NOTE}". Scopes: ${scopesText()}.`);
   }
-  io.log(`Expiry: 90 days is a good default. roborepo doctor and roborepo github status warn ${EXPIRING_DAYS} days before it ends; renew by rerunning roborepo github setup.`);
+  io.log(`Expiry: ${expiryAdvice()}`);
   io.log("Do not paste the token into an agent chat.");
   io.log(`Agents' sandboxes cannot read the keychain, so the token is stored in ${agentHostsFile(stateDir)}.`);
   const token = (await input.askHidden("Paste the token (input hidden): ")).trim();

@@ -19,17 +19,20 @@ export function terminalLaunchSupported(platform = process.platform) {
 }
 
 // `name` names the script file, so repeated launches reuse one file instead of piling up copies.
-// The working directory is the script's own folder: neutral, empty, and owned by RoboRepo.
-export function launchInTerminal({ name, executable, args = [] }, {
+// The working directory is `cwd` when the program acts on a folder (a repo's setup), else the
+// script's own folder: neutral, empty, and owned by RoboRepo. A `cwd` must be an existing absolute
+// folder, like the executable.
+export function launchInTerminal({ name, executable, args = [], cwd = null }, {
   platform = process.platform, dir = path.join(stateDir, "terminal-launch"), run = spawnSync,
 } = {}) {
   if (!terminalLaunchSupported(platform)) return { ok: false, reason: "unsupported_platform" };
   if (!path.isAbsolute(executable) || !fs.existsSync(executable)) return { ok: false, reason: "no_executable" };
+  if (cwd !== null && !(path.isAbsolute(cwd) && isDirectory(cwd))) return { ok: false, reason: "no_folder" };
   fs.mkdirSync(dir, { recursive: true });
   const scriptPath = path.join(dir, `${name}.command`);
   fs.writeFileSync(scriptPath, [
     "#!/bin/sh",
-    `cd ${shellQuote(dir)} || exit 1`,
+    `cd ${shellQuote(cwd ?? dir)} || exit 1`,
     `exec ${[executable, ...args].map(shellQuote).join(" ")}`,
     "",
   ].join("\n"), { mode: 0o700 });
@@ -39,4 +42,12 @@ export function launchInTerminal({ name, executable, args = [] }, {
     return { ok: false, reason: "launch_failed", error: String(result.error?.message || result.stderr || `open exited ${result.status}`).trim() };
   }
   return { ok: true };
+}
+
+function isDirectory(folder) {
+  try {
+    return fs.statSync(folder).isDirectory();
+  } catch {
+    return false;
+  }
 }

@@ -59,6 +59,37 @@ export const repositoriesRoutes = defineRoutes([
     },
   },
   postRoute("/api/repositories/:id/protection", (handlers, body, params) => handlers.applyRepositoryProtection({ repositoryId: params.id, action: body.action })),
+  // The GitHub bot identity. The GET only reads status (`?fresh=1` skips the server's five-minute
+  // cache); the POST opens `roborepo github setup` in a terminal and takes no body, because the
+  // command, its arguments, and its folder are the server's choice alone. The token is typed in
+  // that terminal, never sent here.
+  {
+    method: "GET",
+    path: "/api/repositories/:id/agent-identity",
+    handler: (req, res, { params, qs, handlers }) => {
+      const fresh = new URLSearchParams(qs).get("fresh") === "1";
+      Promise.resolve()
+        .then(() => handlers.loadRepositoryAgentIdentity({ repositoryId: params.id, fresh }))
+        .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (err) => sendError(res, err));
+      return true;
+    },
+  },
+  {
+    method: "POST",
+    path: "/api/repositories/:id/agent-identity/setup",
+    handler: (req, res, { params, handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        if (body && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)) {
+          return send(res, 400, "application/json", JSON.stringify({ error: "expected an empty body" }));
+        }
+        Promise.resolve()
+          .then(() => handlers.launchAgentIdentitySetup({ repositoryId: params.id }))
+          .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (error) => sendError(res, error));
+      });
+      return true;
+    },
+  },
   {
     method: "GET",
     path: "/api/repositories",

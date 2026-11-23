@@ -2352,8 +2352,8 @@ test.describe("repository-first portal Home", () => {
     }
     await card.getByRole("button", { name: "Actions", exact: true }).click();
     const menu = card.locator(".card-head .menu-panel");
-    await expect(menu.locator("> *")).toHaveText(["Pin", "Branch protection", "Ignore Repo"]);
-    await expect(menu.locator("portal-icon")).toHaveCount(3);
+    await expect(menu.locator("> *")).toHaveText(["Pin", "Branch protection", "Agent GitHub account", "Ignore Repo"]);
+    await expect(menu.locator("portal-icon")).toHaveCount(4);
     await expect(page.locator("#home-content").getByRole("link", { name: "Agents", exact: true })).toHaveCount(0);
   });
 });

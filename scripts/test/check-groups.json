@@ -35,6 +35,7 @@
     "github-agent-identity-package-check.mjs",
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",
+    "repository-agent-identity-check.mjs",
     "hook-review-cli-check.mjs",
     "codex-credential-projection-check.mjs",
     "claude-sandbox-projection-check.mjs",

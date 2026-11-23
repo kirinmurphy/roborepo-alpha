@@ -12,6 +12,7 @@ import { repositoryDirectory, unresolvedActivity } from "./templates.js";
 import { createWorktreeCleanupDialog, createWorktreeRemoveDialog } from "./worktree-dialogs.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createProtectionPanel } from "/portal/shared/protection-panel.js";
+import { openAgentIdentityCard } from "./agent-identity.js";
 import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
@@ -276,6 +277,10 @@ async function selectRepositoryAction(key, repository, item, event) {
   closeActionMenus();
   if (key === "protection") {
     void protectionPanel.open(repository);
+    return;
+  }
+  if (key === "agent-identity") {
+    openAgentIdentityCard(repository);
     return;
   }
   try {
