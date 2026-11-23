@@ -119,7 +119,7 @@ Severity says how much a finding matters; class says who resolves it.
 | --- | --- | --- |
 | `fix` | The right fix is clear, stays within the caller's scope and requirements, and changes no public interface or contract the requirements did not already specify. Code, tests, docs, and evidence alike | The caller fixes it |
 | `escalate` | The fix chooses between real alternatives, changes requirements or acceptance criteria, changes a public interface or contract the requirements did not specify, or lands outside the scope | Goes to the user as a decision |
-| `base` | A gate failure the base branch has too: the failing check also fails on the base branch, or its failing input exists there | Recorded as verification; not a finding, not a blocker |
+| `base` | A gate failure the base branch has too: the same check fails on the base branch, shown by the base branch's CI result for the base commit or by rerunning the check there. An input that merely exists on base is not evidence | Recorded as verification; not a finding, not a blocker |
 
 Classify by consequence, not by the kind of change a finding needs. A real alternative has a
 compelling argument for choosing it. When one option clearly wins and the others exist only on paper,

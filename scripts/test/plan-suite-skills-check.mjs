@@ -34,6 +34,11 @@ const includesAll = (label, text, phrases) => {
 const CONVENTION_CHECK_PHRASES = ["Flow and cohesion", "Data and state", "Comments and abstractions", "length alone is never a finding"];
 const OUTSIDE_SCOPE_PHRASES = ["Issues the work under review did not cause are not findings", "`Outside this scope`"];
 const RISK_CHECKPOINT_PHRASES = ["authentication;", "authorization, ownership, and admin;", "database schema and migrations;", "external integrations."];
+// A base failure needs the same check failing on the base branch. An input that only exists there
+// proves nothing: the check can pass on base and still fail on the plan's branch.
+const BASE_FAILURE_EVIDENCE = "the same check fail";
+const assertNoBaseInputLoophole = (label, text) =>
+  assert.ok(!/failing input exists/.test(text), `${label}: a base failure must not rest on a failing input existing on base`);
 
 const SKILLS = {
   "plan-promote": {
@@ -164,6 +169,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "eight-pass cap",
   ]);
   const loop = readPackageFile("plan-suite/skills/plan-execute/references/validation-loop.md");
+  assertNoBaseInputLoophole("validation-loop.md", loop);
   for (const phrase of [...CONVENTION_CHECK_PHRASES, "## The rubric", "| `escalate` |"]) {
     assert.ok(!loop.includes(phrase), `validation-loop.md: the rubric moved to implementation-review, but "${phrase}" is still here`);
   }
@@ -322,6 +328,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // --- plan-review: preflight, base synchronization, the check, fixes, the review packet, and approval ---
 {
   const review = readSkill("plan-review");
+  assertNoBaseInputLoophole("plan-review", review);
   includesAll("plan-review push", review, [
     "Every review run that commits to the feature branch",
     "then push the feature branch (see Push the feature branch)",
@@ -334,7 +341,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   // A finding is fixed in the same session by consequence, not by kind of change; only a choice
   // between alternatives, a requirement change, or an unspecified contract change waits for the human.
   includesAll("plan-review check", review.slice(order[2], order[3]), [
-    "A failure the base branch has too is a **base failure**",
+    "A failure is a **base failure** only when that evidence shows the same check failing on the base branch",
     "neither a finding nor a blocker",
     "never an account of the work",
     "loads `implementation-review` and applies its rubric",
@@ -571,6 +578,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // --- implementation-review: the one rubric, and the callers that use it ---
 {
   const rubric = readSkill("implementation-review");
+  assertNoBaseInputLoophole("implementation-review", rubric);
+  assert.ok(rubric.includes(BASE_FAILURE_EVIDENCE), "implementation-review: a base failure needs the same check failing on base");
   includesAll("implementation-review", rubric, [
     ...CONVENTION_CHECK_PHRASES,
     ...OUTSIDE_SCOPE_PHRASES,

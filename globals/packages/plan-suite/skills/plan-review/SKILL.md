@@ -147,9 +147,10 @@ of it. The human's review is the independent check; this step makes sure they re
   still in progress is waited for, not reproduced locally. Run the
   plan's own tests. Record each command or CI run and its result.
 - For each failure, read the base branch's CI result for the base commit; when it has none, rerun
-  the failing check on the base branch, or show its failing input exists there. A failure the base
-  branch has too is a **base failure**: record it under `### Verification`, and it is neither a
-  finding nor a blocker.
+  the failing check on the base branch. A failure is a **base failure** only when that evidence
+  shows the same check failing on the base branch; a failing input that exists there while the
+  check passes is not one. Record a base failure under `### Verification`; it is neither a finding
+  nor a blocker.
 - Run one Validator pass over the merged result: a fresh-context subagent where the environment has
   one, otherwise a separate read-only step in this session. Give it the plan, the base branch, and
   the gate output if the gate has finished, never an account of the work. It loads
