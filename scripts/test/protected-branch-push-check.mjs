@@ -43,8 +43,9 @@ for (const key of Object.keys(gitEnv)) {
   if (/^GIT_CONFIG_(?:COUNT|PARAMETERS|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnv[key];
 }
 delete gitEnv.ROBOREPO_PROTECTED_BRANCHES;
-// The machine's own GitHub agent identity must not lift the gh api denial in the default cases.
-delete gitEnv.GH_CONFIG_DIR;
+// The machine's own GitHub agent identity must not lift the gh api denial in the default cases, and a
+// token exported on the machine (or in CI) must not keep the agent cases from lifting it.
+for (const name of ["GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"]) delete gitEnv[name];
 gitEnv.ROBOREPO_STATE_ROOT = path.join(tmp, "default-state");
 // An agent shell carries the core.hooksPath override itself; the "human" git here must not.
 for (const key of Object.keys(gitEnv)) if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnv[key];
@@ -356,6 +357,10 @@ for (const [command, expected] of cases) {
       // whose gh acts as the user.
       assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "" } }), options.hookPath ? "defer" : "deny", `${label} with the hook's GH_CONFIG_DIR unset: ${command}`);
       assert.equal(decide(command, { ...options, env: { ...asAgent, GH_CONFIG_DIR: path.join(tmp, "other-gh") } }), "deny", `${label} denies other GH_CONFIG_DIR: ${command}`);
+      // gh prefers an inherited token or host over the bot's config dir.
+      for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "GH_HOST"]) {
+        assert.equal(decide(command, { ...options, env: { ...asAgent, [name]: "x" } }), "deny", `${label} denies with ${name} inherited: ${command}`);
+      }
       assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled, GH_CONFIG_DIR: path.join(notInstalled, "github-agent", "gh") } }), "deny", `${label} denies without the installed identity: ${command}`);
       assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled } }), "deny", `${label} denies without identity: ${command}`);
     }

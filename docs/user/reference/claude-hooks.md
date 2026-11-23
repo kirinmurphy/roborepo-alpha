@@ -202,7 +202,9 @@ all three hold: the agent identity is installed (its Git config file
 Codex only, unset); and the command does not change who `gh` acts as. Under Claude the variable must be set: a session started
 before you ran `roborepo github setup` has none, so its `gh` acts as you and `gh api` stays denied
 until you start a new session. Codex starts its hooks without its shells' variables, so under Codex
-an unset `GH_CONFIG_DIR` is accepted. A command that assigns, exports, or unsets
+an unset `GH_CONFIG_DIR` is accepted. If the hook inherits `GH_TOKEN`, `GITHUB_TOKEN`,
+`GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or `GH_HOST` (exported in your shell profile, say),
+`gh` acts as that token's owner rather than the bot, so `gh api` stays denied. A command that assigns, exports, or unsets
 `GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or
 `GH_HOST` anywhere in it (`=` or `+=`), or runs `gh` through `env`, keeps `gh api` denied. So does a
 `gh api` call whose command names a merge: a `pulls/<n>/merge`, `merges`, or `merge-upstream` path,

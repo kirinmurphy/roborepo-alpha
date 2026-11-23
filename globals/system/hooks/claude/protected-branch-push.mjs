@@ -93,6 +93,9 @@ function agentIdentityActive() {
   if (ghIdentityChanged) return false
   const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
   if (!fs.existsSync(path.join(stateRoot, 'package-runtime', 'github-agent-identity', 'gitconfig'))) return false
+  // gh prefers a token or host from the environment over its config dir, so an inherited one means
+  // gh acts as whoever owns that token.
+  if (GH_IDENTITY_VARIABLES.some((name) => name !== 'GH_CONFIG_DIR' && process.env[name])) return false
   const dir = process.env.GH_CONFIG_DIR
   if (!dir) return forCodex
   return path.resolve(dir) === path.resolve(path.join(stateRoot, 'github-agent', 'gh'))
