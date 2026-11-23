@@ -13,3 +13,17 @@ export function agentIdentityPackageEnabled() {
     return false;
   }
 }
+
+// Whether the package is selected and every resource it installs is actually in place. A package
+// can be selected with a resource missing, for example after a copy failed partway through an
+// enable, and setup then re-applies it rather than reporting it done. The probes load on demand
+// because the permission render imports this module and must not pull them in.
+export async function agentIdentityPackageInstalled() {
+  try {
+    const { buildPackageLiveState } = await import("./package-probes.mjs");
+    const catalog = loadPackageCatalog();
+    return buildPackageLiveState(catalog).get(AGENT_IDENTITY_PACKAGE_ID)?.status === "enabled";
+  } catch {
+    return false;
+  }
+}

@@ -89,8 +89,8 @@ for (const [label, rules] of [["off", claudeOff], ["on", claudeOn]]) {
 // A personal push-code override still renders for Claude under the identity.
 assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { agentIdentity: true }).deny.includes("Bash(git push:*)"));
 
-// The live Codex rules file follows the identity, never writes through a linked rules folder, and
-// returns to the shipped baseline when the identity is off.
+// The live Codex rules file follows the identity, never writes through a rules folder linked into
+// the checkout, and returns to the shipped baseline when the identity is off.
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-codex-rules-"));
   try {
@@ -102,14 +102,23 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
     assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentity: false }), true);
     assert.equal(fs.readFileSync(file, "utf8"), fs.readFileSync(path.join(repoRoot, "generated", "codex", "rules", "roborepo.rules"), "utf8"));
 
+    // A rules folder linked into the checkout is never written through.
+    const checkoutRules = path.join(repoRoot, "generated", "codex", "rules");
+    const shipped = fs.readFileSync(path.join(checkoutRules, "roborepo.rules"), "utf8");
     const linkedHome = path.join(tmp, "linked");
-    const realRules = path.join(tmp, "checkout-rules");
-    fs.mkdirSync(realRules);
-    fs.writeFileSync(path.join(realRules, "roborepo.rules"), "repo copy\n");
     fs.mkdirSync(linkedHome);
-    fs.symlinkSync(realRules, path.join(linkedHome, "rules"));
+    fs.symlinkSync(checkoutRules, path.join(linkedHome, "rules"));
     assert.equal(writeCodexRulesFile(linkedHome, { manifest, agentIdentity: true }), false);
-    assert.equal(fs.readFileSync(path.join(realRules, "roborepo.rules"), "utf8"), "repo copy\n", "a linked rules folder is left alone");
+    assert.equal(fs.readFileSync(path.join(checkoutRules, "roborepo.rules"), "utf8"), shipped, "a rules folder linked into the checkout is left alone");
+
+    // A rules folder linked anywhere else (a dotfiles folder) gets the file, like a real folder.
+    const dotfilesHome = path.join(tmp, "dotfiles-home");
+    const dotfilesRules = path.join(tmp, "dotfiles", "codex-rules");
+    fs.mkdirSync(dotfilesRules, { recursive: true });
+    fs.mkdirSync(dotfilesHome);
+    fs.symlinkSync(dotfilesRules, path.join(dotfilesHome, "rules"));
+    assert.equal(writeCodexRulesFile(dotfilesHome, { manifest, agentIdentity: true }), true);
+    assert.equal(fs.readFileSync(path.join(dotfilesRules, "roborepo.rules"), "utf8"), rulesOn, "a rules folder linked outside the checkout is written through");
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

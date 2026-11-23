@@ -27,7 +27,9 @@ git ls-remote --heads origin repo-plans
 - **The branch does not exist:** propose `~/.worktrees` as the worktree root, state the path it
   resolves to, and wait for the user to confirm or override it. This is asked once per repository.
 - **No `origin` remote, or the command fails:** stop and report it. The plan suite needs a Git
-  repository with an `origin` it can reach.
+  repository with an `origin` it can reach. When `origin` is on GitHub, run step 5's check before
+  stopping and include its offer: on Codex the sandbox has no network until the GitHub agent
+  identity is on, and `not-set-up` is read from local files, so the check still answers.
 
 ### 2. Create or reconnect the store
 

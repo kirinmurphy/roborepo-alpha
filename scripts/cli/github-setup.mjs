@@ -4,15 +4,17 @@
 // argument, a file RoboRepo writes, or the output.
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import readline from "node:readline";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient, runGh } from "../../modules/forge/github.mjs";
 import {
-  AGENT_IDENTITY_PACKAGE_ID, EXPIRING_DAYS, agentGhConfigDir, agentHostsFile, readAgentHosts, readAgentIdentity, refreshCaBundle,
+  AGENT_IDENTITY_PACKAGE_ID, EXPIRING_DAYS, agentGhConfigDir, agentHostsFile, botGhEnv, readAgentHosts, readAgentIdentity,
+  refreshCaBundle, tokenProblems,
 } from "../../modules/forge/agent-identity.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
-import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
+import { agentIdentityPackageInstalled } from "./agent-identity-package.mjs";
 import { stateDir } from "./state-paths.mjs";
 
 const sameLogin = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -69,7 +71,7 @@ async function guidedSetup({ input, open, io, cwd }) {
   const done = (step) => io.log(`✓ ${step}: already done`);
   const dir = agentGhConfigDir(stateDir);
   const user = { cwd, env: { GH_CONFIG_DIR: null } };
-  const bot = { cwd, env: { GH_CONFIG_DIR: dir } };
+  const bot = { cwd, env: botGhEnv(stateDir) };
 
   // 1. The repo and the user's own sign-in.
   const repositoryId = await currentRepositoryId(cwd);
@@ -119,10 +121,19 @@ async function guidedSetup({ input, open, io, cwd }) {
 
   // 4. The bot's token, stored in the agent directory.
   const tokenOk = botLogin && hosts.loggedIn && hosts.hasToken && await githubClient.login(bot).then((login) => sameLogin(login, botLogin), () => false);
-  if (tokenOk) {
-    done("Token");
+  // A token that still works may still need replacing: it expires soon, never expires, or has the
+  // wrong scopes. Offer it here, so a rerun can renew before agents start failing.
+  const tokenIssues = tokenOk ? tokenProblems(await githubClient.tokenInfo(bot)) : [];
+  let replace = !tokenOk;
+  if (tokenIssues.length > 0) {
+    for (const entry of tokenIssues) io.log(`Note: ${entry.message}`);
+    const answer = (await input.ask("Replace the bot's token now? [Y/n] ")).trim().toLowerCase();
+    replace = answer === "" || answer === "y" || answer === "yes";
+  }
+  if (replace) {
+    await storeToken({ input, open, io, cwd, dir, botLogin, hadLogin: hosts.loggedIn, renewing: renewing || tokenOk });
   } else {
-    await storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin: hosts.loggedIn, renewing });
+    done("Token");
   }
 
   // 5. The bot accepts the invitation.
@@ -165,8 +176,9 @@ async function guidedSetup({ input, open, io, cwd }) {
   }
   io.log("✓ Check: the bot account, its access and the branch protection all look right.");
 
-  // 9. Turn the package on.
-  if (agentIdentityPackageEnabled()) {
+  // 9. Turn the package on. Enabling again re-applies every resource, which repairs one left
+  // missing when an earlier enable failed partway.
+  if (await agentIdentityPackageInstalled()) {
     done("Package on");
   } else {
     const { enablePackage, PackageMutationError } = await import("./packages.mjs");
@@ -208,7 +220,7 @@ function refused(what) {
   };
 }
 
-async function storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin, renewing }) {
+async function storeToken({ input, open, io, cwd, dir, botLogin, hadLogin, renewing }) {
   const hosts = readAgentHosts(stateDir);
   if (hadLogin && !hosts.hasToken) {
     io.log("The saved login keeps its token in the keychain, so it is replaced.");
@@ -228,24 +240,37 @@ async function storeToken({ input, open, io, cwd, dir, botLogin, bot, hadLogin, 
   io.log(`Agents' sandboxes cannot read the keychain, so the token is stored in ${agentHostsFile(stateDir)}.`);
   const token = (await input.askHidden("Paste the token (input hidden): ")).trim();
   if (!token) stop("No token given.");
-  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  fs.chmodSync(dir, 0o700);
-  const env = { GH_CONFIG_DIR: dir };
+
+  // The new token signs in to a staging folder first and is checked there. Only a token for the
+  // right account with acceptable scopes replaces the live login, so a rejected one never reaches
+  // agents and the previous token keeps working.
+  const staging = path.join(path.dirname(dir), "gh-staging");
+  fs.rmSync(staging, { recursive: true, force: true });
+  fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
   try {
-    await runGh(cwd, ["auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--with-token", "--insecure-storage"], `${token}\n`, { env });
-  } catch (error) {
-    const detail = String(error?.stderr || error?.message || "").split(token).join("***").trim();
-    stop(`gh could not sign the bot in${detail ? `: ${detail}` : ""}`);
-  }
-  try {
+    const stagedBot = { cwd, env: botGhEnv(stateDir, staging) };
+    try {
+      await runGh(cwd, ["auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--with-token", "--insecure-storage"], `${token}\n`, { env: stagedBot.env });
+    } catch (error) {
+      const detail = String(error?.stderr || error?.message || "").split(token).join("***").trim();
+      stop(`gh could not sign the bot in${detail ? `: ${detail}` : ""}. Nothing was changed.`);
+    }
+    const info = await githubClient.tokenInfo(stagedBot).catch(() => null);
+    if (!info?.login || !sameLogin(info.login, botLogin)) {
+      stop(info?.login
+        ? `That token belongs to ${info.login}, not ${botLogin}. It was not stored; rerun with the right token.`
+        : "GitHub did not accept that token. It was not stored; rerun with a new token.");
+    }
+    const blocking = tokenProblems(info).filter((entry) => entry.severity === "problem");
+    if (blocking.length > 0) {
+      stop(`That token was not stored: ${blocking.map((entry) => entry.message).join(" ")} Fix: ${blocking[0].fix}`);
+    }
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(dir, 0o700);
+    fs.renameSync(path.join(staging, "hosts.yml"), agentHostsFile(stateDir));
     fs.chmodSync(agentHostsFile(stateDir), 0o600);
-  } catch {}
-  const signedInAs = await githubClient.login(bot).catch(() => null);
-  if (!signedInAs || !sameLogin(signedInAs, botLogin)) {
-    await runGh(cwd, ["auth", "logout", "--hostname", "github.com"], "", { env }).catch(() => {});
-    stop(signedInAs
-      ? `That token belongs to ${signedInAs}, not ${botLogin}. It was signed out again; rerun with the right token.`
-      : "GitHub did not accept that token. It was signed out again; rerun with a new token.");
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
   }
   io.log(`✓ Token stored; signed in as ${botLogin}.`);
 }

@@ -97,13 +97,14 @@ export const CODEX_RULES_HOME_SUB = "rules/roborepo.rules";
 
 // Writes Codex's rules/roborepo.rules for the live identity state, so with the GitHub agent identity
 // on, `gh api`, posting, and `git push` get the identity's buckets there too. Personal overrides are
-// not rendered into it; the Codex permission hook applies them. A `rules` folder that is a link (an
-// old install linked it into the checkout) is left alone, so this never writes into the repo; the
-// install step replaces that link. Returns whether the file changed.
+// not rendered into it; the Codex permission hook applies them. A `rules` folder linked into the
+// checkout (an old install did that) is left alone, so this never writes into the repo; the install
+// step replaces that link. A link anywhere else (a dotfiles folder) is written through, like a real
+// folder. Returns whether the file changed.
 export function writeCodexRulesFile(codexHome, { manifest = loadPermissionManifest(), agentIdentity = agentIdentityPackageEnabled() } = {}) {
   const file = path.join(codexHome, CODEX_RULES_HOME_SUB);
   const dir = path.dirname(file);
-  if (fs.existsSync(dir) && fs.lstatSync(dir).isSymbolicLink()) return false;
+  if (linksIntoCheckout(dir)) return false;
   const content = renderCodexRules(manifest, {}, { agentIdentity });
   const isFile = fs.existsSync(file) && fs.lstatSync(file).isFile();
   if (isFile && fs.readFileSync(file, "utf8") === content) return false;
@@ -111,6 +112,17 @@ export function writeCodexRulesFile(codexHome, { manifest = loadPermissionManife
   fs.rmSync(file, { recursive: true, force: true });
   fs.writeFileSync(file, content);
   return true;
+}
+
+function linksIntoCheckout(dir) {
+  try {
+    if (!fs.lstatSync(dir).isSymbolicLink()) return false;
+    const real = fs.realpathSync(dir);
+    const root = fs.realpathSync(repoRoot);
+    return real === root || real.startsWith(`${root}${path.sep}`);
+  } catch {
+    return false;
+  }
 }
 
 // Render the manifest (+ overrides) into each present harness's live config under `baseDir`.

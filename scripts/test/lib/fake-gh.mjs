@@ -7,6 +7,9 @@
 //             | "actions-off" (runs endpoint answers 404) | "runs-error" (runs endpoint answers 502)
 //             | "classic-refused" (classic protection answers 403 with the upgrade message)
 //             | "classic-rate-limited" (classic protection answers 403 for a rate limit)
+//             | "user-unauthorized" (calls as the user, without GH_CONFIG_DIR, answer 401)
+//             | "repo-forbidden" (reading the repo itself answers 403)
+//   An exported GH_TOKEN or GITHUB_TOKEN names the calling account, ahead of any stored login, as gh does.
 //   login, admin, defaultBranch
 //   refuseCreate  a ruleset name whose create answers 422, to fail an apply partway
 //   refuseUpdate  a ruleset name whose update answers 422
@@ -137,6 +140,7 @@ if (accept && method === "PATCH") {
   process.exit(0);
 }
 if (route === "") {
+  if (state.failure === "repo-forbidden") httpError(403, "Resource not accessible by personal access token");
   const permission = identity.bot ? permissionOf(identity.login) : null;
   const permissions = identity.bot
     ? { admin: permission === "admin", push: permission === "admin" || permission === "push", pull: true }
@@ -276,11 +280,20 @@ function savedToken(dir) {
   }
   return null;
 }
+// Like gh, an exported GH_TOKEN or GITHUB_TOKEN wins over any stored login. A function, because
+// requests are answered before later top-level declarations run.
+function envToken() { return process.env.GH_TOKEN || process.env.GITHUB_TOKEN || null; }
 function tokenOf(dir) {
-  const token = dir ? savedToken(dir) : null;
+  const token = envToken() || (dir ? savedToken(dir) : null);
   return token ? (state.tokens || {})[token] || null : null;
 }
 function resolveIdentity() {
+  if (envToken()) {
+    const info = tokenOf(null);
+    if (!info || info.expired) httpError(401, "Bad credentials");
+    return { login: info.login, bot: info.login !== state.login };
+  }
+  if (!configDir && state.failure === "user-unauthorized") httpError(401, "Bad credentials");
   if (!configDir) return { login: state.login, bot: false };
   if (!fs.existsSync(hostsPath)) fail(4, "To get started with GitHub CLI, please run:  gh auth login");
   const info = tokenOf(configDir);

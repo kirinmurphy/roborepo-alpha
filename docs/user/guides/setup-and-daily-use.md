@@ -74,7 +74,8 @@ The setup walks you through each step and skips the ones already done:
    hidden prompt.
 4. Accept the invite (automatic, as the bot).
 5. Run `roborepo protect` if the repo needs it (it asks first), so the bot is not on any bypass list.
-6. Check everything, then enable the package. A failed check leaves it off.
+6. Check everything, then enable the package. A failed check does not turn it on; if it was already
+   on, it stays on.
 
 The token is stored in plaintext, mode 0600, under `~/.roborepo/github-agent/gh`, because neither
 Claude's nor Codex's sandbox can read the macOS keychain. Any process you run, agents included, can
@@ -96,6 +97,15 @@ roborepo github setup
 It recognizes the bot from the saved login and asks only for a new token. It opens your token list;
 sign in as the bot, open the "RoboRepo agents" token, and choose **Regenerate token**, which keeps
 its scopes. Paste the new value at the hidden prompt. Every other step reports itself already done.
+
+You can renew early: when the saved token still works but expires within 14 days, has no expiry
+date, or has the wrong scopes, the setup asks whether to replace it. A new token is checked before
+it replaces the saved one; if it belongs to another account or has the wrong scopes, it is not
+stored and the saved token keeps working.
+
+Setup and status use the bot's saved token even if your shell exports `GH_TOKEN` or `GITHUB_TOKEN`.
+Agent shells do not remove those variables yet, so do not export your own token in the shell you
+start agents from.
 
 Turning the package off stops agents using the bot but leaves its files behind: the plaintext token
 in `~/.roborepo/github-agent/gh/hosts.yml`, plus `ca-bundle.crt` and `gitconfig.local` next to it.

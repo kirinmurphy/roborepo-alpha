@@ -254,8 +254,9 @@ These default-allow behaviors cover the named workflow operations.
 scratch folders past the store's bounds without a prompt. The guarded delivery commands validate their repository, branch, and head targets before acting.
 The lifecycle commands retain their transition, synchronization, and process guards. The plan-store
 allow covers shell invocation. The archive and close skills still require their workflow approvals. Raw fetch and GitHub commands follow their
-existing policies, including the prompts for `gh pr edit` and `gh pr ready`, and the denials for
-`gh pr merge`, direct `gh api` (unless the GitHub agent identity is on), and force-push.
+existing policies: the prompts for `gh pr edit` and `gh pr ready`, and the denials for `gh pr merge`,
+direct `gh api`, and force-push. With the GitHub agent identity on, `gh pr edit`, `gh pr ready`, and
+`gh api` are allowed instead; `gh pr merge` and force-push stay denied.
 
 | Provider | Projection and scope |
 | --- | --- |

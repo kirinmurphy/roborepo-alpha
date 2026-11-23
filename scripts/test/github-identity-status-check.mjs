@@ -99,6 +99,35 @@ try {
   expectLine(1, /broader access than agents need \(workflow\)/);
   start({ token: { scopes: ["repo"] } });
   expectLine(1, /lacks the read:org scope/);
+  // Any scope beyond repo and read:org is too broad, not only a known list of risky ones.
+  start({ token: { scopes: ["repo", "read:org", "admin:public_key"] } });
+  expectLine(1, /broader access than agents need \(admin:public_key\)/);
+  // A fine-grained token lists no scopes, so nothing confirms what it may do.
+  start({ token: { scopes: null } });
+  expectLine(1, /fine-grained token.* — make a classic token/);
+  const jsonReport = (extraEnv) => JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"], extraEnv).stdout);
+  // A token the user exported does not stand in for the bot's stored one.
+  start();
+  const withUserToken = gh.readState();
+  withUserToken.tokens.ghp_userexported0000 = { login: "octo-admin", scopes: ["repo", "read:org", "workflow"], expires: FAR_EXPIRY, expired: false };
+  gh.setState(withUserToken);
+  for (const name of ["GH_TOKEN", "GITHUB_TOKEN"]) {
+    const report = jsonReport({ [name]: "ghp_userexported0000" });
+    assert.deepEqual([report.state, report.botLogin], ["healthy", BOT], `an exported ${name} is ignored for the bot's checks`);
+  }
+  // When your own sign-in cannot be read, the account comparison is reported as not done.
+  start({ failure: "user-unauthorized" });
+  let partial = jsonReport();
+  assert.ok(partial.problems.some((item) => item.id === "account-unchecked" && item.severity === "warn"), "an unread user account is reported");
+  assert.ok(partial.problems.some((item) => item.id === "protection-unchecked" && item.severity === "warn"), "unread branch protection is reported");
+  assert.equal(partial.state, "healthy", "checks that could not run are advice, not problems");
+  // A problem already found survives a later read failing.
+  start({ enabled: false, failure: "repo-forbidden" });
+  partial = jsonReport();
+  assert.equal(partial.state, "problem", "a known problem keeps the state a problem");
+  assert.ok(partial.problems.some((item) => item.id === "package-off"));
+  assert.ok(partial.problems.some((item) => item.id === "check-incomplete" && /could not run/.test(item.message)));
+  console.log("✓ Status ignores exported tokens, flags any extra scope or a fine-grained token, and reports checks it could not run.");
   start({ rulesets: [] });
   expectLine(1, /Branch protection for this repo is missing.* — a repo admin should run roborepo protect/);
   // Protection that exists but falls short is a problem too, and each one's hint names roborepo protect.

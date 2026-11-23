@@ -108,7 +108,8 @@ try {
   assert.ok(accept && accept.configDir === ghDir, "the invitation is accepted as the bot");
   const login = calls.find((call) => call.argv[0] === "auth" && call.argv[1] === "login");
   assert.deepEqual(login.argv, ["auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--with-token", "--insecure-storage"]);
-  assert.equal(login.configDir, ghDir);
+  assert.equal(login.configDir, path.join(stateRoot, "github-agent", "gh-staging"), "the token is tried in a staging folder first");
+  assert.ok(!fs.existsSync(path.join(stateRoot, "github-agent", "gh-staging")), "the staging folder is removed afterwards");
 
   // The token appears nowhere but the hosts.yml gh wrote (and the fake's own server-side state).
   const allowed = new Set([path.join(ghDir, "hosts.yml"), path.join(root, "fake-gh-state.json")].map((file) => fs.realpathSync(file)));
@@ -157,6 +158,66 @@ try {
   restored.tokens[TOKEN].expired = false;
   gh.setState(restored);
 
+  // A token that still works but expires soon can be replaced on a rerun, before agents fail.
+  const SOON = "ghp_expiressoon0000111122223333";
+  const soonExpiry = new Date(Date.now() + 3 * 86_400_000).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
+  const soonState = gh.readState();
+  soonState.tokens[SOON] = { login: BOT, scopes: ["repo", "read:org"], expires: soonExpiry, expired: false };
+  gh.setState(soonState);
+  const hostsFile = path.join(ghDir, "hosts.yml");
+  fs.writeFileSync(hostsFile, `github.com:\n    oauth_token: ${SOON}\n    user: ${BOT}\n`, { mode: 0o600 });
+  result = await setup("n\n");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Note: The bot's token expires in 3 days\.\nReplace the bot's token now\? \[Y\/n\]/);
+  assert.match(result.stdout, /✓ Token: already done/, "declining keeps the working token");
+  assert.ok(fs.readFileSync(hostsFile, "utf8").includes(SOON));
+  result = await setup(`y\n${TOKEN}\n`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Regenerate token/, "replacing a working token is a renewal");
+  assert.ok(fs.readFileSync(hostsFile, "utf8").includes(TOKEN), "accepting installs the new token");
+  console.log("✓ A working token that expires soon can be replaced on a rerun, or kept.");
+
+  // A replacement the checks reject is never installed: the working token stays in place.
+  const BROAD = "ghp_workflowscope0000111122223333";
+  const broadState = gh.readState();
+  broadState.tokens[SOON] = { login: BOT, scopes: ["repo", "read:org"], expires: soonExpiry, expired: false };
+  broadState.tokens[BROAD] = { login: BOT, scopes: ["repo", "read:org", "workflow"], expires: FAR_EXPIRY, expired: false };
+  gh.setState(broadState);
+  fs.writeFileSync(hostsFile, `github.com:\n    oauth_token: ${SOON}\n    user: ${BOT}\n`, { mode: 0o600 });
+  result = await setup(`y\n${BROAD}\n`);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /That token was not stored: .*broader access than agents need \(workflow\)/);
+  assert.ok(fs.readFileSync(hostsFile, "utf8").includes(SOON), "the working token is kept");
+  assert.ok(!fs.existsSync(path.join(stateRoot, "github-agent", "gh-staging")), "the staging folder is removed after a rejection");
+  fs.writeFileSync(hostsFile, `github.com:\n    oauth_token: ${TOKEN}\n    user: ${BOT}\n`, { mode: 0o600 });
+  console.log("✓ A replacement token the checks reject is not stored, and the working one stays.");
+
+  // A token the user exported does not stand in for the bot's stored one.
+  const exported = gh.readState();
+  exported.tokens.ghp_userexported0000 = { login: "octo-admin", scopes: ["repo", "read:org", "workflow"], expires: FAR_EXPIRY, expired: false };
+  gh.setState(exported);
+  for (const name of ["GH_TOKEN", "GITHUB_TOKEN"]) {
+    process.env[name] = "ghp_userexported0000";
+    try {
+      result = await setup("");
+    } finally {
+      delete process.env[name];
+    }
+    assert.equal(result.status, 0, `${name}: ${result.stdout}${result.stderr}`);
+    assert.match(result.stdout, /✓ Bot account \(robo-bot\): already done/, `${name}: the bot is still found`);
+  }
+  console.log("✓ An exported GH_TOKEN or GITHUB_TOKEN does not replace the bot's stored token.");
+
+  // The package is selected but one of its files is missing: a rerun installs it again.
+  const assetFile = path.join(stateRoot, "package-runtime", "github-agent-identity", "gitconfig");
+  assert.ok(fs.existsSync(assetFile), `the package's Git config is installed at ${assetFile}`);
+  fs.rmSync(assetFile);
+  result = await setup("");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /Package on: already done/);
+  assert.ok(fs.existsSync(assetFile), "the rerun reinstalled the missing file");
+  console.log("✓ A selected package with a missing file is re-applied, not reported done.");
+
   // A token kept only in the keychain is not done: setup asks again and stores it in hosts.yml.
   fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    user: ${BOT}\n`);
   fs.writeFileSync(path.join(ghDir, ".fake-token"), `${TOKEN}\n`);
@@ -168,14 +229,14 @@ try {
   assert.equal(fs.statSync(path.join(ghDir, "hosts.yml")).mode & 0o777, 0o600);
   console.log("✓ A keychain-only login is replaced by a token in hosts.yml, mode 0600.");
 
-  // A token for another account is refused and signed out again.
+  // A token for another account is refused and never stored.
   fresh();
   result = await setup(`${BOT}\n${OTHER_TOKEN}\n`);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /belongs to someone-else, not robo-bot/);
   assert.ok(!fs.existsSync(path.join(ghDir, "hosts.yml")), "the wrong login was removed");
   assert.ok(!packageOn());
-  console.log("✓ A token for the wrong account is signed out again.");
+  console.log("✓ A token for the wrong account is refused and never stored.");
 
   // The bot's own login, a missing account, and a refused invitation stop the run.
   fresh();

@@ -13,11 +13,16 @@ export const AGENT_IDENTITY_PACKAGE_ID = "github-agent-identity";
 // How early status and doctor start warning that the bot's token is about to expire. Two weeks
 // leaves room to notice the note between doctor runs.
 export const EXPIRING_DAYS = 14;
-const BROAD_SCOPES = ["workflow", "admin:org", "delete_repo"];
 const REQUIRED_SCOPES = ["repo", "read:org"];
 const SETUP_FIX = "Run roborepo github setup in your own terminal.";
 
 export const agentGhConfigDir = (stateDir) => path.join(stateDir, "github-agent", "gh");
+
+// The environment for a gh call made as the bot. GH_TOKEN and GITHUB_TOKEN take precedence over
+// the stored login, so a token the user exported would make the call run as the user; null removes
+// them (runGh deletes null entries). `dir` defaults to the bot's config directory; setup passes a
+// staging directory to try a new token before it replaces the live one.
+export const botGhEnv = (stateDir, dir = agentGhConfigDir(stateDir)) => ({ GH_CONFIG_DIR: dir, GH_TOKEN: null, GITHUB_TOKEN: null });
 export const agentCaBundleFile = (stateDir) => path.join(stateDir, "github-agent", "ca-bundle.crt");
 export const agentCaGitconfigFile = (stateDir) => path.join(stateDir, "github-agent", "gitconfig.local");
 
@@ -128,8 +133,7 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
   }
 
   const problems = [];
-  const dir = agentGhConfigDir(stateDir);
-  const bot = { cwd, timeoutMs, env: { GH_CONFIG_DIR: dir } };
+  const bot = { cwd, timeoutMs, env: botGhEnv(stateDir) };
   // The user's own account, even from a shell that points GH_CONFIG_DIR at the bot.
   const user = { cwd, timeoutMs, env: { GH_CONFIG_DIR: null } };
   try {
@@ -153,20 +157,35 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
     result.botLogin = info.login;
     result.scopes = info.scopes;
     result.expiresAt = info.expiresAt ? info.expiresAt.toISOString() : null;
-    checkExpiry(info.expiresAt, problems);
-    checkScopes(info.scopes, problems);
+    problems.push(...tokenProblems(info));
 
     result.userLogin = await githubClient.login(user).catch(() => null);
-    if (result.userLogin && result.userLogin.toLowerCase() === info.login.toLowerCase()) {
+    if (!result.userLogin) {
+      problems.push(problem("account-unchecked", "Your own GitHub sign-in could not be read, so this could not confirm the bot is a different account.", "Run gh auth status in your own terminal, then rerun roborepo github status.", "warn"));
+    } else if (result.userLogin.toLowerCase() === info.login.toLowerCase()) {
       problems.push(problem("bot-is-user", `The bot account ${info.login} is your own account, so agents would have your access.`, SETUP_FIX));
     }
     await checkRepoAccess(bot, target.repo, info.login, problems);
     await checkProtection({ repositoryId, cwd, timeoutMs }, problems);
   } catch (error) {
     if (!(error instanceof GitHubError)) throw error;
-    return { ...result, state: "unavailable", reason: error.message };
+    // A problem already found stays reported: a later read failing does not make it go away.
+    if (problems.some((entry) => entry.severity === "problem")) {
+      return finish(result, [...problems, problem("check-incomplete", `Some checks could not run: ${error.message}.`, "Rerun roborepo github status once GitHub answers.", "warn")]);
+    }
+    return { ...result, problems, state: "unavailable", reason: error.message };
   }
   return finish(result, problems);
+}
+
+// What is wrong with a token by itself, from `githubClient.tokenInfo`: its expiry and its scopes.
+// Setup uses it to judge a new token before installing it, and to offer replacing one that works
+// but is expiring, has no expiry date, or has the wrong scopes.
+export function tokenProblems(info) {
+  const problems = [];
+  checkExpiry(info.expiresAt, problems);
+  checkScopes(info.scopes, problems);
+  return problems;
 }
 
 function problem(id, message, fix, severity = "problem") {
@@ -193,9 +212,15 @@ function checkExpiry(expiresAt, problems) {
   }
 }
 
+// A classic token lists its scopes; anything beyond repo and read:org is more than agents need.
+// A fine-grained token sends no scope list, so nothing here could confirm it can push but not
+// administer, and setup asks for a classic token instead.
 function checkScopes(scopes, problems) {
-  if (!scopes) return;
-  const broad = BROAD_SCOPES.filter((scope) => scopes.includes(scope));
+  if (!scopes) {
+    problems.push(problem("fine-grained-token", "The bot's token is a fine-grained token, so RoboRepo cannot confirm what it is allowed to do.", "Make a classic token with only the repo and read:org scopes, then run roborepo github setup in your own terminal."));
+    return;
+  }
+  const broad = scopes.filter((scope) => !REQUIRED_SCOPES.includes(scope));
   if (broad.length > 0) {
     problems.push(problem("broad-scopes", `The bot's token has broader access than agents need (${broad.join(", ")}).`, "Make a new token with only the repo and read:org scopes, then run roborepo github setup in your own terminal."));
   }
@@ -224,7 +249,10 @@ async function checkRepoAccess(bot, repo, botLogin, problems) {
 
 async function checkProtection(target, problems) {
   const report = await readProtection(target);
-  if (report.state === "unavailable") return;
+  if (report.state === "unavailable") {
+    problems.push(problem("protection-unchecked", `Branch protection could not be read${report.reason ? ` (${report.reason})` : ""}, so this could not confirm GitHub stops the bot from merging unreviewed work.`, "Run roborepo protect --check in your own terminal.", "warn"));
+    return;
+  }
   const skipped = report.policies?.some((policy) => policy.status === "skipped");
   if (report.state === "protected" && !skipped) return;
   const message = skipped
