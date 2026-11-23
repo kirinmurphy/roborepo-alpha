@@ -27,7 +27,7 @@ import { inspectWorktreeHook, manageWorktreeHook } from "../cli/worktree-hook.mj
 import { collectKnownWorktrees } from "../cli/worktree-observations.mjs";
 import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
 
-// Each call first removes the empty shells earlier calls were denied removing, and only those.
+// The first call on a temp root removes the empty shells earlier calls were denied removing, and only those.
 {
   const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-shell-sweep-"));
   try {
@@ -51,6 +51,22 @@ import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
     assert.deepEqual(fs.readdirSync(tmpRoot).sort(), [path.basename(unrelated), path.basename(fresh), path.basename(holdsFile)].sort(),
       "the old empty shell and the call's own folder are gone; a folder holding a file, a recent shell, and unrelated folders remain");
     assert.equal(fs.readFileSync(path.join(holdsFile, "object"), "utf8"), "synthetic");
+
+    // The sweep moves the process working directory while it runs, so a long-lived process sweeps
+    // each temp root once: a later call leaves a new shell for the next process.
+    const later = path.join(tmpRoot, "roborepo-disposable-landing-Later1");
+    fs.mkdirSync(later);
+    age(later);
+    const chdir = process.chdir;
+    let chdirCalls = 0;
+    process.chdir = (directory) => { chdirCalls += 1; return chdir.call(process, directory); };
+    try {
+      await withTemporaryStorage("landing", async () => ({ landed: true }), { tmpRoot });
+    } finally {
+      process.chdir = chdir;
+    }
+    assert.equal(chdirCalls, 0, "a second call on the same temp root does not move the working directory");
+    assert.ok(fs.existsSync(later), "a second call on the same temp root sweeps nothing");
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }

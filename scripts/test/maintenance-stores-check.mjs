@@ -133,6 +133,18 @@ try {
   const scratchListed = run([]);
   assert.match(scratchListed.stdout.slice(scratchListed.stdout.indexOf("Agent scratch") - 200), /3 folder\(s\)/, "list counts scratch folders");
 
+  // An old top-level link is selected by age like a folder, and removed as a link: its target
+  // outside the store survives.
+  const oldLink = path.join(scratch, "old-link-out");
+  fs.symlinkSync(outside, oldLink);
+  fs.lutimesSync(oldLink, old, old);
+  const oldLinkReset = run(["reset", "scratch"]);
+  assert.equal(oldLinkReset.status, 0, oldLinkReset.stderr);
+  assert.match(oldLinkReset.stdout, /removed 1 folder\(s\) \(age\)/, "the old link is selected by age");
+  assert.throws(() => fs.lstatSync(oldLink), { code: "ENOENT" }, "the old link is removed");
+  assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "must survive", "removing an old link leaves its target");
+  assert.deepEqual(fs.readdirSync(scratch).sort(), ["link-out", "old-folder-new-file", "recent-topic"], "only the old link goes");
+
   // A store root replaced by a link is never pruned through.
   const linkedTarget = path.join(tempRoot, "linked-target");
   fs.mkdirSync(path.join(linkedTarget, "old"), { recursive: true });
