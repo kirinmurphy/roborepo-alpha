@@ -550,7 +550,7 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 
 ### Approval
 - Decision: approved
-- Reviewed implementation commit: 279cc4c0452e3f5ca6aa5cc36720256a1507e824
+- Reviewed implementation commit: 843701ddb880e16c3a8913591eefee610735d53e
 - Confirmed by: human
 
 ## Decision Log
