@@ -75,7 +75,7 @@ export function sweepEmptyShells(tmpRoot = os.tmpdir(), {
     for (const name of names) {
       if (!SHELL_NAME.test(name)) continue;
       const shell = path.join(tmpRoot, name);
-      const folders = emptyShellFolders(shell, fsApi);
+      const folders = emptyShellFolders(tmpRoot, root, name, fsApi, chdir);
       if (!folders || folders.some((folder) => now - folder.mtimeMs < SHELL_MIN_AGE_MS)) continue;
       const scanned = new Map(folders.map((folder) => [folder.path, folder]));
       scanned.set(tmpRoot, { dev: root.dev, ino: root.ino });
@@ -115,19 +115,34 @@ function sameDirectory(stat, recorded) {
   return stat.isDirectory() && stat.dev === recorded.dev && stat.ino === recorded.ino;
 }
 
-// Every folder in the tree, parents before children, or null when anything but a directory is in it.
-function emptyShellFolders(root, fsApi) {
+// Every folder in the shell `name` under tmpRoot, parents before children, or null when anything
+// but a directory is in it or the tree changed while it was read. The scan is confined the same way
+// removal is: it enters each folder by bare name from its confirmed parent, confirms `.` is the
+// folder it just checked, and lists `.`, so a folder swapped for a link mid-scan is caught rather
+// than followed into the link's target. It returns to each parent through `..`, the parent of the
+// folder actually entered, and confirms that too.
+function emptyShellFolders(tmpRoot, rootStat, name, fsApi, chdir) {
   const folders = [];
-  const visit = (directory) => {
-    let stat;
-    try { stat = fsApi.lstatSync(directory); } catch { return false; }
+  const visit = (directory, parentStat) => {
+    // The working directory is the confirmed parent of `directory`.
+    const stat = fsApi.lstatSync(path.basename(directory));
     if (!stat.isDirectory()) return false;
+    chdir(path.basename(directory));
+    if (!sameDirectory(fsApi.lstatSync("."), stat)) return false;
     folders.push({ path: directory, mtimeMs: stat.mtimeMs, dev: stat.dev, ino: stat.ino });
-    let names;
-    try { names = fsApi.readdirSync(directory); } catch { return false; }
-    return names.every((name) => visit(path.join(directory, name)));
+    for (const child of fsApi.readdirSync(".")) {
+      if (!visit(path.join(directory, child), stat)) return false;
+    }
+    chdir("..");
+    return sameDirectory(fsApi.lstatSync("."), parentStat);
   };
-  return visit(root) ? folders : null;
+  try {
+    chdir(tmpRoot);
+    if (!sameDirectory(fsApi.lstatSync("."), rootStat)) return null;
+    return visit(path.join(tmpRoot, name), rootStat) ? folders : null;
+  } catch {
+    return null; // Vanished, unreadable, or chdir unavailable: leave the shell for a later call.
+  }
 }
 
 function cleanTemporaryTree(root, fsApi, identity) {

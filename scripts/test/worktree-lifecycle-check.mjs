@@ -112,6 +112,30 @@ import { addPlansStore, writePlansFiles } from "./lib/plan-store-fixture.mjs";
     assert.ok(fs.existsSync(path.join(elsewhere, "objects", "pack")), "the link's target keeps its empty folder");
     assert.ok(!fs.existsSync(path.join(`${shell}-moved`, "objects", "pack")), "the scanned folder is the one removed");
     assert.equal(process.cwd(), cwdBefore, "the sweep restores the working directory");
+
+    // The swap lands during the scan, after the shell is checked and before it is listed. The scan
+    // enters the shell and confirms it, so it never lists the link's target, and nothing is removed.
+    fs.rmSync(`${shell}-moved`, { recursive: true, force: true });
+    fs.unlinkSync(shell);
+    fs.mkdirSync(path.join(shell, "objects"), { recursive: true });
+    [path.join(shell, "objects"), shell].forEach((folder) => fs.utimesSync(folder, old, old));
+    let swappedInScan = false;
+    const scanSwap = {
+      ...fs,
+      lstatSync(target, ...rest) {
+        const stat = fs.lstatSync(target, ...rest);
+        if (!swappedInScan && path.basename(String(target)) === path.basename(shell)) {
+          swappedInScan = true;
+          fs.renameSync(shell, `${shell}-moved`);
+          fs.symlinkSync(elsewhere, shell);
+        }
+        return stat;
+      },
+    };
+    assert.deepEqual(sweepEmptyShells(tmpRoot, { fsApi: scanSwap }), [], "a shell replaced mid-scan is not swept");
+    assert.ok(swappedInScan, "the scan swap ran");
+    assert.ok(fs.existsSync(path.join(elsewhere, "objects", "pack")), "the link's target keeps its empty folders");
+    assert.equal(process.cwd(), cwdBefore, "the sweep restores the working directory after a refused scan");
   } finally {
     fs.rmSync(tmpRoot, { recursive: true, force: true });
   }
