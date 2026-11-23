@@ -1,9 +1,9 @@
 ---
 id: w7vls1yk
-next_action: Rerun /plan-execute to submit for review, merge main in, and update PR 82. Separately, the owner runs the guided setup (roborepo github setup) to store the bot token and turn the identity on
+next_action: Rerun /plan-execute to build Phase 8 (portal status card and terminal hand-off), validate, submit for review, merge main in, and update PR 82. The owner separately runs roborepo github setup to turn the identity on
 blocked_by: []
 depends_on: ["3xh2sq32"]
-related: ["f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
+related: ["rtkmc8kf", "f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
 reviewed_commit: 62e86111d947f66b6ce61f991cf152d90c13b8a1
 worktree: git-github-01-agent-identity
 ---
@@ -30,6 +30,10 @@ without a prompt, and Codex does so without leaving its sandbox. Until then, pla
 Turning the identity on is a guided setup. Right after a user sets up the plan suite in a repo,
 RoboRepo offers it. The setup walks the user through the steps only a person can do, checks the
 result, and turns the identity on at the end. A user who declines keeps today's behavior.
+
+The portal tracks the setup so the user never has to remember where it stands. Each repo row shows
+the bot identity's status and the one next step. The step that handles the token opens the same
+setup in a terminal, so the token never passes through the browser or an agent session.
 
 **Recommendation:** a bot user with a classic personal access token, stored by `gh` in a file in the
 bot's own `gh` config folder (`~/.roborepo/github-agent/gh`), because neither agent sandbox can read
@@ -59,6 +63,9 @@ rerunning the guided setup replaces it.
 - A token exported in the shell that starts an agent does not replace the bot (one documented
   exception, see Risks).
 - GitHub-specific pieces sit in one place that is tagged as belonging to the GitHub host.
+- The portal shows, per repo, whether the bot identity is set up, healthy, or needs renewal, and
+  offers the next step. The step that handles the token opens `roborepo github setup` in a terminal
+  (macOS) or gives the command to copy (every OS), and the portal refreshes when the user comes back.
 
 ## Non-goals
 
@@ -69,7 +76,8 @@ rerunning the guided setup replaces it.
   key directly. See Risks.
 - Creating the bot account or token for the user. GitHub requires a person for both; the guided
   setup tells the user what to do, waits, and checks the result.
-- A portal version of the guided setup. See Future work.
+- Entering the token in the portal. The token is typed only at the setup's hidden terminal prompt,
+  so it never reaches a browser, the portal server's requests, or an agent transcript.
 - No-prompt Codex pushes with the identity off. Only the bot's collaborator role lets GitHub reject
   a push to `main`, so an install without the bot keeps Codex's network closed.
 
@@ -401,6 +409,48 @@ settings, so its pushes keep the user's identity.
   (`registry.mjs` and `contract.mjs`, with one folder per provider) is the model to copy when a
   real second host arrives.
 
+### Portal status and terminal hand-off
+
+The setup has several steps over minutes, some on github.com and one in a terminal, and renewal
+comes back months later. The portal keeps track so the user does not have to. It only reads status
+and opens a terminal; every step that touches the token stays in `roborepo github setup`.
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant P as Portal (Home repo row)
+    participant S as Portal server
+    participant T as Terminal
+    P->>S: GET /api/repositories/:id/agent-identity
+    S-->>P: state, findings with fix, setupLaunch (no token)
+    U->>P: Open setup
+    P->>S: POST .../agent-identity/setup (page token)
+    S->>T: launchInTerminal: roborepo github setup, cwd = repo
+    S-->>P: launched, or a reason (card shows the command to copy)
+    U->>T: Pastes token at the hidden prompt
+    U->>P: Returns to the window
+    P->>S: GET ...?fresh=1 on focus
+    S-->>P: healthy
+```
+
+| Piece | Behavior | Built on |
+| --- | --- | --- |
+| Status route | `GET /api/repositories/:id/agent-identity` checks the id against the repo registry and calls `readCurrentAgentIdentity` (`scripts/cli/github-identity.mjs`) with the repo's path as `cwd` and an 8-second timeout, so the package state and state folder come from the same place as `roborepo github status`. It caches each repo's result for five minutes; `?fresh=1` skips the cache. The response carries the state (`not-set-up`, `healthy`, `problem`, `unavailable`), each finding's id, severity, message, and `fix`, the `reason` when the state is `unavailable`, the token's expiry date, and `setupLaunch.supported`. A repo whose GitHub target (`forgeTargetForRepositoryId`) is not `github.com` returns `{ applies: false }` without calling GitHub. It never carries a token | A wrapper `scripts/cli/repository-agent-identity.mjs` beside `scripts/cli/repository-protection.mjs`, wired as `handlers.loadRepositoryAgentIdentity` in `scripts/cli/telemetry.mjs` and routed in `scripts/cli/portal-routes-repositories.mjs` |
+| What the card says | The state, then the `fix` of the first `problem` finding, else the first `warn` or `unchecked` one: the same text doctor and `roborepo github status` print. An `unavailable` result with no findings shows its `reason`. The card offers one button, **Open setup**, when the state is `not-set-up` or the shown `fix` names `roborepo github setup`; the `fix` text says why (set up, renew, refresh) | The `fix` strings `modules/forge/agent-identity.mjs` already returns, so new finding ids need no portal change |
+| Where it shows | A status line in each repo card on Home, and the full card from that repo card's menu, next to the branch-protection item. Only repos the protection panel supports (`supportsProtectionPanel`: a `git:` id, not a mock repo) and whose status route does not answer `applies: false` get it, so a repo on another Git host shows nothing | `portal/shared/protection-panel.js` menu pattern |
+| Terminal hand-off | **Open setup** posts to `POST /api/repositories/:id/agent-identity/setup`, which takes no body. The server opens a terminal running `roborepo github setup` in the repo's folder and returns `launched` or a reason. The program is `process.execPath` (the Node running the portal) with the absolute path of the portal's own `scripts/cli/main.mjs`, then `github setup`; both are absolute paths that exist, which `launchInTerminal` requires. Where `setupLaunch.supported` is false (any OS but macOS today) or the launch fails, the card shows the command with a copy button instead of the button | `scripts/cli/terminal-launch.mjs` `launchInTerminal`, which needs a working-folder option; `launchHookReview` in `scripts/cli/hook-review-launch.mjs` as the model for status recheck, reasons, and fallback; `<portal-copy-button>` |
+| Refresh | After a launch, or once the card shows the copy command, the card refetches that repo with `fresh=1` when the window regains focus or becomes visible, throttled to once per 2 seconds. Other rows use the five-minute cache, so returning to the window does not re-read every repo | The focus pattern in `portal/shared/hook-readiness.js` |
+
+GitHub calls per read: each uncached read runs several `gh` calls (token, login, repo access,
+protection). The five-minute cache and the focus refetch limited to the repo whose setup was opened or copied keep Home's
+polling from repeating them.
+
+Why this keeps the token out of the portal: the status route only reads, and its response has
+logins, dates, and finding ids, no secret. The setup route opens a window and returns; the token is
+typed into that terminal's hidden prompt, which only a person at the keyboard answers. A local process
+that calls the setup route (the mutation guard checks the page token and origin, not who is calling)
+can only open a setup window, not supply a token.
+
 ### Doctor check
 
 `roborepo doctor` and `roborepo github status` call GitHub as the bot, using the agent
@@ -561,6 +611,28 @@ items are fixes found along the way that the token work depends on.
       one empty object between reads in a process, which let a package overwrite a value the user
       set. — abb24603; found by the partial-install test.
 
+### Phase 8: Portal status and terminal hand-off
+
+Added November 23 at the user's request (Decision Log). The token stays in the terminal; the portal
+reads status and opens the terminal.
+
+- [ ] Add `scripts/cli/repository-agent-identity.mjs`: validate the repo id against the registry,
+      call `readCurrentAgentIdentity` with the repo's path as `cwd` and an 8-second timeout, cache
+      each repo's result for five minutes, add `setupLaunch.supported`, and answer `applies: false`
+      for a repo whose GitHub target is not `github.com`.
+- [ ] Add `launchAgentIdentitySetup` modeled on `launchHookReview`: recheck the repo, launch
+      `process.execPath` with the absolute path of `scripts/cli/main.mjs` and `github setup`, and
+      return `launched` or a reason.
+- [ ] Wire `handlers.loadRepositoryAgentIdentity` and `handlers.launchAgentIdentitySetup` in
+      `scripts/cli/telemetry.mjs`, and add `GET /api/repositories/:id/agent-identity` and
+      `POST /api/repositories/:id/agent-identity/setup` in `scripts/cli/portal-routes-repositories.mjs`.
+- [ ] Give `launchInTerminal` (`scripts/cli/terminal-launch.mjs`) a working-folder option.
+- [ ] On Home: a status line in each supported repo card, and the full card from its menu, showing
+      the state, the first finding's `fix` or the `reason`, **Open setup** or the copy command, and
+      the github.com links; refetch that repo on focus after a launch or a shown copy command.
+- [ ] Move the github.com step text (pages, scopes, expiry advice) into one place that
+      `scripts/cli/github-setup.mjs` and the portal card both use.
+
 ## Review
 
 ### Findings
@@ -684,6 +756,14 @@ Automated:
   `unavailable`, not `healthy`.
 - The package test shows `GH_TOKEN` and `GITHUB_TOKEN` set to empty on enable and removed on
   disable, for Claude and Codex.
+- A portal route test shows the status route rejects an unknown repo id, returns each state with its
+  findings' `fix` from a fake `gh`, reports the package as on when it is (state `healthy`, not
+  `problem`), serves the cache until `fresh=1`, and never includes a token; and the setup route takes
+  no body, launches `roborepo github setup` in the repo's folder, and returns a reason when it cannot.
+- A portal browser spec shows the card for not set up, healthy, renew-soon, and problem; no card for
+  a repo on another Git host (`applies: false`); an `unavailable` card shows its reason; **Open setup**
+  posts to the setup route; unsupported launch and a failed launch both show the copy command; focus
+  refetches only that repo.
 - `npm run check` passes before the PR.
 
 Manual, on the real repo, after Phase 6:
@@ -707,6 +787,8 @@ Manual, on the real repo, after Phase 6:
 | From an agent shell: delete or force-push `repo-plans` through `gh api` or `git push --force` | GitHub refuses |
 | From the user's terminal: `gh auth status` | Shows the user, not the bot |
 | From the user's terminal: push a commit to `main` | Succeeds through the admin bypass |
+| Portal, a repo with the identity off: open Home | The repo card shows "not set up" and **Open setup** |
+| Portal: click **Open setup** on macOS | A terminal opens running `roborepo github setup` in the repo's folder; after it finishes, returning to the portal shows "healthy" |
 
 ## Documentation impact
 
@@ -719,6 +801,7 @@ Manual, on the real repo, after Phase 6:
 | `docs/user/reference/roborepo-cli.md` | `roborepo github setup` and the new doctor check |
 | `docs/user/guides/plan/lifecycle/plan-suite.md` | The setup offer at the end of `/plan-suite-init`. Codex saves push directly with the identity on, and report "not synchronized" without it |
 | `docs/internal/docs-map.md` | Add `modules/forge/` and the `github-agent-identity` package |
+| `docs/user/guides/setup-and-daily-use.md`, setup section | The portal card: where it shows, what each state means, and that **Open setup** opens the terminal setup |
 
 ## Risks
 
@@ -751,6 +834,9 @@ Manual, on the real repo, after Phase 6:
   starts a session, its launch environment takes precedence for any variable it already sets. So a
   `GH_TOKEN` set there would not be blanked, and agents would act as that token's account. Read from
   the docs on 2026-11-23, not tested. Mitigation: the setup guide says not to set either token there.
+- **The status route is readable by any local process.** Read-only portal routes need no page
+  token, so a local process can read the bot's login, token expiry, and findings. None is a secret;
+  the token itself never leaves `hosts.yml`.
 - **The token passes through a terminal.** The setup reads it with hidden input and agents are
   denied the command, but a user who pastes the token into an agent chat leaks it to the transcript.
   The setup's instructions say to paste it only at its own prompt.
@@ -761,6 +847,13 @@ None open.
 
 ## Decision Log
 
+- November 23, 2026 (user decision): the portal tracks the bot identity's setup and renewal
+  status per repo and hands the token step to a terminal running `roborepo github setup`; the
+  token is never entered in the portal. This replaces the earlier non-goal of any portal
+  setup. Alternatives: a portal token form (puts the secret in the browser and the server's
+  request path), or leaving setup terminal-only (the user has to track where setup stands).
+  The card lives in this plan rather than in the Home calls-to-action plan (`rtkmc8kf`), which
+  can link to it.
 - November 23, 2026 (user decision): a merge name the shell builds (`${M}PullRequest`) or a query read
   from a file stays a documented limitation of the hooks' `gh api` merge check. Alternative: deny any
   `gh api graphql` query using `$`, a backtick, or `@file`, which would also block legitimate queries.
@@ -847,7 +940,6 @@ None open.
 - Hide the user's SSH agent from agent shells. Codex's `shell_environment_policy` can exclude
   `SSH_AUTH_SOCK`; Claude's `env` can only set it to empty. With fetches on HTTPS, this closes the
   remaining path by which an agent can act as the admin.
-- A portal version of the guided setup.
 - A full forge adapter: `roborepo pr …` commands, with GitHub as one provider and GitLab or
   Bitbucket as others, modeled on `scripts/harnesses/`. Build it only when a second host is
   actually used.
