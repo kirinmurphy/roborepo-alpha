@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Approved at commit 2efa3ecc; merge pull request 76 on GitHub, then run `/plan-close` on this plan (rerun `/plan-review` first if main moves before the merge).
+next_action: Review renewed at commit 43230c08 after the user's Config page changes; it awaits the user's approval of that commit, then merge pull request 76 and run `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -108,11 +108,12 @@ References between skills in the same package are not relationships.
 
 | Package | `requires` | `recommends` | Prose-only references |
 | --- | --- | --- | --- |
-| `plan-suite` | `technical-writing`, `implementation-review`, `test-harness` | `code-style`, `javascript-typescript`, `feature-verification` | — |
+| `plan-suite` | `technical-writing`, `implementation-review`, `test-harness`, `code-style` | `javascript-typescript`, `feature-verification` | — |
 | `session-close` | `implementation-review` | `test-harness`, `plan-suite` | — |
 | `implementation-review` (new) | — | `code-style`, `javascript-typescript` | — |
 | `technical-writing` | — | `code-style`, `javascript-typescript`, `test-harness` | — |
-| `javascript-typescript` | — | `react`, `code-style` | — |
+| `javascript-typescript` | `code-style` | — | `react` (inverse link: `react` requires it) |
+| `react` | `javascript-typescript`, `code-style` | — | — |
 | `feature-verification` | — | — | `test-harness` (boundary: test-harness chooses and runs tests) |
 | `supabase-integration-testing` | — | — | `test-harness` (fallback when Supabase conditions do not match) |
 | `tighten` | none | none | `code-style`, `javascript-typescript`, `react` (out of scope) |
@@ -129,15 +130,16 @@ Why each edge, by source skill:
 | `plan-suite` → `technical-writing` (requires) | `plan-write` and `plan-promote` load it always; `plan-archive`, `plan-close`, `plan-review` pair it | Plan prose is part of the suite's contract |
 | `plan-suite` → `implementation-review` (requires) | Validator passes in `plan-execute` and `plan-review`; `plan-close`'s quality pass | One rubric for every pass |
 | `plan-suite` → `test-harness` (requires) | `plan-close` needs repository-native verification for a complete verdict; the other plan skills pair it | Required by one skill, so required by the package. Enabling `plan-suite` now turns `test-harness` on |
-| `plan-suite` → `code-style`, `javascript-typescript` (recommends) | `code-style` pairs in `plan-write`, `plan-promote`, `plan-execute`, `plan-review`; `javascript-typescript` in the first three | Apply only to plans and diffs with code or JS/TS |
+| `plan-suite` → `code-style` (requires) | Pairs in `plan-write`, `plan-promote`, `plan-execute`, `plan-review` | User decision 2026-11-22: the suite always carries the placement rules |
+| `plan-suite` → `javascript-typescript` (recommends) | Pairs in `plan-write`, `plan-promote`, `plan-execute` | Applies only to plans and diffs with JS/TS |
 | `plan-suite` → `feature-verification` (recommends) | `plan-execute` pairing; `plan-write`'s `references/completion-report.md` reuses its captures | Only for behavior that needs a demonstration |
 | `session-close` → `implementation-review` (requires) | Its "Review the code" step | Replaces "load a code-quality review skill if one exists" |
 | `session-close` → `test-harness` (recommends) | New: verification of the session's changes | Useful, not required to close a session |
 | `session-close` → `plan-suite` (recommends) | `plan-write` pairing for plan sync and backlog hand-off | Only when the session touched a plan |
-| `implementation-review` → `code-style`, `javascript-typescript` (recommends) | New skill | `javascript-typescript` brings `react` through its own recommendation |
+| `implementation-review` → `code-style`, `javascript-typescript` (recommends) | New skill | Flattened into the recommendations of `plan-suite` and `session-close`, which require it |
 | `technical-writing` → three packages (recommends) | Its `## Paired Skills` table and `references/review-loop.md` | Subject-matter constraints, conditional |
-| `javascript-typescript` → `react` (recommends) | Its `## Paired Skills` table | React is a specialization |
-| `javascript-typescript` → `code-style` (recommends) | "as `code-style` describes" for helper placement | Its placement rule defers to code-style |
+| `react` → `javascript-typescript`, `code-style` (requires) | React's `## Paired Skills` table | User decision 2026-11-22: React work is JS/TS work and places code |
+| `javascript-typescript` → `code-style` (requires) | "as `code-style` describes" for helper placement | User decision 2026-11-22: its placement rule defers to code-style |
 
 `requires` stays acyclic: no required package requires anything back. `recommends` may form
 cycles, which the catalog allows.
@@ -317,14 +319,15 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 ## Validation
 
 - [x] `roborepo package validate` passes the migrated manifests.
-- [x] Enabling `plan-suite` in a clean home makes `technical-writing`, `implementation-review`, and
-      `test-harness` effective without recording them as selected roots; disabling `plan-suite`
+- [x] Enabling `plan-suite` in a clean home makes `technical-writing`, `implementation-review`,
+      `test-harness`, and `code-style` effective without recording them as selected roots; disabling `plan-suite`
       while `session-close` is on leaves `implementation-review` effective, and disabling both
       removes it.
 - [x] With `technical-writing` removed from disk, `roborepo package status plan-suite --json`
       reports the package unhealthy.
-- [x] Interactive `roborepo package enable plan-suite` offers `code-style`, `javascript-typescript`,
-      and `feature-verification` once each and enables none on No.
+- [x] Interactive `roborepo package enable plan-suite` offers `javascript-typescript` and
+      `feature-verification` once each and enables none on No (`code-style` was offered too until it
+      became required, 2026-11-22).
 - [x] The setup wizard check from Phase 4 passes.
 - [x] No `SKILL.md` or reference under `globals/packages/` asks the user to enable or skip a package
       (a text check added to `scripts/test/skill-reference-matrix-characterization-check.mjs`).
@@ -401,6 +404,15 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - [x] Grammar in the config panel wizard example — fixed (7447670)
 - [x] Wizard restated the enable path's recommendation filter in presets.mjs — reuses `disabledRecommendations` (17519cd4)
 - [x] No-op `.map((p) => p)` in skill-package-boundaries-check.mjs — removed (17519cd4)
+- [x] User request: replace each section's Recommended dependencies list with a per-row Package Dependencies popover (required and recommended, on/off, each opening its detail, enable-time note) — 23677d29
+- [x] User request: recommendations dialog wider, page rows with live switches, shared popup style, more spacing, No Thanks / Done footer — 23677d29
+- [x] Dialog rows promised an enable-time offer that never comes — note suppressed there (81f05646)
+- [x] Recommendations with no row could open an empty dialog — left out; no dialog when none remain (81f05646, test eadbd8a4, 73b93d7b)
+- [x] Stale shared-modal comment in base.css — reworded (81f05646)
+- [x] User request: dialog title "Additional packages recommended for <package>", no lead line; headings Required Packages / Recommended Packages; more space before on/off; trigger as a subtle button; no skill-count badge — c28745af
+- [x] User request: javascript-typescript, react, and plan-suite require code-style; react requires javascript-typescript; javascript-typescript no longer recommends react — c8fb4a13
+- [x] User request: flatten nested dependencies into one required and one recommended list — `recommendedClosure`, c8fb4a13
+- [x] Flattened recommendations were not nearest first for branched requirements — breadth-first walk and test (43230c08)
 
 ### Verification
 - Validator pass 1 at 40dae82 (fresh-context subagent): 3 actionable, 4 notes; all fixed in 76a693a.
@@ -444,13 +456,36 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - Validator pass at 2efa3ecc (fresh-context subagent): clean; install-drift detection does not read
   package manifests or skills, so the two changes do not interact.
 - CI run 45071990953 at 2efa3ecc (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
-
 - Approval of 2efa3ecc: the user replied "Approve 2efa3ecc" in the /plan-review session on 2026-11-22.
+- User-requested Config page changes after approval of 2efa3ecc (23677d29..73b93d7b): `npm run
+  test:portal-ui` 276 passed at 23677d29; the dependency and recommendation tests (7) pass at
+  73b93d7b; config-dependency-sections, package-catalog, config-bulk-toggle, config-tree-render,
+  config-onboarding-state, portal-pages, portal-surface-layers, package-relationships,
+  wizard-recommendations, docs-reference checks pass.
+- Browser (portal from the worktree, real home): the Package Dependencies button and popover, an
+  entry opening its detail, and the retitled dialog (enable request stubbed in the page, so no
+  package changed).
+- Validator passes at 23677d29 (2 actionable, fixed 81f05646), 81f05646 (1 actionable, fixed
+  eadbd8a4), c28745af (1 actionable, fixed 73b93d7b): fresh-context subagents.
+- Base `main` moved to d66dcfce (#79, base-failure evidence) and was merged in c8d0b03d. Conflicts:
+  validation-loop.md kept this branch's pointer to `implementation-review`, and #79's `base` wording
+  went into `implementation-review`'s class table; plan-suite-skills-check keeps both sides'
+  assertions, with the base-evidence check applied to `implementation-review`.
+- At c8fb4a13..43230c08: package-graph, package-relationships, wizard-recommendations,
+  config-dependency-sections, plan-suite-skills, skill-reference-matrix, skill-structure,
+  skill-package-boundaries, package-catalog, docs-reference checks; `package validate`,
+  `skill audit --check`, `skill render-commands --check`, `doctor.sh --quiet` (101 checks); `npm run
+  test:portal-ui` 277 passed at c8fb4a13.
+- Validator pass at c8d0b03d (fresh-context subagent): 1 actionable (recommendation order), fixed
+  43230c08; plan relationship tables updated in this record.
+- No CI ran on pushes 23677d29..73b93d7b: the pull request conflicted with main, so GitHub skipped
+  its checks until the merge.
+- CI run 45089213771 at 43230c08 (`npm run check` on macOS and Ubuntu, `windows-installer`): passed.
 
 ### Result
 - Status: complete
-- Reviewed implementation commit: 2efa3ecc41d2c573990f837c96ff46f9714ae8d8
-- Base commit: 97f0d5b139cf4eddf6eae8a5fab338bc7998e93e
+- Reviewed implementation commit: 43230c08102a58ba9cef88dee934283128d19bae
+- Base commit: d66dcfce6abd923f3f836d142b04a745e725ffae
 
 ### Approval
 - Decision: approved
@@ -458,6 +493,30 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - Confirmed by: human
 
 ## Decision Log
+
+- **2026-11-22 (user decision): Dependencies show per row, not per section.** Each row with
+  required or recommended packages has a Package Dependencies popover; the section-level
+  Recommended dependencies list, added by [[o9zwxuav]], is removed. `config status` prints a
+  `recommends:` line per row to match.
+- **2026-11-22 (user decision): The recommendations dialog uses the page's own rows** with switches
+  that apply at once, and a No Thanks / Done footer. This changes the presentation of the
+  enable-time offer [[o9zwxuav]] shipped; the offer itself still happens once, at enable.
+- **2026-11-22: A switch in the recommendations dialog opens no further offer.** The checkbox
+  dialog chained each chosen package's own recommendations; with live switches a nested offer would
+  replace the open dialog. Recommendations are asked about once, when the user turns a package on
+  from the page.
+- **2026-11-22: The dependency note shows only while the package and one of its recommendations
+  are off.** Once the package is on, the offer has already happened.
+- **2026-11-22 (user decision): `code-style` is required by `javascript-typescript`, `react`, and
+  `plan-suite`; `react` requires `javascript-typescript`, which no longer recommends `react`.**
+- **2026-11-22 (user decision): Nesting is flattened for presentation and offers.** A package's
+  required list is its `requires` closure; its recommended list is its own `recommends` plus those
+  of every package it requires, nearest first, less anything it requires (`recommendedClosure`).
+  A recommended package's own recommendations are left out: each is offered once, from the package
+  the user turns on, and a recommended package's requirements come with it when it is turned on.
+  Manifests and Paired Skills rows still declare direct edges only.
+- **2026-11-22 (user decision): No skill-count badge.** Removed for every multi-skill package;
+  plan-suite is the only one.
 
 - **2026-11-22 (user decision): Ask about a recommendation once, at enable time.** The plan earlier
   said recommendations never prompt at enable time and skills prompt at run time. The user does not
