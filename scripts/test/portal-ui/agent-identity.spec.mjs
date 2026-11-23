@@ -94,6 +94,23 @@ test.describe("Agent GitHub account", () => {
     await expect(card(page)).toContainText(`Fix: ${SETUP_FIX}`);
     await expect(card(page).getByRole("button", { name: "Open setup" })).toBeVisible();
     await expect(line(page)).toContainText("The bot's token expires in 5 days.");
+
+    // A token with no expiry date is renewed the same way, so it reads the same.
+    answer = report({ findings: [finding("no-expiry", "warn", "The bot's token never expires.", "Regenerate it with an expiry date, then run roborepo github setup in your own terminal.")] });
+    await card(page).getByRole("button", { name: "Check again" }).click();
+    await expect(card(page).locator("[data-slot=state]")).toHaveText("renew soon");
+    await expect(card(page).getByRole("button", { name: "Open setup" })).toBeVisible();
+
+    // "token expired" only when the expiry is the problem shown, not over another problem.
+    answer = report({ state: "problem", findings: [
+      finding("package-off", "problem", "A bot is signed in but the github-agent-identity package is off."),
+      finding("expired", "problem", "The bot's token has expired."),
+    ] });
+    await card(page).getByRole("button", { name: "Check again" }).click();
+    await expect(card(page).locator("[data-slot=state]")).toHaveText("needs attention");
+    answer = report({ state: "problem", findings: [finding("expired", "problem", "The bot's token has expired.")] });
+    await card(page).getByRole("button", { name: "Check again" }).click();
+    await expect(card(page).locator("[data-slot=state]")).toHaveText("token expired");
     await card(page).getByRole("button", { name: "Close" }).click();
 
     answer = report({ state: "problem", findings: [finding("bot-is-admin", "problem", "robo-bot is an admin of example/identity-suite.", "Lower robo-bot to write access, then rerun roborepo github status.")] });

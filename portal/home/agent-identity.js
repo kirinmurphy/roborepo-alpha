@@ -73,7 +73,8 @@ export function describeAgentIdentity(report) {
   const shown = findings.find((entry) => entry.severity === "problem")
     || findings.find((entry) => entry.severity === "warn" || entry.severity === "unchecked")
     || null;
-  const renew = findings.some((entry) => entry.id === "expiring" || entry.id === "expired");
+  // A token that never expires is renewed the same way as one about to, so it reads the same.
+  const renew = findings.some((entry) => entry.id === "expiring" || entry.id === "no-expiry");
   let label;
   let level;
   let message;
@@ -89,7 +90,8 @@ export function describeAgentIdentity(report) {
       message = shown ? shown.message : `Agents act as ${report.botLogin}.`;
       break;
     case "problem":
-      label = renew ? "token expired" : "needs attention";
+      // The label names the finding the card shows, so it never says "expired" over another problem.
+      label = shown.id === "expired" ? "token expired" : "needs attention";
       level = "problem";
       message = shown.message;
       break;
