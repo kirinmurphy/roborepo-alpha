@@ -15,7 +15,7 @@ Give agent sessions a title that starts with the plan-workflow stage they are in
 running many Claude and Codex sessions at once can tell them apart in the sidebar or session
 picker. The intended mechanism for Claude is a hook that sets the title; two trials, listed below,
 confirm how much of Claude that hook can cover. Harnesses with no way to set a title get the same
-identifier through the copied portal prompt and a rename line the person can paste.
+identifier through the copied portal prompt, and in Codex also a rename line the person can paste.
 
 ## Context
 
@@ -92,7 +92,7 @@ answers; the last column says what changes otherwise.
 | Trial | If yes | If no |
 | --- | --- | --- |
 | A. Does a hook-returned title take effect in the Claude desktop app, not only the CLI? | The hook covers both | In the desktop app the agent sets the title with its rename tool, as the rule already instructs |
-| B. Does `UserPromptSubmit` fire with the text of a typed `/plan-execute …` prompt, as the documentation says? | The hook covers typed commands | The hook covers only copied prompts, which carry a title line. A typed command in the Claude CLI gets no stage title; record that as a known gap |
+| B. Does `UserPromptSubmit` fire with the full text of a prompt that opens with a plan command, as the documentation says? Test a typed `/plan-execute …` and a pasted portal prompt, since both open with the command | The hook covers typed commands and copied prompts | The hook cannot see plan-command prompts at all. Drop the hook from this plan; the desktop app relies on the agent's rename tool, and the Claude Code CLI gets no stage title, recorded as a known gap |
 
 ## Proposed design
 
@@ -112,9 +112,9 @@ The whole title, prefix included, is at most 59 characters, because the Claude d
 a title passed at launch to be under 60. A longer description is cut at a word boundary and ends
 with `…`. The plan id never appears: ids are opaque and titles are for people.
 
-A plan command that names no single plan, such as `/plan-write` for a plan that does not exist
-yet or a prompt selecting several plans, takes its description from the first words of the prompt
-after the command. With no words to use, no title is set.
+A plan command that names no plan, such as `/plan-write` for a plan that does not exist yet, takes
+its description from the first words of the prompt after the command. With no words to use, or
+when the prompt names several plans, no title is set.
 
 Known gaps, all in the Claude Code CLI, where the agent has no rename tool and the hook acts only
 when a prompt arrives:
@@ -193,8 +193,8 @@ shared command.
    how the title follows a session to its next stage.
 5. Take the title from the prompt's title line when it has one. Only otherwise build the plan
    snapshot, look up the plan the prompt names, and build the title from the leading plan command
-   and that plan's heading (this branch depends on trial B). If the prompt names no single plan,
-   use the first words after the command; if there are none, print nothing and exit 0.
+   and that plan's heading. If the prompt names no plan, use the first words after the command.
+   If there are none, or the prompt names several plans, print nothing and exit 0.
 6. Request the hook output from the provider and print it.
 
 The command never fails a prompt: any error exits 0 with no output. Disabling plan-suite removes
@@ -253,7 +253,7 @@ Scripted checks, each asserting output a person or a harness would see:
 - Stage change: given a current title of `/plan-execute: <plan>` and a `/plan-review` prompt for
   the same plan, it prints the `/plan-review: <plan>` title.
 - For a plan command that names no plan, it prints a title built from the first words after the
-  command, and prints nothing when there are none.
+  command. It prints nothing when there are none, and nothing for a prompt naming several plans.
 - It prints nothing for an ordinary prompt, for a current title without a stage prefix, for
   malformed input, and for `--harness codex`; it exits 0 in every case.
 - The stage prefixes written in `globals/packages/plan-suite/rules.md` match the formatter's.
@@ -305,7 +305,8 @@ shows the new title in the session list.
   code never carries one harness's hook format (2026-11-23).
 - Codex and Gemini leave the capability undeclared instead of declaring it with placeholder
   functions, following the provider guide's rule; the user agreed (2026-11-23).
-- Copied portal prompts carry the title as the harness-neutral fallback, and sessions outside
-  Claude also get a paste-ready rename line, at the user's direction (2026-11-23).
+- Copied portal prompts carry the title as the harness-neutral fallback, and Codex sessions also
+  get a paste-ready rename line, at the user's direction (2026-11-23). Gemini gets the line only
+  after a rename command is confirmed there.
 - `Quick Change:` is set by the agent on its first edit, not guessed from the first prompt, which
   would mislabel sessions that only ask a question (user's choice, 2026-11-23).
