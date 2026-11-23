@@ -182,8 +182,8 @@ folder. Uninstall removes `package-sources.json` and `packages/`.
 | `SKILL.md` at the root | One package named by the skill's frontmatter `name` |
 
 - **Safety:** a repo containing a symbolic link is refused. `contentsSummary()` lists skills, slash
-  commands, rules, hooks, MCP servers, config changes, services, scripts, requirements, and plugin
-  files that are not installed.
+  commands, rules, hooks, MCP servers, each config change as `<harness>: <op> <setting.path>`,
+  services, runtime assets, scripts, requirements, and plugin files that are not installed.
 - **Trusted catalog:** `manifests/inventory/trusted-package-sources.json`,
   `{ schemaVersion: 1, entries: [{ repo, commit, description }] }`. It ships empty until curation
   is decided. `commit` must be a full SHA. A trusted source whose repo leaves the catalog stops refreshing
@@ -215,7 +215,10 @@ data and throw `PackageServiceError` with a `code`:
 | `packageView` | Rows with `tab`, `sourceId`, `sourceBadge`, `trust`, `collection`, `available`, `installed`, `active`, `revision`, `latestRevision`, `updateAvailable`, `removable` |
 
 A `requires` edge resolves in the requiring package's own source first, then by the reference
-rules; a requirement that stays ambiguous stops the install.
+rules; a requirement that stays ambiguous stops the install, and so does one the requiring
+package's source offers under an ID already recorded from another source (exit 3): an install never
+replaces a recorded choice the user did not name. A workspace `replace` override is honoured ahead
+of the lock here too.
 
 The Config page's package items (`scripts/cli/config.mjs`) carry the same `tab`, `sourceId`,
 `sourceBadge`, `trust`, and `collection` fields, read from the composed catalog.

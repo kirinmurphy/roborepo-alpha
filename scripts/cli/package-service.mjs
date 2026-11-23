@@ -40,6 +40,7 @@ import {
   trustedEntryFor,
 } from "./package-source-git.mjs";
 import { effectiveEnabledIds, readEnabledPackagesRegistry, selectedRootIds } from "./package-state.mjs";
+import { hasReplaceOverride, readWorkspaceOverrides } from "./workspace-resources.mjs";
 
 // Exit codes for non-interactive callers. 2 matches the CLI's existing usage/refusal code.
 export const SERVICE_EXIT_CODES = {
@@ -312,6 +313,9 @@ export function resolvePackageReference(reference, { available = listAvailablePa
     return exact;
   }
   const group = available.filter((pkg) => pkg.id === packageId);
+  // A workspace replace override chooses `local`, ahead of any lock record, as the catalog does.
+  const overridden = group.find((pkg) => pkg.sourceId === LOCAL_SOURCE_ID);
+  if (overridden && hasReplaceOverride("package", packageId, readWorkspaceOverrides())) return overridden;
   const recorded = lock.packages[packageId];
   if (recorded) {
     const chosen = group.find((pkg) => pkg.sourceId === recorded.sourceId);
@@ -403,6 +407,15 @@ function installPlan(root, available, lock) {
     seen.add(pkg.id);
     for (const dep of pkg.requires || []) {
       const sameSource = available.find((candidate) => candidate.sourceId === pkg.sourceId && candidate.id === dep);
+      const recorded = lock.packages[dep];
+      // A requirement already recorded from another source keeps that source: an install never
+      // replaces a recorded choice the user did not name. The user installs one explicitly.
+      if (sameSource && recorded && recorded.sourceId !== pkg.sourceId) {
+        throw new PackageServiceError(
+          `${pkg.qualifiedName} requires ${dep}, which is recorded as ${qualifiedName(recorded.sourceId, dep)} and also offered as ${sameSource.qualifiedName}. Install the one you want explicitly first (for example \`roborepo package install ${sameSource.qualifiedName}\`), then retry`,
+          { code: "ambiguous", details: { packageId: dep, candidates: [qualifiedName(recorded.sourceId, dep), sameSource.qualifiedName] } },
+        );
+      }
       if (sameSource) {
         visit(sameSource);
         continue;
@@ -594,11 +607,12 @@ export async function removePackage(reference, { disable = null } = {}) {
   const record = lock.packages[packageId];
   const composed = safeCompose();
   const pkg = composed.packages.find((entry) => entry.id === packageId);
-  const effectiveSource = record?.sourceId || pkg?.sourceId;
+  // The catalog's choice (which honours a replace override) decides the source, then the lock.
+  const effectiveSource = pkg?.sourceId || record?.sourceId;
   if (sourceId && effectiveSource && sourceId !== effectiveSource) {
     throw new PackageServiceError(`${packageId} is installed from ${effectiveSource}, not ${sourceId}`, { code: "usage" });
   }
-  const tab = record ? sourceTab({ type: record.sourceType || "git" }) : pkg?.tab;
+  const tab = pkg?.tab || (record ? sourceTab({ type: record.sourceType || "git" }) : null);
   if (tab === "system" || effectiveSource === BUILTIN_SOURCE_ID) {
     throw new PackageServiceError(`${packageId} is a System package and cannot be removed; disable it instead`, { code: "refused" });
   }

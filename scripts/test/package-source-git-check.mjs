@@ -13,7 +13,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
-import { makeSourceRoots, runCli, runModules, writeRulesPackage } from "./fixtures/package-sources.mjs";
+import { makeSourceRoots, repoRoot, runCli, runModules, writeRulesPackage } from "./fixtures/package-sources.mjs";
 
 const roots = (() => {
   const made = makeSourceRoots("roborepo-package-source-git-");
@@ -313,6 +313,42 @@ try {
   assert.match(tampered.output, /integrity mismatch/);
   assert.ok(!lock()["robo-hooked"], "a failed integrity check writes no record");
   assert.ok(!fs.existsSync(path.join(roots.stateRoot, "packages", "installed", "robo")), "and leaves no copy");
+
+  // A requirement already recorded from another source is never replaced by the requiring repo's
+  // own package of that name; the install stops and asks for an explicit choice.
+  writeRulesPackage(roots.builtInDir, "rec-dep");
+  ok("package", "enable", "rec-dep");
+  ok("package", "disable", "rec-dep");
+  const recRepo = makeRepo("rec-pack", {
+    "packages/needs-rec/package.config.json": JSON.stringify({
+      schemaVersion: 1, id: "needs-rec", label: "Needs Rec", description: "Requires rec-dep.",
+      presentation: { category: "integrations" }, requires: ["rec-dep"],
+      resources: [{ type: "rules", harness: "claude", source: "rules.md" }],
+    }),
+    "packages/needs-rec/rules.md": "## Needs rec\n",
+    "packages/rec-dep/package.config.json": JSON.stringify({
+      schemaVersion: 1, id: "rec-dep", label: "Rec Dep", description: "Same name as a recorded built-in.",
+      presentation: { category: "integrations" }, resources: [{ type: "rules", harness: "claude", source: "rules.md" }],
+    }),
+    "packages/rec-dep/rules.md": "## Rec dep from repo\n",
+  });
+  json("package", "source", "add", recRepo.url, "--id", "rec");
+  const recInstall = cli("package", "install", "rec/needs-rec", "--yes");
+  assert.equal(recInstall.status, 3, `a recorded requirement is not switched silently\n${recInstall.output}`);
+  assert.match(recInstall.output, /recorded as builtin\/rec-dep and also offered as rec\/rec-dep/);
+  assert.equal(lock()["rec-dep"].sourceId, "builtin");
+  assert.ok(!lock()["needs-rec"], "nothing installs");
+
+  // The contents summary names each config change by harness, operation, and setting, and lists
+  // runtime assets that would be installed and run.
+  const summary = runModules(roots.env, { g: "scripts/cli/package-source-git.mjs" }, `
+    return g.formatContentsSummary(g.contentsSummary(${JSON.stringify(path.join(repoRoot, "globals", "packages", "usage-statusline"))}));
+  `);
+  assert.ok(summary.ok, summary.error);
+  const summaryText = summary.value.join("\n");
+  assert.match(summaryText, /config changes: [^\n]*claude: set statusLine \(status line\)/);
+  assert.match(summaryText, /claude: union env\.CLAUDE_CODE_PLUGIN_DIRS/);
+  assert.match(summaryText, /runtime assets: /);
 
   // ---------------------------------------------------------------------------------------------
   // Failures that must leave no state behind.

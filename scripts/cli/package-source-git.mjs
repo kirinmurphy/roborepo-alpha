@@ -293,7 +293,11 @@ export function contentsSummary(packageDir) {
     rules: of("rules").map((resource) => resource.source),
     hooks: of("hooks").map((resource) => `${resource.source} (${resource.harness})`),
     mcpServers: of("mcp").map((resource) => resource.preset),
-    permissions: of("config-patch").map((resource) => `${resource.harness} config change`),
+    // Each config change by harness, operation, and setting path, so the user sees exactly which
+    // settings (permissions included) a package would write.
+    permissions: of("config-patch").flatMap((resource) => (Array.isArray(resource.patches) ? resource.patches : []).map((patch) =>
+      `${resource.harness}: ${patch.op} ${(patch.path || []).join(".")}${resource.label ? ` (${resource.label})` : ""}`)),
+    runtimeAssets: of("package-runtime-asset").map((resource) => resource.source),
     services: of("service").map((resource) => resource.id),
     scripts: files.filter((rel) => SCRIPT_EXTENSIONS.has(path.extname(rel)) || isExecutable(path.join(packageDir, rel))),
     notInstalled: files.filter((rel) => rel.startsWith("plugin/")),
@@ -308,7 +312,8 @@ export function formatContentsSummary(summary) {
     ["rules", summary.rules],
     ["hooks", summary.hooks],
     ["MCP servers", summary.mcpServers],
-    ["permissions", summary.permissions],
+    ["config changes", summary.permissions],
+    ["runtime assets", summary.runtimeAssets || []],
     ["services", summary.services],
     ["scripts", summary.scripts],
     ["requires", summary.requires],
