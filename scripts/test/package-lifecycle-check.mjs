@@ -362,7 +362,7 @@ for (const pkgId of packageIds) {
 
     // A requirement on a package the catalog leaves out (pending) is named, not skipped silently.
     out = ok("package", "enable", "dep-needs-pending");
-    assert.match(out, /warn: dep-needs-pending requires dep-pending, which is skipped \(pending package/);
+    assert.match(out, /warn: dep-needs-pending includes dep-pending, which is skipped \(pending package/);
     assert.ok(liveRules("dep-needs-pending") && !liveRules("dep-pending"), "the available parent still enables");
     ok("package", "disable", "dep-needs-pending");
 
