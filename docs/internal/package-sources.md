@@ -86,7 +86,7 @@ works without a separate install: the apply step records it (see The lock).
 
 A lock record whose source no longer offers the package (another source still does, or the recorded source was disabled, removed, or lost its folder) leaves the ID **unresolved**: it is left
 out of the catalog, another source's same-ID package is never substituted, `package reconcile`
-keeps its selection and applied records, and doctor reports it. A `builtin` record is the exception: a package that left the built-in library is retired, and reconcile forgets it and its lock record.
+keeps its selection and applied records, and doctor reports it. The packages a lock record leaves out are reported as `shadowed` (a doctor hint and a note in `package list`), so a newly authored package is never ignored silently. A `builtin` record is the exception: a package that left the built-in library is retired, and reconcile forgets it and its lock record.
 
 The override outranks a lock record because the user edits it directly; lock records are written
 by RoboRepo.
@@ -231,6 +231,7 @@ The Config page's package items (`scripts/cli/config.mjs`) carry the same `tab`,
 | A same-ID collision | fail |
 | An unresolved package | fail |
 | A live package changed since it was applied | hint |
+| A package another source offers under an ID whose lock record chose a different source (it is not used) | hint |
 | Bare-ID state not yet migrated, or an applied package without a lock record | hint |
 
 ## Migration from bare-ID state
