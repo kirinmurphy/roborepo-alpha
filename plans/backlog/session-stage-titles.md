@@ -112,8 +112,18 @@ The whole title, prefix included, is at most 59 characters, because the Claude d
 a title passed at launch to be under 60. A longer description is cut at a word boundary and ends
 with `…`. The plan id never appears: ids are opaque and titles are for people.
 
-Known gap: in the Claude Code CLI nothing sets `Quick Change:`, because the agent has no rename
-tool there and the hook acts only on plan commands. Those sessions keep Claude's generated title.
+A plan command that names no single plan, such as `/plan-write` for a plan that does not exist
+yet or a prompt selecting several plans, takes its description from the first words of the prompt
+after the command. With no words to use, no title is set.
+
+Known gaps, all in the Claude Code CLI, where the agent has no rename tool and the hook acts only
+when a prompt arrives:
+
+- Nothing sets `Quick Change:`.
+- A stage the agent starts itself, with no new prompt, gets no stage title until the next prompt
+  that carries a plan command.
+
+Those sessions keep the title they had.
 
 ### How a title reaches a session
 
@@ -121,9 +131,11 @@ tool there and the hook acts only on plan commands. Those sessions keep Claude's
 | --- | --- | --- |
 | Hook | Claude, subject to the trials | Any prompt that carries a title line or opens with a plan command |
 | Copied portal prompt | Every harness | Shows the identifier to the agent and the person; in Claude it also feeds the hook |
-| Rule | Every harness, as far as the agent's tools allow | Sub-task launches, `Quick Change:` and stages the agent starts itself where it has a rename tool, and the paste-ready rename line for plan stages elsewhere |
+| Rule | Every harness, as far as the agent's tools allow | Sub-task launches, `Quick Change:` and stages the agent starts itself where it has a rename tool, and the paste-ready rename line for plan stages in Codex |
 
-The hook path, when a prompt is submitted in Claude:
+The hook path, drawn for a typed plan command in Claude. For a copied prompt the title comes from
+its title line and the formatter is not called. The early exits in the command's steps are not
+drawn.
 
 ```mermaid
 sequenceDiagram
@@ -181,7 +193,8 @@ shared command.
    how the title follows a session to its next stage.
 5. Take the title from the prompt's title line when it has one. Only otherwise build the plan
    snapshot, look up the plan the prompt names, and build the title from the leading plan command
-   and that plan's heading (this branch depends on trial B).
+   and that plan's heading (this branch depends on trial B). If the prompt names no single plan,
+   use the first words after the command; if there are none, print nothing and exit 0.
 6. Request the hook output from the provider and print it.
 
 The command never fails a prompt: any error exits 0 with no output. Disabling plan-suite removes
@@ -197,10 +210,11 @@ One section in `globals/packages/plan-suite/rules.md` states the format and thes
   title if the launch accepts one.
 - On the first file edit in a session that is not working a plan, set `Quick Change: <description>`
   if you have a tool that renames your own session.
-- If you have no such tool: in Claude Code do nothing more, because a hook sets plan-stage titles
-  there; in any other harness print one line the person can paste, `/rename <title>`, once each
-  time a plan command starts, and continue without waiting. Print no rename line for
-  `Quick Change:`.
+- If you have no such tool: in Claude Code do nothing more, because a hook sets the stage title
+  when a prompt starts the stage; in Codex print one line the person can paste, `/rename <title>`,
+  once each time a plan command starts, and continue without waiting. Print no rename line for
+  `Quick Change:`, and none in a harness not named here: whether Gemini has a rename command is
+  not known.
 
 ### Copied prompts
 
@@ -238,6 +252,8 @@ Scripted checks, each asserting output a person or a harness would see:
   title output for a prompt with a title line and for a typed plan command.
 - Stage change: given a current title of `/plan-execute: <plan>` and a `/plan-review` prompt for
   the same plan, it prints the `/plan-review: <plan>` title.
+- For a plan command that names no plan, it prints a title built from the first words after the
+  command, and prints nothing when there are none.
 - It prints nothing for an ordinary prompt, for a current title without a stage prefix, for
   malformed input, and for `--harness codex`; it exits 0 in every case.
 - The stage prefixes written in `globals/packages/plan-suite/rules.md` match the formatter's.
