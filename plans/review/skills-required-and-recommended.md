@@ -626,3 +626,49 @@ requires nor recommends (prose-only references in the "Package relationships" ta
 - **2026-11-22: The Agents-page category check ignores dependency-only packages.**
   `implementation-review` is the first package in `skills-code-quality`, and it has no row by
   design, so the category correctly renders no section.
+
+## Completion summary
+
+Built-in package manifests now declare their real relationships. `plan-suite` includes
+`technical-writing`, `implementation-review`, `test-harness`, `code-style`, and
+`feature-verification`; `react` includes `javascript-typescript` and `code-style`;
+`javascript-typescript` includes `code-style`; `technical-writing` and `implementation-review`
+recommend what improves them. The new dependency-only `implementation-review` package holds the one
+review rubric `/plan-execute`, `/plan-review`, and `/plan-close` use. Skills no longer ask at run
+time to enable a package: the always-on skill-loading rule loads an available recommendation and
+names a skipped one once in the final report, and recommendations are offered only when their
+parent is enabled. The setup wizard prints one line naming recommendations still off, and
+`roborepo skill audit` warns about package-boundary candidates and manifest-and-prose disagreement.
+Along the way, by user decision, the Config page gained a per-row Dependencies popover and a
+cascading-disable dialog, required packages are called "included" wherever a person reads them, and
+`caveman`, `tool-call-optimization`, `session-close`, and `branch-safety` moved to
+`globals/packages-archived/`.
+
+## Verification
+
+- CI run 45225926346 on `main` at 9ad6fab73c3c4fc58217ecd65b1765c58f2a470a passed (`npm run check` on
+  macOS and Ubuntu, `windows-installer`). The run for the landed merge 1604eab8 (45223993932) was
+  cancelled when #80 landed on top of it; 9ad6fab7 adds only that change (4 files: temporary-file
+  store tests and worktree-lifecycle checks), which does not touch package manifests or skills.
+- Plan-named checks run locally on `main` at 1604eab84a69511b795a930ed333dc936d18e4b9:
+  package-catalog, package-graph, plan-suite-skills, skill-reference-matrix-characterization,
+  skill-package-boundaries, wizard-recommendations, package-relationships,
+  config-dependency-sections, docs-reference, and skill-structure checks pass;
+  `roborepo package validate`, `roborepo skill audit --check`, and
+  `roborepo skill render-commands --check` pass.
+- Checked the plan against landed code: the five manifests carry the `requires` / `recommends`
+  sets in "Package relationships" as amended by the Decision Log; `implementation-review` is
+  `selectable: false` and recommends `code-style`; the four archived packages sit under
+  `globals/packages-archived/`; no skill under `globals/packages/` contains an enable-or-skip
+  prompt; `plan-execute`, `plan-review`, `plan-close`, and `validation-loop.md` point to
+  `implementation-review` and no longer carry the convention checks or risk checkpoints.
+- Docs of record checked against landed code: `05-skill-loading.md` (run-time rule),
+  `package-development.md` (relationship policy), `roborepo-support/SKILL.md` ("Pairing another
+  skill"), `config-control-panel.md` (wizard line, Included and Recommended Packages),
+  `plan-suite.md` (included packages and the `implementation-review` rubric).
+- `## Not tested`: both entries cleared with evidence before approval. Every `## Review` finding is
+  checked off with its resolution.
+- `roborepo plans validate ejsc769o`: 0 findings before closure.
+- `roborepo plans approval ejsc769o`: fresh at 279cc4c0452e3f5ca6aa5cc36720256a1507e824.
+- `roborepo plans landed ejsc769o`: landed, newly scanned.
+- Absorbing commit: 1604eab84a69511b795a930ed333dc936d18e4b9
