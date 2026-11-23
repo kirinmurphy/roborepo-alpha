@@ -25,7 +25,7 @@ that plan matter here:
 | From the earlier plan | What it is |
 | --- | --- |
 | Title hook | In Claude, a hook runs `roborepo plans session-title` on each prompt and Claude sets the title from its output |
-| `session-title` capability | A feature a harness's RoboRepo provider (its code under `scripts/harnesses/<id>/` and manifest under `globals/harnesses/<id>/`) declares when the harness can set a title. Only Claude declares it; the function behind it, `sessionTitle.hookOutput`, returns the hook output text for that harness |
+| `session-title` capability | A feature a harness's RoboRepo provider (its code under `scripts/harnesses/<id>/` and manifest under `globals/harnesses/<id>/`) declares when the harness can set a title. Only Claude declares it. Two provider functions sit behind it: `sessionTitle.readHookInput` reads the prompt and current title from the harness's hook input, and `sessionTitle.hookOutput` returns the hook output text that sets a title |
 | Rename-line rule | A rule in `globals/packages/plan-suite/rules.md` telling an agent that cannot rename its session to print `/rename <title>` for the person to paste, in every harness except Claude Code |
 
 Outside Claude the person therefore pastes a rename line at each stage. This plan removes that
@@ -34,7 +34,7 @@ step for a harness once the harness can set the title itself.
 ## Goals
 
 - Codex and Gemini sessions get the same stage titles without the person typing anything.
-- The agent stops printing the rename line in a harness whose title is set automatically.
+- The agent stops printing the rename line in a session whose title is set automatically.
 
 ## Non-goals
 
@@ -61,8 +61,8 @@ For whichever harness gains a mechanism:
 
 | Mechanism that ships | Change |
 | --- | --- |
-| Hook output | Declare `session-title` in that harness's provider manifest, implement `sessionTitle.hookOutput`, and add a `hooks` resource for that harness to the plan-suite package |
-| Launch flag only | Add the title to the launch arguments built by the session launcher. The launcher is not built yet: it is planned in "Session Launching — Milestone 1" (`plan-session-launching-milestone-1`), which this option would then depend on. Sessions started by hand keep the rename line |
+| Hook output | Declare `session-title` in that harness's provider manifest, implement `sessionTitle.readHookInput` and `sessionTitle.hookOutput` for its hook format, and add a `hooks` resource for that harness to the plan-suite package |
+| Launch flag only | Add the title to the launch arguments built by the session launcher. The launcher is not built yet: it is planned in "Session Launching — Milestone 1" (`plan-session-launching-milestone-1`), which this option would then depend on. The launcher's prompt states that the title is already set, and the rule tells the agent to skip the rename line when the prompt says so. Sessions started by hand keep the rename line |
 | Agent-callable rename | None. The earlier rule already tells an agent with a rename tool to use it |
 
 When a harness's title is set by a hook, add that harness beside Claude Code in the rename-line
