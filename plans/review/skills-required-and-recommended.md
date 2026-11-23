@@ -1,6 +1,6 @@
 ---
 id: ejsc769o
-next_action: Approved at commit 279cc4c0; merge pull request 76 on GitHub, then run `/plan-close` on this plan (rerun `/plan-review` first if main moves before the merge).
+next_action: Merged to main in 1604eab8 and CI passed, but main was merged into the plan branch afterwards (843701dd, no branch-only changes), so the approval of 279cc4c0 is stale. Rerun `/plan-review` to approve 843701dd, then `/plan-close`.
 blocked_by: []
 depends_on:
   - o9zwxuav
@@ -672,3 +672,6 @@ cascading-disable dialog, required packages are called "included" wherever a per
 - `roborepo plans approval ejsc769o`: fresh at 279cc4c0452e3f5ca6aa5cc36720256a1507e824.
 - `roborepo plans landed ejsc769o`: landed, newly scanned.
 - Absorbing commit: 1604eab84a69511b795a930ed333dc936d18e4b9
+- Closure refused 2026-11-23: after these checks the branch gained 843701dd, a merge of main at
+  9ad6fab7 whose tree equals main, and `roborepo plans close` reported the approval of 279cc4c0
+  stale (changed paths are #80's four files).
