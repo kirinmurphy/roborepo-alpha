@@ -198,8 +198,11 @@ The protected-branch hook also denies the deny-bucket commands when global flags
 (`gh -R owner/repo api …`), a form the prefix rules miss. It lifts the `gh api` denial only when
 all three hold: the agent identity is installed (its Git config file
 `~/.roborepo/package-runtime/github-agent-identity/gitconfig` exists); the hook's own
-`GH_CONFIG_DIR`, if set, is exactly the agent identity's folder, `~/.roborepo/github-agent/gh`; and
-the command does not change who `gh` acts as. A command that assigns, exports, or unsets
+`GH_CONFIG_DIR` is exactly the agent identity's folder, `~/.roborepo/github-agent/gh`; and the
+command does not change who `gh` acts as. Under Claude the variable must be set: a session started
+before you ran `roborepo github setup` has none, so its `gh` acts as you and `gh api` stays denied
+until you start a new session. Codex starts its hooks without its shells' variables, so under Codex
+an unset `GH_CONFIG_DIR` is accepted. A command that assigns, exports, or unsets
 `GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or
 `GH_HOST` anywhere in it, or runs `gh` through `env`, keeps `gh api` denied. Agents never merge a pull request
 (`merge-pull-requests`): you merge it on GitHub.

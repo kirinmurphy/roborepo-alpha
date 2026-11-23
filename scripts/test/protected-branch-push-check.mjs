@@ -331,7 +331,7 @@ for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
 }
 // As the github-agent identity `gh api` is allowed: the package's Git config file is installed, the
-// hook's GH_CONFIG_DIR is unset or exactly the identity's gh dir, and the command does not change
+// hook's GH_CONFIG_DIR is exactly the identity's gh dir (or unset, under Codex), and the command does not change
 // which account gh acts as. Every other denied gh command stays denied.
 {
   const installIdentity = (root) => {
@@ -349,7 +349,9 @@ for (const [command, expected] of cases) {
     const label = options.hookPath ? "Codex" : "Claude";
     for (const command of ["gh api repos/o/r", "gh api graphql -f query=x", "gh -R o/r api repos/o/r/pulls"]) {
       assert.equal(decide(command, { ...options, env: asAgent }), "defer", `${label} allows as agent: ${command}`);
-      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "" } }), "defer", `${label} allows with the hook's GH_CONFIG_DIR unset: ${command}`);
+      // Codex hooks never see the shell's GH_CONFIG_DIR; a Claude hook without it belongs to a session
+      // whose gh acts as the user.
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "" } }), options.hookPath ? "defer" : "deny", `${label} with the hook's GH_CONFIG_DIR unset: ${command}`);
       assert.equal(decide(command, { ...options, env: { ...asAgent, GH_CONFIG_DIR: path.join(tmp, "other-gh") } }), "deny", `${label} denies other GH_CONFIG_DIR: ${command}`);
       assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled, GH_CONFIG_DIR: path.join(notInstalled, "github-agent", "gh") } }), "deny", `${label} denies without the installed identity: ${command}`);
       assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled } }), "deny", `${label} denies without identity: ${command}`);

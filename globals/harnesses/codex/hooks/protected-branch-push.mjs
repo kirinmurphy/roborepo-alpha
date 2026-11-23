@@ -82,16 +82,20 @@ const GH_IDENTITY_VARIABLES = ['GH_CONFIG_DIR', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_
 let ghIdentityChanged = false
 // True when gh in this shell acts as the github-agent identity. Acting as the bot, GitHub's rulesets
 // and the bot's collaborator role limit what `gh api` can do; as the user, `gh api` could rewrite
-// main. It takes all three: the package's Git config file is installed (Codex may not pass the
-// shell's GH_CONFIG_DIR to hooks, so the file is the signal that the identity is on), this hook's own
-// GH_CONFIG_DIR is unset or exactly the identity's gh config dir, and the command does not change
-// gh's identity itself.
+// main. It takes all three: the package's Git config file is installed, this hook's own
+// GH_CONFIG_DIR names the identity's gh config dir, and the command does not change gh's identity
+// itself.
+// Claude hooks share the session's environment, so an unset GH_CONFIG_DIR means a session started
+// before the identity was on, whose gh acts as the user: it must match exactly. Codex starts command
+// hooks with its own process environment, not the shell_environment_policy values its shells get, so
+// under Codex an unset GH_CONFIG_DIR is expected and the installed file is the signal instead.
 function agentIdentityActive() {
   if (ghIdentityChanged) return false
   const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
   if (!fs.existsSync(path.join(stateRoot, 'package-runtime', 'github-agent-identity', 'gitconfig'))) return false
   const dir = process.env.GH_CONFIG_DIR
-  return !dir || path.resolve(dir) === path.resolve(path.join(stateRoot, 'github-agent', 'gh'))
+  if (!dir) return forCodex
+  return path.resolve(dir) === path.resolve(path.join(stateRoot, 'github-agent', 'gh'))
 }
 
 // Whether any command in `text`, nested ones included, could make gh act as someone other than the
