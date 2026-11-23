@@ -390,6 +390,13 @@ for (const [command, expected] of cases) {
       "gh api repos/O/R/merges -f base=main -f head=feature",
       "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
       "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+      "gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+      "gh api graphql -f query='mutation { mergeBranch(input: {repositoryId: \"x\", base: \"main\", head: \"f\"}) { clientMutationId } }'",
+      "gh api -X POST repos/O/R/merge-upstream -f branch=main",
+      "gh api \"/repos/O/R/pulls/12/merge?x=1\" -XPUT",
+      // A query written in a heredoc or a variable is on the command line too.
+      "gh api graphql -F query=@- <<'Q'\nmutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }\nQ",
+      "Q='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'; gh api graphql -f query=\"$Q\"",
     ]) {
       assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} still denies as agent: ${command}`);
     }

@@ -518,13 +518,15 @@ function classifyPush(cwd, args) {
   return defaultKnown ? VERIFIED : unknownDefault(remote)
 }
 
-// REST paths and GraphQL mutations that merge, named anywhere in a `gh api` call. Agents never merge
-// (merge-pull-requests), and the bot's write role lets it merge an approved pull request, so the
-// agent lift keeps these denied. It reads the command line only: a query passed in a file is not
-// seen.
-const API_MERGES = /(?:^|\/)pulls\/[^/\s]+\/merge\b|(?:^|\/)merges\b|\b(?:mergePullRequest|enablePullRequestAutoMerge|mergeBranch)\b/
+// REST paths and GraphQL mutations that merge. Agents never merge (merge-pull-requests), and the
+// bot's write role lets it merge an approved pull request, so the agent lift keeps these denied.
+// They are matched against the gh arguments and the whole command, heredoc bodies and variable
+// values included; a query read from a file is not seen.
+const API_MERGES = /(?:^|\/)pulls\/[^/\s]+\/merge\b|(?:^|\/)merges\b|(?:^|\/)merge-upstream\b|\b(?:mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest|mergeBranch)\b/
+// Set from the raw command before it is walked.
+let commandMerges = false
 function mergesThroughApi(args) {
-  return args.some((arg) => API_MERGES.test(arg))
+  return commandMerges || args.some((arg) => API_MERGES.test(arg))
 }
 
 // gh with its options removed, matched against the host's denied list.
@@ -1621,6 +1623,7 @@ unsandboxed = toolInput.dangerouslyDisableSandbox === true
 // Every walk reads the command without the heredoc bodies that are plainly data.
 const text = withoutHeredocBodies(command)
 ghIdentityChanged = changesGhIdentity(text)
+commandMerges = API_MERGES.test(command)
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
 let result = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
 // The walks read a body that a program reads (`node <<'EOF'`, `bash <<EOF`) as shell, so an

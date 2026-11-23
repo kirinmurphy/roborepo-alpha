@@ -205,11 +205,11 @@ until you start a new session. Codex starts its hooks without its shells' variab
 an unset `GH_CONFIG_DIR` is accepted. A command that assigns, exports, or unsets
 `GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or
 `GH_HOST` anywhere in it (`=` or `+=`), or runs `gh` through `env`, keeps `gh api` denied. So does a
-`gh api` call that merges: a `pulls/<n>/merge` or `merges` path, or a `mergePullRequest`,
-`enablePullRequestAutoMerge`, or `mergeBranch` mutation on the command line. The bot's write role
-would let it merge an approved pull request, and agents never merge. A query read from a file is
-not seen. Agents never merge a pull request
-(`merge-pull-requests`): you merge it on GitHub.
+`gh api` call whose command names a merge: a `pulls/<n>/merge`, `merges`, or `merge-upstream` path,
+or a `mergePullRequest`, `enablePullRequestAutoMerge`, `enqueuePullRequest`, or `mergeBranch`
+mutation, in an argument, a heredoc, or a variable set in the same command. Only a query read from
+a file is not seen. The bot's write role would let it merge an approved pull request, but agents
+never merge a pull request (`merge-pull-requests`): you merge it on GitHub.
 
 The workflow an agent should follow:
 
