@@ -5,6 +5,7 @@ blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["user-managed-packages-and-add-workflows", "f5exs0bd", "o9zwxuav", "74h2tlim"]
 reviewed_commit: 46f37fbc51d551f49999d757a328694c176555b8
+worktree: packages-multi-source-distribution
 ---
 
 # Package Management: Part 04 - Get Packages From GitHub, Catalogs, and Local Folders
