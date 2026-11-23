@@ -303,7 +303,12 @@ export function resolvePackageReference(reference, { available = listAvailablePa
   if (!packageId) throw new PackageServiceError("a package name is required", { code: "usage" });
   if (sourceId) {
     const exact = available.find((pkg) => pkg.sourceId === sourceId && pkg.id === packageId);
-    if (!exact) throw new PackageServiceError(`source ${sourceId} does not offer ${packageId}`, { code: "usage" });
+    if (!exact) {
+      const disabled = readSourceConfig().sources.find((record) => record.id === sourceId && !record.enabled);
+      throw new PackageServiceError(disabled
+        ? `source ${sourceId} is disabled; enable it with \`roborepo package source enable ${sourceId}\``
+        : `source ${sourceId} does not offer ${packageId}`, { code: "usage" });
+    }
     return exact;
   }
   const group = available.filter((pkg) => pkg.id === packageId);
@@ -467,10 +472,21 @@ function installOne(pkg, lock) {
     const newer = current.resolved !== resolution.resolved ? resolution.resolved : null;
     return { qualifiedName: pkg.qualifiedName, kind: "materialized", revision: current.resolved, changed: false, newerRevision: newer };
   }
-  const folder = adapter.materialize(resolution);
+  // Installed from this source but the copy is gone: restore the recorded revision, never the
+  // listing's newer one.
+  const pinned = current && current.sourceId === resolution.sourceId && current.kind === "materialized"
+    ? { ...resolution, resolved: current.resolved, integrity: current.integrity }
+    : resolution;
+  let folder;
+  try {
+    folder = adapter.materialize(pinned);
+  } catch (err) {
+    if (pinned === resolution) throw err;
+    throw new PackageServiceError(`the installed copy of ${pkg.qualifiedName} is missing and its revision ${current.resolved.slice(0, 12)} is no longer cached; run \`roborepo package update ${pkg.id}\` to review and install the current revision`, { code: "unavailable" });
+  }
   const { record: written, previous } = promoteMaterialized({
     sourceFolder: folder,
-    resolution,
+    resolution: pinned,
     metadata: { collection: pkg.collection || null, url: record.url },
   });
   if (previous?.kind === "materialized" && previous.installedPath !== written.installedPath) deleteMaterializedCopy(previous.installedPath);
@@ -484,6 +500,9 @@ function installOne(pkg, lock) {
 // `expectedRevision` is the revision the caller showed the user; when given, the update moves to
 // exactly that revision, so a branch that moved during the prompt cannot slip in unreviewed.
 export async function updatePackage(reference, { confirmed = false, expectedRevision = null, reapply = null } = {}) {
+  if (expectedRevision !== null && !/^[0-9a-f]{40}$/.test(String(expectedRevision))) {
+    throw new PackageServiceError(`invalid revision: ${expectedRevision}`, { code: "usage" });
+  }
   const lock = readPackageLock();
   const { packageId, sourceId } = parsePackageReference(reference);
   const current = lock.packages[packageId];

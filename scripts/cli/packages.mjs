@@ -181,6 +181,11 @@ function addSkillToPackage(rest) {
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const pkg = catalog.find((entry) => entry.id === pkgId);
   if (!pkg) throw new Error(`unknown package: ${pkgId}`);
+  // A package installed from a Git source is a managed copy pinned to a commit; editing it would
+  // break its integrity hash and be lost on the next update.
+  if (pkg.sourceType === "git") {
+    throw new Error(`package ${pkgId} is installed from ${pkg.sourceId}; copy it into a local folder to change it`);
+  }
   if (packageMode && pkg.origin === "built-in") {
     throw new Error(`package ${pkgId} is built in; app files are not edited in package mode`);
   }
@@ -358,6 +363,9 @@ async function listPackages(rest = []) {
     }
   }
   for (const entry of view.shadowed || []) console.log(`\nnote: ${shadowedMessage(entry)}`);
+  for (const entry of view.unresolved || []) {
+    console.log(`\nunresolved: ${entry.id} (${entry.reason}); it is selected but not applied. Reinstall it with \`roborepo package install <source>/${entry.id}\` or remove it with \`roborepo package remove ${entry.id}\``);
+  }
   const notInstalled = view.packages.filter((row) => !row.installed && row.sourceType === "git");
   if (notInstalled.length === 0) return;
   if (!showAvailable) {

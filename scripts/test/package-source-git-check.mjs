@@ -292,6 +292,17 @@ try {
   const reinstall = ok("package", "install", "deps/dep-root", "--yes");
   assert.match(reinstall, /already installed[\s\S]*newer revision[\s\S]*roborepo package update dep-root/);
   assert.equal(lock()["dep-root"].resolved, depsFirst, "the pin stays until an explicit update");
+  // The installed copy goes missing: the list says so, and reinstalling restores the pinned
+  // commit, not the newer one the listing now shows.
+  fs.rmSync(lock()["dep-root"].installedPath, { recursive: true, force: true });
+  assert.match(ok("package", "list"), /unresolved: dep-root \(installed copy is missing/);
+  ok("package", "install", "deps/dep-root", "--yes");
+  assert.equal(lock()["dep-root"].resolved, depsFirst, "a repair reinstall keeps the pinned commit");
+  assert.ok(fs.existsSync(path.join(lock()["dep-root"].installedPath, "package.config.json")));
+  // A managed copy is not edited in place.
+  const addSkill = cli("package", "dev", "add-skill", "dep-root", "extra-skill");
+  assert.notEqual(addSkill.status, 0);
+  assert.match(addSkill.output, /installed from deps; copy it into a local folder/);
 
   // A cache altered after refresh fails integrity at install and leaves the prior record alone.
   const robo = JSON.parse(fs.readFileSync(path.join(roots.stateRoot, "packages", "catalogs", "robo.json"), "utf8"));
