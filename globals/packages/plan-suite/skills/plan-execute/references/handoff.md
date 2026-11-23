@@ -27,7 +27,7 @@ another); pass it to every command below.
 1. **Merge the base in.** Run `roborepo plans sync-base --base <base> --json`. It fetches the base
    branch's upstream, fast-forwards the local base when that is a pure fast-forward and the checkout holding
    the base has no uncommitted changes, then merges the base into the feature branch, or reports it
-   already up to date. Invoking `/plan-execute` authorizes this merge of the base into the plan's own
+   already up to date, or `landed` when the base already absorbed the branch. Invoking `/plan-execute` authorizes this merge of the base into the plan's own
    feature branch; it needs no further approval. Merging the feature branch into the base stays
    forbidden. When the result's `baseUpdate.fetch` is `failed`, the fetch failed (often a sandbox
    without network access) and the base was compared with the last fetched copy; say so in the

@@ -256,8 +256,8 @@ async function plansLandedCommand(args) {
   if (!result.landed) process.exit(1);
 }
 
-// Exit status: 0 when the branch is up to date or merged, 1 when conflicts pause the merge or a
-// precondition refuses.
+// Exit status: 0 when the branch is up to date, merged, or already landed in base, 1 when conflicts
+// pause the merge or a precondition refuses.
 async function plansSyncBaseCommand(args) {
   const { flags } = parseArgs(args, ["base"]);
   let result;
@@ -273,6 +273,7 @@ async function plansSyncBaseCommand(args) {
     if (update?.moved) console.log(`${result.base}: fast-forwarded to ${update.upstream} at ${update.to.slice(0, 12)}`);
     if (update?.fetch === "failed") console.log(`${result.base}: the fetch failed, so it was compared with ${update.upstream} as of the last fetch`);
     console.log(`${result.branch}: ${result.state}${result.commit ? ` at ${result.commit.slice(0, 12)}` : ""}`);
+    if (result.state === "landed") console.log(`${result.base} already absorbed ${result.branch}${result.absorbingCommit ? ` at ${result.absorbingCommit.slice(0, 12)}` : ""}, so nothing was merged.`);
     for (const conflict of result.conflicts) console.log(`conflict: ${conflict}`);
     if (result.state === "conflicts") console.log("Resolve the conflicts, stage them, run the checks, then run `roborepo plans sync-base --continue`.");
   }
