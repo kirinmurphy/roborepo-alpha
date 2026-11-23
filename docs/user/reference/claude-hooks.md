@@ -206,7 +206,8 @@ an unset `GH_CONFIG_DIR` is accepted. If the hook inherits `GH_TOKEN`, `GITHUB_T
 `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or `GH_HOST`, `gh` acts as that token's owner rather
 than the bot, so `gh api` stays denied. This works only when the hook can see the variable: a Claude
 hook shares the session's environment, but a Codex hook does not see a variable exported only in your
-shell profile, so keep such tokens out of Codex's shells (`shell_environment_policy`). A command that assigns, exports, or unsets
+shell profile. The identity package empties `GH_TOKEN` and `GITHUB_TOKEN` in agent shells (see the list
+below); keep the enterprise tokens and `GH_HOST` out of Codex's shells yourself. A command that assigns, exports, or unsets
 `GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or
 `GH_HOST` anywhere in it (`=` or `+=`), or runs `gh` through `env`, keeps `gh api` denied. So does a
 `gh api` call whose command names a merge: a `pulls/<n>/merge`, `merges`, or `merge-upstream` path,
