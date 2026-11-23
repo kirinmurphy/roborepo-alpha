@@ -197,7 +197,7 @@ a child process, a benchmark, a manual smoke that binds a port — add it to `EX
 ## Temporary Files
 
 `scripts/test/run-checks.mjs` and `scripts/test/test-cli.sh` give each run its own temp folder,
-`roborepo-tests/run-<pid>-<time>/` under the temp root, and set `TMPDIR`, `TEMP`, and `TMP` to it
+`roborepo-tests-<uid>/run-<pid>-<time>/` under the temp root (one private folder per account), and set `TMPDIR`, `TEMP`, and `TMP` to it
 for everything the run starts. The runner removes the folder when it ends, so a suite that calls
 `mkdtemp` and never cleans up leaves nothing behind. At start a run also removes the folders of
 earlier runs whose process no longer exists, which catches a crashed or killed run; a folder whose

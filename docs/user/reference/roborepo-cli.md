@@ -256,9 +256,13 @@ Agents write temporary files that are not throwaway files in Claude here: throwa
 notes handed between sessions, a long investigation's intermediate results. Both harness sandboxes
 let shell commands write this folder. Each call removes scratch folders unchanged for 14 days, or
 the oldest ones once the store passes 500 MB, but never the folder it prints and never a folder
-changed in the last hour, which another session may still be writing. A folder's age is
-the newest change anywhere inside it. The store appears in `roborepo maintenance stores` as
-`scratch`.
+changed in the last hour, which another session may still be writing; the newest folder is always
+kept. A folder's age is the newest change anywhere inside it. The store appears in
+`roborepo maintenance stores` as `scratch`.
+
+When the printed folder is outside what `roborepo delivery pr-body` reads (an overridden `HOME` or
+`ROBOREPO_STATE_ROOT` moved it), the command also prints a note on stderr: write a pull request body
+in the system temp folder instead.
 
 ## Worktree preservation and recovery
 
