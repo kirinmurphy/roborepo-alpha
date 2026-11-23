@@ -182,7 +182,9 @@ folder. Uninstall removes `package-sources.json` and `packages/`.
   files that are not installed.
 - **Trusted catalog:** `manifests/inventory/trusted-package-sources.json`,
   `{ schemaVersion: 1, entries: [{ repo, commit, description }] }`. It ships empty until curation
-  is decided. `commit` must be a full SHA.
+  is decided. `commit` must be a full SHA. A trusted source whose repo leaves the catalog stops refreshing
+  (exit 5) instead of moving to the unreviewed branch head; remove it and add it again as
+  unverified.
 
 ## The package service and CLI
 

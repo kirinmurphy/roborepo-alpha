@@ -360,8 +360,17 @@ export function readGitCatalog(sourceId) {
 // Fetch `revision` (default: the trusted commit for a trusted source, else the default branch),
 // build its packages into the cache, and replace the source's catalog. The previous catalog stays
 // in place until the new one is complete, so a failed refresh changes nothing.
+// A trusted source whose repo has left the trusted catalog is refused rather than moved to the
+// branch head, which would put unreviewed content under a "Trusted" label.
 export function refreshGitSource(record, { revision = null, validate = null } = {}) {
-  const target = revision || (record.trust === "trusted" ? trustedEntryFor(record.url)?.commit : null) || resolveHeadCommit(record.url);
+  let target = revision;
+  if (!target && record.trust === "trusted") {
+    target = trustedEntryFor(record.url)?.commit || null;
+    if (!target) {
+      throw new PackageSourceError(`${record.display || record.url} is no longer in the trusted catalog; remove the source and add it again to use it as unverified`, { code: "unavailable" });
+    }
+  }
+  target ||= resolveHeadCommit(record.url);
   const current = readGitCatalog(record.id);
   if (current?.revision === target && fs.existsSync(revisionCacheDir(record.id, target))) {
     return { catalog: current, changed: false };

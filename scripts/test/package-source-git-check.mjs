@@ -206,6 +206,15 @@ try {
   assert.equal(lock()["trusted-skill"].resolved, reviewed);
   const trustedRow = json("package", "list").packages.find((row) => row.id === "trusted-skill");
   assert.match(trustedRow.sourceBadge, /· Trusted$/);
+  // The repo leaves the trusted catalog: refresh refuses instead of moving to the unreviewed head.
+  const trustedCatalogFile = path.join(roots.appRoot, "manifests", "inventory", "trusted-package-sources.json");
+  const savedCatalog = fs.readFileSync(trustedCatalogFile, "utf8");
+  fs.writeFileSync(trustedCatalogFile, JSON.stringify({ schemaVersion: 1, entries: [] }));
+  const dropped = cli("package", "source", "refresh", "vetted");
+  assert.equal(dropped.status, 5, `${dropped.output}`);
+  assert.match(dropped.output, /no longer in the trusted catalog/);
+  assert.equal(lock()["trusted-skill"].resolved, reviewed, "the installed pin stays on the reviewed commit");
+  fs.writeFileSync(trustedCatalogFile, savedCatalog);
 
   // ---------------------------------------------------------------------------------------------
   // Same ID as a built-in package: a bare reference is ambiguous; a qualified one is the choice.

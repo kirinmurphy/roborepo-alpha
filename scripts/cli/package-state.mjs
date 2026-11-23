@@ -16,8 +16,7 @@
 // so every recorded package can say where it came from. Package IDs stay bare in the lists; the
 // lock (package-lock.mjs) holds the full resolution behind each source reference.
 import fs from "node:fs";
-import path from "node:path";
-import { appliedPackagesPath, enabledPackagesPath } from "./state-paths.mjs";
+import { appliedPackagesPath, enabledPackagesPath, writeJsonStateAtomic } from "./state-paths.mjs";
 import { recordConfigWrite } from "./write-log.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { dropRequiredIds, requiredClosure } from "./package-graph.mjs";
@@ -58,8 +57,7 @@ export function setPackageApplied(id, applied, pkg = null) {
 }
 
 function writeAppliedPackageIds(ids, reason, sources = readAppliedRecord().sources || {}) {
-  fs.mkdirSync(path.dirname(appliedPackagesPath), { recursive: true });
-  fs.writeFileSync(appliedPackagesPath, JSON.stringify({ packages: ids, sources: pickSources(sources, ids) }, null, 2) + "\n");
+  writeJsonStateAtomic(appliedPackagesPath, { packages: ids, sources: pickSources(sources, ids) });
   recordConfigWrite(appliedPackagesPath, reason);
 }
 
@@ -148,17 +146,13 @@ export function packageSelectionStates(catalog, registry = readEnabledPackagesRe
 function writeRegistry(ids, disabledIds, detail = null, sources = readEnabledPackagesRegistry().sources || {}, schemaVersion = REGISTRY_SCHEMA_VERSION) {
   const packages = [...new Set(ids)];
   const disabled = [...new Set(disabledIds)];
-  fs.mkdirSync(path.dirname(enabledPackagesPath), { recursive: true });
-  fs.writeFileSync(enabledPackagesPath, JSON.stringify(
-    {
-      schemaVersion,
-      packages,
-      disabled,
-      sources: pickSources(sources, [...packages, ...disabled]),
-      updatedAt: new Date().toISOString(),
-    },
-    null, 2,
-  ) + "\n");
+  writeJsonStateAtomic(enabledPackagesPath, {
+    schemaVersion,
+    packages,
+    disabled,
+    sources: pickSources(sources, [...packages, ...disabled]),
+    updatedAt: new Date().toISOString(),
+  });
   recordConfigWrite(enabledPackagesPath, detail);
 }
 
