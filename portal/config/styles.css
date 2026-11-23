@@ -906,7 +906,7 @@ dialog#config-modal .modal-path {
   width: fit-content;
 }
 
-/* A row's Package Dependencies link and its popover: Required, then Recommended, each entry a
+/* A row's Dependencies button and its popover: Included, then Recommended, each entry a
  * button opening that package's detail. */
 .package-deps-trigger .menu-button-trigger {
   display: inline-flex;
@@ -988,6 +988,23 @@ dialog#config-modal .modal-path {
   padding: 0 12px;
   color: var(--desc-dim);
   font-size: var(--text-2xs);
+}
+
+/* Disable-with-dependents dialog: the packages that include the one being turned off. */
+.disable-dependents-body {
+  padding: 16px 20px;
+}
+.disable-dependents-body p {
+  margin: 0;
+}
+.disable-dependents-list {
+  margin: 8px 0 12px;
+  padding-left: 20px;
+}
+.disable-dependents-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* Post-enable recommendations dialog: the page's own rows between the head and the footer. */

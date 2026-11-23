@@ -1,7 +1,7 @@
 // <config-item></config-item> — one row in a standard config section (Token Optimization,
 // Commands, Code Conventions, Chat-Time Output), or in the post-enable recommendations dialog. A
 // row's required packages travel with its inspect click, so the source popup can list them, and a
-// row with required or recommended packages gets a Package Dependencies popover listing both. Set
+// row with required or recommended packages gets a Dependencies popover listing both. Set
 // .item (the behaviorView item) and .actions ({onInspect, onToggle, onDependency, offersOnEnable})
 // as properties right after creation. Builds itself from the tpl-config-item template, owns
 // conditional listener wiring (inspect-click, toggle-swap) internally, embeds <config-toggle> in
@@ -112,7 +112,7 @@ class ConfigItemElement extends HTMLElement {
       // createElement, not a template clone: the element must upgrade before panelContent is set.
       const menu = document.createElement("portal-menu-button");
       menu.className = "package-deps-trigger";
-      menu.label = "Package Dependencies";
+      menu.label = "Dependencies";
       menu.panelContent = packageDependencies(item, onDependency, { offersOnEnable });
       dependenciesSlot.replaceWith(menu);
     } else {

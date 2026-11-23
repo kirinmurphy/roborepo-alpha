@@ -379,7 +379,7 @@ export function requiredReference(ref, onSelect) {
   return button;
 }
 
-// A row's Package Dependencies popover: its required packages, then its recommended ones, each
+// A row's Dependencies popover: its required packages, then its recommended ones, each
 // with whether it is on. Selecting one hands onSelect a reference carrying its own required
 // references, so its detail can list them too. A required reference names its requirements by id
 // (requiredIds) within the row's closure; a recommended one already carries its own.

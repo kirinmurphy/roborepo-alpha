@@ -78,13 +78,32 @@
         <button type="button" data-btn="secondary" id="recommendations-done">No Thanks</button>
       </div>
     </dialog>
+    <!-- Shown when a package the user turns off is included in packages they turned on: it names
+         them and offers to turn them off too. Leave them enabled changes nothing. -->
+    <dialog id="disable-dependents-modal" class="portal-dialog" aria-labelledby="disable-dependents-title" data-dialog-size="sm">
+      <div class="modal-head">
+        <div class="modal-head-main">
+          <span class="modal-title" id="disable-dependents-title"></span>
+          <portal-close-button id="disable-dependents-close"></portal-close-button>
+        </div>
+      </div>
+      <div class="modal-body disable-dependents-body">
+        <p id="disable-dependents-lead"></p>
+        <ul class="disable-dependents-list" id="disable-dependents-list"></ul>
+        <p>Would you like to disable all related packages as well?</p>
+      </div>
+      <div class="modal-footer disable-dependents-footer">
+        <button type="button" data-btn="secondary" id="disable-dependents-cancel">Leave them enabled</button>
+        <button type="button" data-btn="danger" id="disable-dependents-confirm">Disable All Packages</button>
+      </div>
+    </dialog>
     <template id="tpl-required-reference">
       <button type="button" data-btn="text" class="modal-requires-item"></button>
     </template>
     <template id="tpl-required-reference-text">
       <span class="modal-requires-item"></span>
     </template>
-    <!-- A row's Package Dependencies popover: what it requires and what it recommends, each entry
+    <!-- A row's Dependencies popover: what it requires and what it recommends, each entry
          opening that package's detail. The note says when recommendations will be offered. -->
     <template id="tpl-package-dependencies">
       <div class="package-deps">

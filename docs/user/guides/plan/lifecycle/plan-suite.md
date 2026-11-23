@@ -457,7 +457,7 @@ Suite commands load helper skills, each from its own package. The suite declares
 `implementation-review` holds the review rubric that `/plan-execute`, `/plan-review`, `/plan-close`,
 and `/session-close` share. It has no toggle or command of its own: the Agents page lists it under
 **Included Packages** when you open the Development Planning Lifecycle or `/session-close` card's
-Package Dependencies.
+Dependencies.
 
 The suite recommends nothing beyond what it includes. A command loads an included skill when the
 work calls for it, for example `feature-verification` only when delivered behavior needs a

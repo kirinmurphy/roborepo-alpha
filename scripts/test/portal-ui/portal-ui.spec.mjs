@@ -156,10 +156,10 @@ test.describe("Agents page", () => {
 
     await expect(page.getByText("Recommended dependencies")).toHaveCount(0);
 
-    // A row's Package Dependencies popover lists what it requires and what it recommends, each
+    // A row's Dependencies popover lists what it requires and what it recommends, each
     // with its state; while the row is off, a note says the recommendations are offered on enable.
     const sessionCloseRow = section.locator("config-item").filter({ has: page.locator(".item-label", { hasText: /^\/session-close$/ }) });
-    await sessionCloseRow.getByRole("button", { name: "Package Dependencies" }).click();
+    await sessionCloseRow.getByRole("button", { name: "Dependencies" }).click();
     const popover = sessionCloseRow.locator(".package-deps");
     await expect(popover.locator(".package-deps-head")).toHaveText(["Included Packages", "Recommended Packages"]);
     await expect(popover.locator("[data-slot=requires] .package-deps-label")).toHaveText([chained.label, dependency.label]);
@@ -324,6 +324,52 @@ test.describe("Agents page", () => {
     expect(posts).toHaveLength(3);
   });
 
+  test("turning off a package that selected packages include asks before turning them off too", async ({ page }) => {
+    const snapshot = await (await page.request.get("/api/config")).json();
+    const target = snapshot.behaviorView.flatMap((section) => section.items || [])
+      .find((item) => item.toggle === "package" && item.id !== "telemetry");
+    expect(target, "fixture needs a package row").toBeTruthy();
+    target.active = true;
+    await page.route("**/api/config", (route) => route.fulfill({ json: snapshot }));
+    const posts = [];
+    await page.route("**/api/config/packages", (route) => {
+      const change = route.request().postDataJSON();
+      posts.push(change);
+      if (change.cascade) {
+        return route.fulfill({ json: { ok: true, message: `disabled: ${change.id}`, outcomes: [], changedPackageIds: [change.id], config: snapshot } });
+      }
+      route.fulfill({ status: 409, json: {
+        ok: false, config: snapshot, includedBy: [{ id: "parent-one", label: "Parent One" }, { id: "parent-two", label: "Parent Two" }],
+        error: { code: "INCLUDED_IN_SELECTED", message: "cannot disable", details: { includedBy: [{ id: "parent-one", label: "Parent One" }, { id: "parent-two", label: "Parent Two" }] } },
+      } });
+    });
+    await page.goto("/agents");
+    const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: target.label }) }).first();
+    const dialog = page.locator("dialog#disable-dependents-modal");
+
+    // Leave them enabled: nothing else is sent, and the switch is back on with no error shown.
+    await row.getByRole("checkbox").dispatchEvent("click");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator("#disable-dependents-lead")).toHaveText(`The following other packages depend on ${target.label}:`);
+    await expect(dialog.locator("#disable-dependents-list li")).toHaveText(["Parent One", "Parent Two"]);
+    await expect(dialog.getByText("Would you like to disable all related packages as well?")).toBeVisible();
+    await dialog.getByRole("button", { name: "Leave them enabled" }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(row.getByRole("checkbox")).toBeChecked();
+    await expect(row.locator(".item-status")).toHaveText("");
+    expect(posts).toEqual([{ id: target.id, enabled: false }]);
+
+    // Disable All Packages: the same disable again, with cascade.
+    await row.getByRole("checkbox").dispatchEvent("click");
+    await dialog.getByRole("button", { name: "Disable All Packages" }).click();
+    await expect.poll(() => posts).toEqual([
+      { id: target.id, enabled: false },
+      { id: target.id, enabled: false },
+      { id: target.id, enabled: false, cascade: true },
+    ]);
+    await expect(dialog).not.toBeVisible();
+  });
+
   test("an enable whose recommendations have no row on the page opens no dialog", async ({ page }) => {
     const snapshot = await (await page.request.get("/api/config")).json();
     const target = snapshot.behaviorView.flatMap((section) => section.items || [])
@@ -357,7 +403,7 @@ test.describe("Agents page", () => {
     const [parent, first, child] = rows;
     expect(child, "fixture needs three disabled packages").toBeTruthy();
     const offers = new Map([[parent.id, [first]], [first.id, [child]]]);
-    // `first` recommends `child`, so its row has a Package Dependencies popover.
+    // `first` recommends `child`, so its row has a Dependencies popover.
     const firstRow = snapshot.behaviorView.flatMap((section) => section.items || []).find((item) => item.id === first.id);
     firstRow.recommends = [{ id: child.id, label: child.label, active: false, inspect: null, builtIn: true, requires: [] }];
     const posts = [];
@@ -380,7 +426,7 @@ test.describe("Agents page", () => {
     // Still the parent's offer: the child is never offered from inside the dialog.
     await expect(dialog.locator("config-item .item-label")).toHaveText([first.label]);
     // So the row's popover there does not promise an offer on enable.
-    await dialog.getByRole("button", { name: "Package Dependencies" }).click();
+    await dialog.getByRole("button", { name: "Dependencies" }).click();
     await expect(dialog.locator(".package-deps [data-slot=recommends] .package-deps-label")).toHaveText([child.label]);
     await expect(dialog.locator(".package-deps [data-slot=note]")).toBeHidden();
   });

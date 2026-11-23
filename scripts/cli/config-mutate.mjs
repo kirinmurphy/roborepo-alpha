@@ -170,13 +170,15 @@ function pruneSkillViews(dir, allowedNames = [], dryRun = false) {
 
 // --------------------------------------------------------------------------- packages
 
-export async function mutatePackage(id, enabled, { dryRun = false } = {}) {
+// `cascade` disables the selected packages that include `id` along with it; without it, a disable
+// they block fails with `includedBy` naming them.
+export async function mutatePackage(id, enabled, { dryRun = false, cascade = false } = {}) {
   if (!findPackage(id)) {
     return { ok: false, message: unavailablePackageMessage(id) };
   }
   const changed = new Set();
   try {
-    const flags = dryRun ? ["--dry-run"] : [];
+    const flags = [...(dryRun ? ["--dry-run"] : []), ...(cascade && !enabled ? ["--cascade"] : [])];
     const result = enabled
       ? await enablePackage([id, ...flags], changed)
       : await disablePackage([id, ...flags], changed);
@@ -189,7 +191,15 @@ export async function mutatePackage(id, enabled, { dryRun = false } = {}) {
       changedPackageIds: [...changed],
     };
   } catch (err) {
-    return { ok: false, message: String(err?.message || err), outcomes: [], recommendations: [], keptOnBy: [], changedPackageIds: [...changed] };
+    return {
+      ok: false,
+      message: String(err?.message || err),
+      outcomes: [],
+      recommendations: [],
+      keptOnBy: [],
+      includedBy: err?.includedBy || [],
+      changedPackageIds: [...changed],
+    };
   }
 }
 

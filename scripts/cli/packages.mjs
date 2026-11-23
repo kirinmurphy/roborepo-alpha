@@ -426,11 +426,14 @@ function installMcpPreset(presetId) {
 // Typed failure for a package mutation that cannot start: a usage error, an unknown package, a
 // direct enable or disable of a dependency-only package, or a disable the dependency rules
 // refuse. Nothing has changed when it is thrown. The terminal commands print the message and exit with `exitCode`; the portal returns it.
+// `includedBy` lists the selected packages that keep a package on when a disable is refused for
+// that reason, so the portal can offer to disable them too.
 export class PackageMutationError extends Error {
-  constructor(message, { exitCode = 2 } = {}) {
+  constructor(message, { exitCode = 2, includedBy = [] } = {}) {
     super(message);
     this.name = "PackageMutationError";
     this.exitCode = exitCode;
+    this.includedBy = includedBy;
   }
 }
 
@@ -753,6 +756,7 @@ export async function disablePackage(rest, changed = new Set()) {
     throw new PackageMutationError(
       `cannot disable ${pkg.id}; it is on because selected packages include it: ${keepers.join(", ")}\n` +
       `rerun with --cascade to disable them too`,
+      { includedBy: keepers.map((id) => ({ id, label: catalog.find((p) => p.id === id)?.label || id })) },
     );
   }
   if (!dryRun) assertHarnessWriteAllowed();

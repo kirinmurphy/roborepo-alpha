@@ -91,6 +91,9 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 - Enabling it turns on each package it includes (dependencies first) and then its own resources.
   Only the package you turned on is recorded; an included package stays on while any package you
   turned on still includes it, and turns off with the last one.
+- Turning off a package that only stays on because packages you turned on include it opens a
+  dialog listing those packages. **Leave them enabled** changes nothing; **Disable All Packages**
+  turns them off too, as `roborepo package disable <id> --cascade` does.
 - A **composite** package lists only `requires`, so it bundles other packages under one toggle.
 - A composite reports itself enabled only when every included package, and any resources of its
   own, are enabled.
@@ -105,7 +108,7 @@ A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 - Nesting is flattened. A package's included packages are everything it requires, directly or
   through another included package. The Config page and terminal call these **included**; the
   manifest field is `requires`. Its recommendations are its own plus those of every package it
-  requires, less anything it requires; that one list is what its Package Dependencies show and
+  requires, less anything it requires; that one list is what its Dependencies show and
   what enabling it offers. A recommended package's own requirements come with it when you turn it
   on, and its own recommendations are not offered on the parent's behalf.
 
@@ -130,7 +133,7 @@ that package's source, and **Back** returns to the package that includes it. A p
 source of its own opens a contents view that lists only its included packages; if all of them are hidden, its
 name opens nothing.
 
-A row with included or recommended packages shows a **Package Dependencies** button. It opens
+A row with included or recommended packages shows a **Dependencies** button. It opens
 **Included Packages** and **Recommended Packages** lists, each package marked on or off; clicking one opens
 that package's detail. While the package is off and some of its recommendations are too, a note
 says you will be offered them when you enable it. `roborepo config status` prints the same lists

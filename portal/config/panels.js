@@ -213,6 +213,47 @@ export function createConfigModal() {
   return { openSource, openSnapshot, showContents, openRepositorySource, reset };
 }
 
+// The disable-with-dependents dialog: a package being turned off is included in packages the user
+// turned on. `confirm` resolves true when they choose to disable those too, false otherwise
+// (Leave them enabled, close, Escape, or the backdrop).
+export function createDisableDependentsDialog() {
+  const dialogEl = document.getElementById("disable-dependents-modal");
+  const titleEl = document.getElementById("disable-dependents-title");
+  const leadEl = document.getElementById("disable-dependents-lead");
+  const listEl = document.getElementById("disable-dependents-list");
+  let settle = null;
+
+  function finish(confirmed) {
+    const resolve = settle;
+    settle = null;
+    if (dialogEl.open) dialogEl.close();
+    resolve?.(confirmed);
+  }
+
+  document.getElementById("disable-dependents-close").addEventListener("click", () => finish(false));
+  document.getElementById("disable-dependents-cancel").addEventListener("click", () => finish(false));
+  document.getElementById("disable-dependents-confirm").addEventListener("click", () => finish(true));
+  dialogEl.addEventListener("cancel", () => finish(false));
+  portalWireBackdropClose(dialogEl, () => finish(false));
+
+  function confirm(packageLabel, includedBy) {
+    finish(false);
+    titleEl.textContent = `Disable ${packageLabel}`;
+    leadEl.textContent = `The following other packages depend on ${packageLabel}:`;
+    listEl.replaceChildren(...includedBy.map((pkg) => {
+      const li = document.createElement("li");
+      li.textContent = pkg.label;
+      return li;
+    }));
+    return new Promise((resolve) => {
+      settle = resolve;
+      dialogEl.showModal();
+    });
+  }
+
+  return { confirm };
+}
+
 // The recommendations dialog: after an enable that left some recommended packages off, it lists
 // them as the page's own rows. Each switch turns its package on or off at once through the page's
 // toggle, so the dialog itself enables nothing. The footer reads "No Thanks" until one of them is

@@ -113,7 +113,27 @@ try {
   assert.doesNotMatch(enabledCloser, /recommended \(not enabled\): .*deps-hidden/,
     "hidden recommendations stay out of the enable result shown by the terminal and portal dialog");
 
-  console.log("ok: config dependencies (row references, recommendations, terminal print)");
+  // The portal's toggle: a disable that selected packages block names them, and `cascade` turns
+  // them off too.
+  const mutate = (id, options) => JSON.parse(run("-e", `
+    import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config-mutate.mjs"))}).then(async (m) => {
+      const result = await m.mutatePackage(${JSON.stringify(id)}, false, ${JSON.stringify(options)});
+      process.stdout.write("\\nRESULT" + JSON.stringify(result));
+    });
+  `).split("\nRESULT").pop());
+  const refused = mutate("deps-leaf", {});
+  assert.equal(refused.ok, false, "a disable that selected packages block is refused");
+  assert.deepEqual(refused.includedBy, [
+    { id: "deps-planner", label: "Deps deps-planner" },
+    { id: "deps-closer", label: "Deps deps-closer" },
+  ], "the refusal names the selected packages that include it");
+  const cascaded = mutate("deps-leaf", { cascade: true });
+  assert.equal(cascaded.ok, true, `a cascading disable succeeds: ${cascaded.message}`);
+  const after = JSON.parse(fs.readFileSync(path.join(tmp, ".roborepo", "enabled-packages.json"), "utf8"));
+  assert.ok(!after.packages.includes("deps-planner") && !after.packages.includes("deps-closer"),
+    "the packages that included it are turned off with it");
+
+  console.log("ok: config dependencies (row references, recommendations, terminal print, cascading disable)");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

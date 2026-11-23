@@ -12,7 +12,7 @@ import { portalSetUpdatedAt, portalHideLoading } from "/portal/shared/api.js";
 import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
-import { createConfigModal, createRecommendationsDialog } from "./panels.js";
+import { createConfigModal, createDisableDependentsDialog, createRecommendationsDialog } from "./panels.js";
 import { snapshotChanged, inspectChipSpecs, contentsEntryChipSpec, setBulkInFlight, isBulkInFlight } from "./state.js";
 import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/repository-scope.js";
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
@@ -20,6 +20,7 @@ import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js"
 
 const modal = createConfigModal();
 const recommendationsDialog = createRecommendationsDialog();
+const disableDependentsDialog = createDisableDependentsDialog();
 // Packages whose on/off control lives on another page. Settings owns token telemetry, so a second
 // toggle here would only duplicate it; the terminal `roborepo config` view still lists it.
 const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry"]);
@@ -85,10 +86,25 @@ async function applyBucket(payload, errSlot) {
 // `offer: false` is for switches inside the recommendations dialog: a recommendation is offered
 // once, when its parent is turned on, so turning one on there opens no further offer.
 async function handleToggle(item, enabled, { offer = true } = {}) {
-  const data = await api.toggleItem(item.toggle, item.id, enabled);
+  let data;
+  try {
+    data = await api.toggleItem(item.toggle, item.id, enabled);
+  } catch (err) {
+    if (enabled || err.code !== "INCLUDED_IN_SELECTED") throw err;
+    data = await disableWithDependents(item, err.details?.includedBy || []);
+  }
   if (data.config) applySnapshot(data.config); // re-render from the authoritative post-mutation snapshot
   void offerHookReview(data.hookHarnesses);
   if (offer && enabled && data.recommendations?.length) await offerRecommendations(item, data.recommendations);
+}
+
+// Turning off a package that packages the user turned on include asks whether to turn those off
+// too. Declining throws an error with no message: the switch flips back and shows nothing, since
+// nothing changed.
+async function disableWithDependents(item, includedBy) {
+  const confirmed = await disableDependentsDialog.confirm(item.label, includedBy);
+  if (!confirmed) throw new Error("");
+  return api.toggleItem(item.toggle, item.id, false, { cascade: true });
 }
 
 // An enable that left recommended packages off lists them as ordinary rows, whose switches apply
@@ -119,7 +135,7 @@ function packageRow(id) {
   return null;
 }
 
-// A package in a row's Package Dependencies opens its source, listing its own requirements.
+// A package in a row's Dependencies opens its source, listing its own requirements.
 function openDependency(ref) {
   return openSourceModal(ref.inspect, ref.contextCost, { builtIn: ref.builtIn, requires: ref.requires || [] });
 }

@@ -88,7 +88,7 @@ not relationships.
 Nesting is flattened for presentation and offers, never in manifests. A package's required list is
 its `requires` closure (`requiredClosure`); its recommended list is its own `recommends` plus those
 of every package it requires, less anything it requires (`recommendedClosure`). The Config page's
-Package Dependencies and the enable-time offer both read the flattened lists. A recommended
+Dependencies and the enable-time offer both read the flattened lists. A recommended
 package's requirements come with it when it is turned on; its own recommendations are not offered
 on the parent's behalf. Manifests and `## Paired Skills` rows still declare only direct edges.
 

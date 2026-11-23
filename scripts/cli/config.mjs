@@ -336,7 +336,7 @@ export function buildBehaviorView(snap) {
   });
   for (const item of snap.packages) {
     // Dependency-only and hidden packages get no row of their own; a dependency-only package is
-    // listed under Requires in the Package Dependencies of each package that requires it.
+    // listed under Included Packages in the Dependencies of each package that requires it.
     if ((item.presentation?.visibility || "catalog") !== "catalog") continue;
     const section = byCategory.get(item.presentation?.category);
     if (!section) continue;
@@ -549,7 +549,7 @@ function visibleRequiredPackages(item, packages) {
     .filter((pkg) => pkg && pkg.presentation?.visibility !== "hidden");
 }
 
-// Each row's recommended packages, as references its Package Dependencies popover lists: its own
+// Each row's recommended packages, as references its Dependencies popover lists: its own
 // and those of the packages it requires, flattened into one list (recommendedClosure), minus
 // hidden or non-selectable ones, which the enable-time offer never names either. Each reference
 // carries its own required references, so opening it shows what comes with it.
