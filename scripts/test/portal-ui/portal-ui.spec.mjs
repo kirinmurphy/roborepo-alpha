@@ -2114,7 +2114,10 @@ test.describe("repository-first portal Home", () => {
     await expect(trigger).toHaveAttribute("aria-expanded", "true");
     await expect(panel.locator("a:visible")).toHaveText(NAV_SECONDARY);
     // Outside click and Escape both close it; Escape hands focus back to the trigger.
-    await page.locator("main").click({ position: { x: 5, y: 5 } });
+    // The viewport's bottom-left corner: main's own top-left can sit under the sticky header, which
+    // then takes the click and the test times out.
+    const viewport = page.viewportSize();
+    await page.mouse.click(5, viewport.height - 5);
     await expect(panel).toBeHidden();
     await trigger.click();
     await page.keyboard.press("Escape");
