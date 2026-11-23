@@ -122,7 +122,7 @@ package's source, and **Back** returns to the package that requires it. A packag
 of its own opens a contents view that lists only its requirements; if all of them are hidden, its
 name opens nothing.
 
-A row with required or recommended packages shows a **Package Dependencies** link. It opens a
+A row with required or recommended packages shows a **Package Dependencies** button. It opens a
 list of what the package requires and what it recommends, each marked on or off; clicking one opens
 that package's detail. While the package is off and some of its recommendations are too, a note
 says you will be offered them when you enable it. `roborepo config status` prints the same lists

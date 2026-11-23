@@ -338,8 +338,12 @@ test.describe("Agents page", () => {
     });
     await page.goto("/agents");
     const row = page.locator("[data-slot=items] config-item").filter({ has: page.locator(".item-label", { hasText: target.label }) }).first();
+    // Wait for the page to read the enable's response, which is when a dialog would open.
+    const answered = page.waitForResponse("**/api/config/packages");
     await row.getByRole("checkbox").dispatchEvent("click");
-    await expect.poll(() => posts).toEqual([{ id: target.id, enabled: true }]);
+    await answered;
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+    expect(posts).toEqual([{ id: target.id, enabled: true }]);
     await expect(page.locator("dialog#recommendations-modal")).not.toBeVisible();
   });
 
