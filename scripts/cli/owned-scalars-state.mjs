@@ -11,8 +11,10 @@ function scalarKey(harness, keyPath) {
   return [harness, ...keyPath].join(".");
 }
 
+// A fresh copy each time: callers add records to what this returns, and a shared fallback would
+// carry those records into later reads in the same process after the state file is gone.
 function readState() {
-  return readJsonState(ownedScalarsStatePath, EMPTY_STATE);
+  return readJsonState(ownedScalarsStatePath, structuredClone(EMPTY_STATE));
 }
 
 // Record what the value looked like BEFORE roborepo set it. `priorValue` is undefined when the key

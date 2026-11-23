@@ -115,18 +115,28 @@ try {
     const report = jsonReport({ [name]: "ghp_userexported0000" });
     assert.deepEqual([report.state, report.botLogin], ["healthy", BOT], `an exported ${name} is ignored for the bot's checks`);
   }
-  // When your own sign-in cannot be read, the account comparison is reported as not done.
+  // When your own sign-in or the branch protection cannot be read, the result is not confirmed:
+  // never healthy, and doctor hints with the fix.
   start({ failure: "user-unauthorized" });
   let partial = jsonReport();
-  assert.ok(partial.problems.some((item) => item.id === "account-unchecked" && item.severity === "warn"), "an unread user account is reported");
-  assert.ok(partial.problems.some((item) => item.id === "protection-unchecked" && item.severity === "warn"), "unread branch protection is reported");
-  assert.equal(partial.state, "healthy", "checks that could not run are advice, not problems");
+  assert.ok(partial.problems.some((item) => item.id === "account-unchecked" && item.severity === "unchecked"), "an unread user account is reported");
+  assert.ok(partial.problems.some((item) => item.id === "protection-unchecked" && item.severity === "unchecked"), "unread branch protection is reported");
+  assert.equal(partial.state, "unavailable", "a result with checks that could not run is not healthy");
+  expectLine(1, /not fully checked: Your own GitHub sign-in could not be read.* — run gh auth status/);
+  const partialStatus = node("scripts/cli/main.mjs", ["github", "status"]);
+  assert.equal(partialStatus.status, 0, "an unconfirmed result is not a problem exit");
+  assert.match(partialStatus.stdout, /could not be fully checked for example\/project:\n {2}Not checked: Your own GitHub sign-in/);
   // A problem already found survives a later read failing.
   start({ enabled: false, failure: "repo-forbidden" });
   partial = jsonReport();
   assert.equal(partial.state, "problem", "a known problem keeps the state a problem");
   assert.ok(partial.problems.some((item) => item.id === "package-off"));
   assert.ok(partial.problems.some((item) => item.id === "check-incomplete" && /could not run/.test(item.message)));
+  // With no problem known, the same failed read leaves the result unconfirmed.
+  start({ failure: "repo-forbidden" });
+  partial = jsonReport();
+  assert.equal(partial.state, "unavailable", "a failed read with nothing else wrong is not healthy");
+  assert.match(partial.reason, /Resource not accessible/);
   console.log("✓ Status ignores exported tokens, flags any extra scope or a fine-grained token, and reports checks it could not run.");
   start({ rulesets: [] });
   expectLine(1, /Branch protection for this repo is missing.* — a repo admin should run roborepo protect/);

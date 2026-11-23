@@ -168,7 +168,8 @@ async function guidedSetup({ input, open, io, cwd }) {
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });
   const blocking = report.problems.filter((entry) => entry.severity === "problem");
   for (const entry of report.problems.filter((item) => item.severity === "warn")) io.log(`Note: ${entry.message}`);
-  if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. The package stays off.`);
+  // Setup confirms nothing it could not check: an unread account or branch protection stops here.
+  if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. Setup does not turn the package on until every check runs.`);
   if (blocking.length > 0) {
     io.error("The bot is not ready, so agents keep acting as you:");
     for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
@@ -184,7 +185,12 @@ async function guidedSetup({ input, open, io, cwd }) {
     const { enablePackage, PackageMutationError } = await import("./packages.mjs");
     try {
       const result = await enablePackage([AGENT_IDENTITY_PACKAGE_ID]);
-      if (!result.ok) stop("The package did not apply cleanly; see the messages above.");
+      // `ok` only says nothing was blocked. A partial outcome (a setting the package could not
+      // claim, such as a GH_CONFIG_DIR you set yourself) would leave agents on the wrong identity.
+      const outcome = result.outcomes?.find((entry) => entry.id === AGENT_IDENTITY_PACKAGE_ID);
+      if (!result.ok || outcome?.outcome !== "enabled") {
+        stop(`The package did not install completely${outcome?.message ? `: ${outcome.message}` : ""}. Agents may not act as ${botLogin}; see the messages above.`);
+      }
     } catch (error) {
       if (error instanceof PackageMutationError) stop(error.message);
       throw error;

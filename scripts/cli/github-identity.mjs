@@ -35,18 +35,21 @@ export function formatReport(report) {
     case "not-set-up":
       return "GitHub agent identity is not set up (optional). Run roborepo github setup in your own terminal to let agents act on GitHub as a bot account.";
     case "unavailable":
+      if (report.problems?.length > 0) return [`GitHub agent identity could not be fully checked${repo}:`, ...problemLines(report.problems)].join("\n");
       return `GitHub agent identity could not be checked${repo}: ${report.reason}. Nothing is wrong that this check can see.`;
     default: {
       const headline = report.state === "healthy"
         ? `GitHub agent identity is healthy${repo}: agents act as ${report.botLogin}.`
         : `GitHub agent identity has problems${repo}:`;
-      const lines = [headline];
-      for (const entry of report.problems) {
-        lines.push(`  ${entry.severity === "warn" ? "Note" : "Problem"}: ${entry.message}`, `    Fix: ${entry.fix}`);
-      }
-      return lines.join("\n");
+      return [headline, ...problemLines(report.problems)].join("\n");
     }
   }
+}
+
+const SEVERITY_LABEL = { warn: "Note", unchecked: "Not checked", problem: "Problem" };
+
+function problemLines(problems) {
+  return problems.flatMap((entry) => [`  ${SEVERITY_LABEL[entry.severity] || "Problem"}: ${entry.message}`, `    Fix: ${entry.fix}`]);
 }
 
 // A problem's own fix, as the tail of doctor's line: "Run roborepo protect." -> "run roborepo protect".
@@ -68,8 +71,12 @@ export function doctorLine(report) {
       const first = report.problems.find((entry) => entry.severity === "problem");
       return { level: "hint", text: `GitHub agent identity problem for ${repo}: ${first.message} — ${fixClause(first.fix)}` };
     }
-    default:
+    default: {
+      // A check that could not run is something you can act on; GitHub being unreachable is not.
+      const unchecked = report.problems?.find((entry) => entry.severity === "unchecked");
+      if (unchecked) return { level: "hint", text: `GitHub agent identity for ${repo} not fully checked: ${unchecked.message} — ${fixClause(unchecked.fix)}` };
       return { level: "ok", text: `GitHub agent identity check skipped (${report.reason})` };
+    }
   }
 }
 

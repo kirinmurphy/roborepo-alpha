@@ -264,6 +264,17 @@ try {
   assert.doesNotMatch(result.stdout, /Agents now act/);
   console.log("✓ A failing check prints each problem with its fix, exits 1, and leaves the package off.");
 
+  // A GH_CONFIG_DIR you set yourself is not the package's to replace: the install is partial, so
+  // setup fails rather than reporting that agents act as the bot.
+  fresh();
+  fs.writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify({ env: { GH_CONFIG_DIR: "/somewhere/else/gh" } }));
+  result = await setup(`${BOT}\n${TOKEN}\ny\n`);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /The package did not install completely/);
+  assert.doesNotMatch(result.stdout, /Agents now act/);
+  assert.equal(claudeSettings().env.GH_CONFIG_DIR, "/somewhere/else/gh", "your own setting is left alone");
+  console.log("✓ A partial package install (your own GH_CONFIG_DIR) fails setup instead of reporting success.");
+
   // A login typed in another case is accepted, and the token check uses GitHub's own spelling.
   fresh();
   result = await setup(`ROBO-Bot\n${TOKEN}\ny\n`);

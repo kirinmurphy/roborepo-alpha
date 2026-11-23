@@ -115,9 +115,12 @@ export function readAgentHosts(stateDir) {
 }
 
 // The result's `state` is `not-set-up`, `healthy`, `problem`, or `unavailable` (`reason` says why).
-// `problems` entries are `{ id, message, fix, severity }`; `severity: "warn"` is advice (a token
-// close to expiring) and does not make the state `problem`. `packageEnabled` is passed in by the
-// caller, which knows the package state.
+// `problems` entries are `{ id, message, fix, severity }`. `severity: "warn"` is advice (a token
+// close to expiring) and does not make the state `problem`. `severity: "unchecked"` is a check that
+// could not run (your own account, branch protection): it is not a defect, but the result is not
+// confirmed either, so the state is `unavailable` unless a problem is already known. Only a result
+// where every check ran can be `healthy`. `packageEnabled` is passed in by the caller, which knows
+// the package state.
 export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), stateDir, timeoutMs, packageEnabled = false }) {
   const result = {
     state: "not-set-up", repository: null, botLogin: null, userLogin: null, packageEnabled,
@@ -161,7 +164,7 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
 
     result.userLogin = await githubClient.login(user).catch(() => null);
     if (!result.userLogin) {
-      problems.push(problem("account-unchecked", "Your own GitHub sign-in could not be read, so this could not confirm the bot is a different account.", "Run gh auth status in your own terminal, then rerun roborepo github status.", "warn"));
+      problems.push(problem("account-unchecked", "Your own GitHub sign-in could not be read, so this could not confirm the bot is a different account.", "Run gh auth status in your own terminal, then rerun roborepo github status.", "unchecked"));
     } else if (result.userLogin.toLowerCase() === info.login.toLowerCase()) {
       problems.push(problem("bot-is-user", `The bot account ${info.login} is your own account, so agents would have your access.`, SETUP_FIX));
     }
@@ -171,7 +174,7 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
     if (!(error instanceof GitHubError)) throw error;
     // A problem already found stays reported: a later read failing does not make it go away.
     if (problems.some((entry) => entry.severity === "problem")) {
-      return finish(result, [...problems, problem("check-incomplete", `Some checks could not run: ${error.message}.`, "Rerun roborepo github status once GitHub answers.", "warn")]);
+      return finish(result, [...problems, problem("check-incomplete", `Some checks could not run: ${error.message}.`, "Rerun roborepo github status once GitHub answers.", "unchecked")]);
     }
     return { ...result, problems, state: "unavailable", reason: error.message };
   }
@@ -193,8 +196,12 @@ function problem(id, message, fix, severity = "problem") {
 }
 
 function finish(result, problems) {
-  const blocking = problems.some((entry) => entry.severity === "problem");
-  return { ...result, problems, state: blocking ? "problem" : "healthy" };
+  if (problems.some((entry) => entry.severity === "problem")) return { ...result, problems, state: "problem" };
+  const unchecked = problems.filter((entry) => entry.severity === "unchecked");
+  if (unchecked.length > 0) {
+    return { ...result, problems, state: "unavailable", reason: unchecked.map((entry) => entry.message.replace(/\.$/, "")).join("; ") };
+  }
+  return { ...result, problems, state: "healthy" };
 }
 
 // A token without an expiry date is only advice: it works, but nothing bounds how long a leaked
@@ -250,7 +257,7 @@ async function checkRepoAccess(bot, repo, botLogin, problems) {
 async function checkProtection(target, problems) {
   const report = await readProtection(target);
   if (report.state === "unavailable") {
-    problems.push(problem("protection-unchecked", `Branch protection could not be read${report.reason ? ` (${report.reason})` : ""}, so this could not confirm GitHub stops the bot from merging unreviewed work.`, "Run roborepo protect --check in your own terminal.", "warn"));
+    problems.push(problem("protection-unchecked", `Branch protection could not be read${report.reason ? ` (${report.reason})` : ""}, so this could not confirm GitHub stops the bot from merging unreviewed work.`, "Run roborepo protect --check in your own terminal.", "unchecked"));
     return;
   }
   const skipped = report.policies?.some((policy) => policy.status === "skipped");
