@@ -106,35 +106,61 @@ and in `roborepo package list --json`. Commands: [Package sources and installing
 
 A package may list `requires: [pkgId, ...]` and `recommends: [pkgId, ...]`:
 
-- Enabling it turns on each required package (dependencies first) and then its own resources. Only
-  the package you turned on is recorded; a required package stays on while any package you turned
-  on still requires it, and turns off with the last one.
+- Enabling it turns on each package it includes (dependencies first) and then its own resources.
+  Only the package you turned on is recorded; an included package stays on while any package you
+  turned on still includes it, and turns off with the last one.
+- Turning off a package that only stays on because packages you turned on include it opens a
+  dialog listing those packages. **Leave them enabled** changes nothing; **Disable All Packages**
+  turns them off too, as `roborepo package disable <id> --cascade` does.
 - A **composite** package lists only `requires`, so it bundles other packages under one toggle.
-- A composite reports itself enabled only when every required package, and any resources of its
+- A composite reports itself enabled only when every included package, and any resources of its
   own, are enabled.
 - A recommended package is never turned on for you. When an enable leaves recommendations off, the
-  panel asks which of them to enable too; **Continue without** enables none.
+  panel lists them as ordinary rows: each switch turns its package on or off at once, and the
+  label opens its detail. **No Thanks** closes the panel with nothing changed; once you turn one
+  on, the button reads **Done**. Turning a package on there opens no further list of its own
+  recommendations. The terminal setup
+  wizard asks nothing: after it applies your choices it prints one line,
+  `recommended (not enabled): code-style, test-harness — enable with: roborepo package enable <id>`
+  after you select Technical Writing, naming what the packages you selected recommend that is still off.
+- Nesting is flattened. A package's included packages are everything it requires, directly or
+  through another included package. The Config page and terminal call these **included**; the
+  manifest field is `requires`. Its recommendations are its own plus those of every package it
+  requires, less anything it requires; that one list is what its Dependencies show and
+  what enabling it offers. A recommended package's own requirements come with it when you turn it
+  on, and its own recommendations are not offered on the parent's behalf.
+
 - A **dependency-only** package has no toggle of its own (`selectable: false`) and no row either
   (`presentation.visibility: "dependency"`); it turns on and off with the packages that require it.
   A **hidden** package (`presentation.visibility: "hidden"`) appears nowhere on the page. A
   non-selectable package must be one of these two: the catalog rejects one that would keep a row
   without a toggle.
 
-A selectable required package with `catalog` visibility keeps its own row. Dependency-only
-packages appear under **Requires** in their parents' source popups instead. Clicking a package's
-name opens its source popup, which lists its visible requirements; each name there opens that
-package's source, and **Back** returns to the package that requires it. A package with no source
-of its own opens a contents view that lists only its requirements; if all of them are hidden, its
+For example, `plan-suite` (Development Planning Lifecycle) includes `technical-writing`,
+`test-harness`, `implementation-review`, `code-style`, and `feature-verification`, and has nothing
+left to recommend. `technical-writing` includes nothing and recommends `code-style` and
+`test-harness`. `react` includes `javascript-typescript`, which includes `code-style`. Turning on
+`plan-suite` turns on its five included packages; turning off `plan-suite` leaves `code-style` on
+while `javascript-typescript` is still on.
+
+A selectable included package with `catalog` visibility keeps its own row. Dependency-only
+packages appear under **Includes** in their parents' source popups instead. Clicking a package's
+name opens its source popup, which lists its visible included packages; each name there opens
+that package's source, and **Back** returns to the package that includes it. A package with no
+source of its own opens a contents view that lists only its included packages; if all of them are hidden, its
 name opens nothing.
 
-Below its own rows, a section lists **Recommended dependencies**: what its packages recommend, each
-with a toggle and naming the packages that recommend it. A package a row already requires, or one
-the section already shows, is not repeated there. **Select All** and the Plans banner act on
-packages you can switch directly, and the group switch is hidden when none are left.
+A row with included or recommended packages shows a **Dependencies** button. It opens
+**Included Packages** and **Recommended Packages** lists, each package marked on or off; clicking one opens
+that package's detail. While the package is off and some of its recommendations are too, a note
+says you will be offered them when you enable it. `roborepo config status` prints the same lists
+as `includes:` and `recommends:` lines under the row, marking recommendations still off.
+**Select All** and the Plans banner act on packages you can switch directly, and the group switch
+is hidden when none are left.
 
 A package may also hold several skills. They turn on and off together with the package's one
 toggle; there is no switch for a single skill inside it. Its card shows the package name, never one
-of its commands, and an `<n> skills` badge beside its cost chips. Clicking the name opens a
+of its commands, with no skill-count badge. Clicking the name opens a
 contents view in the source dialog: the package's startup and when-loaded totals, a summary line
 such as `7 skills · 1 rules fragment`, and one row per skill (its command, or its skill ID when it
 has none, a one-line description, and its own cost), followed by a row for the package's rules or
@@ -163,16 +189,14 @@ The panel renders these sections:
   Feature Verification also lives here: its skill has agents verify finished work themselves and
   show the evidence in the conversation (screenshots inline and the steps they took), and it unlocks `roborepo browser` for screenshots and recordings of local
   web apps. Playwright is installed only on first browser use, with your approval.
-- **Token Optimization** — package-level controls such as the Caveman package. Manage Telemetry
-  from **Settings** or **Tokens**.
-- **Monitoring** — packages that observe agent activity and usage.
-- **Development Workflows** — **Development Planning Lifecycle** and `/session-close` each have
-  their own toggle. The `plan-suite` toggle enables all seven plan commands, including
-  `/plan-suite-init` for repository setup.
+- **Development Workflows** — **Development Planning Lifecycle** has one toggle that enables all
+  seven plan commands, including `/plan-suite-init` for repository setup.
 - **Skills - Code Quality** — skills that check and improve code against project patterns.
 - **Writing Assistants** — long-form writing workflows and structured documentation.
-- **Additional Agent Rules** — Branch Safety and Capture Dense Bash.
 - **Integrations** — optional connections between RoboRepo and supported tools.
+- **Monitoring** — the last package section: packages that observe agent activity and usage,
+  **Usage Statusline** and **Capture Dense Bash**. Manage Telemetry from **Settings** or
+  **Tokens**.
 - **Permissions** — flat behavior and command buckets. Named behaviors and arbitrary commands can
   be set to `allow`, `ask`, `deny`, or reset to the manifest default. They render as one merged
   list split by authorship rather than by kind: entries the user customized appear first, each
@@ -426,7 +450,7 @@ no render.
   confirmation because each behavior is independently reversible.
 - Mutations write live config only; the repo template under `globals/` is never touched
   by the panel.
-- Disabling a composite package leaves its shared required packages in place — disabling
+- Disabling a composite package leaves its shared included packages in place — disabling
   them could break other enabled packages.
 
 ## Edge Cases

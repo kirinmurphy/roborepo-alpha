@@ -26,8 +26,9 @@ export function fetchRepositorySource(scope, id) {
   return portalGetJson("/api/config/repository/source?" + new URLSearchParams({ repo: scope, id }).toString());
 }
 
-export function toggleItem(kind, id, enabled) {
-  return portalPostJson(TOGGLE_ENDPOINT[kind], { id, enabled });
+// `cascade` (package disables only) also disables the selected packages that include `id`.
+export function toggleItem(kind, id, enabled, { cascade = false } = {}) {
+  return portalPostJson(TOGGLE_ENDPOINT[kind], cascade ? { id, enabled, cascade } : { id, enabled });
 }
 
 // Section-level bulk toggle: one request applies the whole batch, runs the single reconcile pass

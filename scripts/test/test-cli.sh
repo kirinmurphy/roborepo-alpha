@@ -581,30 +581,30 @@ assert "config: disable removes package-owned Codex tool approvals" \
 assert "config: enable/disable did not mutate tracked repo source" \
   bash -c "[ \"\$(git -C '${repo_root}' status --porcelain generated/claude/settings.json manifests/inventory/mcp-servers.json)\" = '${cfg_settings_before}' ]"
 
-# Plugin component type (caveman package): enable writes enabledPlugins bool + marketplace entry,
+# Plugin settings patch (fixture-plugin package): enable writes enabledPlugins bool + marketplace entry,
 # disable removes both. The harness performs the actual fetch on next launch — not asserted here.
-bash -c "${cfg_env} node '${cli}' package enable caveman >/dev/null 2>&1" || true
+bash -c "${cfg_env} node '${fixture_cli}' package enable fixture-plugin >/dev/null 2>&1" || true
 assert "config: enable plugin sets enabledPlugins bool + marketplace" \
-  bash -c "node -e \"const s=require('${cfg_home}/.claude/settings.json');process.exit(s.enabledPlugins?.['caveman@caveman']===true&&!!s.extraKnownMarketplaces?.caveman?0:1)\""
-assert "config: caveman package reports enabled in snapshot" \
-  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='caveman');process.exit(p&&p.enabled?0:1)})\""
-bash -c "${cfg_env} node '${cli}' package disable caveman >/dev/null 2>&1" || true
+  bash -c "node -e \"const s=require('${cfg_home}/.claude/settings.json');process.exit(s.enabledPlugins?.['fixture-plugin@fixture-plugin']===true&&!!s.extraKnownMarketplaces?.['fixture-plugin']?0:1)\""
+assert "config: fixture-plugin package reports enabled in snapshot" \
+  bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-plugin');process.exit(p&&p.enabled?0:1)})\""
+bash -c "${cfg_env} node '${fixture_cli}' package disable fixture-plugin >/dev/null 2>&1" || true
 assert "config: disable plugin removes bool + marketplace" \
-  bash -c "node -e \"const s=require('${cfg_home}/.claude/settings.json');process.exit(!s.enabledPlugins?.['caveman@caveman']&&!s.extraKnownMarketplaces?.caveman?0:1)\""
-assert "config: caveman package reports disabled after removal" \
-  bash -c "${cfg_env} node -e \"import('${repo_root}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='caveman');process.exit(p&&!p.enabled?0:1)})\""
+  bash -c "node -e \"const s=require('${cfg_home}/.claude/settings.json');process.exit(!s.enabledPlugins?.['fixture-plugin@fixture-plugin']&&!s.extraKnownMarketplaces?.['fixture-plugin']?0:1)\""
+assert "config: fixture-plugin package reports disabled after removal" \
+  bash -c "${cfg_env} node -e \"import('${fixture_app}/scripts/cli/config.mjs').then(c=>{const p=c.readConfigSnapshot().packages.find(x=>x.id==='fixture-plugin');process.exit(p&&!p.enabled?0:1)})\""
 
 recon_home="${work}/reconcile-home"
 mkdir -p "${recon_home}/.claude" "${recon_home}/.codex"
 echo '{}' > "${recon_home}/.claude/settings.json"
 printf '' > "${recon_home}/.codex/config.toml"
 recon_env="HOME='${recon_home}' ROBOREPO_STATE_ROOT='${recon_home}/.roborepo' SKIP_MCP=1"
-bash -c "${recon_env} node '${fixture_cli}' package enable fixture-tool >/dev/null 2>&1 && ${recon_env} node '${fixture_cli}' package enable caveman >/dev/null 2>&1" || true
+bash -c "${recon_env} node '${fixture_cli}' package enable fixture-tool >/dev/null 2>&1 && ${recon_env} node '${fixture_cli}' package enable fixture-plugin >/dev/null 2>&1" || true
 cp "${repo_root}/generated/claude/settings.json" "${recon_home}/.claude/settings.json"
 cp "${repo_root}/generated/codex/config.toml" "${recon_home}/.codex/config.toml"
 bash -c "${recon_env} node '${fixture_cli}' package reconcile >/dev/null 2>&1" || true
 assert "package reconcile restores enabled Claude plugin settings after root overwrite" \
-  bash -c "node -e \"const s=require('${recon_home}/.claude/settings.json');process.exit(s.enabledPlugins?.['caveman@caveman']===true&&!!s.extraKnownMarketplaces?.caveman?0:1)\""
+  bash -c "node -e \"const s=require('${recon_home}/.claude/settings.json');process.exit(s.enabledPlugins?.['fixture-plugin@fixture-plugin']===true&&!!s.extraKnownMarketplaces?.['fixture-plugin']?0:1)\""
 assert "package reconcile restores enabled package hooks and permissions after root overwrite" \
   bash -c "node -e \"const s=require('${recon_home}/.claude/settings.json');const allow=s.permissions?.allow||[];const hooks=JSON.stringify(s.hooks||{});process.exit(allow.includes('mcp__fixture-tool__lookup')&&hooks.includes('fixture-session.mjs')?0:1)\""
 assert "package reconcile restores package-owned Codex approvals after root overwrite" \
@@ -716,7 +716,7 @@ cat > "${cfg_workspace}/packages/test-composite/package.config.json" <<'JSON'
   "description": "Test-only package that bundles two dependencies.",
   "lifecycle": "optional",
   "presentation": {
-    "category": "token-optimization",
+    "category": "monitoring",
     "order": 99
   },
   "requires": ["impact-awareness", "response-output"],

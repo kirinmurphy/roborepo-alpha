@@ -213,37 +213,92 @@ export function createConfigModal() {
   return { openSource, openSnapshot, showContents, openRepositorySource, reset };
 }
 
-// The recommendations dialog: after an enable that left some recommended packages off, ask which
-// to enable too. Resolves to the chosen ids, or [] when the user continues without them (closing
-// the dialog counts as that). Never enables anything itself; app.js does, with the user's choice.
+// The disable-with-dependents dialog: a package being turned off is included in packages the user
+// turned on. `confirm` resolves true when they choose to disable those too, false otherwise
+// (Leave them enabled, close, Escape, or the backdrop).
+export function createDisableDependentsDialog() {
+  const dialogEl = document.getElementById("disable-dependents-modal");
+  const titleEl = document.getElementById("disable-dependents-title");
+  const leadEl = document.getElementById("disable-dependents-lead");
+  const listEl = document.getElementById("disable-dependents-list");
+  let settle = null;
+
+  function finish(confirmed) {
+    const resolve = settle;
+    settle = null;
+    if (dialogEl.open) dialogEl.close();
+    resolve?.(confirmed);
+  }
+
+  document.getElementById("disable-dependents-close").addEventListener("click", () => finish(false));
+  document.getElementById("disable-dependents-cancel").addEventListener("click", () => finish(false));
+  document.getElementById("disable-dependents-confirm").addEventListener("click", () => finish(true));
+  dialogEl.addEventListener("cancel", () => finish(false));
+  portalWireBackdropClose(dialogEl, () => finish(false));
+
+  function confirm(packageLabel, includedBy) {
+    finish(false);
+    titleEl.textContent = `Disable ${packageLabel}`;
+    leadEl.textContent = `The following other packages depend on ${packageLabel}:`;
+    listEl.replaceChildren(...includedBy.map((pkg) => {
+      const li = document.createElement("li");
+      li.textContent = pkg.label;
+      return li;
+    }));
+    return new Promise((resolve) => {
+      settle = resolve;
+      dialogEl.showModal();
+    });
+  }
+
+  return { confirm };
+}
+
+// The recommendations dialog: after an enable that left some recommended packages off, it lists
+// them as the page's own rows. Each switch turns its package on or off at once through the page's
+// toggle, so the dialog itself enables nothing. The footer reads "No Thanks" until one of them is
+// on and "Done" after; either way it only closes. `ask` resolves when the dialog closes.
 export function createRecommendationsDialog() {
   const dialogEl = document.getElementById("recommendations-modal");
   const titleEl = document.getElementById("recommendations-title");
   const listEl = document.getElementById("recommendations-list");
-  let settle = null;
+  const doneEl = document.getElementById("recommendations-done");
+  let current = null; // { ids, rowFor, renderRow, settle }
 
-  function finish(ids) {
-    const resolve = settle;
-    settle = null;
+  function finish() {
+    const settle = current?.settle;
+    current = null;
     if (dialogEl.open) dialogEl.close();
-    resolve?.(ids);
+    settle?.();
   }
 
-  document.getElementById("recommendations-close").addEventListener("click", () => finish([]));
-  document.getElementById("recommendations-skip").addEventListener("click", () => finish([]));
-  document.getElementById("recommendations-enable").addEventListener("click", () => {
-    finish([...listEl.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value));
-  });
-  dialogEl.addEventListener("cancel", () => finish([]));
-  portalWireBackdropClose(dialogEl, () => finish([]));
+  document.getElementById("recommendations-close").addEventListener("click", finish);
+  doneEl.addEventListener("click", finish);
+  dialogEl.addEventListener("cancel", finish);
+  portalWireBackdropClose(dialogEl, finish);
 
-  function ask(packageLabel, recommendations) {
-    finish([]);
-    titleEl.textContent = `${packageLabel} is on`;
-    listEl.replaceChildren(...recommendations.map((rec) => tmpl.recommendationOption(rec)));
-    dialogEl.showModal();
-    return new Promise((resolve) => { settle = resolve; });
+  // Rows come from the latest snapshot, so a switch flipped here, or anywhere else on the page,
+  // shows its new state the next time the page re-renders.
+  function refresh() {
+    if (!current) return;
+    const rows = current.ids.map(current.rowFor).filter(Boolean);
+    listEl.replaceChildren(...rows.map(current.renderRow));
+    const anyOn = rows.some((row) => row.active);
+    doneEl.textContent = anyOn ? "Done" : "No Thanks";
+    doneEl.dataset.btn = anyOn ? "cta" : "secondary";
   }
 
-  return { ask };
+  // `rowFor(id)` returns the package's row item from the latest snapshot; `renderRow(item)` builds
+  // its row element.
+  function ask(packageLabel, recommendations, { rowFor, renderRow }) {
+    finish();
+    titleEl.textContent = `Additional packages recommended for ${packageLabel}`;
+    return new Promise((settle) => {
+      current = { ids: recommendations.map((rec) => rec.id), rowFor, renderRow, settle };
+      refresh();
+      dialogEl.showModal();
+    });
+  }
+
+  return { ask, refresh };
 }

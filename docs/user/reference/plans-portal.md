@@ -4,8 +4,7 @@
 
 The Plans portal is a built-in RoboRepo portal page for local Markdown planning documents. It is
 paired with the optional plan suite: the `plan-suite` package, which installs `/plan-write`,
-`/plan-promote`, `/plan-execute`, `/plan-review`, `/plan-close`, and `/plan-archive`, and the
-`session-close` package, which installs `/session-close`.
+`/plan-promote`, `/plan-execute`, `/plan-review`, `/plan-close`, and `/plan-archive`.
 
 ## Concept Model
 
@@ -390,11 +389,10 @@ Repositories without Git remain browsable.
 
 ## Package Integration
 
-The plan suite uses two optional packages. `plan-suite` holds the seven plan skills, including
+The plan suite is one optional package. `plan-suite` holds the seven plan skills, including
 `/plan-suite-init`, and the Code Outlives Plans and Plan Records Stay Plan-Specific rules.
-`session-close` holds the chat handoff skill. The Copy menu gates its workflow actions on
-`plan-suite`, and the onboarding banner enables both packages in one request through
-`/api/config/packages/bulk`.
+The Copy menu gates its workflow actions on `plan-suite`, and the onboarding banner enables it
+through `/api/config/packages/bulk`.
 
 When `plan-suite` is disabled:
 
@@ -404,8 +402,7 @@ When `plan-suite` is disabled:
 
 When enabled:
 
-- each of the seven plan skills (and `/session-close`, once its own package is enabled) is a manual
-  skill with Markdown command wrappers for Claude,
+- each of the seven plan skills is a manual skill with Markdown command wrappers for Claude,
   Codex, and Gemini. Gemini CLI requires TOML custom commands, so its generated wrappers are not
   usable native slash commands yet
 - the Copy menu uses the lifecycle actions from the plans snapshot. It filters out **Update** and

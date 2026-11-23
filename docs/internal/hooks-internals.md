@@ -27,13 +27,6 @@ protocols Codex does not have.
 
 These cover the same goals as Codex, realized through Claude's own machinery.
 
-#### Caveman activation
-
-Codex turns on caveman mode with a SessionStart hook. **On Claude this is not a
-hook** — it comes from the `caveman` plugin (`enabledPlugins` in `settings.json`),
-which installs its own SessionStart behavior. Same outcome (terse default output),
-different mechanism.
-
 #### Telemetry capture — SessionStart / PreToolUse / PostToolUse / UserPromptSubmit / Stop
 
 When telemetry is enabled, these hook events call `roborepo telemetry capture`
@@ -110,8 +103,8 @@ Core scripts live in `globals/harnesses/codex/hooks/`. Their hook definitions an
 labels are authored in `globals/harnesses/codex/hooks-codex.json`;
 `scripts/build/render-agent-permissions.mjs` renders `generated/codex/hooks.json` from that source.
 Codex’s adapter reconciles `statusMessage` in place for matching event/command pairs, preserving
-commands, positions, and all other handler fields. Labels participate in native approval hashes. Package-owned hooks (Caveman's `SessionStart` hook,
-telemetry's capture hooks) are authored under their owning package
+commands, positions, and all other handler fields. Labels participate in native approval hashes. Package-owned hooks (telemetry's capture
+hooks) are authored under their owning package
 (`globals/packages/<package>/hooks-codex.json`) and composed into the live Codex hook config only
 when that package is enabled.
 
@@ -130,18 +123,6 @@ in intent with Claude (the same goal, achieved with Codex's own mechanism), and
 ### Part 1 — Common (shared intent with Claude)
 
 These cover the same goals as Claude, realized through Codex's own machinery.
-
-#### Caveman activation — SessionStart (startup|resume)
-
-**Trigger:** session start or resume matching `startup|resume`.
-
-Prints caveman mode activation instructions to stdout: drop
-articles/filler/pleasantries/hedging, use fragments, keep responses terse. Code,
-commits, and security output stays normal. The user can say "stop caveman" or
-"normal mode" to deactivate. (On Claude the same outcome comes from the `caveman`
-plugin instead of a hook.) Package-owned: authored at
-`globals/packages/caveman/hooks-codex.json` and composed into the live Codex hook
-config only when `caveman` is enabled — disabling the package removes this hook.
 
 #### Telemetry capture — SessionStart / PreToolUse / PostToolUse / UserPromptSubmit / Stop
 
@@ -211,7 +192,7 @@ Codex documents support for `SessionStart`, `PreToolUse`, `PermissionRequest`,
 `SubagentStop`, and `Stop` events. Matchers are not honored by every event;
 `UserPromptSubmit` and `Stop` ignore matcher values. Current repo config uses
 `SessionStart`, `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, and `Stop` when
-telemetry is enabled, plus the existing `SessionStart` caveman nudge.
+telemetry is enabled.
 
 ---
 

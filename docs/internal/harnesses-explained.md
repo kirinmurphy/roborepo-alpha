@@ -136,11 +136,9 @@ exploration, verification, and so on). A fragment is just the rule, with no idea
 bound for:
 
 ```markdown
-## Communication
+## Skill Loading
 
-Use caveman full by default. Terse, no filler, fragments OK.
-
-Switch to normal mode only when the user explicitly says `normal mode` or `stop caveman`.
+Load a matching skill before the work it governs, not after — and only the skills the task actually needs.
 ```
 
 A renderer concatenates the fragments into each target file and stamps a do-not-edit header so nobody

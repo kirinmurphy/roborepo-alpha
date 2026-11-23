@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "fixture-plugin",
+  "label": "Fixture plugin",
+  "description": "Test-only package that turns on a Claude plugin through a settings patch: a marketplace entry plus an enabledPlugins flag.",
+  "lifecycle": "optional",
+  "presentation": {
+    "category": "integrations",
+    "order": 900
+  },
+  "resources": [
+    {
+      "type": "config-patch",
+      "harness": "claude",
+      "label": "Fixture plugin",
+      "patches": [
+        {
+          "op": "set",
+          "path": ["extraKnownMarketplaces", "fixture-plugin"],
+          "value": { "source": { "source": "github", "repo": "example/fixture-plugin" } }
+        },
+        {
+          "op": "set",
+          "path": ["enabledPlugins", "fixture-plugin@fixture-plugin"],
+          "value": true
+        }
+      ]
+    }
+  ]
+}

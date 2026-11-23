@@ -3,9 +3,10 @@
 // current, so this pins the clauses themselves:
 //
 // - The shared delivery rule renders for every rules-capable harness and keeps its stop conditions.
-// - The worktree exception reads the same in the always-on branch-safety fragment and the
-//   branch-safety package, so enabling the package never contradicts the shared rule.
+// - The always-on branch-safety fragment states the workflow worktree exception.
 // - The Claude rule enters a linked worktree with `EnterWorktree`, not `change_directory`.
+// - The Temporary Files rule, which plan edits rely on for their working copy, renders for every
+//   rules-capable harness and names the `roborepo scratch` folder.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -33,20 +34,25 @@ for (const harness of harnessIdsWithCapability("rules")) {
   assert.ok(renderRulesPreview(harness, []).includes("## Deliver Finished Work"), `${harness} renders the delivery rule`);
 }
 
-// ---- Worktree exception, identical in both branch-safety copies ----
+// ---- Worktree exception in the branch-safety fragment ----
 const exception = (text, source) => {
   const match = normalize(text).match(/Invoking a workflow that explicitly creates its own worktree[^]*?checkout changes\./);
   assert.ok(match, `${source} states the workflow worktree exception`);
   return match[0];
 };
 const fragmentException = exception(read("globals/system/rules/shared/06-branch-safety.md"), "the shared branch-safety fragment");
-const packageException = exception(read("globals/packages/branch-safety/rules.md"), "the branch-safety package");
-assert.equal(packageException, fragmentException, "both branch-safety copies state the same worktree exception");
 assert.ok(fragmentException.includes("such as `/plan-execute`"), "the exception names the plan-execute workflow");
 
 // ---- Claude worktree entry ----
 const claude = normalize(renderRulesPreview("claude", []));
 assert.ok(claude.includes("enter a linked worktree of this repo with `EnterWorktree({ path })`"), "Claude enters worktrees with EnterWorktree");
 assert.ok(!/entering a worktree means calling `change_directory`/.test(claude), "Claude no longer directs agents to change_directory");
+
+// ---- Temporary Files rule ----
+for (const harness of harnessIdsWithCapability("rules")) {
+  const rendered = normalize(renderRulesPreview(harness, []));
+  assert.ok(rendered.includes("## Temporary Files"), `${harness} renders the Temporary Files rule`);
+  assert.ok(rendered.includes("The folder `roborepo scratch <name>` prints"), `${harness} names the roborepo scratch folder`);
+}
 
 console.log("agent-workflow-rules-check passed");

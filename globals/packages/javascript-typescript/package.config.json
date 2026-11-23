@@ -8,6 +8,9 @@
     "category": "code-conventions",
     "order": 20
   },
+  "requires": [
+    "code-style"
+  ],
   "resources": [
     {
       "type": "skill",

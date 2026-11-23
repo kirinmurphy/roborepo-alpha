@@ -4,8 +4,8 @@
     {
       "id": "code-conventions",
       "label": "Code Conventions",
-      "description": "Skills auto-loaded when relevant — shape output without an explicit command.",
-      "footnote": "* roborepo-support — help skill for this repo, always loaded.",
+      "description": "Skills auto-loaded when relevant \u2014 shape output without an explicit command.",
+      "footnote": "* roborepo-support \u2014 help skill for this repo, always loaded.",
       "order": 4
     },
     {
@@ -14,20 +14,9 @@
       "order": 6
     },
     {
-      "id": "token-optimization",
-      "label": "Token Optimization",
-      "order": 10
-    },
-    {
-      "id": "monitoring",
-      "label": "Monitoring",
-      "description": "Observe what agents actually do — logs and usage capture. Never changes behavior.",
-      "order": 15
-    },
-    {
       "id": "skills-dev-lifecycle",
       "label": "Development Workflows",
-      "description": "Structured workflows for development work: plan a change through to merge, and close out a work session cleanly.",
+      "description": "Structured workflows for development work: plan a change through to merge.",
       "order": 20
     },
     {
@@ -39,7 +28,7 @@
     {
       "id": "skills-writing",
       "label": "Writing Assistants",
-      "description": "Long-form writing workflows — case studies and structured documentation.",
+      "description": "Long-form writing workflows \u2014 case studies and structured documentation.",
       "order": 25
     },
     {
@@ -54,9 +43,10 @@
       "order": 55
     },
     {
-      "id": "additional-agents-md-rules",
-      "label": "Additional Agent Rules",
-      "order": 60
+      "id": "monitoring",
+      "label": "Monitoring",
+      "description": "Observe what agents actually do \u2014 logs and usage capture. Never changes behavior.",
+      "order": 90
     }
   ]
 }

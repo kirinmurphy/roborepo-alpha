@@ -370,7 +370,6 @@ function shortStepTitle(title, width) {
   if (width < 72) {
     return (
       {
-        "Token Optimization": "Token",
         "Code Conventions": "Conventions",
         "Chat-Time Output": "Chat Output",
       }[title] || title

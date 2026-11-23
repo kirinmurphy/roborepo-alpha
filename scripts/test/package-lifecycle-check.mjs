@@ -47,7 +47,9 @@ function writeOwnedCommand(home, harness, name, packageId) {
   return target;
 }
 
-const packageIds = loadPackageCatalog().map((pkg) => pkg.id);
+// A dependency-only package (`selectable: false`) cannot be enabled on its own; it is applied and
+// removed through the packages that require it, which this loop covers.
+const packageIds = loadPackageCatalog().filter((pkg) => pkg.selectable).map((pkg) => pkg.id);
 assert.ok(packageIds.length > 0, "expected at least one package in the catalog");
 
 for (const pkgId of packageIds) {
@@ -301,7 +303,7 @@ for (const pkgId of packageIds) {
     assert.deepEqual(effective(), ["dep-leaf", "dep-shared"], "a directly selected dependency survives its parent");
     ok("package", "enable", "dep-parent-a");
     out = ok("package", "disable", "dep-shared");
-    assert.match(out, /dep-shared stays on: required by dep-parent-a/);
+    assert.match(out, /dep-shared stays on: included in dep-parent-a/);
     assert.ok(!registry().packages.includes("dep-shared"), "the root is removed");
     assert.deepEqual(effective(), ["dep-leaf", "dep-parent-a", "dep-shared"], "the dependency stays effective through its parent");
 
@@ -309,7 +311,7 @@ for (const pkgId of packageIds) {
     const before = fs.readFileSync(registryFile, "utf8");
     const refused = run("package", "disable", "dep-leaf");
     assert.equal(refused.status, 2, "disabling a derived-only dependency is refused");
-    assert.match(refused.stderr, /it is on because selected packages require it: dep-parent-a/);
+    assert.match(refused.stderr, /it is on because selected packages include it: dep-parent-a/);
     assert.equal(fs.readFileSync(registryFile, "utf8"), before, "a refused disable changes nothing");
     out = ok("package", "disable", "dep-leaf", "--cascade");
     assert.deepEqual(effective(), [], "--cascade turns the dependency off with its parents");
@@ -361,7 +363,7 @@ for (const pkgId of packageIds) {
 
     // A requirement on a package the catalog leaves out (pending) is named, not skipped silently.
     out = ok("package", "enable", "dep-needs-pending");
-    assert.match(out, /warn: dep-needs-pending requires dep-pending, which is skipped \(pending package/);
+    assert.match(out, /warn: dep-needs-pending includes dep-pending, which is skipped \(pending package/);
     assert.ok(liveRules("dep-needs-pending") && !liveRules("dep-pending"), "the available parent still enables");
     ok("package", "disable", "dep-needs-pending");
 

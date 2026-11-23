@@ -120,6 +120,7 @@ Automatic helpers:
 | `supabase-integration-testing` | Real Supabase integration tests      |
 | `test-harness`                 | Choosing and validating test runs    |
 | `feature-verification`         | Showing real evidence that work runs |
+| `implementation-review`        | Code reviews in the plan commands    |
 
 ![A package section on the Agents page: slash-command skills with token costs and on/off toggles](docs/images/agents-config.png)
 
