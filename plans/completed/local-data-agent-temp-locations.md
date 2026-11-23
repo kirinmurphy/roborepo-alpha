@@ -1,6 +1,6 @@
 ---
 id: gy8ncs9u
-next_action: "Review the implementation on branch local-data-agent-temp-locations with /plan-review."
+next_action:
 blocked_by: []
 depends_on: ["9njvfh5z"]
 related: ["9njvfh5z", "n8kw3rp2", "wu7h7gdp"]
