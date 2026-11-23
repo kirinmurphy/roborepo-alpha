@@ -82,6 +82,21 @@ try {
   const chosen = json("package", "list").packages.filter((row) => row.id === "fresh-pkg");
   assert.deepEqual(chosen.map((row) => [row.qualifiedName, row.tab]), [["local/fresh-pkg", "custom"]]);
 
+  // The recorded source stops offering an inactive package: a bare install is refused, not
+  // retargeted to the other source still offering that name.
+  const crew = path.join(roots.tmp, "crew");
+  writeRulesPackage(crew, "crew-pkg");
+  writeRulesPackage(roots.builtInDir, "crew-pkg");
+  ok("package", "source", "add", crew);
+  ok("package", "install", "crew/crew-pkg");
+  ok("package", "source", "disable", "crew");
+  const retarget = cli("package", "install", "crew-pkg");
+  assert.equal(retarget.status, 5, `a bare name whose recorded source is gone is refused\n${retarget.output}`);
+  assert.match(retarget.output, /installed from crew, which no longer offers it[\s\S]*builtin\/crew-pkg/);
+  assert.equal(lock()["crew-pkg"].sourceId, "crew", "the recorded source is unchanged");
+  ok("package", "install", "builtin/crew-pkg");
+  assert.equal(lock()["crew-pkg"].sourceId, "builtin", "a qualified name switches explicitly");
+
   // An ID applied earlier already has a recorded source, so a later same-ID package elsewhere does
   // not take it over and a bare reference keeps resolving to the recorded source.
   writeRulesPackage(roots.workspaceDir, "sys-pkg", { label: "Local sys" });

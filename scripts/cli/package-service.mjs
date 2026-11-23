@@ -311,6 +311,12 @@ export function resolvePackageReference(reference, { available = listAvailablePa
   if (recorded) {
     const chosen = group.find((pkg) => pkg.sourceId === recorded.sourceId);
     if (chosen) return chosen;
+    // The recorded source no longer offers it. Another source's package is never substituted
+    // for a bare name; the user names the source they want.
+    throw new PackageServiceError(
+      `${packageId} was installed from ${recorded.sourceId}, which no longer offers it${group.length ? `; to switch, install a qualified name: ${group.map((pkg) => pkg.qualifiedName).join(", ")}` : ""}`,
+      { code: "unavailable", details: { packageId, recordedSource: recorded.sourceId, candidates: group.map((pkg) => pkg.qualifiedName) } },
+    );
   }
   if (group.length === 1) return group[0];
   if (group.length === 0) throw new PackageServiceError(`no source offers ${packageId}`, { code: "usage" });
@@ -444,7 +450,10 @@ function validateProspective(plan) {
 
 function installOne(pkg, lock) {
   if (isLiveSource({ type: pkg.sourceType })) {
+    const previous = lock.packages[pkg.id];
     const record = recordLiveInstall(pkg);
+    // Switching from a copied package to a live one leaves nothing pointing at the old copy.
+    if (previous?.kind === "materialized") deleteMaterializedCopy(previous.installedPath);
     return { qualifiedName: pkg.qualifiedName, kind: "live", path: record.resolved, changed: true };
   }
   const record = findSource(pkg.sourceId);

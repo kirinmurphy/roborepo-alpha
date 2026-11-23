@@ -95,8 +95,10 @@ Validation (skill and command claims, `requires` edges) runs on the resolved set
 would claim another package's skill is refused at install time (see The package service).
 
 A collection derived from a source (two or more Agent Skills folders in one repo) is computed from
-the source's files on each read and carried on each member as `collection: { id, title }`. Nothing
-about it is persisted.
+the source's files when the source is refreshed and carried on each member as
+`collection: { id, title }`. It is cached with the pinned revision (in the source's catalog, and in
+`.roborepo-source.json` beside each installed copy, since one copied package folder cannot show its
+siblings), so it cannot drift from that revision. There is no separate collection record.
 
 ## The lock
 

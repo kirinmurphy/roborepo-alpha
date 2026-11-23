@@ -97,7 +97,8 @@ users add other folders (`path`) and public GitHub repos (`git`). Every catalog 
 - **The `replace` override is a persisted source choice.** Keep honoring it; it is how existing
   workspaces already override a built-in package.
 - **Derived collections:** a git repo with two or more Agent Skills folders yields one package per
-  skill, each carrying `collection: { id, title }` computed at read time. Nothing stores it.
+  skill, each carrying `collection: { id, title }` derived from the repo at its pinned revision
+  and cached with it. There is no collection record to edit.
 - **Install vs. activate:** `package install` records (live) or copies (git) a package and writes
   a lock record; `enable` applies it. Applying a live package also writes its lock record.
 - Domain operations belong in `package-service.mjs`; CLI handlers and portal routes call it.

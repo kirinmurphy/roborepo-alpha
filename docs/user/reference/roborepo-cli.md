@@ -129,7 +129,8 @@ Choose a qualified package name.
 ```
 
 Install the one you want by its qualified name (`roborepo package install local/code-style`);
-later commands keep using that choice. A workspace `replace` override in
+later commands keep using that choice. If that source stops offering the package, a bare name
+is refused rather than switched to another source; install a qualified name to switch. A workspace `replace` override in
 `overrides/resources.json` also counts as choosing `local`.
 
 Exit codes for scripts: `2` usage, `3` ambiguous name, `4` needs confirmation (`--yes`), `5`

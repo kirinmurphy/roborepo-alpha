@@ -185,7 +185,7 @@ function withProvenance(pkg, { sourceId, sourceType, trust, collection, revision
     qualifiedName: qualifiedName(sourceId, pkg.id),
     revision,
     // A collection derived from the source's own files: { id, title } shared by its members, or
-    // null. Computed on every read, never stored.
+    // null. Derived from the source's files at its pinned revision; there is no collection record.
     collection: collection || null,
   };
 }
