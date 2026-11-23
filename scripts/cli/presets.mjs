@@ -19,6 +19,9 @@ import { pathExists, findSiblingArtifact, findSiblingArtifacts, copyTree, stageC
 import { checkDrift, recordWrite } from "./root-config-state.mjs";
 import { BUNDLE_STATE_SCHEMA_VERSION, bundleSelectionStates, effectiveBundleIds, selectedBundleRoots } from "./bundle-selection.mjs";
 import { requiresCycles } from "./package-graph.mjs";
+import { loadPackageCatalog } from "./package-catalog.mjs";
+import { effectiveEnabledIds } from "./package-state.mjs";
+import { disabledRecommendations } from "./packages.mjs";
 import { SHARED_TARGET_KINDS, SharedTargetConflictAbort, applySharedTargetRow, removeSharedTargetRow, sharedTargetInstalled } from "./shared-target-rows.mjs";
 
 const PRESET_MANIFEST = path.join(repoRoot, "manifests", "platform", "presets.json");
@@ -76,7 +79,7 @@ export async function bundleCommand(args) {
 }
 
 // Interactive onboarding, organized around the four user-facing behavior sections that the /agents
-// web portal shows (Token Optimization, Commands, Code Conventions, Permissions) rather than the
+// web portal shows (Code Conventions, Development Workflows, Monitoring, Permissions) rather than the
 // internal bundle list. Each toggleable item drives the same config-mutate primitives the web POST
 // endpoints use, so terminal and web stay in lockstep. Permissions are read-only here.
 // Non-TTY (headless) keeps applying the default configuration, the same set install wires up.
@@ -117,12 +120,6 @@ function markOnboarded() {
 // import cycle (telemetry.mjs → presets.mjs). Returns { ok, message }.
 async function applyItemToggle(section, item, enabled) {
   if (item.toggle === "package") return mutatePackage(item.id, enabled);
-  if (section.category === "Token Optimization") {
-    // caveman and telemetry are packages (telemetry via a service component), so they route through
-    // the one generic package mutate.
-    if (["caveman", "telemetry"].includes(item.id)) return mutatePackage(item.id, enabled);
-    return { ok: false, message: `${item.label} is managed elsewhere (not toggleable here)` };
-  }
   if (section.category === "Chat-Time Output") {
     // The three inline chat-note behaviors are rules packages; route through the generic mutate.
     return mutatePackage(item.id, enabled);
@@ -247,6 +244,7 @@ export async function applyWizardChanges(steps) {
   }
   console.log("\nApplying changes…");
   let failed = 0;
+  const enabled = [];
   for (const row of pending) {
     if (row.states) {
       const result = await applyBehaviorBucket(row.item.id, row.state);
@@ -260,8 +258,26 @@ export async function applyWizardChanges(steps) {
     const status = result.ok ? "ok" : `failed: ${result.message}`;
     if (!result.ok) failed += 1;
     console.log(`  ${verb} ${row.item.id ?? row.label} — ${status}`);
+    if (row.active && result.ok) enabled.push(row.item.id);
   }
+  printRecommendationsStillOff(enabled);
   return { applied: true, changed: true, failed };
+}
+
+// The wizard never prompts for recommendations; it names the ones still off once, after every
+// toggle has applied. Recommendations come from the manifests of the packages the wizard enabled,
+// not from each enable's result, which leaves out anything on at that moment that a later toggle
+// in the same run turned off. Same `recommended (not enabled):` prefix as a non-interactive
+// `roborepo package enable`, plus the command that turns one on.
+function printRecommendationsStillOff(enabledIds) {
+  if (enabledIds.length === 0) return;
+  const catalog = loadPackageCatalog();
+  const effective = effectiveEnabledIds(catalog);
+  const off = [...new Set(enabledIds.flatMap((id) => {
+    const pkg = catalog.find((entry) => entry.id === id);
+    return pkg ? disabledRecommendations(pkg, catalog, effective).map((dep) => dep.id) : [];
+  }))];
+  if (off.length) console.log(`recommended (not enabled): ${off.join(", ")} — enable with: roborepo package enable <id>`);
 }
 
 async function runInteractiveOnboard({ launchPortal = false, source = "library" } = {}) {
@@ -365,7 +381,7 @@ function printIntroWelcome() {
   console.log("Main commands");
   console.log("  roborepo web        manage your settings online");
   console.log("  roborepo package manage    choose which behaviors are enabled");
-  console.log("  roborepo package enable X   turn on a package (caveman, telemetry, ...)");
+  console.log("  roborepo package enable X   turn on a package (telemetry, test-harness, ...)");
   console.log("  roborepo update     re-apply config after pulling changes");
   console.log("");
   console.log("Run `roborepo --help` for all commands.");

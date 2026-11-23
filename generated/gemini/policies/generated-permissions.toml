@@ -630,6 +630,12 @@ priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
+commandPrefix = "roborepo scratch"
+decision = "allow"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
 commandPrefix = "npm test"
 decision = "allow"
 priority = 500

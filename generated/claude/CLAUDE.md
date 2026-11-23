@@ -31,6 +31,20 @@ wildcard add is how one session commits another's work.
 
 Load a matching skill before the work it governs, not after — and only the skills the task actually needs.
 
+A skill's `## Paired Skills` table names related skills, each with a `Load when` condition. For each
+row:
+
+1. If the condition does not match the work, do nothing.
+2. If it matches and the session lists the skill, load it. A `requires` row is always listed while
+   its parent is on.
+3. If it matches and the session does not list the skill, continue without it and name it once in
+   the final report: "Skipped `react`: not enabled".
+
+Decide availability from the skills the session lists, not by calling the package manager, and never
+ask the user mid-run to enable a package. Enabling a package is where recommendations are offered,
+once. A missing `requires` skill means its parent package is unhealthy: report that, with
+`roborepo package status <package>`, instead of running without it.
+
 
 ## Branch Safety
 
@@ -129,6 +143,19 @@ the push is refused, report the exact command and reason.
 
 Leave the primary checkout on the feature branch after a switch. Tell the user which branch is
 checked out and that they must return to the base branch before plan lifecycle transitions.
+
+
+## Temporary Files
+
+Write temporary files in one of two places, never in the checkout or straight into `/tmp`:
+
+| What you are writing | Where | Removed |
+| --- | --- | --- |
+| A throwaway file in Claude | The session scratchpad Claude names | By Claude |
+| Anything else temporary: throwaway files in Codex, notes for a later session, a long investigation's intermediate results | The folder `roborepo scratch <name>` prints; `<name>` is the plan id or a short topic | By a later `roborepo scratch` call: once unchanged for 14 days, or sooner, oldest first, while the store is over 500 MB; a folder changed in the last hour is never removed for size |
+
+Reach the scratch folder through the shell, where the sandbox allows it. Screenshots go through
+`roborepo browser`; anything that must outlive the work belongs in the plan or the repo.
 
 
 ## Claude Specifics

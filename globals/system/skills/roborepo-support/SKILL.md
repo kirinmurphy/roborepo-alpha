@@ -142,7 +142,12 @@ Rules for writing them:
 
 ### Pairing another skill
 
-Declare paired skills in a `## Paired Skills` table with concrete `Load when` conditions. Load
+Declare paired skills in a `## Paired Skills` table with `Skill`, `Relationship`, `Load when`, and
+`Contributes` columns, and declare the same relationship in the package manifest: `requires` when
+the skill cannot meet its contract without the other package, `recommends` when the other improves
+the work but is not needed. A fallback, an alternative, or a boundary statement ("`test-harness`
+chooses the tests") stays in prose and gets no row. The manifest says which packages are related;
+the `Load when` condition says when, and never moves into the manifest. Load
 only skills whose guidance materially constrains the actual task; do not infer relevance from a
 file path, language mention, or routine record update alone. Substantive requirements, design,
 and document authoring differ from recording findings, test results, decisions, and checklists.
@@ -155,8 +160,9 @@ and document authoring differ from recording findings, test results, decisions, 
 - Reuse guidance and applicable references already loaded in the conversation. Reread only for
   changed sources, new subject matter, or guidance unavailable in context. Fresh-context reviewers
   still need the rules that apply to their review.
-- Use advertised skill availability; query package state only for an applicable skill whose state
-  is unclear. Do not inspect every optional package merely because it appears in a table.
+- Decide availability from the skills the session lists. A skill never prompts the user to enable
+  a package: the enable-time offer is the one place a recommendation is asked about. An unavailable
+  recommendation is skipped and named once in the final report.
 - Keep the skills-loaded report accurate: include guidance actually applied, including reuse,
   and applicable skills skipped or unavailable. Do not load anything to populate the report or
   enumerate non-applicable pairings.

@@ -8,6 +8,10 @@
     "category": "skills-writing",
     "order": 20
   },
+  "recommends": [
+    "code-style",
+    "test-harness"
+  ],
   "resources": [
     {
       "type": "skill",

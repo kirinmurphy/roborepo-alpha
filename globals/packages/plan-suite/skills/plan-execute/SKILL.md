@@ -48,25 +48,16 @@ resolve it.
 
 Load these by subject matter while implementing; do not wait to be asked for them by name.
 
-| Skill | Load when | Contributes |
-| --- | --- | --- |
-| `code-style` | The work places code: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
-| `javascript-typescript` | The work touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
-| `test-harness` | The work adds or changes tests, verification commands, or fixtures | Test selection and observable-behavior assertions |
-| `feature-verification` | Delivered UI, server, API, CLI, permission, or performance behavior needs a demonstration beyond routine test reporting | Select and show the fastest sufficient behavioral evidence; reuse existing captures and execution output |
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `implementation-review` | requires | Every Validator pass (see Validation Loop) | The review rubric, severities, finding classes, and report format |
+| `test-harness` | requires | The work adds or changes tests, verification commands, or fixtures | Test selection and observable-behavior assertions |
+| `code-style` | requires | The work places code: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
+| `feature-verification` | requires | Delivered UI, server, API, CLI, permission, or performance behavior needs a demonstration beyond routine test reporting | Select and show the fastest sufficient behavioral evidence; reuse existing captures and execution output |
 
-Each row is its own optional package, so check it before loading it. Run this check in Preflight,
-for every row the plan's subject matter calls for, before the start transition: it is a pre-run gate
-before any work starts, so the no-questions run mode is unaffected.
-
-1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
-2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
-3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
-   - **Skip:** continue without it, and name it as skipped in the final report.
-4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
-5. If it is `missing` or `unavailable`, skip it and say so in the final report.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the final report.
+Never ask the user to enable a package.
 
 State which paired skills applied and which did not — a skipped skill and a forgotten one look
 identical otherwise.
@@ -96,7 +87,7 @@ done or blocked by an open question or external blocker.
 3. Detect whether the plan has become stale or materially incomplete. Run
    the repository's canonical plan validator for the deterministic document findings; it does not check the
    plan's claims against code, so step 2 still applies.
-4. Run the paired-skill check in Paired Skills for every row the plan's subject matter calls for.
+4. Note which Paired Skills rows the plan's subject matter calls for, and which of those the session lists.
 5. Read `plans/plans-config.json` from the plans worktree. New worktrees resolve under
    `<worktreeRoot>/<worktreeRepoName>/<branch>`, without asking. A repository with no plan store is
    not set up: refusals name `roborepo plans init`, and `/plan-suite-init` runs it.
@@ -233,21 +224,20 @@ an explanatory diagram cannot close it.
 ## Validation Loop
 
 Read `references/validation-loop.md` before the first pass. It holds the loop's steps, how to run
-the Validator, the rubric it applies, and the record it leaves in `## Review`. What decides whether
-the loop is done:
+the Validator, and the record it leaves in `## Review`; the rubric the Validator applies is the
+`implementation-review` skill's. What decides whether the loop is done:
 
 - The Validator runs with fresh context, as a subagent where the environment has one, and is given
   the plan, the diff, and the gate output, never the implementer's account of the work.
-- The Validator only reports. This session fixes every finding classed `fix`, code included, without
-  asking the user, and each later pass validates the revised work.
-- A finding is classed by consequence, not size: `fix` when the right fix is clear and stays within
-  the plan's requirements; `escalate`, as an Open Questions entry, when it chooses between real
-  alternatives, each with a compelling argument for it, changes requirements or a contract, or lands
-  outside the plan; `base` when the base branch fails the same check, which is recorded and never
-  blocks.
-- **Never run the submit transition until the loop has ended:** a pass reports no `fix` findings, or
-  the eight-pass cap is reached. The cap limits passes only: the last pass's findings are fixed like
-  any other's, and the run continues, recording that those fixes were not revalidated.
+- The Validator only reports. This session fixes every `blocking` or `actionable` finding classed
+  `fix`, code included, without asking the user, and each later pass validates the revised work.
+- Findings carry `implementation-review`'s severity and class. Here an `escalate` finding becomes
+  an Open Questions entry, and a `base` failure, which is recorded and never blocks, is not a
+  finding.
+- **Never run the submit transition until the loop has ended:** a pass reports no `blocking` or
+  `actionable` `fix` findings, or the eight-pass cap is reached. The cap limits passes only: the
+  last pass's findings are fixed like any other's, and the run continues, recording that those fixes
+  were not revalidated.
 
 ## Implementation Completion
 
@@ -440,8 +430,8 @@ A run is complete when:
 
 - every in-scope, unblocked objective has been implemented;
 - acceptance criteria have been evaluated;
-- the Validation Loop ended on a pass with no `fix` findings, or at its cap with the last pass's
-  findings fixed, and says so;
+- the Validation Loop ended on a pass with no `blocking` or `actionable` `fix` findings, or at its
+  cap with the last pass's findings fixed, and says so;
 - targeted verification has passed or failures are explained;
 - required broader verification has been run when practical;
 - autonomous decisions are in the Decision Log;

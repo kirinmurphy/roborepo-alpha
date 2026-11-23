@@ -331,6 +331,27 @@ export function claudePermissions(manifest, overrides = {}, { home: _home = os.h
   };
 }
 
+// Every rule claudePermissions could render from this manifest, in any bucket, whatever the
+// behavior's current setting. A rule in a live settings file that is in this set but not in the
+// current render is one RoboRepo wrote and has since dropped (a stale install); a rule outside it is
+// the user's own. Gates, hook-decided asks, and bucket choices are ignored on purpose: they decide
+// where a rule lands, not whether RoboRepo owns it.
+export function claudeManagedRules(manifest, overrides = {}) {
+  const rules = new Set(manifest.tools?.read ?? []);
+  for (const b of resolveBehaviors(manifest, overrides.behaviors)) {
+    if (b.kind === "tools") for (const tool of b.tools ?? []) rules.add(tool);
+    if (b.kind === "tools-scoped") {
+      for (const tool of b.tools ?? []) for (const scopePath of b.paths ?? []) rules.add(scopedToolToClaude(tool, scopePath));
+    }
+    if (b.kind === "commands") for (const pattern of b.commands ?? []) rules.add(commandToClaude(pattern));
+  }
+  for (const [server, tools] of Object.entries(manifest.mcp ?? {})) {
+    for (const tool of tools) rules.add(`mcp__${server}__${tool}`);
+  }
+  for (const c of resolveArbitraryCommands(manifest, overrides.commands)) rules.add(commandToClaude(c.tokens));
+  return rules;
+}
+
 // Merge generated permissions into existing Claude settings, preserving every other key except
 // `model`. Global roborepo settings must not pin Claude's model; leave that to the harness/user.
 export function renderClaudeSettings(current, manifest, overrides = {}, options = {}) {

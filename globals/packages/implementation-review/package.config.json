@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "implementation-review",
+  "label": "Implementation Review",
+  "description": "Shared implementation-quality review rules used by lifecycle workflows.",
+  "lifecycle": "optional",
+  "selectable": false,
+  "presentation": {
+    "visibility": "dependency",
+    "category": "skills-code-quality",
+    "order": 5
+  },
+  "recommends": [
+    "code-style"
+  ],
+  "resources": [
+    {
+      "type": "skill",
+      "id": "implementation-review",
+      "source": "skills/implementation-review",
+      "invocation": "auto",
+      "risk": "medium"
+    }
+  ]
+}

@@ -24,12 +24,19 @@ function handleToggle(urlPath) {
     const { loadConfig, mutatePackage, mutateSkill } = handlers;
     readJsonBody(req, async (body, err) => {
       if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
-      const { id, enabled } = body || {};
-      if (typeof id !== "string" || typeof enabled !== "boolean") {
-        return send(res, 400, "application/json", JSON.stringify({ error: "expected { id: string, enabled: boolean }" }));
+      const { id, enabled, cascade = false } = body || {};
+      if (typeof id !== "string" || typeof enabled !== "boolean" || typeof cascade !== "boolean") {
+        return send(res, 400, "application/json", JSON.stringify({ error: "expected { id: string, enabled: boolean, cascade?: boolean }" }));
       }
-      const mutate = urlPath === "/api/config/packages" ? mutatePackage : mutateSkill;
-      const result = await mutate(id, enabled); // mutatePackage is async (service components)
+      const isPackage = urlPath === "/api/config/packages";
+      // mutatePackage is async (service components); `cascade` applies to package disables only.
+      const result = isPackage ? await mutatePackage(id, enabled, { cascade }) : await mutateSkill(id, enabled);
+      // A disable refused because selected packages include it names them, so the portal can offer
+      // to disable them too.
+      if (!result.ok && result.includedBy?.length) {
+        const error = { code: "INCLUDED_IN_SELECTED", message: result.message, details: { includedBy: result.includedBy } };
+        return send(res, 409, "application/json", JSON.stringify({ ...result, error, config: loadConfig() }));
+      }
       const status = result.ok ? 200 : 400;
       send(res, status, "application/json", JSON.stringify({ ...result, config: loadConfig() }));
     });

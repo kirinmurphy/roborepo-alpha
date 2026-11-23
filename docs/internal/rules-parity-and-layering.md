@@ -97,8 +97,7 @@ transitions.
 
 An active skill's own delivery procedure takes precedence over this default. For example,
 `/plan-execute` and `/plan-review` push the plan's feature branch at the end of each run that
-commits to it, and `/session-close` ends the chat without
-pushing. User instructions to keep work local also take precedence. Unfinished experiments and
+commits to it. User instructions to keep work local also take precedence. Unfinished experiments and
 repositories without remotes skip delivery.
 
 ## Override Layers

@@ -45,9 +45,9 @@ Four ways skills relate, by what the user controls:
 
 | Concept | What the user controls | Example | Declared by |
 | --- | --- | --- | --- |
-| **Package** | One switch. Every resource in it turns on and off together. | `plan-suite`, `caveman` | `package.config.json` |
+| **Package** | One switch. Every resource in it turns on and off together. | `plan-suite`, `usage-statusline` | `package.config.json` |
 | **Collection** | Each member has its own switch, plus Select All / Deselect All for the group | None built in today; the portal still renders the switch for any such category | A category with `bulkToggle: true` in `manifests/inventory/package-categories.json` |
-| **Category** | Each member has its own switch, with no group switch | Code Conventions; Development Workflows (`plan-suite` and `session-close`) | A category without `bulkToggle` |
+| **Category** | Each member has its own switch, with no group switch | Code Conventions; Monitoring (`usage-statusline` and `capture-dense-bash`) | A category without `bulkToggle` |
 | **Dependency** | Nothing directly. It turns on because a selected package `requires` it, and off with the last one. A `selectable: false` package is only ever a dependency. | A package named in another's `requires` | `requires` in the parent manifest |
 
 **A package holds skills that are only correct together; a collection holds skills that are useful
@@ -67,6 +67,38 @@ which hands off to `/plan-review`, and so on. Code Conventions answers "yes, but
 together": `code-style` is useful without `react`. A package is all-or-nothing; there is no switch
 for one skill inside it, so skills that need their own switches belong in a collection.
 
+### Declaring a relationship between skills in different packages
+
+A skill that names a skill in another package gets one of three treatments, decided by one policy:
+
+| Relationship | Use when | Package behavior | Skill behavior |
+| --- | --- | --- | --- |
+| `requires` | The parent cannot meet its contract without the other package | Active whenever the parent is; cannot be turned off while the parent is on | Loaded whenever the parent's step needs it, without checking state |
+| `recommends` | The other skill improves the work, but the parent is correct without it | Offered once when the parent is enabled; never auto-enabled | Loaded when its `Load when` condition matches and the session lists it; otherwise skipped and named once in the final report |
+| prose-only reference | A fallback, an alternative, a boundary statement ("X does this instead"), or an inverse link | None | Stays in prose, never in a `## Paired Skills` row |
+
+The manifest says which packages are related; the skill's `## Paired Skills` table says when each
+applies. Task predicates ("when the plan touches JS/TS") stay in the table's `Load when` column and
+never go in the manifest. Each row names the skill and its `Relationship` (`requires` or
+`recommends`), which must match the parent package's manifest. A relationship is per package: in a
+multi-skill package such as `plan-suite`, the skills' needs combine in one manifest, and a package
+one skill requires is required by the package. References between skills in the same package are
+not relationships.
+
+Nesting is flattened for presentation and offers, never in manifests. A package's required list is
+its `requires` closure (`requiredClosure`); its recommended list is its own `recommends` plus those
+of every package it requires, less anything it requires (`recommendedClosure`). The Config page's
+Dependencies and the enable-time offer both read the flattened lists. A recommended
+package's requirements come with it when it is turned on; its own recommendations are not offered
+on the parent's behalf. Manifests and `## Paired Skills` rows still declare only direct edges.
+
+`roborepo skill audit` warns (never errors) when the two disagree, or when the shape looks wrong: an
+unconditional cross-package load (a row whose `Load when` starts with "Always", or a prose
+instruction to load a skill the table does not declare) that neither package requires; two packages
+that each unconditionally hand off to the other; a multi-skill package whose skills never reference
+each other. A reference deliberately kept in prose goes in `PROSE_ONLY_REFERENCES`
+(`scripts/cli/skill-package-boundaries.mjs`).
+
 On the Agents page, a package with two or more skills shows its package label (never one of its
 commands) and an `<n> skills` badge. Clicking the label opens a contents view in the source dialog
 listing each skill, then its rules or hooks, with each entry's own cost; each entry opens the same
@@ -75,7 +107,7 @@ source view a single-skill card does, and Back returns to the list. `buildBehavi
 target, and `context-cost.mjs` reports each resource's share under `contextCost.packages[<id>].resources`.
 A package with no source of its own (no skill, command, or rules) gets the same target with no
 entries when it has a visible requirement, so its label opens a contents view that lists only
-its **Requires**; when every requirement is hidden, the label opens nothing.
+its **Includes**; when every requirement is hidden, the label opens nothing.
 
 ## Manifest schema (`package.config.json`)
 
@@ -89,15 +121,15 @@ Enforced by `normalizePackage`/`normalizeResource` in `scripts/cli/package-catal
 | `description` | yes | non-empty; shown in portal |
 | `lifecycle` | no (defaults `optional`) | `optional` or `system` (`PACKAGE_LIFECYCLES`) |
 | `defaultEnabled` | no (defaults `false`) | boolean; see Default-selection semantics below |
-| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (including `token-optimization`, `monitoring`, `skills-dev-lifecycle`, `skills-writing`, `skills-code-quality`, `code-conventions`, `chat-time-output`, `additional-agents-md-rules`, and `integrations`) |
+| `presentation.category` | yes | must exist in `manifests/inventory/package-categories.json` (`code-conventions`, `chat-time-output`, `skills-dev-lifecycle`, `skills-code-quality`, `skills-writing`, `integrations`, and `monitoring`, in page order) |
 | `presentation.order` | no (defaults `0`) | numeric, controls sort within category |
 | `requires` | no | array of package IDs; they join the effective set automatically. Cycle-checked, missing-id-checked, no self-reference |
-| `recommends` | no | array of package IDs; offered after an enable, never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
+| `recommends` | no | array of package IDs; offered once when the parent is enabled (portal and interactive CLI ask, scripts and the setup wizard print one line), never turned on automatically, never a cause of `partial`. Missing-id-checked; not part of cycle detection |
 | `permissionsRender` | no (defaults `false`) | boolean; `true` re-renders the home permission files (`renderPermissionsToHome`) after the package's other components apply on enable or disable, for a package whose presence changes how permissions render (it reads `effectiveEnabledIds`, as `github-agent-identity` does for `agentIdentityBucket`) |
 | `selectable` | no (defaults `true`) | boolean; `false` makes a dependency-only package that `package enable`/`disable` refuse, except that `disable` removes one still recorded as a root (an older registry, or a manifest that later set `selectable: false`). Cannot combine with `defaultEnabled: true`, and needs `presentation.visibility` `dependency` or `hidden` (a `catalog` row would have no switch) |
-| `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Requires** in the source popup of each package that requires it), or `hidden` (no UI row) |
+| `presentation.visibility` | no (defaults `catalog`) | `catalog` (normal Config row), `dependency` (no row; listed under **Includes** in the source popup of each package that requires it), or `hidden` (no UI row) |
 | `resources` | yes | array — see Resource types |
-| `urls` | no | optional array shown in portal (see e.g. `caveman`) |
+| `urls` | no | optional array of `{ label, url }` links shown in the portal |
 
 There is no `.schema.json` file — validation is hand-rolled JS, not JSON Schema. Do not add one
 speculatively; the current approach is deliberate (see `validatePackageCatalog`).
@@ -160,7 +192,7 @@ Codex). Adding a harness never means adding a method for one package's setting.
 | `set` | Writes the value when the key is absent, already equal, or recorded as RoboRepo's. An unmanaged different value is left and reported as a conflict. The prior state is recorded in `owned-scalars-state.mjs`. | Restores the recorded prior value, or removes a key RoboRepo introduced. A value changed since enable is left. |
 | `union` | Adds the missing items to the list at `path`. With `delimiter` the list is a delimited string; `"path"` means the OS path-list separator. | Removes only the package's items; an emptied list loses its key. |
 
-- `path` is an array of keys, so `["enabledPlugins", "caveman@caveman"]` needs no escaping. In
+- `path` is an array of keys, so `["enabledPlugins", "example@marketplace"]` needs no escaping. In
   TOML, `[...table, key]` addresses `key` under `[table]`.
 - Two packages may not `set` the same path; `validatePackageCatalog` claims each one.
 - `label` names the component in package status and in "Installed outside RoboRepo" badges.

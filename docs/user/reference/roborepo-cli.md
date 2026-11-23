@@ -60,8 +60,8 @@ run `roborepo harness refresh`.
 | `roborepo doctor --installed [--verbose]` | Verifies that installed harness paths resolve correctly; also fails when a local store is over its size cap. |
 | `roborepo maintenance repair [--dry-run] [--on-conflict ...]` | Repairs a moved or renamed checkout by relinking stale symlinks against the current path; it leaves copied config content alone. |
 | `roborepo maintenance repair local-config [--dry-run or --apply]` | Recovers safe local Claude/Codex settings from recent backups when `update` or `doctor --installed` reports local config repair candidates. |
-| `roborepo maintenance stores [list]` | Lists the local stores RoboRepo keeps on disk — telemetry spools, runtime history, capture logs, browser evidence — with each one's size against its bound. |
-| `roborepo maintenance stores reset <id> [--all]` | Reclaims space in one store. Applies that store's own retention policy, or with `--all` clears it outright. Store ids come from `stores list`. |
+| `roborepo maintenance stores [list]` | Lists the local stores RoboRepo keeps on disk — telemetry spools, runtime history, capture logs, browser evidence, agent scratch folders — with each one's size against its bound. |
+| `roborepo maintenance stores reset <id> [--all] [--dry-run]` | Reclaims space in one store. Applies that store's own retention policy, or with `--all` clears it outright. `--dry-run` lists what the reset would remove, with sizes and ages, and removes nothing. Store ids come from `stores list`. |
 | `roborepo maintenance portal-pids [--reap]` | Lists `~/.roborepo/portal/server-<port>.pid` files and whether each one's process is still alive. `--reap` deletes only entries whose process is gone, never a running portal or one owned by another user. |
 
 From a development checkout, two more commands render generated files after you edit their sources:
@@ -86,9 +86,9 @@ RoboRepo configuration in place. See [Uninstall](../guides/install-workflows.md#
 | --- | --- |
 | `roborepo package list` | Lists packages grouped by category with live enabled/disabled status. |
 | `roborepo package inspect <id>` | Prints the full manifest for one package. |
-| `roborepo package enable <id>` | Enables a package and applies it immediately — permissions, hooks, rules, MCP, and commands install without a separate `roborepo update`. Packages it requires turn on with it. Prints one checked result per package: `enabled`, `partial` (some pieces did not land; named), or `blocked` (applying stopped on an error; exits 1). |
-| `roborepo package disable <id> [--cascade]` | Disables a package and removes its owned contributions immediately, along with any package that was on only because it required it. See [Dependencies](#package-dependencies). |
-| `roborepo package reconcile` | Re-applies every enabled package, removes packages RoboRepo installed that are no longer enabled (for example a dependency no package requires any more), and drops stale entries for packages no longer in the catalog. Cleanup removes only packages RoboRepo recorded as installing, never one it did not install; like `package disable`, removing one takes out every entry its manifest lists. |
+| `roborepo package enable <id>` | Enables a package and applies it immediately — permissions, hooks, rules, MCP, and commands install without a separate `roborepo update`. Packages it includes turn on with it. Prints one checked result per package: `enabled`, `partial` (some pieces did not land; named), or `blocked` (applying stopped on an error; exits 1). |
+| `roborepo package disable <id> [--cascade]` | Disables a package and removes its owned contributions immediately, along with any package that was on only because it included it. See [Dependencies](#package-dependencies). |
+| `roborepo package reconcile` | Re-applies every enabled package, removes packages RoboRepo installed that are no longer enabled (for example a dependency no package includes any more), and drops stale entries for packages no longer in the catalog. Cleanup removes only packages RoboRepo recorded as installing, never one it did not install; like `package disable`, removing one takes out every entry its manifest lists. |
 | `roborepo package adopt-live [--dry-run]` | Detects externally installed package behavior and marks it enabled without reinstalling it. |
 | `roborepo package validate [id]` | Validates one package or the whole catalog against the manifest schema. |
 | `roborepo package dev create <id> [--kind=empty\|auto-skill\|skill-command\|standalone-command] [--description=...] [--default-enabled=true]` | Scaffolds a new package under `globals/packages/<id>/` (dev checkout) or `~/.roborepo/workspace/packages/<id>/` (package mode). Refuses to overwrite an existing package. |
@@ -98,17 +98,17 @@ Most users only need `list`, `inspect`, `enable`, and `disable`.
 
 ### Package dependencies
 
-A package can **require** other packages (they turn on with it) or **recommend** them (they are
-offered, never turned on for you). RoboRepo records only the packages you turned on; a required
-package stays on while any package you turned on still requires it, and turns off with the last
-one.
+A package can **include** other packages (they turn on with it; the manifest field is `requires`)
+or **recommend** them (they are offered, never turned on for you). RoboRepo records only the
+packages you turned on; an included package stays on while any package you turned on still
+includes it, and turns off with the last one.
 
 | You run | What happens |
 | --- | --- |
-| `package enable <id>` | `<id>` and everything it requires turn on. In a terminal you are asked about each recommendation that is off; in a script they are only listed. |
-| `package disable <id>` for a package you turned on | It is turned off, unless another package you turned on requires it. Then it stays on and the result names that package. |
-| `package disable <id>` for a package that is on only because another requires it | Refused, naming the packages that keep it on. `--cascade` turns those off too, and it goes with them. |
-| `package enable` or `disable` on a dependency-only package | Refused: it has no switch of its own and follows the packages that require it. One exception: `disable` removes it when the registry records it as a selected package (an older registry, or a package that later became dependency-only). |
+| `package enable <id>` | `<id>` and everything it includes turn on. In a terminal you are asked about each recommendation that is off; in a script they are only listed. |
+| `package disable <id>` for a package you turned on | It is turned off, unless another package you turned on includes it. Then it stays on and the result names that package. |
+| `package disable <id>` for a package that is on only because another includes it | Refused, naming the packages that keep it on. `--cascade` turns those off too, and it goes with them. |
+| `package enable` or `disable` on a dependency-only package | Refused: it has no switch of its own and follows the packages that include it. One exception: `disable` removes it when the registry records it as a selected package (an older registry, or a package that later became dependency-only). |
 
 ## Local Portal
 
@@ -246,6 +246,24 @@ See [RoboRepo Skills Interface](roborepo-skills.md) for the managed/native bound
 > `roborepo dev …` exists only in a Git checkout of RoboRepo itself; the scripts it drives are not
 > published to npm, so an installed copy reports that it requires a development checkout.
 
+## Scratch Folders
+
+| Command | What it does |
+| --- | --- |
+| `roborepo scratch <name>` | Prints `~/.roborepo/scratch/<name>/`, creating it if needed. `<name>` is a plan id or a short topic: one path segment of letters, digits, `.`, `_`, and `-`. |
+
+Agents write temporary files that are not throwaway files in Claude here: throwaway files in Codex,
+notes handed between sessions, a long investigation's intermediate results. Both harness sandboxes
+let shell commands write this folder. Each call removes scratch folders unchanged for 14 days, or
+the oldest ones once the store passes 500 MB, but never the folder it prints and never a folder
+changed in the last hour, which another session may still be writing; the newest folder is always
+kept. A folder's age is the newest change anywhere inside it. The store appears in
+`roborepo maintenance stores` as `scratch`.
+
+When the printed folder is outside what `roborepo delivery pr-body` reads (an overridden `HOME` or
+`ROBOREPO_STATE_ROOT` moved it), the command also prints a note on stderr: write a pull request body
+in the system temp folder instead.
+
 ## Worktree preservation and recovery
 
 Use `git worktrees cleanup` to inspect committed landing and local preservation separately.
@@ -370,15 +388,16 @@ permission entries for workflow skills that deliver an already-pushed feature br
 | Command | Operation |
 | --- | --- |
 | `roborepo delivery fetch <remote>` | Refresh heads under `refs/remotes/<remote>/` using a configured remote name |
-| `roborepo delivery pr-body <body-file>` | Replace the current branch's open PR body with a UTF-8 file in a temp directory |
+| `roborepo delivery pr-body <body-file>` | Replace the current branch's open PR body with a UTF-8 file in a temp directory or the scratch folder |
 | `roborepo delivery pr-ready` | Mark that PR ready for review |
 | `roborepo delivery retry-ci <run-id>` | Rerun failed jobs in a completed, failed run at that PR head |
 
 A normal workflow refreshes the configured remote, pushes the feature branch with its upstream,
 writes the finished PR description to a file, and updates the existing PR. The body file must
 resolve, after symlinks, to a regular file under a fixed system temp location (`/tmp`,
-`/var/tmp`, macOS `/var/folders`, or a Windows per-user `AppData\Local\Temp`) that the
-`read-secrets` credential denylist does not name. `TMPDIR` does not widen that set; on Windows,
+`/var/tmp`, macOS `/var/folders`, or a Windows per-user `AppData\Local\Temp`) or under the
+scratch folder (`~/.roborepo/scratch/`), and the `read-secrets` credential denylist must not
+name it. `TMPDIR` does not widen that set; on Windows,
 `TEMP` is accepted only when it names an `AppData\Local\Temp` folder. The command opens the file
 and rechecks its identity before reading. On Linux that check uses the kernel's path for the open
 file and refuses a path swapped mid-check; on macOS and Windows it narrows that window but cannot

@@ -3,7 +3,7 @@ import path from "node:path";
 import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageMode, initializeWorkspace } from "./paths.mjs";
 import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { forgetPackageIds, readEnabledPackagesRegistry, readAppliedPackageIds, selectedRootIds, setPackageApplied, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
-import { requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
+import { recommendedClosure, requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
 import { loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
@@ -426,11 +426,14 @@ function installMcpPreset(presetId) {
 // Typed failure for a package mutation that cannot start: a usage error, an unknown package, a
 // direct enable or disable of a dependency-only package, or a disable the dependency rules
 // refuse. Nothing has changed when it is thrown. The terminal commands print the message and exit with `exitCode`; the portal returns it.
+// `includedBy` lists the selected packages that keep a package on when a disable is refused for
+// that reason, so the portal can offer to disable them too.
 export class PackageMutationError extends Error {
-  constructor(message, { exitCode = 2 } = {}) {
+  constructor(message, { exitCode = 2, includedBy = [] } = {}) {
     super(message);
     this.name = "PackageMutationError";
     this.exitCode = exitCode;
+    this.includedBy = includedBy;
   }
 }
 
@@ -524,7 +527,7 @@ export async function enablePackage(rest, changed = new Set()) {
     console.log(`[dry-run] would enable: ${pkg.label}`);
     console.log(`  [dry-run] mark package selected in registry`);
     for (const id of order) {
-      if (id !== pkg.id) console.log(`  [dry-run] would enable required package: ${id}`);
+      if (id !== pkg.id) console.log(`  [dry-run] would enable included package: ${id}`);
       await applyPackageComponents(catalog.find((p) => p.id === id), { dryRun: true });
     }
     return { ok: true, outcomes: [], recommendations: disabledRecommendations(pkg, catalog, order), changedPackageIds: [] };
@@ -533,7 +536,7 @@ export async function enablePackage(rest, changed = new Set()) {
   console.log(`enabling: ${pkg.label}`);
   setPackageEnabled(pkg.id, true, loadPackageCatalog({ includeUnavailable: true }));
   const blocked = await applyInOrder(order, catalog, async (target) => {
-    if (target.id !== pkg.id) console.log(`enabling required package: ${target.label}`);
+    if (target.id !== pkg.id) console.log(`enabling included package: ${target.label}`);
     changed.add(target.id);
     await applyPackageComponents(target);
   });
@@ -557,16 +560,17 @@ function warnUnavailableRequirements(order, catalog) {
     for (const dep of fullCatalog.find((p) => p.id === id)?.requires || []) {
       if (available.has(dep)) continue;
       const reason = unavailablePackageReason(fullCatalog.find((p) => p.id === dep) || {}) || "not in the catalog";
-      console.warn(`  warn: ${id} requires ${dep}, which is skipped (${reason})`);
+      console.warn(`  warn: ${id} includes ${dep}, which is skipped (${reason})`);
     }
   }
 }
 
-// Visible selectable recommendations of `pkg` that are not effective. Offered, never applied here: only
-// the portal and the interactive terminal command ask the user.
-function disabledRecommendations(pkg, catalog, effectiveIds) {
+// Visible selectable recommendations of `pkg`, its own and those of the packages it requires, that
+// are not effective. Offered, never applied here: only the portal and the interactive terminal
+// command ask the user.
+export function disabledRecommendations(pkg, catalog, effectiveIds) {
   const effective = new Set(effectiveIds);
-  return (pkg.recommends || [])
+  return recommendedClosure(catalog, pkg.id)
     .map((id) => catalog.find((p) => p.id === id))
     .filter((dep) => dep && dep.selectable && dep.presentation?.visibility !== "hidden" && !effective.has(dep.id))
     .map((dep) => ({ id: dep.id, label: dep.label, description: dep.description }));
@@ -763,8 +767,9 @@ export async function disablePackage(rest, changed = new Set()) {
   const keepers = rootsRequiring(catalog, pkg.id, roots);
   if (!isRoot && keepers.length && !cascade) {
     throw new PackageMutationError(
-      `cannot disable ${pkg.id}; it is on because selected packages require it: ${keepers.join(", ")}\n` +
+      `cannot disable ${pkg.id}; it is on because selected packages include it: ${keepers.join(", ")}\n` +
       `rerun with --cascade to disable them too`,
+      { includedBy: keepers.map((id) => ({ id, label: catalog.find((p) => p.id === id)?.label || id })) },
     );
   }
   if (!dryRun) assertHarnessWriteAllowed();
@@ -785,20 +790,20 @@ export async function disablePackage(rest, changed = new Set()) {
     console.log(`[dry-run] would disable: ${pkg.label}`);
     for (const id of deselect) console.log(`  [dry-run] mark ${id} deselected in registry`);
     for (const id of order) await removePackageComponents(catalog.find((p) => p.id === id), { dryRun: true });
-    if (keptOnBy.length) console.log(`  [dry-run] ${pkg.id} would stay on: required by ${keptOnBy.join(", ")}`);
+    if (keptOnBy.length) console.log(`  [dry-run] ${pkg.id} would stay on: included in ${keptOnBy.join(", ")}`);
     return { ok: true, outcomes: [], keptOnBy, changedPackageIds: [] };
   }
 
   console.log(`disabling: ${pkg.label}`);
   for (const id of deselect) setPackageEnabled(id, false, catalog);
   const blocked = await applyInOrder(order, catalog, async (target) => {
-    if (target.id !== pkg.id) console.log(`disabling ${deselect.includes(target.id) ? "dependent" : "no longer required"} package: ${target.label}`);
+    if (target.id !== pkg.id) console.log(`disabling ${deselect.includes(target.id) ? "dependent" : "no longer included"} package: ${target.label}`);
     changed.add(target.id);
     await removePackageComponents(target);
   });
   const outcomes = probeOutcomes(catalog, order, blocked);
   printOutcomes(outcomes);
-  if (keptOnBy.length) console.log(`  ${pkg.id} stays on: required by ${keptOnBy.join(", ")}`);
+  if (keptOnBy.length) console.log(`  ${pkg.id} stays on: included in ${keptOnBy.join(", ")}`);
   return { ok: blocked.size === 0, outcomes, keptOnBy, changedPackageIds: [...changed] };
 }
 

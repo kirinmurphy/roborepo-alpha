@@ -21,7 +21,7 @@ import { loadSlashCommandPlan } from "../cli/slash-commands.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const cli = path.join(repoRoot, "scripts/cli/main.mjs");
 const normalize = (text) => text.replace(/\s+/g, " ");
-// The plan skills ship in one package; session-close is its own.
+// The plan skills ship in one package; other skills are each their own.
 const PLAN_SUITE_PACKAGE = "plan-suite";
 const packageOf = (id) => (id.startsWith("plan-") ? PLAN_SUITE_PACKAGE : id);
 const readSkill = (id) => normalize(fs.readFileSync(path.join(repoRoot, "globals/packages", packageOf(id), "skills", id, "SKILL.md"), "utf8"));
@@ -29,11 +29,16 @@ const readPackageFile = (relative) => normalize(fs.readFileSync(path.join(repoRo
 const includesAll = (label, text, phrases) => {
   for (const phrase of phrases) assert.ok(text.includes(phrase), `${label}: missing "${phrase}"`);
 };
-// The rubric exists as two texts (validation-loop.md and plan-review's inline copy); both must carry
-// the convention checks so an edit to one cannot silently drop them.
+// The review rubric lives once, in implementation-review; every caller points to it instead of
+// carrying a copy, so these phrases are asserted there and asserted absent from the callers.
 const CONVENTION_CHECK_PHRASES = ["Flow and cohesion", "Data and state", "Comments and abstractions", "length alone is never a finding"];
-// Both rubric texts must also keep issues the plan did not cause out of its findings.
-const OUTSIDE_PLAN_PHRASES = ["Issues the plan did not cause are not findings", "`Outside this plan`"];
+const OUTSIDE_SCOPE_PHRASES = ["Issues the work under review did not cause are not findings", "`Outside this scope`"];
+const RISK_CHECKPOINT_PHRASES = ["authentication;", "authorization, ownership, and admin;", "database schema and migrations;", "external integrations."];
+// A base failure needs the same check failing on the base branch. An input that only exists there
+// proves nothing: the check can pass on base and still fail on the plan's branch.
+const BASE_FAILURE_EVIDENCE = "the same check fail";
+const assertNoBaseInputLoophole = (label, text) =>
+  assert.ok(!/failing input exists/.test(text), `${label}: a base failure must not rest on a failing input existing on base`);
 
 const SKILLS = {
   "plan-promote": {
@@ -157,32 +162,29 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "Read `references/validation-loop.md` before the first pass",
     "never the implementer's account of the work",
     "The Validator only reports",
-    "A finding is classed by consequence, not size",
+    "Findings carry `implementation-review`'s severity and class",
     "which is recorded and never blocks",
     "Never run the submit transition until the loop has ended",
     "without asking the user",
     "eight-pass cap",
   ]);
-  includesAll("validation-loop.md", readPackageFile("plan-suite/skills/plan-execute/references/validation-loop.md"), [
-    "## The loop",
-    "## The rubric",
-    "a check an agent can run is run, not listed",
-    "A reason that does not hold is a `fix` finding",
+  const loop = readPackageFile("plan-suite/skills/plan-execute/references/validation-loop.md");
+  assertNoBaseInputLoophole("validation-loop.md", loop);
+  for (const phrase of [...CONVENTION_CHECK_PHRASES, "## The rubric", "| `escalate` |"]) {
+    assert.ok(!loop.includes(phrase), `validation-loop.md: the rubric moved to implementation-review, but "${phrase}" is still here`);
+  }
+  includesAll("validation-loop.md", loop, [
+    "the `implementation-review` skill's rubric",
+    "load it before the first pass",
+    "A `note` is shown in the pass's report and not recorded",
+    "no `blocking` or `actionable` `fix` findings",
     "never pass `isolation: \"worktree\"`",
     "Do not give it a summary of what was built",
     "record in the plan that the Validator ran in-session",
-    "| `fix` |",
-    "| `escalate` |",
-    "| `base` |",
-    "Size never decides the class",
     "Never ask the user whether to fix a `fix` finding",
     "Cap at eight passes",
     "the eighth pass's findings are recorded and fixed like any other pass's",
-    "A silent pass is indistinguishable from a skipped one",
     "only `/plan-review` writes `### Approval`",
-    ...CONVENTION_CHECK_PHRASES,
-    ...OUTSIDE_PLAN_PHRASES,
-    "A comment the diff adds that only restates the code | `fix`",
   ]);
 
   const completion = skill.slice(order[4], order[5]);
@@ -308,7 +310,6 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "`NOT_TESTED_UNEXPLAINED`",
     "`roborepo plans submit` and `plans preflight` refuse the second",
   ]);
-  includesAll("session-close", readSkill("session-close"), ["Run a check an agent can run instead of listing it", "`Needs a person: <why>`"]);
   includesAll("feature-verification", readSkill("feature-verification"), ["Run `roborepo browser run --serve` as a bare call"]);
   const write = readSkill("plan-write");
   assert.ok(write.includes("Change a plan only through `roborepo plans save`"), "plan-write: writes through the store, not before editing");
@@ -326,6 +327,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 // --- plan-review: preflight, base synchronization, the check, fixes, the review packet, and approval ---
 {
   const review = readSkill("plan-review");
+  assertNoBaseInputLoophole("plan-review", review);
   includesAll("plan-review push", review, [
     "Every review run that commits to the feature branch",
     "then push the feature branch (see Push the feature branch)",
@@ -338,14 +340,16 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   // A finding is fixed in the same session by consequence, not by kind of change; only a choice
   // between alternatives, a requirement change, or an unspecified contract change waits for the human.
   includesAll("plan-review check", review.slice(order[2], order[3]), [
-    "A failure the base branch has too is a **base failure**",
+    "A failure is a **base failure** only when that evidence shows the same check failing on the base branch",
     "neither a finding nor a blocker",
     "never an account of the work",
-    "Classify every finding by consequence, not size",
-    ...CONVENTION_CHECK_PHRASES,
-    ...OUTSIDE_PLAN_PHRASES,
-    "a comment the diff adds that only restates the code is a fix",
+    "loads `implementation-review` and applies its rubric",
+    "Each finding carries the rubric's severity and class",
+    "`Outside this scope`",
   ]);
+  for (const phrase of CONVENTION_CHECK_PHRASES) {
+    assert.ok(!review.includes(phrase), `plan-review: the rubric lives in implementation-review, but "${phrase}" is still inline`);
+  }
   includesAll("plan-review fixes", review.slice(order[4], order[5]), [
     "Fix every finding classed **fix** in this session, code included",
     "Commit the fix on its own, separate from the plan record",
@@ -396,8 +400,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "An agent cannot approve, and passing tests are not approval",
     "`roborepo plans approval <plan> --json`",
     "`roborepo plans approve <plan> --commit <full reviewed commit id> --confirmed-by <who>`",
-    // Review runs what an agent can and asks the human only for the rest.
-    "entries whose `Needs a person:` or `Blocked:` reason does not hold and cleared entries without evidence",
+    // Review runs what an agent can and asks the human only for the rest. Whether an entry's reason
+    // holds is part of implementation-review's checklist, asserted in its own block.
     "run the check here and clear the entry with its evidence",
     "Retry each `Blocked:` entry once",
     "the checks only the human can make",
@@ -433,14 +437,18 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   ]);
 }
 
-// --- suite-wide conventions: every plan-suite skill checks its paired packages before loading them,
-// and /plan-close repairs agent-resolvable gaps before refusing. ---
+// --- suite-wide conventions: every plan-suite skill declares its paired skills with the package
+// relationship, never prompts to enable a package, and /plan-close repairs agent-resolvable gaps
+// before refusing. ---
 {
-  const suite = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive", "session-close"];
+  const suite = ["plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"];
   for (const id of suite) {
     const skill = readSkill(id);
-    includesAll(`${id} paired skills`, skill, ["## Paired Skills", "host's skill/package manager", "Enable it, or skip it for this run?", "never describe a drifted package as loaded"]);
-    if (id !== "session-close") includesAll(`${id} plan naming`, skill, ["Name the plan by its H1 title, with its id in parentheses on first mention only"]);
+    includesAll(`${id} paired skills`, skill, ["## Paired Skills", "| Skill | Relationship | Load when | Contributes |", "the paired-skill rule in Skill Loading", "Never ask the user to enable a package"]);
+    for (const phrase of ["Enable it, or skip it", "host's skill/package manager"]) {
+      assert.ok(!skill.includes(phrase), `${id}: paired skills no longer run an enable-or-skip check ("${phrase}")`);
+    }
+    includesAll(`${id} plan naming`, skill, ["Name the plan by its H1 title, with its id in parentheses on first mention only"]);
     if (["plan-promote", "plan-execute"].includes(id)) {
       const report = id === "plan-execute"
         ? readPackageFile("plan-suite/skills/plan-execute/references/final-report.md")
@@ -472,6 +480,9 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     includesAll(`${id} cold-reader check`, report, [check]);
     if (id !== "plan-promote") assert.ok(!report.includes("```text"), `${id}: report has no fixed status template`);
     assert.ok(!report.includes("where it applies"), `${id}: visual evidence is required, not optional`);
+  }
+  for (const id of ["javascript-typescript", "technical-writing"]) {
+    includesAll(`${id} paired skills`, readSkill(id), ["| Skill | Relationship | Load when | Contributes |", "the paired-skill rule in Skill Loading", "Never ask the user to enable a package"]);
   }
   includesAll("plan-write lists the shared report reference", readSkill("plan-write"), [
     "Before the completion report, read `references/completion-report.md`",
@@ -563,6 +574,39 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
   }
 }
 
+// --- implementation-review: the one rubric, and the callers that use it ---
+{
+  const rubric = readSkill("implementation-review");
+  assertNoBaseInputLoophole("implementation-review", rubric);
+  assert.ok(rubric.includes(BASE_FAILURE_EVIDENCE), "implementation-review: a base failure needs the same check failing on base");
+  includesAll("implementation-review", rubric, [
+    ...CONVENTION_CHECK_PHRASES,
+    ...OUTSIDE_SCOPE_PHRASES,
+    ...RISK_CHECKPOINT_PHRASES,
+    "a check an agent can run is run, not listed",
+    "A reason that does not hold is a `fix` finding",
+    "A comment the diff adds that only restates the code | `fix`",
+    "| `blocking` |", "| `actionable` |", "| `note` |",
+    "| `fix` |", "| `escalate` |", "| `base` |",
+    "Size never decides the class",
+    "Generic cleanup advice is not a finding",
+    "A silent pass is indistinguishable from a skipped one",
+    "Functionality gaps", "Naming and intuitiveness", "Project-pattern conformance",
+  ]);
+  for (const id of ["plan-execute", "plan-review", "plan-close"]) {
+    const skill = readSkill(id);
+    assert.ok(skill.includes("`implementation-review`"), `${id}: references implementation-review`);
+    for (const phrase of [...CONVENTION_CHECK_PHRASES, "## Risk Checkpoints", "database schema and migrations"]) {
+      assert.ok(!skill.includes(phrase), `${id}: "${phrase}" belongs to implementation-review`);
+    }
+  }
+  includesAll("plan-close review", readSkill("plan-close"), [
+    "Then run `implementation-review` over the plan-owned implementation",
+    "makes the plan incomplete at the verdict",
+    "`test-harness` decides which checks those are",
+  ]);
+}
+
 // --- plan-suite-init confirms the worktree root once, and reconnects without asking ---
 // This gate has no executable code path, so these phrases are its only enforcement.
 {
@@ -582,6 +626,18 @@ validatePackageCatalog(catalog);
 
 const byId = new Map(catalog.map((pkg) => [pkg.id, pkg]));
 assert.ok(byId.has(PLAN_SUITE_PACKAGE), `catalog missing package: ${PLAN_SUITE_PACKAGE}`);
+assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).requires, ["technical-writing", "implementation-review", "test-harness", "code-style", "feature-verification"], `${PLAN_SUITE_PACKAGE} requires`);
+assert.deepEqual(byId.get(PLAN_SUITE_PACKAGE).recommends || [], [], `${PLAN_SUITE_PACKAGE} recommends nothing`);
+assert.deepEqual(byId.get("technical-writing").recommends, ["code-style", "test-harness"], "technical-writing recommends");
+assert.deepEqual(byId.get("implementation-review").recommends, ["code-style"], "implementation-review recommends");
+assert.deepEqual(byId.get("javascript-typescript").requires, ["code-style"], "javascript-typescript requires");
+assert.deepEqual(byId.get("javascript-typescript").recommends || [], [], "javascript-typescript recommends nothing");
+assert.deepEqual(byId.get("react").requires, ["javascript-typescript", "code-style"], "react requires");
+assert.ok(!byId.has("session-close"), "session-close is archived, out of the catalog");
+const review = byId.get("implementation-review");
+assert.equal(review.selectable, false, "implementation-review is dependency-only");
+assert.equal(review.presentation.visibility, "dependency", "implementation-review has no Config row");
+assert.ok(!review.resources.some((r) => r.type === "slash-command" || (r.entrypoints || []).length), "implementation-review has no slash command");
 for (const id of ["plan-suite-init", "plan-write", "plan-promote", "plan-execute", "plan-review", "plan-close", "plan-archive"]) {
   assert.ok(!byId.has(id), `${id} is a skill of ${PLAN_SUITE_PACKAGE}, not a package of its own`);
 }

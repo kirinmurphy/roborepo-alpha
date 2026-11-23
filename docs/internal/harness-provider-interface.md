@@ -405,6 +405,11 @@ Codex is the only implementer. Its sandbox stops writes outside the workspace ro
 Both depend on the repository the render runs in, so they appear only after `roborepo update` runs
 inside a repository that has a plans store. The tracked `generated/codex/config.toml` has neither.
 
+Writable paths that hold for every checkout are not adapter output: `CODEX_SANDBOX_WRITABLE_PATHS` in
+`scripts/harnesses/codex/index.mjs` (the agent scratch folder, `~/.roborepo/scratch/**`) is merged
+into every Codex render, so the tracked `generated/codex/config.toml` carries it, the way Claude's
+`CLAUDE_SANDBOX_WRITABLE_PATHS` lists `~/.npm` and the scratch folder.
+
 Claude renders a sandbox too, but implements neither method. Its `permissions.render` sets the
 `sandbox` key of `settings.json` from `scripts/harnesses/claude/sandbox-settings.mjs`, and
 everything there holds for any checkout, because `~/.claude/settings.json` is user-level:

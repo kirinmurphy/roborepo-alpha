@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { repoRoot } from "./paths.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
+import { packageBoundaryFindings, pairedSkillRows, pairedSkillSection } from "./skill-package-boundaries.mjs";
 
 const AUDIT_REL = "docs/internal/skill-invocation-audit.md";
 const AUDIT_PATH = path.join(repoRoot, AUDIT_REL);
@@ -100,8 +101,8 @@ const VAGUE_TRIGGERS = /\b(when relevant|if relevant|as needed|when appropriate|
 // What is NOT judged: whether a given pairing is the right one. That is a claim about the skills'
 // subject matter, not about the shape of the declaration.
 function pairedSkillShape(skill, knownSkillNames = []) {
-  const table = /## Paired Skills\n([\s\S]*?)(?=\n## |\n$)/.exec(skill.body);
-  if (!table) {
+  const body = pairedSkillSection(skill.body);
+  if (body === null) {
     // Only flag skills that already tell the reader to pair with something; a skill with no
     // cross-skill relationship is not missing a table.
     //
@@ -119,18 +120,14 @@ function pairedSkillShape(skill, knownSkillNames = []) {
   }
 
   const out = [];
-  const body = table[1];
   if (!/do not wait to be asked for them by name/i.test(body)) {
     out.push("Paired Skills table does not instruct the load");
   }
 
-  const rows = body.split("\n").filter((line) => /^\|/.test(line) && !/^\|\s*-+/.test(line)).slice(1);
   const vague = [];
   const requestGated = [];
-  for (const row of rows) {
-    const cells = row.split("|").map((cell) => cell.trim());
-    const [, name, when = ""] = cells;
-    if (!name || !when) continue;
+  for (const { skill: name, when } of pairedSkillRows(skill.body) || []) {
+    if (!when) continue;
     if (VAGUE_TRIGGERS.test(when)) vague.push(name);
     if (/\bthe user (asks|requests|requested|names)\b/i.test(when)) requestGated.push(name);
   }
@@ -202,11 +199,34 @@ function recommendation(policy, skillFindings) {
   return "Keep auto if trigger remains narrow.";
 }
 
+// Skills grouped by package, as packageBoundaryFindings reads them.
+function packageSkillGroups(skills) {
+  const byName = new Map(skills.map((skill) => [skill.name, skill]));
+  return loadPackageCatalog({ includeUnavailable: true }).map((pkg) => ({
+    id: pkg.id,
+    requires: pkg.requires || [],
+    recommends: pkg.recommends || [],
+    skills: (pkg.resources || [])
+      .filter((resource) => resource.type === "skill" && byName.has(resource.id))
+      .map((resource) => ({ name: resource.id, body: byName.get(resource.id).body })),
+  }));
+}
+
+// Package-boundary warnings over the live catalog.
+export function catalogBoundaryFindings() {
+  return packageBoundaryFindings(packageSkillGroups(packageSkillEntries().map(readSkill)));
+}
+
 function escapeCell(value) {
   return String(value ?? "").replaceAll("|", "\\|").replace(/\s+/g, " ").trim();
 }
 
 export function renderSkillAudit() {
+  return buildSkillAudit().content;
+}
+
+// The rendered audit and its package-boundary warnings, from one pass over the catalog.
+function buildSkillAudit() {
   const policies = manifestPolicies();
   const skills = packageSkillEntries().map(readSkill);
   // Prose-pairing detection matches against real skill names, so an ordinary backticked value is
@@ -225,10 +245,11 @@ export function renderSkillAudit() {
     };
   });
 
+  const boundaryWarnings = packageBoundaryFindings(packageSkillGroups(skills));
   const unknownPolicies = [...policies.keys()].filter((name) => !skills.some((skill) => skill.name === name));
   const dynamicCount = rows.filter((row) => row.findings !== "none").length;
 
-  return `${[
+  const content = `${[
     "# Skill Invocation Audit",
     "",
     GENERATED_MARKER,
@@ -271,6 +292,13 @@ export function renderSkillAudit() {
     "- mode/reference matrices that no longer parse",
     "- paired skills mentioned in prose but never declared, or declared without instructing the load",
     "- paired-skill triggers that are unresolvable (\"when relevant\") or gated on a user request",
+    "- package-boundary warnings: an unconditional cross-package load neither package requires, two packages that each unconditionally hand off to the other, a multi-skill package whose skills never reference each other, and manifests that disagree with Paired Skills tables",
+    "",
+    "## Package Boundary Warnings",
+    "",
+    "Warnings only. Each compares package manifests (`requires`, `recommends`) with the skills' `## Paired Skills` tables.",
+    "",
+    ...(boundaryWarnings.length ? boundaryWarnings.map((warning) => `- ${warning}`) : ["None."]),
     "",
     "## Next Actions",
     "",
@@ -279,12 +307,14 @@ export function renderSkillAudit() {
     "3. Keep high-risk or side-effecting workflows behind explicit commands or hooks.",
     "",
   ].join("\n")}\n`;
+  return { content, boundaryWarnings };
 }
 
 export function skillAudit(args = []) {
   const checkOnly = args.includes("--check");
   const write = args.includes("--write") || !checkOnly;
-  const content = renderSkillAudit();
+  const { content, boundaryWarnings } = buildSkillAudit();
+  for (const warning of boundaryWarnings) console.warn(`warn: ${warning}`);
   const current = fs.existsSync(AUDIT_PATH) ? fs.readFileSync(AUDIT_PATH, "utf8").replace(/\r\n/g, "\n") : "";
 
   if (checkOnly) {

@@ -110,7 +110,6 @@ place while preserving commands, handler positions, and unrelated hooks.
 | Event | Hook | What it does | Installed by |
 | --- | --- | --- | --- |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | core (`hooks` bundle) |
-| SessionStart | Caveman mode | Turns on terse output; say "stop caveman" or "normal mode" to turn it off | `caveman` |
 | PreToolUse (shell) | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and any force push, backed by a git `pre-push` hook. Denies every push it cannot verify (`--no-verify`, `--all`, a `$VARIABLE`, an unrecorded remote default branch), where Claude would ask. Denies merges into a checkout that has a protected branch checked out, as Claude does, and deletes there, where Claude would ask. See [Protected Branches](claude-hooks.md#protected-branches) | core (`hooks` bundle) |
 | PreToolUse (shell) | Command permissions | Applies your permission settings' `allow`, `ask`, and `deny` buckets to shell commands by their leading words. An `allow` covers a single command only: a command with `;`, `&&`, `\|`, a redirection, or `$(...)` keeps Codex's own approval (see below) | core (`hooks` bundle) |
 | PermissionRequest (shell) | Verified push approval | Approves the generic push request only after the branch guard verifies it; leaves other confirmations to Codex | core (`hooks` bundle) |

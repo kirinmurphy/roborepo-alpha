@@ -333,6 +333,11 @@ check_store_bounds() {
   local output
   if output="$(node "${repo_root}/scripts/cli/maintenance-stores.mjs" --check 2>&1)"; then
     ok "local stores within their bounds"
+    # A store over its cap only because of folders the byte cap spares prints a hint line.
+    while IFS= read -r line; do
+      # An `if`, not `&&`: a non-matching last line would return 1 and stop doctor under set -e.
+      if [[ "${line}" == hint:* ]]; then echo "${line}"; fi
+    done <<< "${output}"
   else
     failed=1
     while IFS= read -r line; do
@@ -457,6 +462,54 @@ check_agent_identity() {
     1) hint "${output}" ;;
     *) fail "GitHub agent identity check crashed: ${output}" ;;
   esac
+}
+
+# Installed harness config that `roborepo update` would change: owned permission rules, sandbox and
+# hook settings, and copied hook files (scripts/cli/install-drift.mjs). Like a stale skill copy, it
+# warns, and fails under --installed. `roborepo update` installs from the checkout the install came
+# from, so from any other checkout (a feature branch's worktree) that checkout's own copy of the
+# check answers; when it has none yet, this checkout's answer can only be a hint, since a difference
+# may be this branch's own unmerged change.
+check_install_drift() {
+  if ! command -v node >/dev/null 2>&1; then
+    ok "node unavailable; skipped installed config drift check"
+    return 0
+  fi
+  local checker="${repo_root}/scripts/cli/install-drift.mjs" install_repo="" advisory=0
+  if [[ "${package_mode}" -eq 0 ]]; then
+    install_repo="$(read_install_repo 2>/dev/null || true)"
+    [[ -z "${install_repo}" ]] || install_repo="$(cd "${install_repo}" 2>/dev/null && pwd -P || true)"
+  fi
+  if [[ -n "${install_repo}" && "${install_repo}" != "$(cd "${repo_root}" && pwd -P)" ]]; then
+    if [[ -f "${install_repo}/scripts/cli/install-drift.mjs" ]]; then
+      checker="${install_repo}/scripts/cli/install-drift.mjs"
+    else
+      advisory=1
+    fi
+  fi
+  local output status=0
+  output="$(node "${checker}" 2>&1)" || status=$?
+  if [[ "${status}" -eq 0 ]]; then
+    ok "installed harness config matches the checkout it installs from"
+    return 0
+  fi
+  if [[ "${status}" -ne 1 ]]; then
+    fail "installed config drift check crashed: ${output}"
+    return 0
+  fi
+  local summary details
+  summary="$(head -n 1 <<<"${output}")"
+  details="$(tail -n +2 <<<"${output}")"
+  if [[ "${advisory}" -eq 1 ]]; then
+    hint "installed harness config differs from this checkout (${summary}); it was installed from ${install_repo}, so a difference this branch made is expected until it merges"
+  elif [[ "${check_installed}" -eq 1 ]]; then
+    fail "installed harness config is behind what roborepo update would install: ${summary} — run: roborepo update"
+    echo "${details}" >&2
+    return 0
+  else
+    echo "warn: installed harness config is behind what roborepo update would install: ${summary} — run: roborepo update"
+  fi
+  echo "${details}"
 }
 
 check_local_config_repair_candidates() {
@@ -598,6 +651,7 @@ if [[ "${#stale_skill_caches[@]}" -gt 0 ]]; then
 else
   ok "installed skill copies match their source"
 fi
+check_install_drift
 check_readme_skill_coverage
 # Internal (repo-only) skills: source in local/skills/, linked into THIS repo's project-scope
 # dotdirs (.claude/skills, .codex/skills) — never global, never exported.

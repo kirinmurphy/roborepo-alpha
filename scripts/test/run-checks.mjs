@@ -16,7 +16,8 @@
 //   node scripts/test/run-checks.mjs --group <name>   # run the exact files listed for <name> in
 //                                                     #   check-groups.json (used by ci.sh)
 //
-// Environment is inherited (spawnSync with the caller's env), so flags that suites read directly
+// Each run gets its own TMPDIR (scripts/test/lib/run-tmpdir.mjs), removed when the run ends.
+// Otherwise the environment is inherited (spawnSync with the caller's env), so flags that suites read directly
 // from the environment — e.g. CLEAN_MACHINE_STRICT=1 — pass through unchanged when ci.sh
 // invokes this.
 //
@@ -27,6 +28,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { closeRunTmpdir, openRunTmpdir } from "./lib/run-tmpdir.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..", "..");
@@ -98,11 +100,22 @@ function main() {
     process.exit(2);
   }
 
+  // Every suite's temp files land in this run's own folder, removed when the run ends.
+  const runDir = openRunTmpdir();
+  const env = { ...process.env, TMPDIR: runDir, TEMP: runDir, TMP: runDir };
   const failed = [];
-  for (const file of suites) {
-    const fullPath = path.join(testDir, file);
-    const result = spawnSync(process.execPath, [fullPath], { stdio: "inherit", env: process.env });
-    if (result.status !== 0) failed.push(file);
+  try {
+    for (const file of suites) {
+      const fullPath = path.join(testDir, file);
+      const result = spawnSync(process.execPath, [fullPath], { stdio: "inherit", env });
+      if (result.status !== 0) failed.push(file);
+    }
+  } finally {
+    try {
+      closeRunTmpdir(runDir);
+    } catch (error) {
+      console.error(`could not remove the run's temp folder ${runDir}: ${error.message}`);
+    }
   }
 
   const passed = suites.length - failed.length;

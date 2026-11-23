@@ -19,7 +19,7 @@ Use it when you want to:
 | Piece | Always available? | What it does |
 | --- | --- | --- |
 | Plans page | Yes | Local `/plans` portal view for discovering, filtering, rendering, and copying plan context |
-| Plan suite | Optional packages: `plan-suite` and `session-close` | Seven plan commands, including one-time setup, plus `/session-close` |
+| Plan suite | Optional package: `plan-suite` | Seven plan commands, including one-time setup |
 
 | Command | What you get |
 | --- | --- |
@@ -30,7 +30,6 @@ Use it when you want to:
 | `/plan-review` | Recheck the finished work against the current base, fix what has a clear fix, show you a plain-language review, and record your approval |
 | `/plan-close` | After you merge the reviewed work, verify it and move the plan to `completed/` |
 | `/plan-archive` | Retire a plan that will not be completed, with the reason |
-| `/session-close` | End a chat: review and commit the session's work, write the handoff note |
 
 No command takes a mode argument. Each one does one thing, so typing `/plan-` lists every step.
 A command never starts the next one: you run each step yourself, normally in a new chat.
@@ -53,8 +52,8 @@ flowchart LR
 3. Run `/plan-write` to create a backlog plan.
 4. Run `/plan-promote` on it to check it against the repository, resolve open decisions, and move it
    to `ready/`.
-5. Run `/plan-execute` to implement it in its own worktree. Run it again to resume in a later chat;
-   if you stop mid-work, `/session-close` writes the handoff note. When the work is complete, a
+5. Run `/plan-execute` to implement it in its own worktree. Run it again to resume in a later chat.
+   When the work is complete, a
    validator checks it and the same run fixes what it finds; once a check comes back clean, the
    plan moves to `review/`.
 6. Run `/plan-review`. It rechecks the work against the current base, fixes anything with a clear
@@ -89,13 +88,12 @@ page, follows the same standard: one sentence you can act on without the chat.
 ## Enable The Plan Suite
 
 The seven plan commands ship as one package, `plan-suite`, and turn on and off together.
-They include `/plan-suite-init` for one-time repository setup. `/session-close` is a separate
-package because it is useful in any chat.
+They include `/plan-suite-init` for one-time repository setup.
 
-The Plans page shows an onboarding banner until the suite is enabled. Its button enables both
-packages at once, and each command in the list has a **Details** button that shows that command's
-skill. The Agents page shows them under **Development Workflows**: a **Development Planning
-Lifecycle** card with a `7 skills` badge, and a **/session-close** card, each with its own toggle.
+The Plans page shows an onboarding banner until the suite is enabled. Its button enables `plan-suite`,
+and each command in the list has a **Details** button that shows that command's
+skill. The Agents page shows them under **Development Workflows** as the **Development Planning
+Lifecycle** card, with its own toggle.
 Click the Development Planning Lifecycle card's name to list its seven skills and its rules
 fragment, each of which opens its source.
 
@@ -103,7 +101,6 @@ From the CLI:
 
 ```sh
 roborepo package enable plan-suite
-roborepo package enable session-close
 ```
 
 The six commands were once six packages (`plan-write`, `plan-promote`, and so on), and
@@ -210,8 +207,9 @@ end with every open question in one batch.
 
 When the work is finished it runs a validation loop. A validator with fresh context, a separate
 agent where the harness has one, reads the plan, the full diff, and the check results, never the
-implementing agent's account of the work, and reports findings. It never edits anything. Each
-finding gets one of three classes, by consequence rather than size:
+implementing agent's account of the work, and reports findings against the `implementation-review`
+rubric. It never edits anything. Each finding has a severity (`blocking`, `actionable`, or `note`;
+a `note` never holds up the loop) and one of three classes, by consequence rather than size:
 
 | Class | When | What happens |
 | --- | --- | --- |
@@ -219,8 +217,8 @@ finding gets one of three classes, by consequence rather than size:
 | `escalate` | The fix chooses between real alternatives, each with a compelling argument for it, changes requirements or an unspecified contract, or lands outside the plan | It becomes an open question in the run's final batch |
 | `base` | The base branch fails the same check | It is recorded as verification, and blocks nothing |
 
-The run never asks before fixing a `fix` finding. The loop repeats until a pass finds nothing to
-fix, for at most eight passes. The cap limits passes only: the last pass's findings are fixed like
+The run never asks before fixing a `fix` finding. The loop repeats until a pass finds no `blocking`
+or `actionable` finding to fix, for at most eight passes. The cap limits passes only: the last pass's findings are fixed like
 any other's, and the run records that those fixes were not revalidated. The findings and the passes are recorded in the plan's `## Review` section. Then it runs the completion preflight
 (`roborepo plans preflight`), which checks that:
 
@@ -401,12 +399,6 @@ runs `roborepo plans archive <plan> --reason "<why>"`, which writes the reason u
 
 Archiving never removes a worktree or branch; unmerged code stays where it is.
 
-## `/session-close`
-
-Ends a chat: reviews the code the session changed, syncs docs and any plan the session touched,
-commits the session's work, and writes a handoff note for the next chat. It runs only when you ask,
-and never moves a plan.
-
 ## Not Tested
 
 A plan can carry a `## Not tested` section: checkboxes for work that exists but that no test
@@ -448,9 +440,19 @@ unchecked.
 
 ## Paired Skills
 
-Suite commands load helper skills such as `technical-writing`, `code-style`, and `test-harness`.
-Each is its own optional package. When one a command needs is disabled, the command asks whether to
-enable it or skip it for that run, and names any skipped skill in its report.
+Suite commands load helper skills, each from its own package. The suite declares which ones it needs:
+
+| Package | Relationship | What it means for you |
+| --- | --- | --- |
+| `technical-writing`, `test-harness`, `implementation-review`, `code-style`, `feature-verification` | Included | Enabling `plan-suite` turns them on, and they stay on while it is on |
+
+`implementation-review` holds the review rubric that `/plan-execute`, `/plan-review`, and
+`/plan-close` share. It has no toggle or command of its own: the Agents page lists it under
+**Included Packages** when you open the Development Planning Lifecycle card's Dependencies.
+
+The suite recommends nothing beyond what it includes. A command loads an included skill when the
+work calls for it, for example `feature-verification` only when delivered behavior needs a
+demonstration. No command asks you to enable a package while it runs.
 
 ## Open The Plans Page
 

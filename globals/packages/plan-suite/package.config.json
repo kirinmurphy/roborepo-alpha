@@ -8,6 +8,13 @@
     "category": "skills-dev-lifecycle",
     "order": 10
   },
+  "requires": [
+    "technical-writing",
+    "implementation-review",
+    "test-harness",
+    "code-style",
+    "feature-verification"
+  ],
   "resources": [
     {
       "type": "skill",

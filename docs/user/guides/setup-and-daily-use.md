@@ -21,17 +21,15 @@ warnings/tasks, and copy repository-aware context.
 
 Enable the plan suite for agent workflow prompts and one slash command per lifecycle step. The
 `plan-suite` package holds all seven plan commands, including `/plan-suite-init` for repository
-setup. The Plans page banner enables it alongside the separate `session-close` package. From the
-CLI, enable both packages with these commands.
+setup. The Plans page banner enables it. From the CLI, enable it with this command.
 
 ```sh
 roborepo package enable plan-suite
-roborepo package enable session-close
 ```
 
 Then use `/plan-write` to create or update a plan, `/plan-promote` to prepare it, `/plan-execute` to
 implement it, `/plan-review` to review it and record your approval, `/plan-close` to close it after
-you merge it, `/plan-archive` to retire one you will not finish, and `/session-close` to end a chat.
+you merge it, and `/plan-archive` to retire one you will not finish.
 
 See [Plan Suite Walkthrough](plan/lifecycle/plan-suite.md) for the full user flow.
 

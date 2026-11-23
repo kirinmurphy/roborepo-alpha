@@ -18,10 +18,10 @@ test command/suite. For package and user-content journeys, see
 | --- | --- | --- | --- |
 | Full CI parity gate | `npm run check` | `scripts/test/ci.sh`: everything below that CI runs, on both legs | CI runs it on every pull request and every push to main. Run it locally only for CI, workflow, or test-orchestration changes, a release, or on request. |
 | Pre-push check | `bash scripts/test/pre-push-check.sh <remote> [<url>]` with git's ref lines on stdin | doctor, docs references, `git diff --check` over the pushed commits | Runs from the repository `pre-push` hook. Stays under 10 seconds. |
-| Repo health | `bash scripts/doctor.sh --quiet` | generated-file drift, manifest data, links, script health | `roborepo doctor --installed` adds live installed-path checks. |
+| Repo health | `bash scripts/doctor.sh --quiet` | generated-file drift, manifest data, links, script health, and whether the installed harness config is behind what `roborepo update` would install (a warning; `scripts/cli/install-drift.mjs`) | `roborepo doctor --installed` adds live installed-path checks and turns that warning into a failure. |
 | Main smoke suite | `npm test` | fast repository behavior and simulated package mode | Alias for `scripts/test/test-cli.sh --quiet`. |
 | Install/uninstall collisions | `bash scripts/test/test-install-collisions.sh` | conflict policy, managed-copy reclaim, uninstall cleanliness against real fixture homes | Not covered by `npm test`. The only layer that proves uninstall leaves no remnants. |
-| Live install smoke | `npm run test:install-smoke` | whether *this machine's* install matches the repo: hook scripts byte-current and registered, package rules rendered, enabled ids real, skill links resolve | Read-only, and deliberately not in `npm test` or CI — there is no live install to inspect there. Run it after `roborepo update`. Complements `doctor --installed`, which does not check installed hook scripts at all. |
+| Live install smoke | `npm run test:install-smoke` | whether *this machine's* install matches the repo: hook scripts byte-current and registered, package rules rendered, enabled ids real, skill links resolve | Read-only, and deliberately not in `npm test` or CI — there is no live install to inspect there. Run it after `roborepo update`. Complements doctor, which compares installed hook scripts with their sources but not their registration or package rules. |
 | Package artifact smoke | `npm run test:package-install` | real `npm pack`, isolated global install, package-mode lifecycle, appRoot immutability | Requires a clean worktree only when retaining an artifact with `--output-dir`. |
 | Release preflight | `npm run publish:npm -- --dry-run` | npm auth, registry availability, release checks | Does not write a version or publish. |
 | Targeted Node checks | `node scripts/test/<name>.mjs` | one behavior surface | Preferred while debugging a specific regression. |
@@ -193,6 +193,17 @@ point; it must still be reached by CI or the main test runner.
 When that check fails, add the file to a runner. Only if it is genuinely not a suite entry point —
 a child process, a benchmark, a manual smoke that binds a port — add it to `EXEMPT` in
 `scripts/test/orphan-test-check.mjs` along with the reason it is not automated.
+
+## Temporary Files
+
+`scripts/test/run-checks.mjs` and `scripts/test/test-cli.sh` give each run its own temp folder,
+`roborepo-tests-<uid>/run-<pid>-<time>/` under the temp root (one private folder per account), and set `TMPDIR`, `TEMP`, and `TMP` to it
+for everything the run starts. The runner removes the folder when it ends, so a suite that calls
+`mkdtemp` and never cleans up leaves nothing behind. At start a run also removes the folders of
+earlier runs whose process no longer exists, which catches a crashed or killed run; a folder whose
+process may still be alive, including one a sandbox hides, is left alone. The helper is
+`scripts/test/lib/run-tmpdir.mjs`. A suite run directly with `node` gets no run folder, so it
+should still remove what it creates.
 
 ## Sandbox Notes
 

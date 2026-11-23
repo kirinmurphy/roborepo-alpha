@@ -14,6 +14,10 @@ const { loadPermissionManifest, renderPermissionsTo } = await import("../cli/per
 const { getHarnessProvider } = await import("../harnesses/registry.mjs");
 
 const codex = getHarnessProvider("codex");
+const { CODEX_SANDBOX_WRITABLE_PATHS } = await import("../harnesses/codex/index.mjs");
+// Grants beyond the provider's fixed ones (the agent scratch folder), which every profile carries.
+const storeGrants = (toml) => [...toml.matchAll(/^"(.+)" = "write"$/gm)].map((match) => match[1])
+  .filter((grant) => !CODEX_SANDBOX_WRITABLE_PATHS.includes(grant));
 const configFile = path.join(home, ".codex", "config.toml");
 fs.writeFileSync(configFile, "");
 const render = (cwd, overrides = {}) => {
@@ -32,7 +36,8 @@ try {
   assert.ok(toml.includes(`[permissions.managed-workspace.workspace_roots]\n${JSON.stringify(root)} = true`));
 
   // ---------------------------------------------------------------- exact grants
-  const grants = [...toml.matchAll(/^"(.+)" = "write"$/gm)].map((match) => match[1]);
+  assert.ok(toml.includes('"~/.roborepo/scratch/**" = "write"'), "every workspace profile grants the scratch folder");
+  const grants = storeGrants(toml);
   assert.deepEqual(grants, [
     path.join(common, "objects/**"),
     path.join(common, "worktrees/repo_plans/**"),
@@ -58,9 +63,12 @@ try {
   const readOnly = render(repo, { behaviors: { "write-files": "ask" } });
   assert.doesNotMatch(readOnly, /= "write"/, "a read-only profile grants no writes");
   const unset = render(fixture.repository("no-store", {}, { store: false }));
-  assert.doesNotMatch(unset, /= "write"|workspace_roots/, "a repository with no store adds nothing");
+  assert.deepEqual(storeGrants(unset), [], "a repository with no store adds no grant");
+  assert.doesNotMatch(unset, /workspace_roots/, "a repository with no store adds no root");
   const outside = fs.mkdtempSync(path.join(fixture.tmp, "outside-"));
-  assert.doesNotMatch(render(outside), /= "write"|workspace_roots/, "outside a repository adds nothing");
+  const outsideToml = render(outside);
+  assert.deepEqual(storeGrants(outsideToml), [], "outside a repository adds no grant");
+  assert.doesNotMatch(outsideToml, /workspace_roots/, "outside a repository adds no root");
 
   // ---------------------------------------------------------------- reserved worktree as the cwd
   assert.deepEqual(

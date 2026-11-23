@@ -5,12 +5,15 @@
     "config-dependency-sections-check.mjs",
     "package-lifecycle-check.mjs",
     "package-default-enabled-check.mjs",
+    "wizard-recommendations-check.mjs",
+    "package-relationships-check.mjs",
     "initialization-lifecycle-check.mjs",
     "harness-cohort-presentation-check.mjs",
     "harness-desktop-runtime-check.mjs",
     "harness-install-desktop-check.mjs",
     "managed-uninstall-check.mjs",
     "plan-suite-skills-check.mjs",
+    "skill-package-boundaries-check.mjs",
     "backlog-order-check.mjs",
     "backlog-model-check.mjs",
     "plan-store-check.mjs",
@@ -91,6 +94,8 @@
     "protect-check.mjs",
     "doctor-protection-check.mjs",
     "github-identity-status-check.mjs",
-    "github-setup-check.mjs"
+    "github-setup-check.mjs",
+    "run-tmpdir-check.mjs",
+    "install-drift-check.mjs"
   ]
 }

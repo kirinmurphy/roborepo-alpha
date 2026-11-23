@@ -12,6 +12,7 @@ default_permissions = "managed-workspace"
 extends = ":workspace"
 
 [permissions.managed-workspace.filesystem]
+"~/.roborepo/scratch/**" = "write"
 "~/.ssh/**" = "deny"
 "~/.aws/**" = "deny"
 "~/.gnupg/**" = "deny"

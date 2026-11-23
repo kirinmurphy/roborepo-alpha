@@ -115,7 +115,6 @@
       ],
       "skipPhrases": [
         "creating or revising plans",
-        "ending a session",
         "reviewing a working diff",
         "merging branches"
       ]

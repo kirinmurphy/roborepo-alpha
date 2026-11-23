@@ -26,6 +26,6 @@ naming what it stops.
 ## Plans Change Through the CLI
 
 Plan files live under `plans/` on the `repo-plans` branch, in a reserved worktree. Change them only
-with named `roborepo plans` commands: read with `plans show`, edit a copy outside the code checkout,
+with named `roborepo plans` commands: read with `plans show`, edit a copy in a temporary folder (see Temporary Files),
 and write with `plans save`. Never edit that worktree directly or run Git in it, and never add plan
 files to a code branch.
