@@ -1,6 +1,6 @@
 ---
 name: plan-close
-description: Use when closing one repository plan after its reviewed pull request has merged, or rerunning closure to confirm completion or resume guarded cleanup. Close from the store's review/ folder; recognize a plan already in completed/ without repeating closure. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit completion and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), the human review or approval (plan-review), archiving (plan-archive), ending a session (session-close), reviewing a working diff, or merging branches.
+description: Use when closing one repository plan after its reviewed pull request has merged, or rerunning closure to confirm completion or resume guarded cleanup. Close from the store's review/ folder; recognize a plan already in completed/ without repeating closure. Run the repository's checks, fix agent-resolvable gaps including missing tests, check claims, a fresh human approval, and landing, then commit completion and clean up the plan's worktree. Refuse only for unresolved work, unconfirmed manual checks, a stale or missing approval, or unconfirmed landing; hand superseded or abandoned plans to plan-archive. Trigger on explicit /plan-close or requests such as close this plan now that it has merged. Do not use for creating or revising plans (plan-write), preparing a plan (plan-promote), implementation (plan-execute), the human review or approval (plan-review), archiving (plan-archive), reviewing a working diff, or merging branches.
 ---
 
 # Plan Close
@@ -58,21 +58,15 @@ failed test pass. Recheck mutable requirements against the current state.
 
 Load these when the run calls for them; do not wait to be asked for them by name.
 
-| Skill | Load when | Contributes |
-| --- | --- | --- |
-| `technical-writing` | Writing the completion summary and `## Verification` section | Section content and reader clarity |
-| `test-harness` | Judging whether a failing or missing test is relevant to the plan | Test selection and observable-behavior assertions |
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `implementation-review` | requires | **Always**: step 3 reviews the plan-owned implementation | The review rubric, severities, finding classes, and report format |
+| `test-harness` | requires | **Always**: step 1 selects and runs the checks the verdict rests on | Test selection, and whether a failing or missing test is relevant to the plan |
+| `technical-writing` | requires | Writing the completion summary and `## Verification` section | Section content and reader clarity |
 
-Each row is its own optional package, so check it before loading it:
-
-1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
-2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
-3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
-   - **Skip:** continue without it, and name it as skipped in the final report.
-4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
-5. If it is `missing` or `unavailable`, skip it and say so in the final report.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the final report.
+Never ask the user to enable a package.
 
 ## Workflow
 
@@ -85,10 +79,11 @@ Read the repository's CI result for the landed commit on the base branch, from i
 available; it stands in for the completion gate. Run the canonical completion gate locally, once,
 from the checkout that holds the plan's landed work, only when no CI result exists for that commit;
 a CI run still in progress is waited for, not reproduced locally.
-Then run the focused tests named by the plan. When the gate runs locally, prefer the repository's
-canonical CI command over a broad discovery command that also includes release-only or optional
-environment suites. Tests run first because a red plan-relevant suite changes the code the verdict
-would judge.
+Then run the focused tests named by the plan; `test-harness` decides which checks those are and
+whether a failing or missing test bears on this plan. This step owns only how the results are read
+for the verdict. When the gate runs locally, prefer the repository's canonical CI command over a
+broad discovery command that also includes release-only or optional environment suites. Tests run
+first because a red plan-relevant suite changes the code the verdict would judge.
 
 On a plan-relevant failure, inspect the cause and fix it when the change is within the selected
 plan's scope and can be made autonomously. Add a missing regression test when needed, rerun the
@@ -130,6 +125,11 @@ additional docs the implementation actually affects, against the landed code. Us
 doc-of-record map when one exists. Fix in-scope drift before the verdict; unresolved required drift
 prevents closure. For older plans without that section, derive the affected docs from the landed
 change instead of requiring a plan migration.
+
+Then run `implementation-review` over the plan-owned implementation, with the plan's acceptance
+criteria and `## Documentation impact` as the requirements and the landed change as the scope. A
+`blocking` or `actionable` finding classed `fix` is an agent-resolvable gap; one that cannot be
+fixed within the plan's scope makes the plan incomplete at the verdict.
 
 You must fix agent-resolvable gaps before the verdict: correct in-scope code or plan claims, add a
 missing regression test for untested observable behavior, and perform available UI

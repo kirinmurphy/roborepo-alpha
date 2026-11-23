@@ -1,5 +1,5 @@
 // Bulk enable/disable of a set of packages: a bulkToggle section's Select All switch, or the Plans
-// onboarding banner's plan-suite and session-close. One HTTP request carries the whole set; this
+// onboarding banner's plan-suite. One HTTP request carries the whole set; this
 // module applies it as ONE unit:
 //
 //   preflight (validate every id against the simulated target set) -> diff vs current state ->
@@ -96,7 +96,7 @@ export async function applyBulkPackageChange(ids, enabled) {
       }
       const selection = packageSelectionStates(catalog).get(id);
       if (selection !== "selected") {
-        const message = selection === "required" ? "required by another selected package" : "no change";
+        const message = selection === "required" ? "included in another selected package" : "no change";
         results.push({ id, changed: false, ok: true, skipped: selection === "required", message, outcomes: [] });
         continue;
       }

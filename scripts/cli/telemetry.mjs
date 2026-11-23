@@ -886,7 +886,7 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
       if (payload.autoDiscovery?.enabled) startAutoDiscoveryScan();
       return afterSourceChange(payload);
     },
-    mutatePackage: async (id, enabled) => reportPackageHookChange(await mutatePackage(id, enabled), [id]),
+    mutatePackage: async (id, enabled, options) => reportPackageHookChange(await mutatePackage(id, enabled, options), [id]),
     mutateSkill: (id, enabled) => setSkillInstalled(id, enabled),
     // Bulk enable/disable of a set of packages (Select All sections, the Plans onboarding banner). Lazy import: keeps the
     // batch module (and its reconcile dependency) out of every non-portal code path.

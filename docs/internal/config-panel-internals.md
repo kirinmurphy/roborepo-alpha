@@ -14,13 +14,15 @@ Each snapshot package carries `selectable`, `selection` (`selected`, `required`,
 `catalog` from the normal rows. Each package row carries `requires[]`: its transitive required
 packages as references (`id`, `label`, `active`, and the `inspect` target and cost their own row
 would have). These references do not suppress a selectable catalog-visible package's own row.
-The source popup lists a row's references under **Requires**, each opening that package's source
-with **Back** to the row. `roborepo config status` prints them as a `requires:` line under the row.
-Each section also gets
-`recommendedDependencies[]` (its rows' direct `recommends`, minus rows it already shows and packages
-a row requires): ordinary switchable rows plus `relationship`, `referencedBy`, and `relationText`,
-rendered below the section's rows and printed by `config status`. Rows carry `selection` so the
-group switch counts only rows it can act on.
+The source popup lists a row's references under **Includes** (the UI's word for `requires`), each
+opening that package's source with **Back** to the row. `roborepo config status` prints them as an
+`includes:` line under the row.
+Each row also
+carries `recommends[]`: its flattened recommendations (`recommendedClosure`: its own and those of
+every package it requires, minus what it requires), less hidden or non-selectable ones, as references with the same fields plus their own `requires[]`. The row's
+Dependencies popover lists both, each opening that package's source; `config status`
+prints a `recommends:` line. Rows carry `selection` so the group switch counts only rows it can act
+on.
 
 Adding a feature of an existing resource shape is data, not code: declare its resources in the
 owning `package.config.json`. A new shape needs a new `case` in the enable/disable switch
@@ -86,7 +88,7 @@ one response.
 
 | Endpoint | Body | Result |
 | --- | --- | --- |
-| `POST /api/config/packages` | `{ id, enabled }` | enable/disable a package |
+| `POST /api/config/packages` | `{ id, enabled, cascade? }` | enable/disable a package. `cascade: true` also disables the selected packages that include it; without it, such a disable answers `409` with `error.code` `INCLUDED_IN_SELECTED` and `error.details.includedBy` (`[{ id, label }]`) |
 | `POST /api/config/skills` | `{ id, enabled }` | link/unlink a skill |
 | `POST /api/config/permissions` | `{ behaviorId, bucket }` or `{ tokens, bucket }` | set a named behavior or arbitrary command to `deny`, `ask`, `allow`, or `default` |
 

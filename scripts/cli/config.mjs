@@ -19,7 +19,7 @@ import {
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageSelectionStates } from "./package-state.mjs";
 import { bundleSelectionStates, selectedBundleRoots } from "./bundle-selection.mjs";
-import { recommendedBy, requiredBy, requiredClosure } from "./package-graph.mjs";
+import { recommendedBy, recommendedClosure, requiredBy, requiredClosure } from "./package-graph.mjs";
 import { inspectSkill, skillInventorySource } from "./skill-inventory.mjs";
 import { readLiveRulesFile } from "./config-live-rules.mjs";
 import { buildRootConfigView } from "./root-config-view.mjs";
@@ -336,11 +336,15 @@ export function buildBehaviorView(snap) {
   });
   for (const item of snap.packages) {
     // Dependency-only and hidden packages get no row of their own; a dependency-only package is
-    // listed under Requires in the source popup of each package that requires it.
+    // listed under Included Packages in the Dependencies of each package that requires it.
     if ((item.presentation?.visibility || "catalog") !== "catalog") continue;
     const section = byCategory.get(item.presentation?.category);
     if (!section) continue;
-    section.items.push({ ...presentationItem(item), requires: requiredReferences(item, snap.packages, presentationItem) });
+    section.items.push({
+      ...presentationItem(item),
+      requires: requiredReferences(item, snap.packages, presentationItem),
+      recommends: recommendedReferences(item, snap.packages, presentationItem),
+    });
   }
 
   const sections = categories
@@ -357,7 +361,6 @@ export function buildBehaviorView(snap) {
       footnote: section.footnote,
       items: section.items.sort((a, b) => a.order - b.order || a.label.localeCompare(b.label)),
       contextCost: sectionContextCost(section.items),
-      recommendedDependencies: recommendedDependencies(section.items, snap.packages, presentationItem),
     }));
 
   const permItems = permissionItems(perms);
@@ -547,36 +550,27 @@ function visibleRequiredPackages(item, packages) {
     .filter((pkg) => pkg && pkg.presentation?.visibility !== "hidden");
 }
 
-// The packages a section's rows recommend, as the section's Recommended dependencies list: each a
-// switchable row naming the rows that recommend it. A package already shown as a row in the
-// section, one a row requires (it turns on anyway), and a hidden or non-selectable one
-// are left out.
-function recommendedDependencies(sectionItems, packages, presentationItem) {
+// Each row's recommended packages, as references its Dependencies popover lists: its own
+// and those of the packages it requires, flattened into one list (recommendedClosure), minus
+// hidden or non-selectable ones, which the enable-time offer never names either. Each reference
+// carries its own required references, so opening it shows what comes with it.
+function recommendedReferences(item, packages, presentationItem) {
   const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const shown = new Set(sectionItems.map((item) => item.id));
-  const required = new Set(sectionItems.flatMap((item) => requiredClosure(packages, [item.id])));
-  const recommended = new Map();
-  for (const item of sectionItems) {
-    const label = byId.get(item.id)?.label || item.label;
-    for (const id of byId.get(item.id)?.recommends || []) {
-      const pkg = byId.get(id);
-      if (!pkg || shown.has(id) || required.has(id) || !pkg.selectable) continue;
-      if (pkg.presentation?.visibility === "hidden") continue;
-      if (!recommended.has(id)) recommended.set(id, new Set());
-      recommended.get(id).add(label);
-    }
-  }
-  return [...recommended].map(([id, referencedBy]) => {
-    const pkg = byId.get(id);
-    return {
-      ...presentationItem(pkg),
-      label: pkg.label,
-      relationship: "recommended",
-      referencedBy: [...referencedBy],
-      relationText: `recommended by ${[...referencedBy].join(", ")}`,
-      requires: requiredReferences(pkg, packages, presentationItem),
-    };
-  }).sort((a, b) => a.label.localeCompare(b.label));
+  return recommendedClosure(packages, item.id)
+    .map((id) => byId.get(id))
+    .filter((pkg) => pkg && pkg.selectable && pkg.presentation?.visibility !== "hidden")
+    .map((pkg) => {
+      const row = presentationItem(pkg);
+      return {
+        id: pkg.id,
+        label: pkg.label,
+        active: pkg.enabled,
+        inspect: row.inspect,
+        contextCost: row.contextCost,
+        builtIn: row.builtIn,
+        requires: requiredReferences(pkg, packages, presentationItem),
+      };
+    });
 }
 
 // A package with this many skills or more is a set: its card label opens a contents view listing
@@ -622,7 +616,7 @@ function packagePresentationItem(item, tools, contextCost = null, { hasVisibleRe
 }
 
 // The card for a package with several skills: always the package label (never one of its
-// commands), a skill-count badge, and a `package-contents` inspect target whose entries each carry
+// commands), and a `package-contents` inspect target whose entries each carry
 // the inspect object that resource would have had on a card of its own.
 function multiSkillPresentationItem(item, tools, contextCost) {
   const toolById = new Map(tools.map((tool) => [tool.id, tool]));
@@ -656,7 +650,7 @@ function multiSkillPresentationItem(item, tools, contextCost) {
   return {
     ...packageItemBase(item, contextCost),
     label: item.label,
-    badges: [`${item.skillIds.length} skills`, ...statusBadges(item)],
+    badges: statusBadges(item),
     inspect: {
       kind: "package-contents",
       id: item.id,

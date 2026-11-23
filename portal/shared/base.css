@@ -1126,9 +1126,48 @@ dialog[data-dialog-size="sm"] { max-width: min(var(--dialog-sm), 100vw); }
 dialog[data-dialog-size="md"] { max-width: min(var(--dialog-md), 100vw); }
 dialog[data-dialog-size="lg"] { max-width: min(var(--dialog-lg), 100vw); }
 dialog[data-dialog-size="xl"] { max-width: min(var(--dialog-xl), 100vw); }
-/* Shared modal chrome — used by /agents' #config-modal and /plans' #skill-modal. Each dialog's
- * own box styling (background, backdrop) stays in that page's own styles.css keyed off its
- * id; only the reusable head/title/path/close/body classes and the width scale live here. */
+/* Shared popup box: background, border, radius, a column of head / body / footer, and the
+ * backdrop. Add class="portal-dialog" to a <dialog> (with data-dialog-size for its width) instead
+ * of styling its box by id. */
+dialog.portal-dialog {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  width: 100%;
+  max-height: 85vh;
+  padding: 0;
+}
+dialog.portal-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+dialog.portal-dialog::backdrop {
+  background: var(--backdrop);
+}
+/* The title row fills the head and never wraps: the close button keeps a fixed column at its right
+ * edge, top-aligned, and a long title wraps within the space left of it. */
+dialog.portal-dialog .modal-head-main {
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+dialog.portal-dialog .modal-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  /* Centers a one-line title on the close button's height. */
+  line-height: 1.4;
+  padding-top: 3px;
+}
+dialog.portal-dialog .modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+/* Shared modal chrome — the head/title/path/close/body classes, used by /agents' dialogs and
+ * /plans' #skill-modal. A dialog with class="portal-dialog" takes its box from the rule above;
+ * other dialogs still style their box in their page's own styles.css. */
 .modal-head {
   padding: 12px 16px;
   border-bottom: 1px solid var(--line);

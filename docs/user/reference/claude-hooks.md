@@ -18,8 +18,6 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 | PostToolUse `Read` | Skill reference observer | Tells Claude which skill reference files it just read, for the skills-loaded line | `skill-visibility` |
 | SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |
 
-Caveman mode on Claude comes from the `caveman` plugin, not a hook.
-
 ## Protected Branches
 
 Agents can push to feature branches without a prompt. They cannot push to a protected branch:

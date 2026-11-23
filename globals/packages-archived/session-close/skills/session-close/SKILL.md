@@ -50,20 +50,15 @@ conversation looks finished. The user decides when the session is over.
 
 Load these when the session calls for them; do not wait to be asked for them by name.
 
-| Skill | Load when | Contributes |
-| --- | --- | --- |
-| `plan-write` | The session worked on a repository plan, or the user sends an open thread to the backlog | Syncing the plan from evidence, and creating a backlog plan |
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `implementation-review` | requires | Step 1, whenever the session changed code | The review rubric, risk checkpoints, severities, finding classes, and report format |
+| `test-harness` | recommends | Step 1 verifies the session's changes: choosing or running the checks they affect | Test selection and observable-behavior assertions |
+| `plan-write` | recommends | The session worked on a repository plan, or the user sends an open thread to the backlog | Syncing the plan from evidence, and creating a backlog plan |
 
-Each row is its own optional package, so check it before loading it:
-
-1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
-2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
-3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
-   - **Skip:** continue without it, and name it as skipped in the status summary.
-4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
-5. If it is `missing` or `unavailable`, skip it and say so in the status summary.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the status summary.
+Never ask the user to enable a package.
 
 ## Workflow
 
@@ -77,11 +72,13 @@ in scope here even though `git diff`/`git status` can't tell them apart from ses
 If you cannot enumerate this set (e.g. picking up mid-session with no memory of earlier edits),
 say so explicitly rather than guessing from the working tree.
 
-- If a dedicated code-quality review skill exists in the current environment, load it and run
-  its review loop against the scoped files. Otherwise review the scoped files directly for:
-  optimizations, functionality gaps, intuitiveness/naming, project-pattern conformance.
-- Apply fixes that don't change intended behavior. Leave genuinely low-risk/cosmetic items as
-  notes instead of silently changing more.
+- Run `implementation-review` over the scoped files, with what the user asked for this session as
+  the requirements. It names any risk checkpoint the files touch.
+- Run the checks the scoped files affect, so the review judges evidence rather than intent.
+- Fix `blocking` and `actionable` findings classed `fix` when the fix doesn't change intended
+  behavior. Leave `note` findings as notes instead of silently changing more.
+- Unresolved `blocking` or `actionable` findings, including every `escalate`, are must-fix items
+  in step 5's handoff.
 - Skip this step only if there is no code diff this session (docs-only or planning
   session) — say so rather than fabricating a review.
 
@@ -96,6 +93,8 @@ say so explicitly rather than guessing from the working tree.
   update `next_action`. Run a check an agent can run instead of listing it; each entry added ends
   with the reason an agent cannot clear it, `Needs a person: <why>` or
   `Blocked: <command> failed with <error>`. Then run the repository's canonical plan validator for `<plan>` and report its findings.
+  When the session does not list `plan-write`, leave the plan unchanged, say so in the status
+  summary, and put the plan's open tasks in the handoff note instead.
 - Do not restructure or rewrite docs wholesale. Small, targeted edits, preserving existing
   structure.
 - Report drift found but not fixed, separately from what was changed.
@@ -141,7 +140,7 @@ nothing and wait for instruction.
   and never stage a file flagged as unrelated stray work in step 3.
 - Commit message: standard repository commit conventions (see local contributor guidance) —
   summarize the *why* pulled from the session's own goal, not just a
-  diff restatement. If the session covered multiple unrelated changes, say so and
+  diff restatement. Name every risk checkpoint step 1's review reported. If the session covered multiple unrelated changes, say so and
   either split into multiple commits or ask which grouping the user wants.
 - Do not push. Committing is as far as this skill goes unless the user separately asks
   to push.
@@ -166,7 +165,8 @@ deliverable of a session close.
   - Add every must-fix / clear continuation item to the handoff note.
   - For ambiguous priority items, ask the user what to do with each item before including it.
     Offer exactly these choices: **include details in the handoff note**, **add it to the
-    backlog as a new task**, or **forget about it**.
+    backlog as a new task**, or **forget about it**. When the session does not list `plan-write`,
+    leave out the backlog choice and say once that backlog plans need the plan suite.
   - If the user chooses backlog, load `plan-write` and create a backlog plan for that issue. It
     saves to the plans branch, so it is no part of the session commit. Include the new plan path in
     the status summary.
@@ -227,11 +227,3 @@ content is the fenced body between them.
 - Do not invent a next step when none exists; say the session is fully closed instead.
 - Do not restructure docs beyond the targeted updates the session's changes call for.
 - Do not skip the review step silently — if skipped, say why.
-
-## Risk Checkpoints
-
-Take extra care, and say what to double-check, when the session's changes touched:
-authentication; authorization/ownership/admin; database schema and migrations; API
-behavior and mutations; environment variables and deployment config; file uploads and
-storage; external integrations. Call these out in both the review step and the commit
-message.

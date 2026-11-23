@@ -28,23 +28,15 @@ Use the existing plan document as the source of truth. Do not create a second me
 
 Load these as part of the review; do not wait to be asked for them by name.
 
-| Skill | Load when | Contributes |
-| --- | --- | --- |
-| `technical-writing` | **Always**: promotion rewrites plan prose | Section content, representation, and reader clarity |
-| `code-style` | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
-| `javascript-typescript` | The plan touches JS/TS — ESM, exports, types, framework-less DOM | Language and markup conventions |
-| `test-harness` | The plan proposes tests, verification commands, or a regression strategy | Test selection and observable-behavior assertions |
+| Skill | Relationship | Load when | Contributes |
+| --- | --- | --- | --- |
+| `technical-writing` | requires | **Always**: promotion rewrites plan prose | Section content, representation, and reader clarity |
+| `test-harness` | requires | The plan proposes tests, verification commands, or a regression strategy | Test selection and observable-behavior assertions |
+| `code-style` | requires | The plan specifies where code goes: module boundaries, orchestration vs. execution, reuse | Ownership and layering constraints |
 
-Each row is its own optional package, so check it before loading it:
-
-1. Check the host's skill/package manager for `<skill>` and read its availability and activation state.
-2. If `available` is true, `enabled` is true, and `status` is `enabled` or `configured`, load it.
-3. If it is disabled, ask: "`<skill>` is not enabled. Enable it, or skip it for this run?"
-   - **Enable:** use the host's package manager to enable `<skill>` with the user's permission, then load it.
-   - **Skip:** continue without it, and name it as skipped in the final report.
-4. If `enabled` and `status` disagree (`partial`, `external`), report the status, offer
-   the host's package reconciliation command or skip, and never describe a drifted package as loaded.
-5. If it is `missing` or `unavailable`, skip it and say so in the final report.
+Each row follows the paired-skill rule in Skill Loading: a `requires` row is always available, and
+a `recommends` row whose skill the session does not list is skipped and named once in the final report.
+Never ask the user to enable a package.
 
 ## Workflow
 

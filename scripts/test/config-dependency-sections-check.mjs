@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // Config page dependencies, as buildBehaviorView derives them and `roborepo config status` prints
 // them: each row references its transitive requirements for the source popup, independently of
-// whether they keep their own catalog rows; a section lists its direct `recommends` as switchable
-// rows, without repeating a row it already shows or a package a row requires; dependency-only and
-// hidden packages have no normal row. Workspace fixtures in a throwaway home.
+// whether they keep their own catalog rows; each row also references its direct `recommends`,
+// minus packages it requires and hidden ones; dependency-only and hidden packages have no normal
+// row. Workspace fixtures in a throwaway home.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -36,12 +36,13 @@ function fixture(id, config = {}) {
 // deps-planner -> deps-review (dependency-only) -> deps-leaf (other category, transitive)
 // deps-closer -> deps-review; recommends deps-companion (other category) and deps-leaf (also required)
 // deps-sibling is a row in the same section that deps-closer recommends; deps-companion -> deps-leaf
+// deps-review recommends deps-sibling, so deps-planner lists it through its requirement
 fixture("deps-planner", { requires: ["deps-review"] });
 fixture("deps-closer", { requires: ["deps-review"], recommends: ["deps-companion", "deps-leaf", "deps-sibling", "deps-hidden"] });
 fixture("deps-sibling");
-fixture("deps-review", { selectable: false, requires: ["deps-leaf"], presentation: { visibility: "dependency" } });
-fixture("deps-leaf", { presentation: { category: "token-optimization" } });
-fixture("deps-companion", { requires: ["deps-leaf"], presentation: { category: "token-optimization" } });
+fixture("deps-review", { selectable: false, requires: ["deps-leaf"], recommends: ["deps-sibling"], presentation: { visibility: "dependency" } });
+fixture("deps-leaf", { presentation: { category: "code-conventions" } });
+fixture("deps-companion", { requires: ["deps-leaf"], presentation: { category: "code-conventions" } });
 fixture("deps-hidden", { presentation: { visibility: "hidden" } });
 fixture("pure-parent", { requires: ["deps-review"], resources: [] });
 fixture("pure-hidden-parent", { requires: ["deps-hidden"], resources: [] });
@@ -85,27 +86,54 @@ try {
   assert.deepEqual(byId.get("deps-sibling").requires, [], "a row with no requirements references none");
   assert.equal(section.requiredDependencies, undefined, "required packages get no page list of their own");
 
-  const recommended = section.recommendedDependencies.map((item) => item.id);
-  assert.deepEqual(recommended, ["deps-companion"],
-    "recommended skips rows already in the section and packages a row requires");
-  assert.equal(section.recommendedDependencies[0].toggle, "package", "an off recommendation can be switched on");
-  assert.equal(section.recommendedDependencies[0].relationText, "recommended by Deps deps-closer");
-  assert.deepEqual(section.recommendedDependencies[0].requires.map((ref) => ref.id), ["deps-leaf"],
-    "a recommended row references its requirements like any other row");
+  assert.equal(section.recommendedDependencies, undefined, "recommended packages get no section list of their own");
+  const closerRecommends = byId.get("deps-closer").recommends;
+  assert.deepEqual(closerRecommends.map((ref) => ref.id), ["deps-companion", "deps-sibling"],
+    "a row's recommendations skip packages it requires and hidden packages, in manifest order");
+  const companion = closerRecommends[0];
+  assert.equal(companion.label, "Deps deps-companion");
+  assert.equal(companion.active, false, "an off recommendation reads as off");
+  assert.ok(companion.inspect, "a recommendation carries the inspect target its detail opens");
+  assert.deepEqual(companion.requires.map((ref) => ref.id), ["deps-leaf"],
+    "a recommendation carries its own requirements, so its detail can list them");
+  assert.deepEqual(byId.get("deps-planner").recommends.map((ref) => ref.id), ["deps-sibling"],
+    "a row lists the recommendations of what it requires, flattened into its own list");
+  assert.deepEqual(byId.get("deps-sibling").recommends, [], "a row with no recommendations references none");
 
   const printed = run(cli, "config", "status");
   assert.doesNotMatch(printed, /Required dependencies/, "config status prints no required list");
-  assert.match(printed, /\[x\] Deps deps-planner\n {6}Dependency section fixture\n {6}requires: Deps deps-leaf, Deps deps-review\n/,
+  assert.match(printed, /\[x\] Deps deps-planner\n {6}Dependency section fixture\n {6}includes: Deps deps-leaf, Deps deps-review\n/,
     "config status names a row's requirements under it");
-  assert.match(printed, /\n {2}Recommended dependencies\n {4}\[ \] Deps deps-companion {2}\(recommended by Deps deps-closer\)/,
-    "config status prints the recommended list");
+  assert.doesNotMatch(printed, /Recommended dependencies/, "config status prints no section recommended list");
+  assert.match(printed, /\n {6}recommends: Deps deps-companion \(off\), Deps deps-sibling \(off\)\n/,
+    "config status names a row's recommendations under it, with the ones still off marked");
 
   const enabledCloser = run(cli, "package", "enable", "deps-closer");
   assert.match(enabledCloser, /recommended \(not enabled\): .*deps-companion/);
   assert.doesNotMatch(enabledCloser, /recommended \(not enabled\): .*deps-hidden/,
     "hidden recommendations stay out of the enable result shown by the terminal and portal dialog");
 
-  console.log("ok: config dependencies (row references, recommended list, terminal print)");
+  // The portal's toggle: a disable that selected packages block names them, and `cascade` turns
+  // them off too.
+  const mutate = (id, options) => JSON.parse(run("-e", `
+    import(${JSON.stringify(path.join(repoRoot, "scripts/cli/config-mutate.mjs"))}).then(async (m) => {
+      const result = await m.mutatePackage(${JSON.stringify(id)}, false, ${JSON.stringify(options)});
+      process.stdout.write("\\nRESULT" + JSON.stringify(result));
+    });
+  `).split("\nRESULT").pop());
+  const refused = mutate("deps-leaf", {});
+  assert.equal(refused.ok, false, "a disable that selected packages block is refused");
+  assert.deepEqual(refused.includedBy, [
+    { id: "deps-planner", label: "Deps deps-planner" },
+    { id: "deps-closer", label: "Deps deps-closer" },
+  ], "the refusal names the selected packages that include it");
+  const cascaded = mutate("deps-leaf", { cascade: true });
+  assert.equal(cascaded.ok, true, `a cascading disable succeeds: ${cascaded.message}`);
+  const after = JSON.parse(fs.readFileSync(path.join(tmp, ".roborepo", "enabled-packages.json"), "utf8"));
+  assert.ok(!after.packages.includes("deps-planner") && !after.packages.includes("deps-closer"),
+    "the packages that included it are turned off with it");
+
+  console.log("ok: config dependencies (row references, recommendations, terminal print, cascading disable)");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });
 }

@@ -31,6 +31,34 @@ export function requiredClosure(nodes, rootIds) {
   return out;
 }
 
+// What a package recommends with nesting flattened: its own `recommends`, then those of every
+// package it requires, minus anything it requires (that turns on anyway) and itself. A recommended
+// package's own recommendations are not included: each is offered once, from the package the user
+// turns on, and a recommended package's requirements come with it when it is turned on.
+export function recommendedClosure(nodes, rootId) {
+  const byId = nodeMap(nodes);
+  if (!byId.has(rootId)) return [];
+  const skip = new Set(requiredClosure(byId, [rootId]));
+  const out = [];
+  // Nearest first: breadth-first over `requires`, in declared order, so a direct requirement's
+  // recommendations come before those of anything it requires in turn.
+  const queue = [rootId];
+  const seen = new Set(queue);
+  while (queue.length) {
+    const id = queue.shift();
+    for (const rec of edges(byId.get(id), "recommends")) {
+      if (!skip.has(rec) && !out.includes(rec)) out.push(rec);
+    }
+    for (const dep of edges(byId.get(id), "requires")) {
+      if (byId.has(dep) && !seen.has(dep)) {
+        seen.add(dep);
+        queue.push(dep);
+      }
+    }
+  }
+  return out;
+}
+
 // The selected roots in a legacy record that listed dependencies alongside the packages that
 // pulled them in: every listed id that another listed, non-excluded id requires (directly or
 // transitively) is dropped, because it stays in the required closure through that parent.

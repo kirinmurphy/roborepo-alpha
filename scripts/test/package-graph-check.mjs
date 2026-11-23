@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import {
   dropRequiredIds,
   recommendedBy,
+  recommendedClosure,
   requiredBy,
   requiredClosure,
   requiresCycles,
@@ -50,5 +51,28 @@ assert.deepEqual(
   [["a", "b", "a"]],
 );
 assert.deepEqual(requiresCycles([{ id: "self", requires: ["self"] }]), [["self", "self"]]);
+
+// Recommendations flatten across what a package requires, never across what it recommends.
+const flat = [
+  { id: "app", requires: ["core"], recommends: ["extra", "core"] },
+  { id: "core", requires: ["base"], recommends: ["lint", "extra"] },
+  { id: "base", recommends: ["docs", "app"] },
+  { id: "extra", requires: ["heavy"], recommends: ["more"] },
+  { id: "heavy" }, { id: "lint" }, { id: "docs" }, { id: "more" },
+];
+assert.deepEqual(recommendedClosure(flat, "app"), ["extra", "lint", "docs"],
+  "its own recommendations, then those of what it requires, once each, minus what it requires and itself");
+assert.deepEqual(recommendedClosure(flat, "extra"), ["more"], "a recommended package's requirements are not recommendations");
+assert.deepEqual(recommendedClosure(flat, "heavy"), [], "no recommendations anywhere in the closure");
+assert.deepEqual(recommendedClosure(flat, "ghost"), [], "an unknown package recommends nothing");
+// Branched requirements: a direct requirement's recommendations come before a deeper one's.
+const branched = [
+  { id: "top", requires: ["a", "b"] },
+  { id: "a", recommends: ["ra"] },
+  { id: "b", requires: ["c"], recommends: ["rb"] },
+  { id: "c", recommends: ["rc"] },
+  { id: "ra" }, { id: "rb" }, { id: "rc" },
+];
+assert.deepEqual(recommendedClosure(branched, "top"), ["ra", "rb", "rc"], "nearest requirements first, in declared order");
 
 console.log("ok: package graph helpers");

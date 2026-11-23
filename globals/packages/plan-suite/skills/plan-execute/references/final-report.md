@@ -79,7 +79,7 @@ Include, when they apply:
   is worth doing;
 - blocked objectives and what blocks them;
 - paired skills skipped or unavailable, with the reason;
-- a missing feature-verification pairing for UI, server, API, CLI, or performance work, and why.
+- `feature-verification` not applied to UI, server, API, CLI, or performance work, and why.
 
 A ✓ belongs here only when it settles a doubt the reader would otherwise have, such as a fixed
 flake that now passes repeatedly.

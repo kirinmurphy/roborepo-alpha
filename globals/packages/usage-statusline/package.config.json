@@ -5,7 +5,7 @@
   "description": "Shows context and rate-limit usage in supported harness footers, and context usage above the prompt in the Claude desktop app, without model calls.",
   "lifecycle": "optional",
   "presentation": {
-    "category": "token-optimization",
+    "category": "monitoring",
     "order": 10
   },
   "resources": [

@@ -12,7 +12,7 @@ import { portalSetUpdatedAt, portalHideLoading } from "/portal/shared/api.js";
 import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
-import { createConfigModal, createRecommendationsDialog } from "./panels.js";
+import { createConfigModal, createDisableDependentsDialog, createRecommendationsDialog } from "./panels.js";
 import { snapshotChanged, inspectChipSpecs, contentsEntryChipSpec, setBulkInFlight, isBulkInFlight } from "./state.js";
 import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/repository-scope.js";
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
@@ -20,6 +20,7 @@ import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js"
 
 const modal = createConfigModal();
 const recommendationsDialog = createRecommendationsDialog();
+const disableDependentsDialog = createDisableDependentsDialog();
 // Packages whose on/off control lives on another page. Settings owns token telemetry, so a second
 // toggle here would only duplicate it; the terminal `roborepo config` view still lists it.
 const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry"]);
@@ -82,25 +83,61 @@ async function applyBucket(payload, errSlot) {
   }
 }
 
-async function handleToggle(item, enabled) {
-  const data = await api.toggleItem(item.toggle, item.id, enabled);
+// `offer: false` is for switches inside the recommendations dialog: a recommendation is offered
+// once, when its parent is turned on, so turning one on there opens no further offer.
+async function handleToggle(item, enabled, { offer = true } = {}) {
+  let data;
+  try {
+    data = await api.toggleItem(item.toggle, item.id, enabled);
+  } catch (err) {
+    if (enabled || err.code !== "INCLUDED_IN_SELECTED") throw err;
+    data = await disableWithDependents(item, err.details?.includedBy || []);
+  }
   if (data.config) applySnapshot(data.config); // re-render from the authoritative post-mutation snapshot
   void offerHookReview(data.hookHarnesses);
-  if (enabled && data.recommendations?.length) await offerRecommendations(item, data.recommendations);
+  if (offer && enabled && data.recommendations?.length) await offerRecommendations(item, data.recommendations);
 }
 
-// An enable that left recommended packages off asks which to enable too; each chosen one is an
-// ordinary package toggle, so it reports and re-renders the same way.
-async function offerRecommendations(item, recommendations) {
-  const chosen = await recommendationsDialog.ask(item.label, recommendations);
-  for (const id of chosen) {
-    try {
-      await handleToggle({ toggle: "package", id, label: id }, true);
-    } catch (err) {
-      showError(err);
-      return;
-    }
+// Turning off a package that packages the user turned on include asks whether to turn those off
+// too. Declining throws an error with no message: the switch flips back and shows nothing, since
+// nothing changed.
+async function disableWithDependents(item, includedBy) {
+  const confirmed = await disableDependentsDialog.confirm(item.label, includedBy);
+  if (!confirmed) throw new Error("");
+  return api.toggleItem(item.toggle, item.id, false, { cascade: true });
+}
+
+// An enable that left recommended packages off lists them as ordinary rows, whose switches apply
+// at once and re-render the page the same way any toggle does.
+// A recommendation with no row on the page has no switch to show, so it is left out, and the
+// dialog does not open when none remain.
+function offerRecommendations(item, recommendations) {
+  const shown = recommendations.filter((rec) => packageRow(rec.id));
+  if (shown.length === 0) return Promise.resolve();
+  return recommendationsDialog.ask(item.label, shown, {
+    rowFor: packageRow,
+    renderRow: (row) => tmpl.configItemElement(row, {
+      onInspect: openSourceModal,
+      onToggle: (target, enabled) => handleToggle(target, enabled, { offer: false }),
+      onDependency: openDependency,
+      offersOnEnable: false,
+      contextCost: lastSnapshot?.contextCost || null,
+    }),
+  });
+}
+
+// A package's row in the latest snapshot, wherever its section is.
+function packageRow(id) {
+  for (const section of lastSnapshot?.behaviorView || []) {
+    const row = section.categoryId && section.items.find((item) => item.id === id);
+    if (row) return row;
   }
+  return null;
+}
+
+// A package in a row's Dependencies opens its source, listing its own requirements.
+function openDependency(ref) {
+  return openSourceModal(ref.inspect, ref.contextCost, { builtIn: ref.builtIn, requires: ref.requires || [] });
 }
 
 // Section-level batch (bulkToggle sections): one request for the whole section, server applies
@@ -145,6 +182,7 @@ function renderStandardSection(section, contextCost) {
     onInspectClick: openSourceModal,
     onToggle: handleToggle,
     onBulkToggle: handleBulkToggle,
+    onDependency: openDependency,
     contextCost,
   });
 }
@@ -297,6 +335,7 @@ function applySnapshot(snap) {
   if (changed) {
     last = changed;
     render(snap);
+    recommendationsDialog.refresh();
   }
   portalSetUpdatedAt(new Date(), { cadenceMs: POLL_INTERVAL_MS });
 }
