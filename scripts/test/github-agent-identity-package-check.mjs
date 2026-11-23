@@ -52,12 +52,16 @@ try {
 
   assert.equal(claudeSettings().env.GH_CONFIG_DIR, ghDir, "Claude env points at the bot's gh directory");
   assert.ok(path.isAbsolute(claudeSettings().env.GH_CONFIG_DIR));
+  // gh uses an exported GH_TOKEN or GITHUB_TOKEN ahead of the stored login and treats an empty one
+  // as unset, so blanking them keeps a token from your shell from replacing the bot.
+  for (const name of ["GH_TOKEN", "GITHUB_TOKEN"]) assert.equal(claudeSettings().env[name], "", `Claude env blanks ${name}`);
   assert.ok(fs.existsSync(gitconfig), "the gitconfig asset is installed");
   assert.equal(fs.readFileSync(gitconfig, "utf8"), fs.readFileSync(path.join(repoRoot, "globals", "packages", ID, "gitconfig"), "utf8"));
   assert.ok(claudeSettings().permissions.allow.includes("Bash(gh api:*)"), "enable re-renders Claude permissions for the identity");
 
   const codexOn = codexConfig();
   assert.ok(codexOn.includes(`GH_CONFIG_DIR = ${JSON.stringify(ghDir)}`), "Codex shell env points at the bot's gh directory");
+  for (const name of ["GH_TOKEN", "GITHUB_TOKEN"]) assert.ok(codexOn.includes(`${name} = ""`), `Codex shell env blanks ${name}`);
   assert.match(codexOn, /network_proxy = true/);
   assert.match(codexOn, /\[permissions\.managed-workspace\.network\.domains\]/);
   for (const host of ["github.com", "api.github.com", "example.com"]) assert.ok(domain(codexOn, host), `on: domains table allows ${host}`);
@@ -86,10 +90,11 @@ try {
   const disabled = run("package", "disable", ID);
   assert.equal(disabled.status, 0, `disable failed\n${disabled.stdout}\n${disabled.stderr}`);
   assert.equal(claudeSettings().env?.GH_CONFIG_DIR, undefined, "Claude env no longer names the bot directory");
+  for (const name of ["GH_TOKEN", "GITHUB_TOKEN"]) assert.equal(claudeSettings().env?.[name], undefined, `Claude env no longer blanks ${name}`);
   assert.ok(!fs.existsSync(gitconfig), "the gitconfig asset is removed");
   assert.ok(claudeSettings().permissions.deny.includes("Bash(gh api:*)"), "disable restores the baseline Claude permissions");
   const codexOff = codexConfig();
-  assert.doesNotMatch(codexOff, /GH_CONFIG_DIR|network_proxy|github\.com/, "Codex config is clean after disable");
+  assert.doesNotMatch(codexOff, /GH_CONFIG_DIR|GH_TOKEN|GITHUB_TOKEN|network_proxy|github\.com/, "Codex config is clean after disable");
   assert.ok(domain(codexOff, "example.com"), "off: the user's own domain stays");
   assert.equal(codexRules(), baselineRules, "off: Codex rules return to the identity-off baseline");
   assert.match(codexOff, /\[permissions\.managed-workspace\.network\]\nenabled = false/);

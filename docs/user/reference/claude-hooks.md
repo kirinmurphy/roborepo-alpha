@@ -246,9 +246,12 @@ administrator, and is not on a ruleset's bypass list, so GitHub itself rejects a
 your identity and your bypass. `roborepo github setup` creates it
 ([Setup And Daily Use](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot)).
 
-The package works through two settings in agent shells only:
+The package works through these settings in agent shells only:
 
 - `GH_CONFIG_DIR` points `gh` at `~/.roborepo/github-agent/gh`, where the bot's token is stored.
+- `GH_TOKEN` and `GITHUB_TOKEN` are set to empty. `gh` would use either one ahead of the stored
+  login, so a token exported in your shell would otherwise make agents act as you; `gh` treats an
+  empty value as unset.
 - A Git config file at `~/.roborepo/package-runtime/github-agent-identity/gitconfig`, included
   through the agents' `GIT_CONFIG_*` variables, clears inherited credential helpers, has
   `gh auth git-credential` answer for github.com, and rewrites SSH remotes to HTTPS.

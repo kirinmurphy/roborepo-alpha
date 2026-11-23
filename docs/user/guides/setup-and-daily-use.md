@@ -103,9 +103,10 @@ date, or has the wrong scopes, the setup asks whether to replace it. A new token
 it replaces the saved one; if it belongs to another account or has the wrong scopes, it is not
 stored and the saved token keeps working.
 
-Setup and status use the bot's saved token even if your shell exports `GH_TOKEN` or `GITHUB_TOKEN`.
-Agent shells do not remove those variables yet, so do not export your own token in the shell you
-start agents from.
+Setup, status, and agent shells use the bot's saved token even if your shell exports `GH_TOKEN` or
+`GITHUB_TOKEN`: the package sets both to empty in Claude and Codex agent shells. One exception: in a
+session the Claude desktop app starts, a variable the app's own launch environment sets takes
+precedence over Claude's settings, so do not set either token in that environment.
 
 Turning the package off stops agents using the bot but leaves its files behind: the plaintext token
 in `~/.roborepo/github-agent/gh/hosts.yml`, plus `ca-bundle.crt` and `gitconfig.local` next to it.

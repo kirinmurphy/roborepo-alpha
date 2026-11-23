@@ -22,24 +22,44 @@
     {
       "type": "config-patch",
       "harness": "claude",
-      "label": "GitHub bot config directory",
+      "label": "GitHub bot config directory, without your exported tokens",
       "patches": [
         {
           "op": "set",
           "path": ["env", "GH_CONFIG_DIR"],
           "value": "${roborepo-state:github-agent/gh}"
+        },
+        {
+          "op": "set",
+          "path": ["env", "GH_TOKEN"],
+          "value": ""
+        },
+        {
+          "op": "set",
+          "path": ["env", "GITHUB_TOKEN"],
+          "value": ""
         }
       ]
     },
     {
       "type": "config-patch",
       "harness": "codex",
-      "label": "GitHub bot config directory and network",
+      "label": "GitHub bot config directory, without your exported tokens, and network",
       "patches": [
         {
           "op": "set",
           "path": ["shell_environment_policy", "set", "GH_CONFIG_DIR"],
           "value": "${roborepo-state:github-agent/gh}"
+        },
+        {
+          "op": "set",
+          "path": ["shell_environment_policy", "set", "GH_TOKEN"],
+          "value": ""
+        },
+        {
+          "op": "set",
+          "path": ["shell_environment_policy", "set", "GITHUB_TOKEN"],
+          "value": ""
         },
         {
           "op": "set",
