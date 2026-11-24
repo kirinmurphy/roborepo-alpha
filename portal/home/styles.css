@@ -256,35 +256,33 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 /* The heading's ⚠ sits on the text's center line rather than its baseline, beside the label it marks. */
 .token-warnings-panel .domain-heading { align-items: center; column-gap: 8px; }
 .token-warnings-glyph { color: var(--warn); margin-right: -2px; }
-/* agent-identity.js: the bot account's banner above the repo list, each GitHub repo card's line,
-   and the card behind them. */
-.agent-identity-banner {
-  display: grid;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  font-size: var(--text-sm);
-}
-.agent-identity-banner[data-level="warn"] { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
-.agent-identity-banner[data-level="problem"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
-.agent-identity-banner p { margin: 0; }
-.agent-identity-banner-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-.agent-identity-facts { flex: 1 1 auto; min-width: 0; color: var(--dim); }
+/* agent-identity.js: the setup offer above the repo list, the "agent bot" badge in a GitHub repo's
+   title, and the card behind them. */
+.agent-identity-offer { font-size: var(--text-sm); }
+.agent-identity-offer-body { display: grid; gap: 8px; }
+.agent-identity-offer-body p { margin: 0; }
 .agent-identity-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.agent-identity-repo-pick { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); }
-.agent-identity-line {
-  display: flex;
-  flex-wrap: wrap;
+.agent-identity-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 6px 8px;
-  padding: 6px 16px;
-  border-top: 1px solid var(--line);
+  gap: 5px;
+  margin-left: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
   color: var(--dim);
-  font-size: var(--text-sm);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  align-self: center;
 }
-.agent-identity-line-text { flex: 1 1 auto; min-width: 0; }
+.agent-identity-badge:hover, .agent-identity-badge:focus-visible { color: var(--ink); border-color: var(--dim); }
+.agent-identity-badge[hidden] { display: none; }
+.agent-identity-badge-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.agent-identity-badge[data-level="ok"] .agent-identity-badge-dot { background: var(--ok); }
+.agent-identity-badge[data-level="warn"] .agent-identity-badge-dot { background: var(--warn); }
+.agent-identity-badge[data-level="problem"] .agent-identity-badge-dot { background: var(--danger); }
 .agent-identity-state {
   border: 1px solid var(--line);
   border-radius: 999px;

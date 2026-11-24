@@ -1,11 +1,13 @@
 // The portal's view of the GitHub bot identity. The bot account is one for every repo, so it is read
-// once (the Home banner); each listed GitHub repo adds only what is about that repo (the bot's
-// invitation and access there, and the branch rules). The portal reads status, opens
+// once; each listed GitHub repo adds only what is about that repo (the bot's invitation and access
+// there, and the branch rules). While the package is off, Home offers the setup; its "No thanks"
+// is remembered here. The portal reads status, opens
 // `roborepo github setup` in a terminal, and can turn the package on when that is the only step
 // left; the token is typed at the setup's hidden prompt, so it never passes through the browser or
 // this server.
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { packageIsOnlyStep } from "../../modules/forge/agent-identity.mjs";
@@ -47,14 +49,26 @@ async function readAccount({ fresh, now, read }) {
 }
 
 export async function loadAgentIdentityAccount({
-  fresh = false, platform = process.platform, now = Date.now, read = readCurrentAccountIdentity,
+  fresh = false, stateRoot = STATE_ROOT, platform = process.platform, now = Date.now, read = readCurrentAccountIdentity,
 } = {}) {
-  return portalAccount(await readAccount({ fresh, now, read }), { platform });
+  return { ...portalAccount(await readAccount({ fresh, now, read }), { platform }), offerDismissed: offerDismissed(stateRoot) };
+}
+
+// "No thanks" to Home's setup offer. A marker file in RoboRepo's state, not in the bot's folder:
+// it is a portal preference, and the bot's folder is written only by the setup.
+const offerMarker = (stateRoot) => path.join(stateRoot, "agent-identity", "offer-dismissed");
+const offerDismissed = (stateRoot) => fs.existsSync(offerMarker(stateRoot));
+
+export function dismissAgentIdentityOffer({ stateRoot = STATE_ROOT, now = () => new Date() } = {}) {
+  const marker = offerMarker(stateRoot);
+  fs.mkdirSync(path.dirname(marker), { recursive: true });
+  fs.writeFileSync(marker, `${now().toISOString()}\n`);
+  return { offerDismissed: true };
 }
 
 // Resolves to `{ applies: false }` for a repo whose remote is not github.com, so the card stays
 // hidden there, and to `account: "waiting"` while the bot account cannot be used (not set up, or
-// its token is not accepted): the banner says what to do, and there is nothing per repo to check.
+// its token is not accepted): the account is what to fix, and there is nothing per repo to check.
 // Rejects with NOT_FOUND for an id the portal does not list.
 export async function loadRepositoryAgentIdentity({
   repositoryId, stateRoot, fresh = false, platform = process.platform, now = Date.now,

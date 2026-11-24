@@ -77,8 +77,9 @@ The setup walks you through each step and skips the ones already done:
 6. Check everything, then enable the package. A failed check does not turn it on; if it was already
    on, it stays on.
 
-The portal's Home page tracks where this stands: a banner shows the bot account once, with the next
-step, and each GitHub repo card shows what is left in that repo. **Open setup** opens this same setup
+The portal's Home page tracks where this stands. While the package is off, it offers the setup once
+(**No thanks** hides the offer for good). Once the package is on, each GitHub repo shows an
+**agent bot** badge, green when agents can work there, and the badge opens what is left. **Open setup** opens this same setup
 in a terminal (macOS; elsewhere it shows the command to copy). If the bot is already signed in and
 only the package is off, `roborepo package enable github-agent-identity` (or **Turn on** on Home) is
 all that is left. See [Agent GitHub account](../reference/repositories.md#agent-github-account).

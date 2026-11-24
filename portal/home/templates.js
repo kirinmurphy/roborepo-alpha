@@ -6,7 +6,7 @@ import { worktreeCleanupNotice } from "./worktree-dialogs.js";
 import { worktreeDetailsButton } from "./worktree-details.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 import { supportsProtectionPanel } from "/portal/shared/protection-panel.js";
-import { mountAgentIdentityLine, supportsAgentIdentity } from "./agent-identity.js";
+import { mountAgentIdentityBadge, supportsAgentIdentity } from "./agent-identity.js";
 
 const MOCK_NAMES = {
   "git:github.com/example/shared-stack-fixture": "Mock: Shared Compose stack",
@@ -65,7 +65,7 @@ function repositoryCard(repository, actions) {
   mountRepositoryShortcuts(node.querySelector("[data-slot=repository-shortcuts]"), repository);
   const notice = worktreeCleanupNotice(repository, { onEnable: actions.onEnableCleanup, onDismiss: actions.onDismissCleanup });
   if (notice) node.querySelector("[data-slot=cleanup-notice]").append(notice);
-  mountAgentIdentityLine(node.querySelector("[data-slot=agent-identity]"), repository);
+  mountAgentIdentityBadge(node.querySelector("[data-slot=agent-identity-badge]"), repository);
   return node;
 }
 

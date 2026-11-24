@@ -12,7 +12,7 @@ import { repositoryDirectory, unresolvedActivity } from "./templates.js";
 import { createWorktreeCleanupDialog, createWorktreeRemoveDialog } from "./worktree-dialogs.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createProtectionPanel } from "/portal/shared/protection-panel.js";
-import { openAgentIdentityCard, renderAgentIdentityBanner } from "./agent-identity.js";
+import { openAgentIdentityCard, renderAgentIdentityOffer } from "./agent-identity.js";
 import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
@@ -22,7 +22,7 @@ const content = document.getElementById("home-content");
 const warning = document.getElementById("home-warning");
 const harnessBanner = document.getElementById("home-harness-banner");
 const hookReadiness = document.getElementById("home-hook-readiness");
-const agentIdentityBanner = document.getElementById("home-agent-identity");
+const agentIdentityOffer = document.getElementById("home-agent-identity");
 const autoDiscoveryMount = document.getElementById("home-auto-discovery");
 const mockDisclaimer = document.getElementById("home-mock-disclaimer");
 const homeHeading = document.querySelector(".home-heading");
@@ -178,7 +178,7 @@ async function refresh({ force = false } = {}) {
           ? null
           : repositoryEmptyState({ autoDiscoveryEnabled, ...onboarding });
       content.replaceChildren(...(body ? [body] : []));
-      renderAgentIdentityBanner(agentIdentityBanner, overview.repositories);
+      renderAgentIdentityOffer(agentIdentityOffer, overview.repositories);
       homeHeading.hidden = firstRunWithoutMocks;
       manageRepositories.hidden = !known;
       autoDiscoveryMount.hidden = autoDiscoveryEnabled;

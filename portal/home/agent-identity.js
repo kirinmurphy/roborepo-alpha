@@ -1,10 +1,11 @@
-// The GitHub bot identity on Home. The bot account is one for every repo, so its state (signed in,
-// package on, token expiry and scopes) shows once, in a banner above the repo list. Each GitHub repo
-// card adds a one-line status for what is about that repo only: whether the bot was invited, has
-// accepted, has no more than write access, and whether the branch rules stop it from merging. The
-// page only reads status, asks the server to open `roborepo github setup` in a terminal, and asks
-// it to turn the package on when that is the one step left; the token is typed at the terminal's
-// hidden prompt and never passes through here.
+// The GitHub bot identity on Home. While the package is off, Home offers the setup once, in an info
+// prompt above the repo list that "No thanks" hides for good. Once the package is on, each GitHub
+// repo's title carries an "agent bot" badge (green when agents can work there, red when something
+// is in the way), and the badge opens a card with everything about the bot in that repo: the
+// account, its token, the bot's invitation, the branch rules, and the steps that remain. The page
+// only reads status, asks the server to open `roborepo github setup` in a terminal, and asks it to
+// turn the package on when that is the one step left; the token is typed at the terminal's hidden
+// prompt and never passes through here.
 import { portalFillSlots as fill, portalGetJson, portalPostJson, portalTpl as tpl, portalWireBackdropClose } from "/portal/shared/api.js";
 import { supportsProtectionPanel } from "/portal/shared/protection-panel.js";
 
@@ -15,6 +16,7 @@ const REUSE_MS = 5 * 60_000;
 const FOCUS_THROTTLE_MS = 2_000;
 const SETUP_COMMAND_PATTERN = /roborepo github setup/;
 const TOKEN_FINDINGS = new Set(["expired", "expiring", "no-expiry", "fine-grained-token", "broad-scopes", "scopes-missing", "token-in-keychain"]);
+const LEVEL_RANK = { ok: 0, muted: 1, warn: 2, problem: 3 };
 
 // The bot identity is a GitHub feature: only listed GitHub repos show it. The server has the last
 // word (`applies: false`), so a repo it turns down shows nothing either.
@@ -26,14 +28,15 @@ let account = null; // { at, report }
 let accountPending = null;
 const reports = new Map(); // repositoryId -> { at, report }
 const pending = new Map(); // repositoryId -> Promise
-const lines = new Map(); // repositoryId -> Set of mounted line elements
+const badges = new Map(); // repositoryId -> Set of mounted badge elements
 const names = new Map(); // repositoryId -> display name
+let githubRepositories = [];
 // Set while the user is away doing the setup (a terminal opened, or the command was shown): coming
 // back to the window re-reads the account and these repos, and only these, past the cache.
 let watchingAccount = false;
 const watching = new Set();
 let lastFocusRefresh = 0;
-let banner = null;
+let offer = null;
 let card = null;
 
 // ---------------------------------------------------------------------------------------------
@@ -55,12 +58,14 @@ function loadAccount({ fresh = false } = {}) {
 function showAccount(report) {
   const before = account?.report;
   account = { at: Date.now(), report };
-  // Each repo's line reads the account on the server, so a changed account means new lines.
-  if (before && (before.state !== report.state || before.botLogin !== report.botLogin || before.packageEnabled !== report.packageEnabled)) {
-    for (const repositoryId of lines.keys()) load(repositoryId, { reread: true }).catch(() => {});
+  // Each repo's read depends on the account on the server, so a changed account means new reads.
+  const changed = before && (before.state !== report.state || before.botLogin !== report.botLogin || before.packageEnabled !== report.packageEnabled);
+  for (const repositoryId of badges.keys()) {
+    if (report.packageEnabled && (changed || !reports.has(repositoryId))) load(repositoryId, { reread: true }).catch(() => {});
+    renderBadges(repositoryId);
   }
   if (!describeAccount(report).offersSetup && !report.enableOffered) watchingAccount = false;
-  banner?.render(report);
+  offer?.render(report);
   if (card?.showing("account")) card.render();
 }
 
@@ -72,8 +77,8 @@ function load(repositoryId, { fresh = false, reread = false } = {}) {
   const request = portalGetJson(`${repoUrl(repositoryId)}${fresh ? "?fresh=1" : ""}`)
     .then((report) => {
       reports.set(repositoryId, { at: Date.now(), report });
-      if (!report.applies || !describeRepo(report).offersSetup) watching.delete(repositoryId);
-      for (const line of lines.get(repositoryId) || []) renderLine(line, report);
+      if (!report.applies || !repoView(account?.report, report).offersSetup) watching.delete(repositoryId);
+      renderBadges(repositoryId);
       if (card?.showing(repositoryId)) card.render();
       return report;
     })
@@ -104,8 +109,12 @@ export function describeAccount(report) {
   switch (report.state) {
     case "not-set-up":
       label = "not set up";
-      level = "warn";
-      message = "Agents act on GitHub as you. A separate bot account lets GitHub itself refuse agent pushes to main and merges no one approved.";
+      // With the package on and no bot, agents cannot use GitHub at all; with it off, this is only
+      // something on offer.
+      level = report.packageEnabled ? "problem" : "muted";
+      message = report.packageEnabled
+        ? "The package is on, but no bot account is set up, so agents cannot push or open pull requests."
+        : "Agents use your GitHub account today. With a bot account of their own, GitHub itself refuses their pushes to main and merges no one approved.";
       break;
     case "healthy":
       label = renew ? "renew soon" : "on";
@@ -141,10 +150,9 @@ const REPO_LABELS = {
   protection: "branch rules missing",
 };
 
-// One repo's short label, level, sentence, fix, and whether the setup (run in that repo) is the
-// next step. A repo waiting on the account says nothing: the banner covers it.
+// What is about one repo only: its short label, level, sentence, fix, and whether the setup (run
+// in that repo) is the next step.
 export function describeRepo(report) {
-  if (report.account === "waiting") return { label: null, level: "muted", message: "", fix: null, offersSetup: false };
   const shown = shownFinding(report.findings);
   let label;
   let level;
@@ -161,8 +169,9 @@ export function describeRepo(report) {
       message = shown.message;
       break;
     case "problem":
+      // A pending invite still stops every push, so it is as red as a missing one.
       label = REPO_LABELS[shown.id] || "needs attention";
-      level = shown.id === "invite-pending" ? "warn" : "problem";
+      level = "problem";
       message = shown.message;
       break;
     default:
@@ -174,139 +183,135 @@ export function describeRepo(report) {
   return { label, level, message, fix, offersSetup: !shown?.owner && SETUP_COMMAND_PATTERN.test(fix || "") };
 }
 
-function accountFacts(report) {
-  if (report.state === "not-set-up") return "";
-  const facts = [];
-  const login = report.botLogin || report.savedLogin;
-  facts.push(login ? `bot ${login}` : "no bot signed in");
-  facts.push(report.packageEnabled ? "package on" : "package off");
-  if (report.scopes) facts.push(`token: ${report.scopes.join(", ") || "no scopes"}`);
-  if (report.expiresAt) facts.push(`expires ${new Date(report.expiresAt).toLocaleDateString()}`);
-  else if (report.botLogin) facts.push("no expiry");
-  return facts.join(" · ");
+// The bot in one repo, account included: the account's state while it is what stands in the way
+// (or is the worse of the two), otherwise the repo's own.
+export function repoView(accountReport, report) {
+  if (!report.applies) return { label: "not on GitHub", level: "muted", message: "This repo's remote is not on github.com, so the bot account does not apply.", fix: null, offersSetup: false };
+  const accountView = accountReport ? describeAccount(accountReport) : null;
+  if (report.account === "waiting") return accountView || { label: "checking", level: "muted", message: "", fix: null, offersSetup: false };
+  const view = describeRepo(report);
+  return accountView && LEVEL_RANK[accountView.level] > LEVEL_RANK[view.level] ? accountView : view;
 }
 
 // ---------------------------------------------------------------------------------------------
-// Banner
+// The setup offer above the repo list, while the package is off
 
-// Renders the account banner above the repo list, once Home knows its repos. Hidden when no listed
-// repo is on GitHub, since the account matters only there.
-export function renderAgentIdentityBanner(mount, repositories) {
+// Renders the offer once Home knows its repos. Nothing shows when no listed repo is on GitHub, when
+// the package is on (the badges take over), or once the user said "No thanks".
+export function renderAgentIdentityOffer(mount, repositories) {
   if (!mount) return;
-  const github = repositories.filter(supportsAgentIdentity);
-  for (const repository of github) names.set(repository.repositoryId, repository.displayName || repository.repositoryId);
-  if (github.length === 0) {
+  githubRepositories = repositories.filter(supportsAgentIdentity);
+  for (const repository of githubRepositories) names.set(repository.repositoryId, repository.displayName || repository.repositoryId);
+  if (githubRepositories.length === 0) {
     mount.hidden = true;
     return;
   }
-  banner ??= buildBanner(mount);
-  banner.setRepositories(github);
-  if (account) banner.render(account.report);
-  loadAccount().catch((error) => banner.error(error.message));
+  offer ??= buildOffer(mount);
+  if (account) offer.render(account.report);
+  // An offer, not a warning: a failed read just leaves it out.
+  loadAccount().catch(() => { mount.hidden = true; });
 }
 
-function buildBanner(mount) {
-  const node = tpl("tpl-agent-identity-banner");
+function buildOffer(mount) {
+  const node = tpl("tpl-agent-identity-offer");
   const slot = (name) => node.querySelector(`[data-slot="${name}"]`);
-  let repositories = [];
-  let copyFallback = false;
+  let declined = false;
   let note = null;
   mount.replaceChildren(node);
 
-  slot("details").addEventListener("click", () => openAccountCard());
+  slot("setup").addEventListener("click", () => openAccountCard());
   slot("enable").addEventListener("click", () => void turnOn(slot("enable"), (message) => { note = message; render(account?.report); }));
-  slot("open-setup").addEventListener("click", async () => {
-    const repositoryId = slot("repo-select").value;
-    const result = await openSetup(slot("open-setup"), repositoryId);
-    note = result.note;
-    if (!result.launched) copyFallback = true;
+  slot("dismiss").addEventListener("click", async () => {
+    slot("dismiss").disabled = true;
+    try {
+      await portalPostJson(`${ACCOUNT_URL}/dismiss-offer`, {});
+      declined = true;
+      note = null;
+    } catch (error) {
+      note = `Could not save that: ${error.message}`;
+    } finally {
+      slot("dismiss").disabled = false;
+    }
     render(account?.report);
   });
+  slot("close").addEventListener("click", () => { mount.hidden = true; });
 
   function render(report) {
     if (!report) return;
-    mount.hidden = false;
-    const view = describeAccount(report);
-    fill(node, { state: view.label, facts: accountFacts(report), message: view.message });
-    slot("state").dataset.level = view.level;
-    node.dataset.level = view.level;
-    // Healthy and quiet: one line, nothing to do.
-    slot("message").hidden = view.level === "ok";
-    slot("fix").hidden = !view.fix;
-    slot("fix").textContent = view.fix ? `Fix: ${view.fix}` : "";
-    const launchable = view.offersSetup && report.setupLaunch?.supported && repositories.length > 0;
-    slot("enable").hidden = !view.enable;
-    slot("open-setup").hidden = !launchable;
-    slot("repo-pick").hidden = !launchable || repositories.length < 2;
-    slot("actions").hidden = !view.enable && !launchable;
-    const showCommand = view.offersSetup && (!launchable || copyFallback);
-    slot("command-row").hidden = !showCommand;
-    if (showCommand) {
-      fill(node, { command: report.guide.command });
-      slot("copy").copySource = report.guide.command;
-      watchingAccount = true;
+    // Just declined: say where to find it later, until the page reloads.
+    if (declined) {
+      mount.hidden = false;
+      slot("offer").hidden = true;
+      slot("declined").hidden = false;
+      return;
     }
+    if (report.packageEnabled || report.offerDismissed) {
+      mount.hidden = true;
+      return;
+    }
+    mount.hidden = false;
+    slot("offer").hidden = false;
+    slot("declined").hidden = true;
+    const ready = report.enableOffered === true;
+    fill(node, {
+      message: ready
+        ? `Your agents' bot account, ${report.botLogin}, is set up. Turn the package on and agents use it instead of your account.`
+        : "Agents push and open pull requests as you. Give them their own GitHub bot account, and GitHub itself refuses their pushes to main and merges no one approved.",
+    });
+    slot("enable").hidden = !ready;
+    slot("setup").hidden = ready;
     slot("note").hidden = !note;
     slot("note").textContent = note || "";
-    slot("error").hidden = true;
   }
 
-  return {
-    render,
-    error(message) {
-      mount.hidden = false;
-      slot("error").hidden = false;
-      slot("error").textContent = `Agent GitHub account status unavailable: ${message}`;
-    },
-    setRepositories(list) {
-      repositories = list;
-      const select = slot("repo-select");
-      const chosen = select.value;
-      select.replaceChildren(...list.map((repository) => {
-        const option = document.createElement("option");
-        option.value = repository.repositoryId;
-        option.textContent = repository.displayName || repository.repositoryId;
-        return option;
-      }));
-      if (list.some((repository) => repository.repositoryId === chosen)) select.value = chosen;
-    },
-  };
+  return { render };
 }
 
 // ---------------------------------------------------------------------------------------------
-// Repo line
+// The badge beside a repo's GitHub link, while the package is on
 
-// Mounts the status line into a repo card's slot. Home rebuilds its cards on every refresh, so a
-// known result renders at once and the read happens only when it is missing or old.
-export function mountAgentIdentityLine(slot, repository) {
+// Mounts the badge into a repo card's title. Home rebuilds its cards on every refresh, so a known
+// result renders at once and the read happens only when it is missing or old.
+export function mountAgentIdentityBadge(slot, repository) {
   if (!slot || !supportsAgentIdentity(repository)) return;
-  names.set(repository.repositoryId, repository.displayName || repository.repositoryId);
-  const line = tpl("tpl-agent-identity-line");
-  line.hidden = true;
-  line.querySelector("[data-slot=details]").addEventListener("click", () => openAgentIdentityCard(repository));
-  slot.append(line);
-  const set = lines.get(repository.repositoryId) || new Set();
+  const { repositoryId } = repository;
+  names.set(repositoryId, repository.displayName || repositoryId);
+  const badge = tpl("tpl-agent-identity-badge");
+  badge.hidden = true;
+  badge.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openAgentIdentityCard(repository);
+  });
+  slot.append(badge);
+  const set = badges.get(repositoryId) || new Set();
   for (const old of set) if (!old.isConnected) set.delete(old);
-  set.add(line);
-  lines.set(repository.repositoryId, set);
-  const known = reports.get(repository.repositoryId);
-  if (known) renderLine(line, known.report);
-  load(repository.repositoryId).catch(() => {});
+  set.add(badge);
+  badges.set(repositoryId, set);
+  renderBadge(badge, repositoryId);
+  // The repo is read only once the account says the package is on: with it off there is no badge.
+  loadAccount().then((report) => (report.packageEnabled ? load(repositoryId) : null)).catch(() => {});
 }
 
-function renderLine(line, report) {
-  const view = report.applies ? describeRepo(report) : null;
-  if (!view?.label) {
-    line.hidden = true;
+function renderBadges(repositoryId) {
+  for (const badge of badges.get(repositoryId) || []) renderBadge(badge, repositoryId);
+}
+
+function renderBadge(badge, repositoryId) {
+  const report = reports.get(repositoryId)?.report;
+  if (!account?.report.packageEnabled || !report?.applies) {
+    badge.hidden = true;
     return;
   }
-  line.hidden = false;
-  fill(line, { state: view.label, text: view.message });
-  line.querySelector("[data-slot=state]").dataset.level = view.level;
+  const view = repoView(account.report, report);
+  badge.hidden = false;
+  badge.dataset.level = view.level;
+  badge.title = `Agent bot: ${view.label}`;
+  badge.setAttribute("aria-label", `Agent bot: ${view.label}. Show details`);
 }
 
 // ---------------------------------------------------------------------------------------------
-// Actions shared by the banner and the card
+// Actions shared by the offer and the card
 
 async function turnOn(button, onNote) {
   button.disabled = true;
@@ -355,7 +360,8 @@ function launchFailureNote(result) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Card: the account (from the banner) or one repo (from its line or menu)
+// Card: the account (from the offer) or one repo (from its badge or menu). Each says everything
+// the user needs on its own; neither points at the other.
 
 function openAccountCard() {
   card ??= buildCard();
@@ -366,6 +372,8 @@ export function openAgentIdentityCard(repository) {
   card ??= buildCard();
   void card.open({ kind: "repo", repositoryId: repository.repositoryId, name: repository.displayName || repository.repositoryId });
 }
+
+const firstGithubRepository = () => githubRepositories[0]?.repositoryId || [...badges.keys()][0] || null;
 
 function buildCard() {
   const dialog = document.getElementById("agent-identity-dialog");
@@ -378,7 +386,7 @@ function buildCard() {
   slot("enable").addEventListener("click", () => void turnOn(slot("enable"), (message) => { if (target) target.note = message; render(); }));
   slot("open-setup").addEventListener("click", async () => {
     const opening = target;
-    const repositoryId = opening.kind === "repo" ? opening.repositoryId : [...lines.keys()][0];
+    const repositoryId = opening.kind === "repo" ? opening.repositoryId : firstGithubRepository();
     const result = await openSetup(slot("open-setup"), repositoryId);
     if (target !== opening) return;
     opening.note = result.note;
@@ -408,19 +416,17 @@ function buildCard() {
     const accountReport = account.report;
     const repoReport = target.kind === "repo" ? reports.get(target.repositoryId)?.report : null;
     if (target.kind === "repo" && !repoReport) return;
-    const view = target.kind === "account"
-      ? describeAccount(accountReport)
-      : repoReport.applies
-        ? repoReport.account === "waiting"
-          ? { ...describeAccount(accountReport), label: "account first", level: describeAccount(accountReport).level }
-          : describeRepo(repoReport)
-        : { label: "not on GitHub", level: "muted", message: "This repo's remote is not on github.com, so the bot account does not apply.", fix: null, offersSetup: false };
-    fill(dialog, { subject: target.kind === "account" ? "Bot account (all repos)" : target.name, state: view.label, message: view.message || "The bot can work here." });
+    const accountView = describeAccount(accountReport);
+    const view = target.kind === "account" ? accountView : repoView(accountReport, repoReport);
+    fill(dialog, { subject: target.kind === "account" ? "Bot account (all repos)" : target.name, state: view.label, message: view.message || "Agents can push and open pull requests here as the bot." });
     slot("state").dataset.level = view.level;
     slot("fix").hidden = !view.fix;
     slot("fix").textContent = view.fix ? `Fix: ${view.fix}` : "";
 
-    const checks = target.kind === "account" ? accountChecks(accountReport) : repoReport.applies ? repoChecks(accountReport, repoReport) : [];
+    const checks = target.kind === "repo" && !repoReport.applies ? [] : [
+      ...accountChecks(accountReport),
+      ...(target.kind === "repo" && repoReport.account !== "waiting" ? repoChecks(repoReport) : []),
+    ];
     slot("checks").hidden = checks.length === 0;
     slot("checks").replaceChildren(...checks.map((check) => stepItem("tpl-agent-identity-check", check)));
 
@@ -429,11 +435,11 @@ function buildCard() {
     slot("owner-message").textContent = ownerMessage || "";
     slot("owner-copy").copySource = ownerMessage || "";
 
-    // The github.com steps are the account's; a repo card shows them only while the account is
-    // what is in the way.
+    // The github.com steps belong to the account, so every card shows them while the account needs
+    // the setup.
     const guide = accountReport.guide;
-    const accountView = describeAccount(accountReport);
-    const showGuide = Boolean(guide) && (target.kind === "account" || repoReport?.account === "waiting") && accountView.offersSetup;
+    const applies = target.kind === "account" || repoReport.applies;
+    const showGuide = Boolean(guide) && applies && accountView.offersSetup;
     slot("guide").hidden = !showGuide;
     if (showGuide) {
       slot("guide-lead").textContent = guide.lead;
@@ -446,9 +452,9 @@ function buildCard() {
       fill(dialog, { "guide-expiry": `Token expiry: ${guide.expiry}`, "token-warning": guide.tokenWarning });
     }
 
-    const offersSetup = view.offersSetup || (repoReport?.account === "waiting" && accountView.offersSetup);
-    const enable = (target.kind === "account" || repoReport?.account === "waiting") && accountView.enable;
-    const setupRepo = target.kind === "repo" ? target.repositoryId : [...lines.keys()][0];
+    const offersSetup = applies && (view.offersSetup || accountView.offersSetup);
+    const enable = applies && accountView.enable;
+    const setupRepo = target.kind === "repo" ? target.repositoryId : firstGithubRepository();
     const launchable = offersSetup && Boolean(setupRepo) && (target.kind === "repo" ? repoReport.setupLaunch?.supported : accountReport.setupLaunch?.supported);
     slot("enable").hidden = !enable;
     slot("open-setup").hidden = !launchable;
@@ -502,16 +508,17 @@ export function guideSteps(report, guide) {
     .map((step) => ({ ...step, done: step.id === "account" ? accountDone : step.id === "token" ? tokenDone : false }));
 }
 
-// What the account card confirms, one line each.
+// What the status confirms about the account, one line each. The package line shows only while it
+// is off: a card reached from a badge already means it is on.
 function accountChecks(report) {
   if (report.state === "not-set-up") return [];
   const login = report.botLogin || report.savedLogin;
   const findings = report.findings || [];
   const has = (id) => findings.some((entry) => entry.id === id);
   return [
-    { label: "Bot account", note: login ? `${login}${has("bot-is-user") ? " is your own account" : ""}` : "none signed in", done: Boolean(report.botLogin) && !has("bot-is-user") },
+    { label: "Bot account", note: login ? `${login}${has("bot-is-user") ? " is your own account" : ", shared by every repo"}` : "none signed in", done: Boolean(report.botLogin) && !has("bot-is-user") },
     { label: "Token", note: tokenNote(report), done: Boolean(report.botLogin) && !findings.some((entry) => TOKEN_FINDINGS.has(entry.id)) },
-    { label: "Package", note: report.packageEnabled ? "on: agent shells use the bot" : "off: agents still act as you", done: report.packageEnabled },
+    ...(report.packageEnabled ? [] : [{ label: "Package", note: "off: agents still act as you", done: false }]),
   ];
 }
 
@@ -524,11 +531,8 @@ function tokenNote(report) {
   return trouble ? `${parts.join(", ")}: ${trouble.message}` : parts.join(", ");
 }
 
-// What a repo card confirms: the account (shared), the bot's place in this repo, and the rules.
-function repoChecks(accountReport, report) {
-  const accountOk = accountReport.state === "healthy";
-  const accountLine = { label: "Bot account", note: accountOk ? `${accountReport.botLogin}, shared by every repo` : "needs attention; see the banner on Home", done: accountOk };
-  if (report.account === "waiting") return [accountLine];
+// What the status confirms in one repo: the bot's place there, and the branch rules.
+function repoChecks(report) {
   const has = (id) => report.findings.some((entry) => entry.id === id);
   const accessKnown = report.state !== "unavailable" || report.findings.length > 0;
   const invite = has("invite-pending") ? "invited; the bot has not accepted yet"
@@ -537,7 +541,6 @@ function repoChecks(accountReport, report) {
   const rules = has("protection-unverified") ? "applied, but who may bypass them cannot be seen"
     : has("protection") ? "missing" : has("protection-unchecked") ? "could not be read" : "approval required to merge; main and plans protected";
   return [
-    accountLine,
     { label: "Invitation", note: accessKnown ? invite : "not checked", done: accessKnown && !has("invite-pending") && !has("not-collaborator") && !has("bot-is-admin") },
     { label: "Branch rules", note: accessKnown ? rules : "not checked", done: accessKnown && !["protection", "protection-unverified", "protection-unchecked"].some(has) },
   ];

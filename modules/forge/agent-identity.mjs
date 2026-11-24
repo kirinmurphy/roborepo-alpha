@@ -353,7 +353,7 @@ function checkScopes(scopes, problems) {
 
 // A finding only the repo's owner can fix, when you do not administer the repo, carries
 // `owner: true`, and its fix asks you to send them the message.
-const askOwner = (what) => `Ask the repo's owner to ${what}; Home and roborepo github status give you a message to send them.`;
+const askOwner = (what) => `Ask the repo's owner to ${what}; send them the message below.`;
 
 async function checkRepoAccess(bot, repo, botLogin, problems, userAdmin) {
   let permissions = {};

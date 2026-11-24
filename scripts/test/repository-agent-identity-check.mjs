@@ -2,7 +2,7 @@
 // The portal's GitHub bot identity routes below the browser: the account read (once for every repo,
 // a five-minute cache that `fresh` skips, no token in the answer), each repo's read (listed GitHub
 // repos only, nothing per repo while the account cannot be used), turning the package on only when
-// that is the one step left, the setup launch (always `roborepo github setup` in the repo's own
+// that is the one step left, Home's setup offer and its remembered "No thanks", the setup launch (always `roborepo github setup` in the repo's own
 // folder, a reason when it cannot open), the routes' handling of `fresh` and of a non-empty body,
 // and the real reads against a fake `gh` with the package on and off.
 import assert from "node:assert/strict";
@@ -15,7 +15,7 @@ import {
   defaultRegistry, registerLocalRoot, registerLocalRootPath, rootId, upsertRepository, writeRegistry,
 } from "../../modules/repositories/index.mjs";
 import {
-  clearAgentIdentityCache, launchAgentIdentitySetup, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity,
+  clearAgentIdentityCache, dismissAgentIdentityOffer, launchAgentIdentitySetup, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity,
 } from "../cli/repository-agent-identity.mjs";
 import { launchInTerminal } from "../cli/terminal-launch.mjs";
 import { shellQuote } from "../harnesses/shell-quote.mjs";
@@ -45,6 +45,7 @@ try {
   await packageTurnsOnOnlyAsTheLastStep();
   await setupLaunchIsTheServersChoice(checkout);
   terminalLaunchStartsInTheGivenFolder(checkout);
+  await offerDismissalIsRemembered();
   await routesPassFreshAndRefuseABody();
   realStatusAgainstFakeGh(checkout);
   console.log("ok: portal agent identity status, setup launch, and routes");
@@ -200,6 +201,17 @@ function terminalLaunchStartsInTheGivenFolder(checkout) {
   assert.equal(launchInTerminal({ name: "setup", executable: process.execPath, cwd: path.join(tmp, "absent") }, { platform: "darwin", dir, run }).reason, "no_folder");
 }
 
+// "No thanks" to Home's offer is a marker in RoboRepo's state, read with every account answer.
+async function offerDismissalIsRemembered() {
+  const offerRoot = path.join(tmp, "offer-state");
+  const read = () => Promise.resolve(readyAccount());
+  assert.equal((await loadAgentIdentityAccount({ fresh: true, stateRoot: offerRoot, read })).offerDismissed, false);
+  assert.deepEqual(dismissAgentIdentityOffer({ stateRoot: offerRoot, now: () => new Date("2026-11-24T10:00:00Z") }), { offerDismissed: true });
+  assert.equal(fs.readFileSync(path.join(offerRoot, "agent-identity", "offer-dismissed"), "utf8"), "2026-11-24T10:00:00.000Z\n");
+  assert.equal((await loadAgentIdentityAccount({ fresh: true, stateRoot: offerRoot, read })).offerDismissed, true);
+  clearAgentIdentityCache();
+}
+
 async function routesPassFreshAndRefuseABody() {
   const calls = [];
   const handlers = {
@@ -211,6 +223,7 @@ async function routesPassFreshAndRefuseABody() {
     launchAgentIdentitySetup: (params) => { calls.push(["launch", params]); return Promise.resolve({ launched: true }); },
     loadAgentIdentityAccount: (params) => { calls.push(["account", params]); return Promise.resolve({ state: "healthy" }); },
     turnOnAgentIdentity: () => { calls.push(["enable"]); return Promise.resolve({ enabled: true }); },
+    dismissAgentIdentityOffer: () => { calls.push(["dismiss"]); return { offerDismissed: true }; },
   };
   const id = encodeURIComponent(GITHUB);
   const get = await request("GET", `/api/repositories/${id}/agent-identity`, "fresh=1", handlers);
@@ -237,7 +250,12 @@ async function routesPassFreshAndRefuseABody() {
   assert.deepEqual(calls, [], "a body is refused before anything is enabled");
   const turned = await request("POST", "/api/agent-identity/enable", "", handlers, "");
   assert.equal(turned.status, 200);
-  assert.deepEqual(calls, [["enable"]]);
+  assert.deepEqual(calls.splice(0), [["enable"]]);
+  assert.equal((await request("POST", "/api/agent-identity/dismiss-offer", "", handlers, JSON.stringify({ forever: false }))).status, 400);
+  assert.deepEqual(calls, [], "a body is refused before anything is saved");
+  const dismissed = await request("POST", "/api/agent-identity/dismiss-offer", "", handlers, "");
+  assert.deepEqual(JSON.parse(dismissed.body), { offerDismissed: true });
+  assert.deepEqual(calls, [["dismiss"]]);
 }
 
 // The real reads in a child process, because the state folder and package state are read when the
