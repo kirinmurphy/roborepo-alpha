@@ -74,15 +74,16 @@ The setup walks you through each step and skips the ones already done:
    hidden prompt.
 4. Accept the invite (automatic, as the bot).
 5. Run `roborepo protect` if the repo needs it (it asks first), so the bot is not on any bypass list.
-6. Check everything, then enable the package. A failed check does not turn it on; if it was already
-   on, it stays on.
+6. Check everything, then switch agents to the bot (the `github-agent-identity` package). A failed
+   check does not switch them; if they already use the bot, they still do.
 
-The portal's Home page tracks where this stands. While the package is off, it offers the setup once
-(**No thanks** hides the offer for good). Once the package is on, each GitHub repo shows an
-**agent bot** badge, green when agents can work there, and the badge opens what is left. **Open setup** opens this same setup
-in a terminal (macOS; elsewhere it shows the command to copy). If the bot is already signed in and
-only the package is off, `roborepo package enable github-agent-identity` (or **Turn on** on Home) is
-all that is left. See [Agent GitHub account](../reference/repositories.md#agent-github-account).
+In the portal, **Agent GitHub Account** in Settings is the on/off switch. While it is off, Home
+offers the setup once (**No thanks** hides the offer for good). Once it is on, each GitHub repo shows
+an **agent bot** badge, green when agents can work there, and the badge opens a numbered list of
+what is done and where to start. **Open setup** opens this same setup in a terminal (macOS;
+elsewhere it shows the command to copy). If the bot is already signed in and only the switch is off,
+**Turn on** in Settings or on Home (or `roborepo package enable github-agent-identity`) is all that is
+left. See [Agent GitHub account](../reference/repositories.md#agent-github-account).
 
 In a repo someone else administers, the setup cannot invite the bot or add branch rules. It still
 finishes the bot account's own steps, leaves the package as it was, and prints a message to send the

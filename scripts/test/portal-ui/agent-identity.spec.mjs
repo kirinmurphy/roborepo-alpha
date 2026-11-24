@@ -204,7 +204,7 @@ test.describe("Agent GitHub account", () => {
 
     await offer(page).getByRole("button", { name: "No thanks" }).click();
     await expect(offer(page)).toContainText("Home won't offer this again");
-    await expect(offer(page).getByRole("link", { name: "Agents" })).toHaveAttribute("href", "/agents");
+    await expect(offer(page).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
     expect(posts).toEqual([{ kind: "dismiss", body: "{}" }]);
     await shot(page, "home-offer-declined");
 
@@ -236,37 +236,39 @@ test.describe("Agent GitHub account", () => {
     await shot(page, "home-badges-repos-under-healthy-account");
   });
 
-  test("every repo state's card says everything about the bot there, account included", async ({ page }) => {
+  test("every repo state's card is one numbered list in setup order, account included", async ({ page }) => {
     await stub(page, { accountNext: () => ACCOUNTS.healthy.report });
     await openHome(page);
     const expectations = {
-      "identity-ready": { done: [true, true, true, true], setup: false, owner: false },
-      "identity-invited": { done: [true, true, false, true], setup: true, owner: false },
-      "identity-uninvited": { done: [true, true, false, true], setup: true, owner: false },
-      "identity-theirs": { done: [true, true, false, false], setup: false, owner: true },
-      "identity-unverified": { done: [true, true, true, false], setup: false, owner: true },
-      "identity-unprotected": { done: [true, true, true, false], setup: false, owner: false },
-      "identity-bot-admin": { done: [true, true, false, true], setup: false, owner: false },
-      "identity-unread": { done: [true, true, false, false], setup: false, owner: false },
+      "identity-ready": { done: [true, true, true, true, true], summary: "Agents act on GitHub as robo-bot.", setup: false, owner: false },
+      "identity-invited": { done: [true, true, true, false, true], summary: "Start at item 4.", setup: true, owner: false },
+      "identity-uninvited": { done: [true, true, true, false, true], summary: "Start at item 4.", setup: true, owner: false },
+      "identity-theirs": { done: [true, true, true, false, false], summary: "Start at item 4.", setup: false, owner: true },
+      "identity-unverified": { done: [true, true, true, true, false], summary: "Agents can work, but item 5 needs you soon.", setup: false, owner: true },
+      "identity-unprotected": { done: [true, true, true, true, false], summary: "Start at item 5.", setup: false, owner: false },
+      "identity-bot-admin": { done: [true, true, true, false, true], summary: "Start at item 4.", setup: false, owner: false },
+      "identity-unread": { done: [true, true, true, false, false], summary: "GitHub did not answer. Check again in a moment.", setup: false, owner: false },
     };
     for (const [name, expected] of Object.entries(expectations)) {
       await badge(page, name).click();
       await expect(card(page).locator("[data-slot=subject]")).toHaveText(name);
       await expect(card(page).locator("[data-slot=state]")).toHaveText(REPOS[name].label);
-      const checks = card(page).locator("[data-slot=checks] li");
-      await expect(checks.locator("[data-slot=label]")).toHaveText(["Bot account", "Token", "Invitation", "Branch rules"]);
-      expect(await doneOf(checks), name).toEqual(expected.done);
-      await expect(checks.first()).toContainText("robo-bot, shared by every repo");
-      await expect(checks.nth(1)).toContainText("scopes repo, read:org");
-      await expect(card(page)).not.toContainText("banner");
+      await expect(card(page).locator("[data-slot=message]")).toHaveText(expected.summary);
+      const steps = card(page).locator("[data-slot=steps] > li");
+      await expect(steps.locator(".agent-identity-step-head [data-slot=label]")).toHaveText(["Bot account", "Token", "Agents use the bot", "Invited to this repo", "Branch rules"]);
+      await expect(steps.locator("[data-slot=number]")).toHaveText(["1.", "2.", "3.", "4.", "5."]);
+      expect(await doneOf(steps), name).toEqual(expected.done);
+      await expect(steps.nth(1)).toContainText("repo, read:org · expires");
+      // No second checklist, no separate github.com panel, no "Fix:" line repeating an item.
+      await expect(card(page).locator("ul, section")).toHaveCount(0);
+      await expect(card(page)).not.toContainText("Fix:");
       await expect(card(page).getByRole("button", { name: "Open setup" })).toBeVisible({ visible: expected.setup });
       await expect(card(page).locator("[data-slot=owner]")).toBeVisible({ visible: expected.owner });
       if (expected.owner) {
+        await expect(steps.filter({ hasText: "Ask the owner; the message below says what to do." })).not.toHaveCount(0);
         await expect(card(page).locator("[data-slot=owner-message]")).toContainText(`${BOT} never needs Admin`);
         await expect(card(page).getByRole("button", { name: "Copy message" })).toBeVisible();
       }
-      // A working account has no github.com steps left.
-      await expect(card(page).locator("[data-slot=guide]")).toBeHidden();
       await shot(card(page), `repo-card-${name}`);
       await card(page).getByRole("button", { name: "Close" }).click();
     }
@@ -276,48 +278,59 @@ test.describe("Agent GitHub account", () => {
     // The repo menu opens the same card.
     await repoCard(page, "identity-ready").getByRole("button", { name: "Actions", exact: true }).click();
     await repoCard(page, "identity-ready").getByRole("button", { name: "Agent GitHub account" }).click();
-    await expect(card(page)).toContainText("Agents can push and open pull requests here as the bot.");
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Agents act on GitHub as robo-bot.");
   });
 
-  test("the github.com steps are the bot's, with addresses to copy and done steps dimmed, in the offer's card and in a red badge's card", async ({ page }) => {
+  test("an item done on github.com carries the address to copy into the bot's browser, and done items are dimmed", async ({ page }) => {
     let current = ACCOUNTS["not-set-up"].report;
     await stub(page, { accountNext: () => current, ready: () => Boolean(current.botLogin) });
-    const steps = () => card(page).locator("[data-slot=steps] li");
-    const stepsOf = () => steps().evaluateAll((items) => items.map((item) => [item.querySelector("[data-slot=label]").textContent, item.dataset.done === "true"]));
+    const steps = () => card(page).locator("[data-slot=steps] > li");
+    const urls = () => steps().evaluateAll((items) => items.map((item) => {
+      const row = item.querySelector("[data-slot=url-row]");
+      return row.hidden ? null : item.querySelector("[data-slot=url]").textContent;
+    }));
 
     await openHome(page);
     await offer(page).getByRole("button", { name: "Set it up" }).click();
-    const panel = card(page).getByRole("region", { name: "On github.com, signed in as the bot" });
-    await expect(panel).toBeVisible();
-    await expect(panel).toContainText("Do these as the bot account, not as you.");
+    await expect(card(page).locator("[data-slot=subject]")).toHaveText("Bot account (all repos)");
+    await expect(steps().locator(".agent-identity-step-head [data-slot=label]")).toHaveText(["Bot account", "Token", "Agents use the bot"]);
+    expect(await doneOf(steps())).toEqual([false, false, false]);
+    expect(await urls()).toEqual(["https://github.com/signup", "https://github.com/settings/tokens/new", null]);
+    await expect(steps().nth(2)).toContainText("The setup turns this on when it finishes.");
     // Addresses to copy, never links that would open in your own signed-in browser.
-    await expect(panel.locator("a")).toHaveCount(0);
-    await expect(panel.locator("[data-slot=url]").nth(1)).toHaveText("https://github.com/settings/tokens/new");
-    await expect(panel.getByRole("button", { name: "Copy link" })).toHaveCount(2);
-    expect(await stepsOf()).toEqual([["Create the bot account", false], ["Create a classic token", false]]);
+    await expect(card(page).locator("a")).toHaveCount(0);
+    await expect(card(page).getByRole("button", { name: "Copy link" })).toHaveCount(2);
+    await expect(card(page).locator("[data-slot=bot-browser]")).toHaveText("Open copied links where the bot is signed in, not in your own browser.");
     await expect(card(page).getByRole("button", { name: "Open setup" })).toBeVisible();
     await shot(card(page), "account-card-not-set-up");
     await card(page).getByRole("button", { name: "Close" }).click();
 
-    // The bot is ready and only the package is off: its checklist, and Turn on.
+    // The bot is ready and only agents' switch is off: Turn on, no addresses.
     current = ACCOUNTS["package-off"].report;
     await openHome(page);
     await expect(offer(page).getByRole("button", { name: "Turn on" })).toBeVisible();
     await repoCard(page, "identity-ready").getByRole("button", { name: "Actions", exact: true }).click();
     await repoCard(page, "identity-ready").getByRole("button", { name: "Agent GitHub account" }).click();
-    await expect(card(page).locator("[data-slot=checks] li [data-slot=label]")).toHaveText(["Bot account", "Token", "Package", "Invitation", "Branch rules"]);
-    expect(await doneOf(card(page).locator("[data-slot=checks] li"))).toEqual([true, true, false, true, true]);
+    await expect(steps()).toHaveCount(5);
+    expect(await doneOf(steps())).toEqual([true, true, false, true, true]);
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 3.");
+    await expect(card(page).locator("[data-slot=bot-browser]")).toBeHidden();
     await expect(card(page).getByRole("button", { name: "Turn on" })).toBeVisible();
+    await shot(card(page), "repo-card-package-off");
     await card(page).getByRole("button", { name: "Close" }).click();
 
-    // With the package on and the token expired, a repo's badge is red and its card carries the
-    // account's steps itself: the account is done (dimmed) and the token step becomes renewing it.
+    // With agents switched on and the token expired, a repo's badge is red and its card carries the
+    // renewal itself; the repo's own items wait for a working account.
     current = ACCOUNTS["token-expired"].report;
     await openHome(page);
     await badge(page, "identity-ready").click();
     await expect(card(page).locator("[data-slot=state]")).toHaveText("token expired");
-    expect(await stepsOf()).toEqual([["Create the bot account", true], ["Renew the token", false]]);
+    await expect(steps()).toHaveCount(5);
+    expect(await doneOf(steps())).toEqual([true, false, true, false, false]);
+    expect(await urls()).toEqual([null, "https://github.com/settings/tokens", null, null, null]);
+    await expect(steps().nth(3)).toContainText("checked once the bot account works");
     await expect(steps().first()).toHaveCSS("opacity", "0.55");
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 2.");
     await expect(card(page).getByRole("button", { name: "Open setup" })).toBeVisible();
     await shot(card(page), "repo-card-token-expired");
   });
@@ -380,5 +393,44 @@ test.describe("Agent GitHub account", () => {
     await stub(page, { accountNext: () => ACCOUNTS.healthy.report, repoNext: () => ({ applies: false }) });
     await openHome(page);
     for (const name of NAMES) await expect(badge(page, name)).toBeHidden();
+  });
+  test("Settings holds the one switch: Set it up links to Home's card, Turn on only for a ready bot, Turn off once on", async ({ page }) => {
+    let current = ACCOUNTS["not-set-up"].report;
+    const { posts } = await stub(page, {
+      accountNext: () => current,
+      ready: () => Boolean(current.botLogin),
+      enable: () => { current = ACCOUNTS.healthy.report; return { enabled: true, account: current }; },
+    });
+    const disables = [];
+    await page.route("**/api/config/packages", async (route) => {
+      disables.push(route.request().postData());
+      current = ACCOUNTS["package-off"].report;
+      return route.fulfill({ json: { ok: true } });
+    });
+    const row = page.locator("#agent-identity-row");
+
+    await page.goto("/settings");
+    await expect(row.getByRole("status")).toHaveText("Off: agents act on GitHub as you.");
+    await expect(row.getByRole("link", { name: "Set it up" })).toHaveAttribute("href", "/?agent-identity=setup");
+    await expect(row.getByRole("button")).toBeHidden();
+    await shot(row, "settings-not-set-up");
+
+    // The link opens Home's account card, and the parameter is spent.
+    await row.getByRole("link", { name: "Set it up" }).click();
+    await expect(card(page).locator("[data-slot=subject]")).toHaveText("Bot account (all repos)");
+    await expect(page).toHaveURL(/\/$/);
+
+    current = ACCOUNTS["package-off"].report;
+    await page.goto("/settings");
+    await expect(row.getByRole("status")).toHaveText("robo-bot is ready; agents act as you.");
+    await row.getByRole("button", { name: "Turn on" }).click();
+    await expect(row.getByRole("status")).toHaveText(/^robo-bot · token expires /);
+    await expect(row.getByText("Agents use their bot account")).toBeVisible();
+    expect(posts).toEqual([{ kind: "enable", body: "{}" }]);
+    await shot(row, "settings-on");
+
+    await row.getByRole("button", { name: "Turn off" }).click();
+    await expect(row.getByRole("status")).toHaveText("robo-bot is ready; agents act as you.");
+    expect(disables.map((body) => JSON.parse(body))).toEqual([{ id: "github-agent-identity", enabled: false }]);
   });
 });

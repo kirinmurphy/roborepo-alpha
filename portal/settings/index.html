@@ -37,6 +37,18 @@
           <button type="button" data-btn="secondary" id="telemetry-toggle" aria-describedby="telemetry-description" disabled></button>
         </div>
       </section>
+      <section class="portal-section settings-section" aria-labelledby="agent-identity-title">
+        <header class="portal-section-head"><h2 id="agent-identity-title">Agent GitHub Account</h2></header>
+        <div class="settings-control-row" id="agent-identity-row">
+          <div class="settings-control-copy">
+            <div class="settings-token-active" data-slot="active" hidden><span class="settings-token-active-dot" aria-hidden="true"></span>Agents use their bot account</div>
+            <strong data-slot="status" role="status">Checking…</strong>
+            <span>Agents push and open pull requests as a separate GitHub account, so GitHub itself stops them pushing to main or merging PRs no one approved.</span>
+          </div>
+          <a data-btn="text" data-slot="link" hidden></a>
+          <button type="button" data-btn="secondary" data-slot="action" hidden></button>
+        </div>
+      </section>
     </main>
     {{REPOSITORY_SOURCES}}
     <template id="tpl-settings-harness-row">

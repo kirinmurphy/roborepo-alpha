@@ -71,7 +71,7 @@
           <p class="worktree-dialog-help" data-slot="note" hidden></p>
         </div>
         <div class="agent-identity-offer-body" data-slot="declined" hidden>
-          <p>Got it; Home won't offer this again. To set it up later, turn on the <strong>GitHub Agent Identity</strong> package on the <a href="/agents">Agents</a> page.</p>
+          <p>Got it; Home won't offer this again. To set it up later, use <strong>Agent GitHub account</strong> in <a href="/settings">Settings</a>.</p>
           <div class="agent-identity-actions">
             <button type="button" data-btn="text" data-slot="close">OK</button>
           </div>
@@ -85,27 +85,24 @@
         <span class="agent-identity-badge-dot" aria-hidden="true"></span>agent bot
       </button>
     </template>
-    <!-- agent-identity.js: one step done on github.com as the bot, with its link to copy. -->
+    <!-- agent-identity.js: one numbered item of the card's list. An item still to do may carry what to
+         do and a github.com address to copy into the bot's browser. -->
     <template id="tpl-agent-identity-step">
       <li class="agent-identity-step">
         <span class="agent-identity-step-mark" data-slot="mark" aria-hidden="true"></span>
         <div class="agent-identity-step-body">
-          <strong data-slot="label"></strong>
-          <span class="agent-identity-step-note" data-slot="note"></span>
-          <div class="agent-identity-command-line" data-slot="url-row">
-            <code data-slot="url"></code>
-            <portal-copy-button data-slot="copy" label="Copy link"></portal-copy-button>
+          <div class="agent-identity-step-head">
+            <span class="agent-identity-step-number" data-slot="number"></span>
+            <strong data-slot="label"></strong>
+            <span class="agent-identity-step-note" data-slot="note"></span>
           </div>
-        </div>
-      </li>
-    </template>
-    <!-- agent-identity.js: one line of a checklist (a fact the status confirms, or not yet). -->
-    <template id="tpl-agent-identity-check">
-      <li class="agent-identity-step">
-        <span class="agent-identity-step-mark" data-slot="mark" aria-hidden="true"></span>
-        <div class="agent-identity-step-body">
-          <strong data-slot="label"></strong>
-          <span class="agent-identity-step-note" data-slot="note"></span>
+          <div class="agent-identity-step-action" data-slot="action-row">
+            <span data-slot="action"></span>
+            <div class="agent-identity-command-line" data-slot="url-row" hidden>
+              <code data-slot="url"></code>
+              <portal-copy-button data-slot="copy" label="Copy link"></portal-copy-button>
+            </div>
+          </div>
         </div>
       </li>
     </template>
@@ -281,8 +278,8 @@
           <span class="agent-identity-state" data-slot="state"></span>
         </p>
         <p data-slot="message"></p>
-        <p class="agent-identity-fix" data-slot="fix" hidden></p>
-        <ul class="agent-identity-steps" data-slot="checks" hidden></ul>
+        <ol class="agent-identity-steps" data-slot="steps" hidden></ol>
+        <p class="worktree-dialog-help" data-slot="bot-browser" hidden></p>
         <div class="agent-identity-owner" data-slot="owner" hidden>
           <div class="agent-identity-owner-head">
             <strong>Message for the repo's owner</strong>
@@ -298,13 +295,6 @@
           </div>
         </div>
         <p class="worktree-dialog-help" data-slot="launch-note" hidden></p>
-        <section class="agent-identity-guide" data-slot="guide" hidden aria-labelledby="agent-identity-guide-title">
-          <h3 id="agent-identity-guide-title">On github.com, signed in as the bot</h3>
-          <p class="agent-identity-guide-lead" data-slot="guide-lead"></p>
-          <ol class="agent-identity-steps" data-slot="steps"></ol>
-          <p class="worktree-dialog-help" data-slot="guide-expiry"></p>
-          <p class="worktree-dialog-help" data-slot="token-warning"></p>
-        </section>
         <div class="item-err" data-slot="error" hidden></div>
       </div>
       <div class="modal-actions">

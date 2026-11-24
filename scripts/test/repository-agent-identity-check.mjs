@@ -96,7 +96,7 @@ async function statusReadIsCachedAndCarriesNoToken(checkout) {
   assert.equal(accountView.botLogin, "robo-bot");
   assert.equal(accountView.guide.command, "roborepo github setup");
   assert.ok(accountView.guide.steps.some((step) => step.id === "token" && step.url === "https://github.com/settings/tokens/new"));
-  assert.match(accountView.guide.lead, /as the bot account, not as you/);
+  assert.match(accountView.guide.lead, /where the bot is signed in/);
   assert.ok(!JSON.stringify(accountView).includes(TOKEN), "no token reaches the account answer");
 
   clock += 60_000;

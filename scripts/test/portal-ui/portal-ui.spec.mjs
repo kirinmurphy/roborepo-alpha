@@ -129,6 +129,8 @@ test.describe("Agents page", () => {
     await expect(page.locator(".packages-intro p")).toHaveText("Extend your harness config. Toggling a package below writes it into every active harness's configuration.");
     // Settings owns the token telemetry toggle; the Agents page does not repeat it.
     await expect(page.getByText("Token Telemetry", { exact: true })).toHaveCount(0);
+    // Settings also owns the agent GitHub account, whose switch only turns on once the bot works.
+    await expect(page.getByText("GitHub Agent Identity", { exact: true })).toHaveCount(0);
     // Monitoring shows its other packages, never the telemetry row.
     const monitoring = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Monitoring" }) });
     await expect(monitoring.locator(".item-label")).toHaveText(["Usage Statusline", "Capture Dense Bash"]);

@@ -1,8 +1,9 @@
 // The GitHub bot identity on Home. While the package is off, Home offers the setup once, in an info
 // prompt above the repo list that "No thanks" hides for good. Once the package is on, each GitHub
 // repo's title carries an "agent bot" badge (green when agents can work there, red when something
-// is in the way), and the badge opens a card with everything about the bot in that repo: the
-// account, its token, the bot's invitation, the branch rules, and the steps that remain. The page
+// is in the way), and the badge opens a card listing, in setup order, the bot account, its token,
+// agents using it, the bot's invitation to that repo, and the branch rules. Settings owns the on/off
+// switch and links here to set it up. The page
 // only reads status, asks the server to open `roborepo github setup` in a terminal, and asks it to
 // turn the package on when that is the one step left; the token is typed at the terminal's hidden
 // prompt and never passes through here.
@@ -113,7 +114,7 @@ export function describeAccount(report) {
       // something on offer.
       level = report.packageEnabled ? "problem" : "muted";
       message = report.packageEnabled
-        ? "The package is on, but no bot account is set up, so agents cannot push or open pull requests."
+        ? "Agents are set to use a bot account, but none is set up, so they cannot push or open pull requests."
         : "Agents use your GitHub account today. With a bot account of their own, GitHub itself refuses their pushes to main and merges no one approved.";
       break;
     case "healthy":
@@ -125,7 +126,7 @@ export function describeAccount(report) {
       if (enable) {
         label = "off";
         level = "warn";
-        message = `${report.botLogin} is ready, but the package that switches agents to it is off, so agents still act as you.`;
+        message = `${report.botLogin} is ready, but agents still act as you.`;
       } else {
         // The label names the finding shown, so it never says "expired" over another problem.
         label = shown.id === "expired" ? "token expired" : "needs attention";
@@ -208,8 +209,19 @@ export function renderAgentIdentityOffer(mount, repositories) {
   }
   offer ??= buildOffer(mount);
   if (account) offer.render(account.report);
+  openCardFromLink();
   // An offer, not a warning: a failed read just leaves it out.
   loadAccount().catch(() => { mount.hidden = true; });
+}
+
+// Settings' "Set it up" links to Home with ?agent-identity=setup, since the setup runs in a repo's
+// folder and Home knows the repos. The parameter is removed once used, so a reload does not reopen it.
+function openCardFromLink() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("agent-identity") !== "setup") return;
+  url.searchParams.delete("agent-identity");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  openAccountCard();
 }
 
 function buildOffer(mount) {
@@ -255,8 +267,8 @@ function buildOffer(mount) {
     const ready = report.enableOffered === true;
     fill(node, {
       message: ready
-        ? `Your agents' bot account, ${report.botLogin}, is set up. Turn the package on and agents use it instead of your account.`
-        : "Agents push and open pull requests as you. Give them their own GitHub bot account, and GitHub itself refuses their pushes to main and merges no one approved.",
+        ? `Your agents' bot account, ${report.botLogin}, is set up. Turn it on and agents use it instead of your account.`
+        : "Currently, agents push and open pull requests as you. Give them their own GitHub bot account to prevent admin abilities such as pushing to main and merging PRs no one approved.",
     });
     slot("enable").hidden = !ready;
     slot("setup").hidden = ready;
@@ -360,8 +372,9 @@ function launchFailureNote(result) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Card: the account (from the offer) or one repo (from its badge or menu). Each says everything
-// the user needs on its own; neither points at the other.
+// Card: the account (from the offer or Settings) or one repo (from its badge or menu). One numbered
+// list in setup order, so the first unchecked item is where to start; an item that needs a page on
+// github.com carries that page's address. Each card says everything on its own.
 
 function openAccountCard() {
   card ??= buildCard();
@@ -416,53 +429,36 @@ function buildCard() {
     const accountReport = account.report;
     const repoReport = target.kind === "repo" ? reports.get(target.repositoryId)?.report : null;
     if (target.kind === "repo" && !repoReport) return;
+    const applies = target.kind === "account" || repoReport.applies;
     const accountView = describeAccount(accountReport);
     const view = target.kind === "account" ? accountView : repoView(accountReport, repoReport);
-    fill(dialog, { subject: target.kind === "account" ? "Bot account (all repos)" : target.name, state: view.label, message: view.message || "Agents can push and open pull requests here as the bot." });
+    const steps = applies ? cardSteps(accountReport, repoReport) : [];
+    fill(dialog, {
+      subject: target.kind === "account" ? "Bot account (all repos)" : target.name,
+      state: view.label,
+      message: applies ? summary(accountReport, view, steps) : view.message,
+    });
     slot("state").dataset.level = view.level;
-    slot("fix").hidden = !view.fix;
-    slot("fix").textContent = view.fix ? `Fix: ${view.fix}` : "";
-
-    const checks = target.kind === "repo" && !repoReport.applies ? [] : [
-      ...accountChecks(accountReport),
-      ...(target.kind === "repo" && repoReport.account !== "waiting" ? repoChecks(repoReport) : []),
-    ];
-    slot("checks").hidden = checks.length === 0;
-    slot("checks").replaceChildren(...checks.map((check) => stepItem("tpl-agent-identity-check", check)));
+    slot("steps").hidden = steps.length === 0;
+    slot("steps").replaceChildren(...steps.map(stepItem));
+    slot("bot-browser").hidden = !steps.some((step) => step.url);
+    slot("bot-browser").textContent = accountReport.guide?.lead || "";
 
     const ownerMessage = repoReport?.ownerMessage || null;
     slot("owner").hidden = !ownerMessage;
     slot("owner-message").textContent = ownerMessage || "";
     slot("owner-copy").copySource = ownerMessage || "";
 
-    // The github.com steps belong to the account, so every card shows them while the account needs
-    // the setup.
-    const guide = accountReport.guide;
-    const applies = target.kind === "account" || repoReport.applies;
-    const showGuide = Boolean(guide) && applies && accountView.offersSetup;
-    slot("guide").hidden = !showGuide;
-    if (showGuide) {
-      slot("guide-lead").textContent = guide.lead;
-      slot("steps").replaceChildren(...guideSteps(accountReport, guide).map((step) => {
-        const item = stepItem("tpl-agent-identity-step", step);
-        fill(item, { url: step.url });
-        item.querySelector("[data-slot=copy]").copySource = step.url;
-        return item;
-      }));
-      fill(dialog, { "guide-expiry": `Token expiry: ${guide.expiry}`, "token-warning": guide.tokenWarning });
-    }
-
     const offersSetup = applies && (view.offersSetup || accountView.offersSetup);
-    const enable = applies && accountView.enable;
     const setupRepo = target.kind === "repo" ? target.repositoryId : firstGithubRepository();
     const launchable = offersSetup && Boolean(setupRepo) && (target.kind === "repo" ? repoReport.setupLaunch?.supported : accountReport.setupLaunch?.supported);
-    slot("enable").hidden = !enable;
+    slot("enable").hidden = !(applies && accountView.enable);
     slot("open-setup").hidden = !launchable;
     const showCommand = offersSetup && (!launchable || target.copyFallback);
     slot("command-row").hidden = !showCommand;
-    if (showCommand && guide) {
-      fill(dialog, { command: guide.command });
-      slot("copy").copySource = guide.command;
+    if (showCommand && accountReport.guide) {
+      fill(dialog, { command: accountReport.guide.command });
+      slot("copy").copySource = accountReport.guide.command;
       if (target.kind === "repo") watching.add(target.repositoryId);
       watchingAccount = true;
     }
@@ -476,9 +472,9 @@ function buildCard() {
     render,
     async open(next) {
       target = { ...next, copyFallback: false, note: null };
-      fill(dialog, { subject: next.kind === "account" ? "Bot account (all repos)" : next.name, state: "checking", message: "Reading the bot account's status from GitHub…" });
+      fill(dialog, { subject: next.kind === "account" ? "Bot account (all repos)" : next.name, state: "checking", message: "Reading the bot's status from GitHub…" });
       slot("state").dataset.level = "muted";
-      for (const name of ["fix", "checks", "owner", "command-row", "launch-note", "guide", "open-setup", "enable"]) slot(name).hidden = true;
+      for (const name of ["steps", "bot-browser", "owner", "command-row", "launch-note", "open-setup", "enable"]) slot(name).hidden = true;
       showError(null);
       if (!dialog.open) dialog.showModal();
       await refresh({ fresh: false });
@@ -486,64 +482,100 @@ function buildCard() {
   };
 }
 
-function stepItem(template, step) {
-  const item = fill(tpl(template), { label: step.label, note: step.note || "" });
+// One sentence above the list: what works, and where to start when something does not.
+function summary(accountReport, view, steps) {
+  const first = steps.findIndex((step) => !step.done && !step.waiting);
+  const bot = accountReport.botLogin || accountReport.savedLogin || "the bot";
+  if (view.label === "not checked") return "GitHub did not answer. Check again in a moment.";
+  if (first === -1) return accountReport.packageEnabled ? `Agents act on GitHub as ${bot}.` : `${bot} is ready; agents still act as you.`;
+  return view.level === "warn" && accountReport.packageEnabled ? `Agents can work, but item ${first + 1} needs you soon.` : `Start at item ${first + 1}.`;
+}
+
+function stepItem(step, index) {
+  const item = fill(tpl("tpl-agent-identity-step"), { number: `${index + 1}.`, label: step.label, note: step.note || "", action: step.action || "" });
   item.dataset.done = String(step.done);
-  item.querySelector("[data-slot=mark]").textContent = step.done ? "✓" : "";
-  if (step.done) item.querySelector("[data-slot=mark]").setAttribute("aria-label", "Done");
+  item.dataset.waiting = String(Boolean(step.waiting));
+  const mark = item.querySelector("[data-slot=mark]");
+  mark.textContent = step.done ? "✓" : "";
+  if (step.done) mark.setAttribute("aria-label", "Done");
+  item.querySelector("[data-slot=action-row]").hidden = !step.action && !step.url;
+  item.querySelector("[data-slot=action]").hidden = !step.action;
+  item.querySelector("[data-slot=url-row]").hidden = !step.url;
+  if (step.url) {
+    fill(item, { url: step.url });
+    item.querySelector("[data-slot=copy]").copySource = step.url;
+  }
   return item;
 }
 
-// The github.com steps, each marked done when the status already shows it: the account exists once
-// a bot is signed in, and the token is done while GitHub accepts it and nothing is wrong with it.
-// Renewing replaces the token step when there is a token to renew.
-export function guideSteps(report, guide) {
-  const findings = report.findings || [];
-  const tokenTrouble = findings.some((entry) => TOKEN_FINDINGS.has(entry.id));
-  const accountDone = Boolean(report.signedIn || report.savedLogin);
-  const tokenDone = Boolean(report.botLogin) && !tokenTrouble;
-  const renewing = accountDone && (tokenTrouble || !report.botLogin);
-  return guide.steps
-    .filter((step) => (step.id === "renew" ? renewing : step.id === "token" ? !renewing : true))
-    .map((step) => ({ ...step, done: step.id === "account" ? accountDone : step.id === "token" ? tokenDone : false }));
-}
+const dateText = (iso) => new Date(iso).toLocaleDateString();
 
-// What the status confirms about the account, one line each. The package line shows only while it
-// is off: a card reached from a badge already means it is on.
-function accountChecks(report) {
-  if (report.state === "not-set-up") return [];
-  const login = report.botLogin || report.savedLogin;
-  const findings = report.findings || [];
+// The card's list, in setup order: the bot account, its token, agents using it, then (for one repo)
+// the bot's invitation there and the branch rules. A repo item waits, unchecked and without an
+// action, while the account is not usable.
+export function cardSteps(accountReport, repoReport = null) {
+  const findings = accountReport.findings || [];
   const has = (id) => findings.some((entry) => entry.id === id);
-  return [
-    { label: "Bot account", note: login ? `${login}${has("bot-is-user") ? " is your own account" : ", shared by every repo"}` : "none signed in", done: Boolean(report.botLogin) && !has("bot-is-user") },
-    { label: "Token", note: tokenNote(report), done: Boolean(report.botLogin) && !findings.some((entry) => TOKEN_FINDINGS.has(entry.id)) },
-    ...(report.packageEnabled ? [] : [{ label: "Package", note: "off: agents still act as you", done: false }]),
-  ];
-}
+  const guide = new Map((accountReport.guide?.steps || []).map((step) => [step.id, step]));
+  const login = accountReport.botLogin || accountReport.savedLogin;
+  const tokenTrouble = findings.find((entry) => TOKEN_FINDINGS.has(entry.id));
 
-function tokenNote(report) {
-  const findings = report.findings || [];
-  const trouble = findings.find((entry) => TOKEN_FINDINGS.has(entry.id));
-  if (!report.botLogin) return trouble ? trouble.message : "GitHub did not accept it";
-  const parts = [report.scopes ? `scopes ${report.scopes.join(", ")}` : "fine-grained (no scope list)"];
-  parts.push(report.expiresAt ? `expires ${new Date(report.expiresAt).toLocaleDateString()}` : "no expiry date");
-  return trouble ? `${parts.join(", ")}: ${trouble.message}` : parts.join(", ");
-}
+  const accountDone = Boolean(accountReport.signedIn || accountReport.savedLogin) && !has("bot-is-user");
+  const accountStep = { label: "Bot account", done: accountDone, note: has("bot-is-user") ? `${login} is your own account; use a separate one` : login || "not created yet" };
+  if (!login) Object.assign(accountStep, { action: guide.get("account")?.note, url: guide.get("account")?.url });
 
-// What the status confirms in one repo: the bot's place there, and the branch rules.
-function repoChecks(report) {
-  const has = (id) => report.findings.some((entry) => entry.id === id);
-  const accessKnown = report.state !== "unavailable" || report.findings.length > 0;
-  const invite = has("invite-pending") ? "invited; the bot has not accepted yet"
-    : has("not-collaborator") ? "not invited"
-      : has("bot-is-admin") ? "accepted, but the bot is an admin" : "accepted, with write access";
-  const rules = has("protection-unverified") ? "applied, but who may bypass them cannot be seen"
-    : has("protection") ? "missing" : has("protection-unchecked") ? "could not be read" : "approval required to merge; main and plans protected";
-  return [
-    { label: "Invitation", note: accessKnown ? invite : "not checked", done: accessKnown && !has("invite-pending") && !has("not-collaborator") && !has("bot-is-admin") },
-    { label: "Branch rules", note: accessKnown ? rules : "not checked", done: accessKnown && !["protection", "protection-unverified", "protection-unchecked"].some(has) },
-  ];
+  const tokenDone = Boolean(accountReport.botLogin) && !tokenTrouble;
+  const tokenStep = { label: "Token", done: tokenDone };
+  if (tokenDone) {
+    tokenStep.note = [accountReport.scopes ? accountReport.scopes.join(", ") : "fine-grained", accountReport.expiresAt ? `expires ${dateText(accountReport.expiresAt)}` : "no expiry date"].join(" · ");
+  } else {
+    tokenStep.note = !login ? "not created yet" : tokenTrouble ? tokenTrouble.message : "GitHub did not accept it";
+    const renewing = accountDone && (Boolean(tokenTrouble) || !accountReport.botLogin);
+    // A token in the keychain only needs the setup to move it; wrong scopes need a new token, not a
+    // regenerated one.
+    const wrongKind = ["broad-scopes", "fine-grained-token", "scopes-missing"].includes(tokenTrouble?.id);
+    const page = guide.get(renewing && !wrongKind ? "renew" : "token");
+    if (tokenTrouble?.id === "token-in-keychain") tokenStep.action = "Open setup moves it where agents can read it.";
+    else if (page) Object.assign(tokenStep, { action: page.note, url: page.url });
+  }
+
+  const useStep = {
+    label: "Agents use the bot",
+    done: Boolean(accountReport.packageEnabled),
+    note: accountReport.packageEnabled ? "on" : "off; agents act as you",
+    ...(accountReport.packageEnabled || accountReport.enableOffered ? {} : { action: "The setup turns this on when it finishes." }),
+  };
+  const steps = [accountStep, tokenStep, useStep];
+  if (!repoReport) return steps;
+
+  if (repoReport.account === "waiting") {
+    return [...steps,
+      { label: "Invited to this repo", done: false, waiting: true, note: "checked once the bot account works" },
+      { label: "Branch rules", done: false, waiting: true, note: "checked once the bot account works" }];
+  }
+  const repoHas = (id) => repoReport.findings.some((entry) => entry.id === id);
+  const finding = (id) => repoReport.findings.find((entry) => entry.id === id);
+  const known = repoReport.state !== "unavailable" || repoReport.findings.length > 0;
+  const askOwner = "Ask the owner; the message below says what to do.";
+
+  const inviteId = ["invite-pending", "not-collaborator", "bot-is-admin"].find(repoHas);
+  const invite = { label: "Invited to this repo", done: known && !inviteId };
+  if (!known) invite.note = "not checked";
+  else if (!inviteId) invite.note = "write access";
+  else {
+    invite.note = { "invite-pending": "invited; not accepted yet", "not-collaborator": "not invited", "bot-is-admin": "the bot is an admin; lower it to Write" }[inviteId];
+    invite.action = finding(inviteId).owner ? askOwner : inviteId === "bot-is-admin" ? null : "Open setup does this.";
+  }
+
+  const rulesId = ["protection", "protection-unverified", "protection-unchecked"].find(repoHas);
+  const rules = { label: "Branch rules", done: known && !rulesId };
+  if (!known) rules.note = "not checked";
+  else if (!rulesId) rules.note = "approval required to merge";
+  else {
+    rules.note = { protection: "missing", "protection-unverified": "applied, but you can't see who may bypass them", "protection-unchecked": "could not be read" }[rulesId];
+    rules.action = finding(rulesId).owner ? askOwner : rulesId === "protection" ? "Run roborepo protect here, or use Branch protection in the repo's menu." : null;
+  }
+  return [...steps, invite, rules];
 }
 
 // ---------------------------------------------------------------------------------------------

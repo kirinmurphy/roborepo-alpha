@@ -158,21 +158,25 @@ rules stay on. Each button runs the same steps as the matching `roborepo protect
 ### Agent GitHub account
 
 Agents can act on GitHub as a separate
-[bot account](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot). Home shows it in
-one of two ways, depending on whether the `github-agent-identity` package is on.
+[bot account](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot). Its on/off switch
+is **Agent GitHub Account** in Settings. Underneath, the switch is the `github-agent-identity`
+package, which points agent shells at the bot's login. The Agents page leaves that package to
+Settings, because Settings turns it on only once the bot works: on before then, agents would have no
+GitHub login at all.
 
-**While the package is off**, Home offers the setup in an info notice above the repo list, whenever
-a listed repo is on github.com:
+| Settings shows | Its controls |
+| --- | --- |
+| Off, agents act as you | **Set it up** opens the bot card on Home |
+| The bot is ready, agents act as you | **Turn on**, after a fresh check. Agent sessions already open keep acting as you until restarted |
+| On: the bot's login and token expiry | **Details** opens the bot card; **Turn off** makes agents act as you again |
+| On, but the bot needs attention | **Fix it** opens the bot card; **Turn off** |
 
-- **Set it up** opens the account card: the github.com steps and **Open setup**.
-- **Turn on** replaces it when the bot is already set up and only the package is off. It does what
-  the setup's last step does, after a fresh check. Agent sessions already open keep acting as you
-  until restarted.
-- **No thanks** hides the offer for good. It says the package can be turned on later on the Agents
-  page, and is gone on the next load.
+**While it is off**, Home offers the setup in an info notice above the repo list, whenever a listed
+repo is on github.com: **Set it up** (or **Turn on** when the bot is ready), and **No thanks**, which
+hides the offer for good and points to Settings for later.
 
-**Once the package is on**, the offer is gone and each GitHub repo's title has an **agent bot**
-badge beside its GitHub link. The dot's color covers both the bot account and that repo:
+**Once it is on**, the offer is gone and each GitHub repo's title has an **agent bot** badge beside
+its GitHub link. The dot's color covers both the bot account and that repo:
 
 | Dot | Means |
 | --- | --- |
@@ -182,15 +186,20 @@ badge beside its GitHub link. The dot's color covers both the bot account and th
 | Grey | **not checked**: GitHub did not answer |
 
 The badge's tooltip names the state. Clicking it (or **Agent GitHub account** in the repo's menu)
-opens the repo's card, which says everything on its own: the bot's login, the token's scopes and
-expiry, the invitation, the branch rules, and the fix. Confirmed items are marked and dimmed. For a
-repo someone else administers, the card has a message to copy and send the owner: invite the bot with
-Write access, and the branch rules to add. `roborepo github status` prints the same message.
+opens the repo's card: one numbered list in setup order, and a line saying which item to start at.
 
-While the account is not set up, or its token needs renewing, the card lists the github.com steps in
-their own panel. They are done signed in as the bot, often in another browser or a private window,
-so each shows the address to copy there instead of a link that would open in your own session. A
-step the status already confirms (the account exists, the token works) is marked done.
+1. **Bot account**: its login.
+2. **Token**: scopes and expiry.
+3. **Agents use the bot**: the Settings switch.
+4. **Invited to this repo**: with write, not admin, access.
+5. **Branch rules**: approval required to merge.
+
+Done items are checked and dimmed. An item done on github.com (creating the account, creating or
+renewing the token) carries the address to copy into the browser where the bot is signed in, instead
+of a link that would open in your own session. While the bot account is not usable, items 4 and 5
+wait. The card from the offer or Settings lists items 1 to 3. For a repo someone else administers,
+items 4 and 5 say to ask the owner, and the card has a message to copy and send them: invite the bot
+with Write access, and the branch rules to add. `roborepo github status` prints the same message.
 
 **Open setup** opens a terminal running `roborepo github setup` in the repo's folder (macOS). On
 another OS, or when the terminal does not open, the page shows the command to copy instead. The
