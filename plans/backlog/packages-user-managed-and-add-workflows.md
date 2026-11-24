@@ -3,7 +3,7 @@ id: user-managed-packages-and-add-workflows
 next_action: Characterize existing workspace catalog and typed skill/MCP primitives, then agree source/provenance and receipt boundaries before designing unified add flows.
 blocked_by: []
 depends_on: ["bysyzl1e"]
-related: ["jdsobwn"]
+related: ["jdsobwn", "62hoz5a9"]
 reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
@@ -140,8 +140,10 @@ identity, collision resolution, remote artifacts, and installation provenance. T
 creation, grouping, receipts, export, and removal UX on those contracts. [[74h2tlim]] owns profile
 containment and backup; agree source/record boundaries before any path migration. Remote registry
 implementation is not required merely to begin characterizing shipped local add primitives. The
-portal add screen's GitHub path needs [[jdsobwn]] Stage 4 (the `git` source and trusted catalog);
-local adds do not.
+[[62hoz5a9]] owns the portal's package-source screens: the System / Custom / Third Party tab bar,
+source badges, Install, Update, and Remove on cards, the Sources panel, and adding a GitHub repo or
+local folder as a source. This plan's portal work is the Custom tab's Add button and the typed add
+flows it opens.
 
 ## Proposed Behavior
 
@@ -233,29 +235,8 @@ workspace or a separate collection record. Decide before building the "Usually t
 
 ### Adding From The Portal
 
-The Third Party tab's Add button opens one screen with two ways in:
-
-- **Paste a URL**: a public GitHub repo URL.
-- **Browse trusted**: a list of repos from the trusted catalog that ships with RoboRepo.
-
-Both lead to the same preview before anything is installed:
-
-```mermaid
-flowchart TD
-  paste[User pastes a GitHub URL] -->|resolves to a commit| preview[Preview]
-  browse[User picks a trusted catalog entry] -->|resolves to its reviewed commit| preview
-  preview -->|lists skills, rules, hooks, scripts, permissions found| warn{Trusted catalog entry?}
-  warn -->|yes| confirm[Standard confirmation]
-  warn -->|no| strong[Stronger third-party warning]
-  confirm -->|user confirms| install[Install and show receipt]
-  strong -->|user confirms| install
-  install -->|adds a card to| tab[Third Party tab]
-```
-
-The preview names the repo, the commit, and each package that will appear, using the grouping
-rules in [[jdsobwn]]. The receipt after install is the same receipt the CLI prints. Fetching,
-pinning, and integrity checks belong to the `git` source in [[jdsobwn]] Stage 4; this plan owns
-the screen.
+Adding a GitHub repo or a local folder as a package source, and installing from it with a preview,
+is in [[62hoz5a9]], which also renders the tabs and source badges.
 
 The Custom tab's Add button opens the same typed flows as `roborepo add` for local folders and
 files.
@@ -400,8 +381,9 @@ them by where they came from:
 | **Custom** | Packages the user wrote or keeps in a local folder, including everything from typed `roborepo add` flows on local paths | Enable, disable, inspect, export, remove. Remove never deletes the user's source folder. |
 | **Third Party** | Packages from someone else's GitHub repo or catalog | Enable, disable, inspect, update, remove. |
 
-The tab comes from the package's source, as defined in [[jdsobwn]] Portal Tabs and Removal. The
-Add button sits on the Custom and Third Party tabs.
+The tab comes from the package's source, as defined in [[jdsobwn]] Portal Tabs and Removal.
+[[62hoz5a9]] renders the tab bar, source badges, and Remove; this plan adds the Custom tab's Add
+button and the user-content status badges below.
 
 Inside each tab, sections stay data-driven from package metadata, using the existing categories:
 
@@ -418,8 +400,6 @@ its own tab. Rows carry status badges:
 - `native`
 - `blocked`
 
-Third Party rows also carry a source badge naming the repo or catalog, and `Trusted` when the
-package came from the trusted catalog. Origin needs no badge, because the tab already shows it.
 
 ## CLI Surface
 
@@ -479,18 +459,6 @@ The main simplification is not removing capability. It is routing new user-creat
 5. Roborepo prints a receipt showing the source file, managed ID, rendered harness files, and
    inspect/export/remove commands.
 6. `/config` shows the row on the Custom tab in `Chat-Time Output`, with source inspect available.
-
-### Adding A Third-Party Skill From The Portal
-
-1. User opens the Third Party tab and selects Add.
-2. User pastes `https://github.com/cloudflare/security-audit-skill`, or picks it from the trusted
-   catalog if it is listed there.
-3. RoboRepo resolves the repo to a commit and shows the preview: the repo name, the commit, the
-   package it will create, any hooks or scripts found, and whether it is a trusted catalog entry.
-4. User confirms, after the stronger warning when the repo is not in the catalog.
-5. RoboRepo installs the package and shows the receipt.
-6. The skill appears on the Third Party tab with a source badge, ready to enable.
-7. Later, the user can disable it, update it to a newer commit, or remove it.
 
 ### Adding Multiple Pieces Together
 
@@ -686,11 +654,8 @@ the source is moved or the shell starts from a different directory.
 
 - [ ] Audit existing presentation/category metadata consumers and remove only remaining hard-coded user-content gaps.
 - [ ] Keep curated descriptions for built-ins where useful, but make category placement data-driven.
-- [ ] Add the System / Custom / Third Party tab bar above the package lists, driven by each
-      package's tab from the shared package view.
 - [ ] Add a generic web section renderer for unknown/new categories, including `Uncategorized`.
-- [ ] Add status and source badges to behavior view items.
-- [ ] Show Remove only on Custom and Third Party cards.
+- [ ] Add the `partial`, `native`, and `blocked` status badges to behavior view items.
 - [ ] Ensure `onboard` applies toggles by item type rather than hard-coded package IDs.
 
 ### Phase 3 - Add Flows
@@ -708,14 +673,11 @@ the source is moved or the shell starts from a different directory.
 
 ### Phase 3b - Portal Add
 
-Needs [[jdsobwn]] Stage 4 for the GitHub path.
+Needs [[62hoz5a9]]'s tab bar.
 
-- [ ] Add the Add button to the Custom and Third Party tabs.
-- [ ] Build the Third Party add screen: paste-a-URL field and trusted catalog list.
-- [ ] Show the preview: repo, commit, packages, and any hooks, scripts, or permissions found.
-- [ ] Show the stronger warning for URLs outside the trusted catalog.
-- [ ] Show the install receipt in the portal.
+- [ ] Add the Add button to the Custom tab.
 - [ ] Route the Custom add button to the typed local add flows.
+- [ ] Show the receipt of a typed add in the portal.
 
 ### Phase 4 - Inspect, Export, Remove
 
@@ -797,6 +759,9 @@ Needs [[jdsobwn]] Stage 4 for the GitHub path.
   stay installed; Custom and Third Party packages can also be removed.
 - **2026-10-24: Portal add by URL or trusted catalog.** Decided by the user. URLs outside the
   catalog are allowed with a stronger warning.
+- **2026-11-24: Package-source screens move to Part 04b.** Decided by the user. The tab bar, source
+  badges, Remove, and the GitHub add screen move to [[62hoz5a9]], which brings every package-source
+  CLI action to the portal. This plan keeps the typed add flows and the Custom tab's Add button.
 
 ## Documentation impact
 
