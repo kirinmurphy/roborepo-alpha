@@ -58,7 +58,8 @@ Refusals carry a code from `SERVICE_EXIT_CODES` (`usage`, `ambiguous`, `confirma
 that is on needs a `disable` callback: the CLI passes one that turns the package off first.
 
 Git runs synchronously (`spawnSync` in `scripts/cli/package-source-git.mjs`), with a 120-second
-timeout. Adding a GitHub source, refreshing it, installing from it, and updating all run Git.
+timeout. Adding a GitHub source, refreshing it, and updating run Git. Installing copies from the listing the
+last refresh built and runs no Git.
 
 The portal side:
 
@@ -115,7 +116,7 @@ flowchart LR
   `PackageServiceError` code to an HTTP status and the service's message. No package logic lives in
   a route.
 - **Git off the server's thread:** a route whose service call runs Git (add a GitHub source,
-  refresh, install, update) runs that call in a child Node process and awaits it. Because Git is
+  refresh, update) runs that call in a child Node process and awaits it. Because Git is
   synchronous, calling it inside the portal server would stop every page from answering for up to
   two minutes. One small runner does this: it takes a service function name and its arguments and
   returns `{ result }` or `{ error: { code, message, details } }`. The route rebuilds the
@@ -237,7 +238,7 @@ performs each step.
 
 | Risk | Mitigation |
 | --- | --- |
-| A GitHub add, refresh, install, or update takes up to two minutes | The call runs in a child process, so other pages keep answering; the dialog shows progress, and the 120-second Git timeout bounds the wait |
+| A GitHub add, refresh, or update takes up to two minutes | The call runs in a child process, so other pages keep answering; the dialog shows progress, and the 120-second Git timeout bounds the wait |
 | A portal action and a CLI command run at once | Lock and store writes take the package lock. A refresh replaces a source's listing only after it validates, so a racing refresh leaves one complete listing |
 | The page shows stale state after a CLI change | The page reloads data after each action and on focus; the parity check covers a CLI change seen in the portal |
 | The Agents page grows crowded | Tabs split the list; the Sources panel sits in its own section |
