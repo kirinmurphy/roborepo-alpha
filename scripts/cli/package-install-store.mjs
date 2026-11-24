@@ -37,7 +37,7 @@ const HASH_EXCLUDED = new Set([".git", SOURCE_METADATA_FILE]);
 // files, because a link would let the copy read content the integrity hash never covered.
 export function hashPackageTree(dir, { rejectLinks = false } = {}) {
   const hash = crypto.createHash("sha256");
-  for (const { rel, kind, excluded } of listEntries(dir)) {
+  for (const { rel, kind, excluded } of listEntries(dir, { searchExcluded: rejectLinks })) {
     if (kind === "l" && rejectLinks) throw new Error(`${dir}: symbolic links are not allowed in an installed package (${rel})`);
     if (excluded) continue;
     const content = kind === "l" ? Buffer.from(fs.readlinkSync(path.join(dir, rel)), "utf8") : fs.readFileSync(path.join(dir, rel));
@@ -54,20 +54,20 @@ export function hashPackageTree(dir, { rejectLinks = false } = {}) {
 // A symbolic link under an excluded name is still listed, marked `excluded`: it is left out of the
 // hash, but a copy that must hold no links has to see it. Otherwise a link named like the source
 // metadata file would pass the check, and writing that metadata would follow the link out of the
-// store.
-function listEntries(dir, prefix = "") {
+// store. With `searchExcluded`, a folder under an excluded name is searched the same way, so a link
+// inside it (`nested/.roborepo-source.json/link`) is seen too; its files stay out of the hash. A
+// live package's fingerprint skips that search, so it never walks a large `.git` folder.
+function listEntries(dir, { searchExcluded = false } = {}, prefix = "", inExcluded = false) {
   const out = [];
   const entries = fs.readdirSync(prefix ? path.join(dir, ...prefix.split("/")) : dir, { withFileTypes: true })
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   for (const entry of entries) {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (HASH_EXCLUDED.has(entry.name)) {
-      if (entry.isSymbolicLink()) out.push({ rel, kind: "l", excluded: true });
-      continue;
-    }
-    if (entry.isSymbolicLink()) out.push({ rel, kind: "l" });
-    else if (entry.isDirectory()) out.push(...listEntries(dir, rel));
-    else if (entry.isFile()) out.push({ rel, kind: "f" });
+    const excluded = inExcluded || HASH_EXCLUDED.has(entry.name);
+    if (entry.isSymbolicLink()) out.push(excluded ? { rel, kind: "l", excluded } : { rel, kind: "l" });
+    else if (entry.isDirectory()) {
+      if (!excluded || searchExcluded) out.push(...listEntries(dir, { searchExcluded }, rel, excluded));
+    } else if (entry.isFile() && !excluded) out.push({ rel, kind: "f" });
   }
   return out;
 }

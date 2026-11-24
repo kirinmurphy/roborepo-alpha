@@ -261,6 +261,32 @@ function within(roots) {
     assert.ok(!stagedExcluded.ok && /symbolic links are not allowed/.test(stagedExcluded.error), stagedExcluded.error);
     assert.equal(fs.readFileSync(path.join(roots.tmp, "outside.md"), "utf8"), "outside content\n", "the link target is untouched");
     assert.equal(run(`return l.lockRecordFor("linked-pkg");`), null, "nothing is recorded");
+    fs.rmSync(path.join(pkg, ".roborepo-source.json"));
+
+    // A folder under an excluded name is searched for links as well, in both trees.
+    const nestedLink = (root) => {
+      const folder = path.join(root, "nested", ".roborepo-source.json");
+      fs.mkdirSync(folder, { recursive: true });
+      fs.symlinkSync(path.join(roots.tmp, "outside.md"), path.join(folder, "link"));
+    };
+    nestedLink(pkg);
+    const nestedStaged = runModules(roots.env, store, `
+      return st.promoteMaterialized({
+        sourceFolder: ${JSON.stringify(pkg)},
+        resolution: { sourceId: "gitsrc", packageId: "linked-pkg", resolved: "abc123", sourceType: "git", trust: "unverified", integrity: ${JSON.stringify(before.value)} },
+      });
+    `);
+    assert.ok(!nestedStaged.ok && /symbolic links are not allowed/.test(nestedStaged.error), nestedStaged.error);
+    fs.rmSync(path.join(pkg, "nested"), { recursive: true });
+    fs.cpSync(pkg, target, { recursive: true });
+    nestedLink(target);
+    const nestedTarget = runModules(roots.env, store, `
+      return st.promoteMaterialized({
+        sourceFolder: ${JSON.stringify(pkg)},
+        resolution: { sourceId: "gitsrc", packageId: "linked-pkg", resolved: "abc123", sourceType: "git", trust: "unverified", integrity: ${JSON.stringify(before.value)} },
+      });
+    `);
+    assert.ok(!nestedTarget.ok && /symbolic links are not allowed/.test(nestedTarget.error), nestedTarget.error);
   } finally {
     roots.cleanup();
   }
