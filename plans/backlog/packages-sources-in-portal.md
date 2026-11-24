@@ -117,7 +117,10 @@ flowchart LR
 - **Git off the server's thread:** a route whose service call runs Git (add a GitHub source,
   refresh, install, update) runs that call in a child Node process and awaits it. Because Git is
   synchronous, calling it inside the portal server would stop every page from answering for up to
-  two minutes.
+  two minutes. One small runner does this: it takes a service function name and its arguments and
+  returns `{ result }` or `{ error: { code, message, details } }`. The route rebuilds the
+  `PackageServiceError` from that, so `planChanged`, `preview`, `plan`, and `change` reach the page
+  as they would in-process. Routes that run no Git call the service directly.
 - **Page:** the Agents page gains the tab bar and a Sources panel. Dialogs reuse the page's existing
   dialog and busy-state patterns in `portal/config/panels.js` and `templates.js`.
 
@@ -127,6 +130,7 @@ flowchart LR
 | --- | --- |
 | `GET /api/packages` | `packageView()` |
 | `GET /api/packages/sources` | `listSources()` |
+| `GET /api/packages/sources/:id` | `sourceInfo(id)`, for the package IDs a source offers |
 | `POST /api/packages/sources` `{ location, id? }` | `addSource()` |
 | `POST /api/packages/sources/:id/refresh` | `refreshSources(id)` |
 | `POST /api/packages/sources/:id/enabled` `{ enabled }` | `setSourceEnabled()` |
@@ -170,8 +174,9 @@ revision and starting point shown.
 **Remove.** A confirmation that says what happens: the package is turned off first, the installed
 copy is deleted for a GitHub package, and a Custom package's folder is never touched.
 
-**Sources panel.** Lists every source with what `package source info` prints: its type, tab,
-trust, location, and package counts, from `listSources()`. Each row offers
+**Sources panel.** Lists every source with its type, tab, trust, location, and package counts,
+from `listSources()`. Expanding a row shows the packages it offers, from `sourceInfo()`, which
+together match what `package source info` prints. Each row offers
 **Refresh** (GitHub sources), an on/off toggle, and **Remove**. Remove asks whether to keep
 installed packages, matching `--keep-installed`, which the service allows only for GitHub
 sources. `builtin` offers neither remove nor turning off, and `local` (the workspace) can be turned
