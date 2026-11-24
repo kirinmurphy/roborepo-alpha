@@ -236,6 +236,31 @@ function within(roots) {
       });
     `);
     assert.ok(!reuse.ok && /symbolic links are not allowed/.test(reuse.error), reuse.error);
+
+    // A link under a name the hash skips (the source metadata file) is refused too, in the staged
+    // copy and in an existing target, so writing metadata can never follow it out of the store.
+    fs.rmSync(path.join(target, "extra.md"));
+    fs.symlinkSync(path.join(roots.tmp, "outside.md"), path.join(target, ".roborepo-source.json"));
+    const reuseExcluded = runModules(roots.env, store, `
+      return st.promoteMaterialized({
+        sourceFolder: ${JSON.stringify(pkg)},
+        resolution: { sourceId: "gitsrc", packageId: "linked-pkg", resolved: "abc123", sourceType: "git", trust: "unverified", integrity: ${JSON.stringify(before.value)} },
+      });
+    `);
+    assert.ok(!reuseExcluded.ok && /symbolic links are not allowed/.test(reuseExcluded.error), reuseExcluded.error);
+    fs.rmSync(path.join(roots.stateRoot, "packages", "installed"), { recursive: true, force: true });
+
+    fs.symlinkSync(path.join(roots.tmp, "outside.md"), path.join(pkg, ".roborepo-source.json"));
+    const stagedExcluded = runModules(roots.env, store, `
+      return st.promoteMaterialized({
+        sourceFolder: ${JSON.stringify(pkg)},
+        resolution: { sourceId: "gitsrc", packageId: "linked-pkg", resolved: "abc123", sourceType: "git", trust: "unverified", integrity: ${JSON.stringify(before.value)} },
+        metadata: { collection: "c" },
+      });
+    `);
+    assert.ok(!stagedExcluded.ok && /symbolic links are not allowed/.test(stagedExcluded.error), stagedExcluded.error);
+    assert.equal(fs.readFileSync(path.join(roots.tmp, "outside.md"), "utf8"), "outside content\n", "the link target is untouched");
+    assert.equal(run(`return l.lockRecordFor("linked-pkg");`), null, "nothing is recorded");
   } finally {
     roots.cleanup();
   }

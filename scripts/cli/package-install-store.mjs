@@ -37,8 +37,9 @@ const HASH_EXCLUDED = new Set([".git", SOURCE_METADATA_FILE]);
 // files, because a link would let the copy read content the integrity hash never covered.
 export function hashPackageTree(dir, { rejectLinks = false } = {}) {
   const hash = crypto.createHash("sha256");
-  for (const { rel, kind } of listEntries(dir)) {
+  for (const { rel, kind, excluded } of listEntries(dir)) {
     if (kind === "l" && rejectLinks) throw new Error(`${dir}: symbolic links are not allowed in an installed package (${rel})`);
+    if (excluded) continue;
     const content = kind === "l" ? Buffer.from(fs.readlinkSync(path.join(dir, rel)), "utf8") : fs.readFileSync(path.join(dir, rel));
     const name = Buffer.from(rel, "utf8");
     hash.update(`${kind}:${name.length}:`);
@@ -50,13 +51,20 @@ export function hashPackageTree(dir, { rejectLinks = false } = {}) {
 }
 
 // Files and symbolic links under `dir`, as "/"-separated relative paths in sorted order.
+// A symbolic link under an excluded name is still listed, marked `excluded`: it is left out of the
+// hash, but a copy that must hold no links has to see it. Otherwise a link named like the source
+// metadata file would pass the check, and writing that metadata would follow the link out of the
+// store.
 function listEntries(dir, prefix = "") {
   const out = [];
   const entries = fs.readdirSync(prefix ? path.join(dir, ...prefix.split("/")) : dir, { withFileTypes: true })
-    .filter((entry) => !HASH_EXCLUDED.has(entry.name))
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   for (const entry of entries) {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (HASH_EXCLUDED.has(entry.name)) {
+      if (entry.isSymbolicLink()) out.push({ rel, kind: "l", excluded: true });
+      continue;
+    }
     if (entry.isSymbolicLink()) out.push({ rel, kind: "l" });
     else if (entry.isDirectory()) out.push(...listEntries(dir, rel));
     else if (entry.isFile()) out.push({ rel, kind: "f" });
