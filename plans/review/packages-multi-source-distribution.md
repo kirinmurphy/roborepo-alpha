@@ -1,6 +1,6 @@
 ---
 id: jdsobwn
-next_action: Run /plan-review on this plan. Implementation, validation, and docs are done and the pull request is open; the Trusted Catalog Curation decision is still open (the catalog ships empty), and the Decision Log entry on recorded requirements is worth confirming.
+next_action: Run /plan-review on this plan. Implementation, validation, and docs are done and the pull request is open; the Decision Log entry on recorded requirements is worth confirming.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["user-managed-packages-and-add-workflows", "f5exs0bd", "o9zwxuav", "74h2tlim"]
@@ -1096,6 +1096,12 @@ The implementation should treat these as settled unless new repository constrain
   silently prefer the recorded source, which installs a different package than the repo expects.
   The Validator escalated this; the refusal is the conservative choice that leaves both outcomes
   one explicit command away. Revisit in `/plan-review` if you prefer the alternative.
+- **2026-11-24: The trusted catalog ships empty.** The user decided that no repo is vouched for
+  yet. Every Git source installs as unverified, so the user sees its contents and confirms.
+  Vouching for well-known collections (for example Cloudflare's or Matt Pocock's skills) is a
+  later add-on with its own vetting. A static list can describe a repo that has since changed, so
+  a separate exploration looks at auditing every third-party pull, including vouched-for ones.
+  Alternatives not chosen: the user curates a small list now; defer to an outside catalog.
 - **2026-11-23: No `package search` or `package info` command.** The Stage 5 checklist does not ask
   for them; `package list --available` and `package inspect` cover listing and detail.
 
@@ -1108,9 +1114,7 @@ These are resolved during the relevant stage and do not change the architecture 
 Who adds a repo to the trusted catalog, what review it gets, and how often reviewed commits are
 refreshed. This decides how much "Trusted" actually promises.
 
-Still open. `manifests/inventory/trusted-package-sources.json` ships with no entries, which the
-plan allows; the trusted path is exercised with fixture entries. Adding the first real entry is a
-data change once this is decided.
+Resolved 2026-11-24: the catalog ships empty (see Decision Log).
 
 ### Source Configuration File Name
 
