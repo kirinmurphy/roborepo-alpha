@@ -1,6 +1,6 @@
 ---
 id: oxix07pd
-next_action: Answer the three open questions in this plan (worktree folder for repos without a plan store, the size limits, command or rule text), then run /plan-promote on it.
+next_action:
 blocked_by: []
 depends_on: []
 related: ["gcfw77cq", "i5mnkm7z", "w7vls1yk"]
@@ -291,3 +291,7 @@ Acceptance criteria:
    `roborepo delivery` group would resolve the folder and branch deterministically, at the cost of
    one more command to maintain. Recommended: rule text now, a command only if agents get the path
    wrong in practice.
+
+## Archived
+
+2026-11-24: Renamed, not abandoned: the same plan is recreated as agent-config-small-change-delivery.md because the plan store has no rename command.
