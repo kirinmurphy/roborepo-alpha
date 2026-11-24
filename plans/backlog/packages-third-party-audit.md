@@ -211,7 +211,8 @@ Install and update print the same layout, so a finding appears in exactly one pl
    changes, MCP servers, scripts, runtime assets, services) on update.
 3. RoboRepo and Cisco findings at `medium` and lower. On update, `medium` findings are marked the
    same way; `low` and `info` findings carry no mark, since they never count as new.
-4. The LLM review's status and all of its findings, whatever their severity.
+4. Engine status: which engines ran, which were skipped and why, and the Cisco skill-scanner install
+   suggestion when it is absent. Then the LLM review's findings, whatever their severity.
 5. On update, the file change list that exists today.
 
 The capability delta's findings decide whether the update review runs; they are printed in
@@ -248,6 +249,11 @@ copies kept under `plugin/`. They are not installed, but a skill can tell the ag
   findings tagged `cisco-skill-scanner`.
 - Absent, failing, or timing out: the report records the engine as skipped with the reason, and the
   install continues.
+- **Suggesting it.** When it is absent, the prompt's engine status line names it as skipped and
+  gives the one command that installs it, with a short reason ("adds malicious-code checks RoboRepo
+  does not do"). `doctor --installed` gives the same suggestion as a hint, only while at least one
+  git package is installed. RoboRepo shows the command and never runs it: the scanner is a Python
+  tool the user installs themselves.
 
 ### LLM review
 
@@ -359,7 +365,8 @@ change together with the report shape.
   update each RoboRepo or Cisco finding at `medium` or above is marked **new** or **accepted**,
   and LLM findings appear only in the review section.
 - Running `package install` on a package already installed from that source runs no LLM review.
-- With Cisco skill-scanner absent, the report lists it as skipped; with a fake scanner present, its
+- With Cisco skill-scanner absent, the report lists it as skipped and the prompt and
+  `doctor --installed` show the command that installs it; with a fake scanner present, its
   SARIF findings appear tagged with its engine.
 - After a new rule is added that matches an installed package, `doctor --installed` reports that
   finding; a finding accepted at install is not reported.
@@ -369,10 +376,10 @@ change together with the report shape.
 
 | Check | Covers |
 | --- | --- |
-| `scripts/test/package-audit-check.mjs` (new) | Each rule fires on a positive fixture and stays quiet on a near-miss; Unicode and padding cases; fingerprints; capability delta; content over the review size cap is listed as not reviewed; a new `low` finding leaves the capability delta empty; Cisco adapter with a fake executable that prints a SARIF fixture and asserts it was asked for offline engines only, plus absent (no `uvx` fallback), failing, and timeout cases; LLM review with a fake harness (the pattern in `scripts/test/telemetry-synthetic-provider-check.mjs`, which uses `node` as the provider executable) for valid JSON, invalid output, JSON naming a rule outside the fixed list, a `critical` severity recorded as `high` (and not refusing the install), and timeout |
+| `scripts/test/package-audit-check.mjs` (new) | Each rule fires on a positive fixture and stays quiet on a near-miss; Unicode and padding cases; fingerprints; capability delta; content over the review size cap is listed as not reviewed; a new `low` finding leaves the capability delta empty; Cisco adapter with a fake executable that prints a SARIF fixture and asserts it was asked for offline engines only, plus absent (no `uvx` fallback, install suggestion shown), failing, and timeout cases; LLM review with a fake harness (the pattern in `scripts/test/telemetry-synthetic-provider-check.mjs`, which uses `node` as the provider executable) for valid JSON, invalid output, JSON naming a rule outside the fixed list, a `critical` severity recorded as `high` (and not refusing the install), and timeout |
 | `scripts/test/package-source-git-check.mjs` | Confirmation policy on install and update, `--allow-critical`, integrity mismatch at preview and update refused with exit 7, an update re-confirming a package whose critical finding was already accepted still needs `--allow-critical`, `low` findings printed without a mark, a pre-audit install gains `acceptedFindings` on its next update, a `path` package installs with no audit and no confirmation, accepted fingerprints in the lock, update delta; review runs on a non-empty delta, runs with `--review` on an empty one, and runs once across preview and install and across the two update calls (fake harness that counts calls); a cached update review is not reused for a full install; install with no harness completes and reports the review skipped; `--yes` update prints findings with the result; `--yes` without `--allow-critical` is refused on a critical finding; a reinstall after `package remove` runs the review again; `package install` of an already-installed package runs no review; printed output follows Prompt order, with new and accepted marks on update; a source record with `trust: "trusted"` is rejected; trusted-catalog cases removed |
 | `git grep -n -i "trusted" -- 'scripts/cli/package*' scripts/cli/packages.mjs docs/internal/package-sources.md docs/internal/cli-internals.md docs/user/reference/roborepo-cli.md docs/user/reference/config-control-panel.md docs/architecture/config-code-separation.md local/skills/roborepo-development/references/package-development.md manifests/inventory manifests/platform/cli/command-definitions/package` | Run once before review. Every Trusted-tier name on the removal list matches this search, so any hit left must be an unrelated use of the word, checked by hand |
-| `scripts/test/package-provenance-check.mjs` | `doctor --installed` reports an unaccepted `critical` finding as a failure and `high` or `medium` as a hint, stays quiet on `low` and on an accepted finding, and gives a hint (not a failure) for a record without `acceptedFindings`; the lock keeps `acceptedFindings` through a read and write |
+| `scripts/test/package-provenance-check.mjs` | `doctor --installed` suggests installing Cisco skill-scanner only while a git package is installed; reports an unaccepted `critical` finding as a failure and `high` or `medium` as a hint, stays quiet on `low` and on an accepted finding, and gives a hint (not a failure) for a record without `acceptedFindings`; the lock keeps `acceptedFindings` through a read and write |
 | `scripts/test/harness-registry-check.mjs` | `headlessReviewArgs` validation |
 
 These touch the package install and update flows and the provider manifest contract, so the tests
@@ -394,6 +401,10 @@ for those flows run locally and CI runs the full gate (`npm run check`).
   read-only? These must be confirmed against each CLI's current help during `/plan-promote`, not
   assumed.
 
+- **The scanner's install command.** The research found the PyPI package `cisco-ai-skill-scanner`.
+  Confirm the package name, the executable name RoboRepo looks for on `PATH`, and the command to
+  suggest (`uv tool install` or `pipx install`) against its current README during `/plan-promote`.
+
 ## Related plans
 
 - **Package Management Part 04 (jdsobwn)** introduced the trusted catalog this plan removes. It is a
@@ -411,7 +422,7 @@ for those flows run locally and CI runs the full gate (`npm run check`).
 | `docs/internal/cli-internals.md` | Remove the `trusted` subcommand from the `package source` list |
 | `docs/architecture/config-code-separation.md` | Replace the trusted catalog mention with the audit |
 | `local/skills/roborepo-development/references/package-development.md` | Remove `trusted` from the `package source` subcommand list |
-| `docs/user/reference/roborepo-cli.md` | Remove `package source trusted`; add `--allow-critical` and `--review`; describe the audit output |
+| `docs/user/reference/roborepo-cli.md` | Remove `package source trusted`; add `--allow-critical` and `--review`; describe the audit output and the optional Cisco skill-scanner |
 | `docs/user/reference/config-control-panel.md` | Remove the ` · Trusted` badge |
 | `docs/internal/harness-provider-interface.md` | Document `extensions.app.headlessReviewArgs` |
 | `manifests/inventory/README.md` | Remove the `trusted-package-sources.json` row |
