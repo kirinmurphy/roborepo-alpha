@@ -57,8 +57,9 @@ Refusals carry a code from `SERVICE_EXIT_CODES` (`usage`, `ambiguous`, `confirma
 `unavailable`, `refused`, `invalid`) that the CLI turns into its exit status. Removing a package
 that is on needs a `disable` callback: the CLI passes one that turns the package off first.
 
-Git runs synchronously (`spawnSync` in `scripts/cli/package-source-git.mjs`), with a 120-second
-timeout. Adding a GitHub source, refreshing it, and updating run Git. Installing copies from the listing the
+Git runs synchronously (`spawnSync` in `scripts/cli/package-source-git.mjs`), and each remote
+Git call times out after 120 seconds. One operation makes up to three such calls, so it can take
+several minutes. Adding a GitHub source, refreshing it, and updating run Git. Installing copies from the listing the
 last refresh built and runs no Git.
 
 The portal side:
@@ -117,8 +118,8 @@ flowchart LR
   a route.
 - **Git off the server's thread:** a route whose service call runs Git (add a GitHub source,
   refresh, update) runs that call in a child Node process and awaits it. Because Git is
-  synchronous, calling it inside the portal server would stop every page from answering for up to
-  two minutes. One small runner does this: it takes a service function name and its arguments and
+  synchronous, calling it inside the portal server would stop every page from answering for
+  several minutes. One small runner does this: it takes a service function name and its arguments and
   returns `{ result }` or `{ error: { code, message, details } }`. The route rebuilds the
   `PackageServiceError` from that, so `planChanged`, `preview`, `plan`, and `change` reach the page
   as they would in-process. Routes that run no Git call the service directly.
@@ -185,7 +186,7 @@ off but not removed, matching what the service refuses.
 
 **Add a source.** One dialog with a field that takes a GitHub URL or a folder path, an optional id,
 and the trusted list below it (an empty state for now). A GitHub add refreshes the listing before
-it returns, which can take up to two minutes; the button shows progress and the page stays usable.
+it returns, which can take several minutes; the button shows progress and the page stays usable.
 
 ### Required rules
 
@@ -238,7 +239,7 @@ performs each step.
 
 | Risk | Mitigation |
 | --- | --- |
-| A GitHub add, refresh, or update takes up to two minutes | The call runs in a child process, so other pages keep answering; the dialog shows progress, and the 120-second Git timeout bounds the wait |
+| A GitHub add, refresh, or update takes several minutes | The call runs in a child process, so other pages keep answering, and the dialog shows progress until it returns |
 | A portal action and a CLI command run at once | Lock and store writes take the package lock. A refresh replaces a source's listing only after it validates, so a racing refresh leaves one complete listing |
 | The page shows stale state after a CLI change | The page reloads data after each action and on focus; the parity check covers a CLI change seen in the portal |
 | The Agents page grows crowded | Tabs split the list; the Sources panel sits in its own section |
