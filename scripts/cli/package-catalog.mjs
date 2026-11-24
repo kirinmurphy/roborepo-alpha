@@ -229,7 +229,9 @@ export function resolvePackageCandidates(candidates, { overrides = readWorkspace
     const recorded = lock.packages[id];
     if (recorded) {
       const chosen = group.find((pkg) => pkg.sourceId === recorded.sourceId);
-      if (chosen) {
+      if (chosen && movedFromRecordedFolder(chosen, recorded)) {
+        unresolved.push({ id, sourceId: recorded.sourceId, reason: `source ${recorded.sourceId} now offers ${id} from ${chosen.sourceRoot}, not the recorded folder ${recorded.resolved}`, candidates: group.map((pkg) => pkg.qualifiedName) });
+      } else if (chosen) {
         packages.push(chosen);
         // Other sources' packages with this ID stay out, by the recorded choice. They are reported
         // so a newly authored package is never ignored without a word.
@@ -252,12 +254,44 @@ export function resolvePackageCandidates(candidates, { overrides = readWorkspace
   return { packages, collisions, unresolved, shadowed };
 }
 
+// A folder source keeps its ID when its path is edited, so the same ID can start offering a
+// package from a different folder. The lock names the folder the package was installed from;
+// using the new one would retarget the install without the user choosing it, so it is left
+// unresolved until the user reinstalls or removes it. The workspace source and the built-in
+// library are exempt: both follow a location RoboRepo manages (the configured workspace, the
+// application folder), which moves on its own and is not a change of source.
+function movedFromRecordedFolder(pkg, recorded) {
+  if (recorded.kind !== "live" || pkg.sourceType !== "path" || pkg.sourceId === LOCAL_SOURCE_ID) return false;
+  return path.resolve(pkg.sourceRoot) !== path.resolve(recorded.resolved);
+}
+
+// A package that requires an unresolved package cannot be applied either: its requirement is not
+// in the catalog. It joins the unresolved set, so it is reported and its selection kept, instead
+// of failing catalog validation and stopping every other package from loading.
+function withUnresolvedRequirements(resolved) {
+  const unresolvedIds = new Set(resolved.unresolved.map((entry) => entry.id));
+  let packages = resolved.packages;
+  const unresolved = [...resolved.unresolved];
+  for (;;) {
+    const blocked = packages.filter((pkg) => (pkg.requires || []).some((dep) => unresolvedIds.has(dep)));
+    if (blocked.length === 0) break;
+    for (const pkg of blocked) {
+      const missing = pkg.requires.filter((dep) => unresolvedIds.has(dep));
+      unresolved.push({ id: pkg.id, sourceId: pkg.sourceId, reason: `it requires unresolved package ${missing.join(", ")}`, candidates: [pkg.qualifiedName] });
+      unresolvedIds.add(pkg.id);
+    }
+    packages = packages.filter((pkg) => !blocked.includes(pkg));
+  }
+  return { ...resolved, packages, unresolved };
+}
+
 // The resolved catalog plus what could not be resolved. Most callers want loadPackageCatalog;
 // doctor and the package service read the full result.
 export function composePackageCatalog({ sources, lock = readPackageLock(), overrides = readWorkspaceOverrides() } = {}) {
   const listed = listPackageCandidates({ sources, lock });
   const resolved = resolvePackageCandidates(listed.candidates, { overrides, lock });
-  return { ...resolved, unresolved: [...listed.unresolved, ...resolved.unresolved], candidates: listed.candidates };
+  const composed = withUnresolvedRequirements({ ...resolved, unresolved: [...listed.unresolved, ...resolved.unresolved] });
+  return { ...composed, candidates: listed.candidates };
 }
 
 export function shadowedMessage({ id, chosen, hidden }) {
@@ -280,9 +314,9 @@ export function isPackageAvailable(pkg, env = process.env) {
 }
 
 export function loadPackageCatalog({ includeUnavailable = false, env = process.env } = {}) {
-  const { packages, collisions } = composePackageCatalog();
+  const { packages, collisions, unresolved } = composePackageCatalog();
   if (collisions.length > 0) throw new Error(collisions.map(collisionMessage).join("\n"));
-  validatePackageCatalog(packages);
+  validatePackageCatalog(packages, { unresolvedIds: new Set(unresolved.map((entry) => entry.id)) });
   const available = includeUnavailable ? packages : packages.filter((pkg) => isPackageAvailable(pkg, env));
   return available.sort(packageSort);
 }
@@ -304,7 +338,7 @@ export function unavailablePackageMessage(pkgId, env = process.env) {
   return pkg ? unavailablePackageReason(pkg, env) : `unknown package: ${pkgId}`;
 }
 
-export function validatePackageCatalog(packages) {
+export function validatePackageCatalog(packages, { unresolvedIds = new Set() } = {}) {
   const categories = new Set(readPackageCategories().map((category) => category.id));
   const errors = [];
   const packageIds = new Set();
@@ -349,7 +383,11 @@ export function validatePackageCatalog(packages) {
   for (const pkg of packages) {
     for (const [relation, label] of PACKAGE_RELATIONS) {
       for (const dep of pkg[relation] || []) {
-        if (isSlug(dep) && dep !== pkg.id && !packageIds.has(dep)) errors.push(`${pkg.id}: missing ${label} package: ${dep}`);
+        if (!isSlug(dep) || dep === pkg.id || packageIds.has(dep)) continue;
+        // A recommendation of an unresolved package is only unavailable for now; it is reported
+        // as unresolved on its own and must not stop the catalog from loading.
+        if (relation === "recommends" && unresolvedIds.has(dep)) continue;
+        errors.push(`${pkg.id}: missing ${label} package: ${dep}`);
       }
     }
   }

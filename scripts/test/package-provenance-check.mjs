@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { liveClaudeRules, makeSourceRoots, runCli, runModules, writeReplaceOverride, writeRulesPackage } from "./fixtures/package-sources.mjs";
 
 const MODULES = {
@@ -48,7 +49,7 @@ function within(roots) {
     assert.equal(local.kind, "live");
     assert.equal(local.sourceId, "local");
     assert.equal(local.resolved, path.join(roots.workspaceDir, "prov-local"));
-    assert.match(local.fingerprint, /^sha256-[0-9a-f]{64}$/);
+    assert.match(local.fingerprint, /^sha256v2-[0-9a-f]{64}$/);
     // Disable keeps the install record: disabled is still installed.
     ok("package", "disable", "prov-local");
     assert.ok(run(`return Boolean(l.readPackageLock().packages["prov-local"]);`), "disable keeps the lock record");
@@ -160,6 +161,114 @@ function within(roots) {
     assert.ok(!liveClaudeRules(roots.home).includes("builtin copy"), "the other source's package is not applied");
     const findings = run(`return d.packageProvenanceFindings();`);
     assert.ok(findings.some((f) => f.level === "fail" && /package moved is unresolved/.test(f.message)), JSON.stringify(findings));
+  } finally {
+    roots.cleanup();
+  }
+}
+
+// A selected package that requires an unresolved package is unresolved too: reconcile reports it,
+// keeps both selections, and still applies the other packages instead of failing validation.
+{
+  const roots = makeSourceRoots("roborepo-provenance-unresolved-requirement-");
+  const { ok, json } = within(roots);
+  try {
+    const team = path.join(roots.tmp, "team");
+    writeRulesPackage(team, "child");
+    writeRulesPackage(roots.workspaceDir, "parent", { requires: ["child"] });
+    writeRulesPackage(roots.workspaceDir, "bystander", { marker: "bystander applied" });
+    ok("package", "source", "add", team);
+    ok("package", "enable", "parent");
+    ok("package", "enable", "bystander");
+    fs.rmSync(path.join(team, "child"), { recursive: true });
+    const out = ok("package", "reconcile");
+    assert.match(out, /package parent is unresolved \(it requires unresolved package child\)/);
+    assert.match(out, /reconcile: Fixture bystander/, "the other packages are still reconciled");
+    assert.deepEqual(json("enabled-packages.json").packages.sort(), ["bystander", "parent"], "the selection is kept");
+    assert.match(ok("package", "list"), /bystander/, "package list still loads");
+  } finally {
+    roots.cleanup();
+  }
+}
+
+// The content hash frames every entry with its length, so moving bytes between files changes it;
+// a symbolic link in a copy RoboRepo installs is refused, never copied past the integrity check.
+{
+  const roots = makeSourceRoots("roborepo-provenance-hash-");
+  const { run } = within(roots);
+  const store = { ...MODULES, st: "scripts/cli/package-install-store.mjs" };
+  try {
+    const one = path.join(roots.tmp, "one");
+    const two = path.join(roots.tmp, "two");
+    fs.mkdirSync(one);
+    fs.mkdirSync(two);
+    fs.writeFileSync(path.join(one, "a"), "x\0b\0y");
+    fs.writeFileSync(path.join(two, "a"), "x");
+    fs.writeFileSync(path.join(two, "b"), "y");
+    const hashes = runModules(roots.env, store, `return [st.hashPackageTree(${JSON.stringify(one)}), st.hashPackageTree(${JSON.stringify(two)})];`);
+    assert.ok(hashes.ok, hashes.error);
+    assert.notEqual(hashes.value[0], hashes.value[1], "one file holding x\\0b\\0y must not hash like files a=x and b=y");
+
+    const pkg = path.join(roots.tmp, "linked", "linked-pkg");
+    writeRulesPackage(path.dirname(pkg), "linked-pkg");
+    const before = runModules(roots.env, store, `return st.hashPackageTree(${JSON.stringify(pkg)});`);
+    assert.ok(before.ok, before.error);
+    fs.writeFileSync(path.join(roots.tmp, "outside.md"), "outside content\n");
+    fs.symlinkSync(path.join(roots.tmp, "outside.md"), path.join(pkg, "extra.md"));
+    const promote = runModules(roots.env, store, `
+      return st.promoteMaterialized({
+        sourceFolder: ${JSON.stringify(pkg)},
+        resolution: { sourceId: "gitsrc", packageId: "linked-pkg", resolved: "abc123", sourceType: "git", trust: "unverified", integrity: ${JSON.stringify(before.value)} },
+      });
+    `);
+    assert.ok(!promote.ok && /symbolic links are not allowed/.test(promote.error), promote.error);
+    assert.equal(run(`return l.lockRecordFor("linked-pkg");`), null, "nothing is recorded");
+    assert.ok(!fs.existsSync(path.join(roots.stateRoot, "packages", "installed", "gitsrc")), "nothing is installed");
+
+    // An already installed copy for that revision is checked the same way.
+    fs.rmSync(path.join(pkg, "extra.md"));
+    const target = path.join(roots.stateRoot, "packages", "installed", "gitsrc", "abc123", "linked-pkg");
+    fs.cpSync(pkg, target, { recursive: true });
+    fs.symlinkSync(path.join(roots.tmp, "outside.md"), path.join(target, "extra.md"));
+    const reuse = runModules(roots.env, store, `
+      return st.promoteMaterialized({
+        sourceFolder: ${JSON.stringify(pkg)},
+        resolution: { sourceId: "gitsrc", packageId: "linked-pkg", resolved: "abc123", sourceType: "git", trust: "unverified", integrity: ${JSON.stringify(before.value)} },
+      });
+    `);
+    assert.ok(!reuse.ok && /symbolic links are not allowed/.test(reuse.error), reuse.error);
+  } finally {
+    roots.cleanup();
+  }
+}
+
+// Overlapping processes each read the lock, change one record and write it back. The package lock
+// serializes that, so no process's record is lost.
+{
+  const roots = makeSourceRoots("roborepo-provenance-lock-race-");
+  const { run } = within(roots);
+  try {
+    const lockModule = path.join(roots.appRoot, "scripts/cli/package-lock.mjs");
+    const writers = 6;
+    const perWriter = 15;
+    const script = (n) => `
+      const l = await import(${JSON.stringify(lockModule)});
+      for (let i = 0; i < ${perWriter}; i++) {
+        l.writeLockRecord({ sourceId: "local", packageId: "w${n}-" + i, kind: "live", resolved: "/x" });
+      }
+    `;
+    const exits = await Promise.all(Array.from({ length: writers }, (_, n) => new Promise((resolve) => {
+      const child = spawn(process.execPath, ["--input-type=module", "-e", script(n)], { env: roots.env, stdio: ["ignore", "ignore", "inherit"] });
+      child.on("exit", resolve);
+    })));
+    assert.deepEqual(exits, Array(writers).fill(0), "every writer finishes");
+    const ids = run(`return Object.keys(l.readPackageLock().packages);`);
+    assert.equal(ids.length, writers * perWriter, `every concurrent write is kept (${ids.length} of ${writers * perWriter})`);
+    assert.ok(!fs.existsSync(path.join(roots.stateRoot, "packages", "package-lock.json.lock")), "the lock is released");
+
+    // A lock left by a process that no longer exists is taken over rather than blocking forever.
+    fs.writeFileSync(path.join(roots.stateRoot, "packages", "package-lock.json.lock"), "999999999\n");
+    run(`l.writeLockRecord({ sourceId: "local", packageId: "after-crash", kind: "live", resolved: "/x" }); return true;`);
+    assert.ok(run(`return Boolean(l.lockRecordFor("after-crash"));`));
   } finally {
     roots.cleanup();
   }

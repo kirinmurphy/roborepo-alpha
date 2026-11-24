@@ -112,13 +112,13 @@ installed package ID; it is the persisted source choice and the provenance docto
     "code-style": {
       "sourceId": "builtin", "packageId": "code-style", "sourceType": "bundled", "trust": "official",
       "kind": "live", "selector": null, "resolved": "/…/globals/packages/code-style",
-      "integrity": null, "fingerprint": "sha256-…", "installedPath": null, "url": null,
+      "integrity": null, "fingerprint": "sha256v2-…", "installedPath": null, "url": null,
       "installedAt": "2026-11-23T00:00:00.000Z"
     },
     "security-audit": {
       "sourceId": "cloudflare-security-audit-skill", "packageId": "security-audit", "sourceType": "git",
       "trust": "unverified", "kind": "materialized", "selector": "default-branch",
-      "resolved": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8", "integrity": "sha256-…",
+      "resolved": "c1c8a8c1471069fb0e188eeaff69b8e8db6564a8", "integrity": "sha256v2-…",
       "fingerprint": null, "installedPath": "/…/packages/installed/cloudflare-security-audit-skill/c1c8…/security-audit",
       "url": "https://github.com/cloudflare/security-audit-skill.git", "installedAt": "…"
     }
@@ -131,6 +131,12 @@ installed package ID; it is the persisted source choice and the provenance docto
 | `live` | The package folder | `fingerprint`: content hash when last applied or installed; drift is expected and reported as a hint | `package install` of a live package, and every apply |
 | `materialized` | Immutable revision (commit SHA) | `integrity`: content hash of the copy, checked before it is moved into place | `package install` / `package update` of a git package |
 
+- Both hashes use the `sha256v2-` format: every file is framed with its path length and content
+  length before hashing, so two different trees can never produce the same input. A lock holding
+  any other format is refused with a request to reinstall the package. An installed copy may not
+  contain a symbolic link; promotion refuses one in the staged copy or an existing target.
+- Every lock change holds an exclusive lock file (`withPackageLock`) from the read to the write, so
+  two RoboRepo commands running at once cannot drop each other's records.
 - Writes go through a temp file and a rename (`writeJsonStateAtomic`), so an interrupted write
   leaves the previous file whole. A corrupt lock throws `PackageLockError`; it is never read as
   empty, because that would forget every source choice.
@@ -177,9 +183,9 @@ folder. Uninstall removes `package-sources.json` and `packages/`.
 | Repo contains | Packages |
 | --- | --- |
 | `package.config.json` at the root, in `packages/*/`, or in `*/` | As declared |
-| `.claude-plugin/plugin.json` | One package holding every `skills/*/SKILL.md`; plugin hooks and commands are listed as "not installed" |
+| `.claude-plugin/plugin.json` | One package holding every `skills/*/SKILL.md` (a root `SKILL.md` only when there are none); plugin hooks and commands it does not install are listed as "not installed" |
+| `SKILL.md` at the root | One package named by the skill's frontmatter `name`, holding the whole repo; any `skills/*` folders ride along inside it |
 | `skills/*/SKILL.md` | One package per skill, category `added-skills`; two or more form a collection |
-| `SKILL.md` at the root | One package named by the skill's frontmatter `name` |
 
 - **Safety:** a repo containing a symbolic link is refused. `contentsSummary()` lists skills, slash
   commands, rules, hooks, MCP servers, each config change as `<harness>: <op> <setting.path>`,
@@ -200,18 +206,18 @@ data and throw `PackageServiceError` with a `code`:
 | --- | --- | --- |
 | `usage` | 2 | Missing or unknown argument, unknown source, unsupported URL |
 | `ambiguous` | 3 | A bare ID that several sources offer with no recorded choice |
-| `confirmationRequired` | 4 | Installing from an unverified source, or updating, without confirmation (`--yes`) |
+| `confirmationRequired` | 4 | Installing from an unverified source, or updating, without confirmation (`--yes`); or the plan or starting revision changed after it was shown, so it must be confirmed again |
 | `unavailable` | 5 | The repo cannot be reached, or a revision is not cached |
-| `refused` | 6 | Removing a System package, a default source, a source with installed packages, or switching an active package's source |
-| `invalid` | 7 | A package that fails validation, or a repo without packages |
+| `refused` | 6 | Removing a System package, a default source, a source with installed packages, or switching an active package's source; an update whose source listing moved while it ran |
+| `invalid` | 7 | A package that fails validation, or a repo without packages; an update whose re-apply failed and was rolled back |
 
 | Function | Does |
 | --- | --- |
 | `listSources`, `sourceInfo`, `addSource`, `removeSource`, `setSourceEnabled`, `refreshSources`, `trustedCatalog` | Source management. Disabling or removing a folder source is refused while another source's package requires one of its packages |
 | `listAvailablePackages`, `resolvePackageReference` | Every (source, package) pair; one pick per the reference rules |
-| `previewInstall`, `installPackage` | Contents summary of the package and every package the install brings, then the install. Installing a package already installed from the same source never moves its pin; it reports a newer revision for `update` |
-| `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed; re-apply an active package. Refused when the source now points at a different repository than the installed copy came from |
-| `removePackage` | Refuse System; refuse a copied package another package requires; disable an active package first; delete the record and any copy |
+| `previewInstall`, `installPackage` | Contents summary of the package and every package the install brings, then the install. `previewInstall` returns the `plan` (each package and revision); `installPackage` takes it as `expectedPlan` and refuses when the fresh plan differs. Installing a package already installed from the same source never moves its pin, plans from the installed copy, and reports a newer revision for `update` |
+| `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed against the shown starting revision (`expectedFrom`); re-apply an active package with its required packages, removing components the new revision dropped. A failed re-apply restores the old record and copy. A missing copy at an unchanged pin is restored. Refused when the source now points at a different repository than the installed copy came from |
+| `removePackage` | The lock record names the source to remove. Refuse System; refuse a copied package another package requires; disable an active package first, unless a local override is the active one; delete the record and any copy |
 | `packageView` | Rows with `tab`, `sourceId`, `sourceBadge`, `trust`, `collection`, `available`, `installed`, `active`, `revision`, `latestRevision`, `updateAvailable`, `removable` |
 
 A `requires` edge resolves in the requiring package's own source first, then by the reference

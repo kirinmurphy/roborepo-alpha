@@ -122,6 +122,28 @@ try {
     };
   `);
   assert.deepEqual(pure.single, ["team/x"]);
+
+  // `local` is reserved for the workspace folder: no other record may take its ID, and no other
+  // source may claim to be the workspace.
+  assert.match(fails(`s.writeSourceConfig([{ id: "local", type: "git", url: "https://example.com/packages.git", trust: "unverified" }]);`), /only the local source is the workspace folder/);
+  assert.match(fails(`s.writeSourceConfig([{ id: "local", type: "path", path: "/x", trust: "local" }]);`), /only the local source is the workspace folder/);
+  assert.match(fails(`s.writeSourceConfig([{ id: "team", type: "path", workspace: true, trust: "local" }]);`), /only the local source is the workspace folder/);
+  assert.equal(run(`return s.validateSourceRecord({ id: "team-git", type: "git", url: "https://example.com/p.git", trust: "unverified" }).id;`), "team-git", "a git source under another ID is fine");
+
+  // A live record from a folder source names its folder. When the same source ID now offers the
+  // package from another folder (its path was edited), the package is unresolved, not retargeted.
+  // The workspace source follows the configured workspace, so it is exempt.
+  const moved = run(`
+    const pkg = (sourceId, id, root) => ({ id, sourceId, sourceType: "path", sourceRoot: root, qualifiedName: sourceId + "/" + id });
+    const lock = { schemaVersion: 1, packages: {
+      x: { sourceId: "team", packageId: "x", kind: "live", resolved: "/old/x" },
+      w: { sourceId: "local", packageId: "w", kind: "live", resolved: "/old-workspace/packages/w" },
+    } };
+    const r = c.resolvePackageCandidates([pkg("team", "x", "/new/x"), pkg("local", "w", "/new-workspace/packages/w")], { overrides: [], lock });
+    return { ids: r.packages.map((p) => p.qualifiedName), unresolved: r.unresolved.map((u) => [u.id, u.sourceId]) };
+  `);
+  assert.deepEqual(moved.unresolved, [["x", "team"]]);
+  assert.deepEqual(moved.ids, ["local/w"], "the workspace source follows the workspace");
   assert.deepEqual(pure.pair, [{ id: "x", candidates: ["team/x", "git-a/x"] }]);
   assert.match(pure.message, /provided by more than one source \(team\/x, git-a\/x\)/);
 } finally {

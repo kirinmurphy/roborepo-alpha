@@ -27,7 +27,7 @@ import {
 } from "./package-sources.mjs";
 import { composePackageCatalog, listPackageCandidates, normalizePackageEntry, validatePackageCatalog } from "./package-catalog.mjs";
 import { createSourceAdapter } from "./package-source-adapters.mjs";
-import { readPackageLock } from "./package-lock.mjs";
+import { readPackageLock, writeLockRecord } from "./package-lock.mjs";
 import { deleteMaterializedCopy, promoteMaterialized, recordLiveInstall, removeInstalled } from "./package-install-store.mjs";
 import {
   contentsSummary,
@@ -151,6 +151,9 @@ function addPathSource(folder, id, sources) {
   const dir = path.resolve(folder);
   const sourceId = id || path.basename(dir).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   if (!SLUG_RE.test(sourceId)) throw new PackageServiceError(`cannot derive a source id from ${dir}; pass --id`, { code: "usage" });
+  // A folder has no repository URL, so any copy a git source left installed under this id belongs
+  // to another origin, and a later install would replace that copy with the folder's package.
+  refuseReusedSourceId(sourceId, null);
   if (findSource(sourceId, sources)) throw new PackageServiceError(`package source ${sourceId} already exists; pass --id to choose another`, { code: "refused" });
   if (sources.some((record) => record.type === "path" && sourceDirectory(record) === dir)) {
     throw new PackageServiceError(`${dir} is already a package source`, { code: "refused" });
@@ -163,7 +166,7 @@ function addPathSource(folder, id, sources) {
 }
 
 // A source id that installed packages still name belongs to those packages' repository. Reusing
-// it for another repository would let a later update replace one repo's content with another's
+// it for another repository or a folder (`url` null) would let a later update replace one repo's content with another's
 // under an unchanged name.
 function refuseReusedSourceId(sourceId, url) {
   const named = Object.values(readPackageLock().packages).filter((entry) => entry.sourceId === sourceId);
@@ -309,6 +312,7 @@ function availableFromSource(record) {
   return createSourceAdapter(record).list().map((entry) => ({
     ...normalizePackageEntry(entry, record),
     revision: entry.revision,
+    integrity: entry.integrity || null,
     contents: entry.contents,
   }));
 }
@@ -376,28 +380,37 @@ export function previewInstall(reference) {
   const lock = readPackageLock();
   const pkg = resolvePackageReference(reference, { available, lock });
   // Everything the install would bring, dependencies included, so the user sees each package's
-  // contents before agreeing to any of them.
+  // contents before agreeing to any of them. The root comes last.
   const plan = installPlan(pkg, available, lock);
+  const root = plan.at(-1);
   return {
-    qualifiedName: pkg.qualifiedName,
-    sourceId: pkg.sourceId,
-    packageId: pkg.id,
-    trust: pkg.trust,
-    tab: pkg.tab,
-    revision: pkg.revision || null,
+    qualifiedName: root.qualifiedName,
+    sourceId: root.sourceId,
+    packageId: root.id,
+    trust: root.trust,
+    tab: root.tab,
+    revision: root.revision || null,
     needsConfirmation: plan.some((entry) => entry.trust === "unverified"),
-    contents: pkg.contents || contentsSummary(pkg.sourceRoot),
+    contents: root.contents || contentsSummary(root.sourceRoot),
     packages: plan.map((entry) => previewOf(entry)),
+    plan: planDigest(plan),
   };
 }
 
 // Install a package (and what it requires from the same source). `confirmed` must be true for an
 // unverified source: the caller has shown previewInstall's contents to the user and they agreed.
-export function installPackage(reference, { confirmed = false } = {}) {
+// `expectedPlan` is previewInstall's `plan` as the caller showed it. When given, the install goes
+// ahead only if it would install exactly those packages at those revisions: a source refreshed
+// between the preview and the install asks for confirmation again rather than installing a
+// revision or a dependency the user never saw.
+export function installPackage(reference, { confirmed = false, expectedPlan = null } = {}) {
   const available = listAvailablePackages();
   const lock = readPackageLock();
   const pkg = resolvePackageReference(reference, { available, lock });
   const plan = installPlan(pkg, available, lock);
+  if (expectedPlan && !samePlan(planDigest(plan), expectedPlan)) {
+    throw planChangedError(plan.at(-1).qualifiedName, plan);
+  }
   const unconfirmed = plan.filter((entry) => entry.trust === "unverified");
   if (unconfirmed.length > 0 && !confirmed) {
     throw new PackageServiceError(
@@ -422,16 +435,35 @@ function previewOf(pkg) {
   };
 }
 
+// The packages and revisions an install plan names, which is what a confirmation agrees to.
+function planDigest(plan) {
+  return plan.map((entry) => ({ qualifiedName: entry.qualifiedName, revision: entry.revision || null }));
+}
+
+function samePlan(digest, expected) {
+  const key = (entries) => entries.map((entry) => `${entry.qualifiedName}@${entry.revision || ""}`).sort().join("\n");
+  return Array.isArray(expected) && key(digest) === key(expected);
+}
+
+function planChangedError(name, plan) {
+  return new PackageServiceError(
+    `what installing ${name} would bring changed since it was shown; review it and confirm again`,
+    { code: "confirmationRequired", details: { planChanged: true, preview: plan.map((entry) => previewOf(entry)), plan: planDigest(plan) } },
+  );
+}
+
 // The package and every package it requires that is not already resolvable. A requirement is
 // looked for in the requiring package's own source first, then by the usual reference rules; one
 // that stays ambiguous stops the install.
 function installPlan(root, available, lock) {
   const plan = [];
   const seen = new Set();
-  const effective = new Map(safeCompose().packages.map((pkg) => [pkg.id, pkg]));
-  const visit = (pkg) => {
-    if (seen.has(pkg.id)) return;
-    seen.add(pkg.id);
+  const composed = safeCompose();
+  const effective = new Map(composed.packages.map((pkg) => [pkg.id, pkg]));
+  const visit = (listed) => {
+    if (seen.has(listed.id)) return;
+    seen.add(listed.id);
+    const pkg = keptInstall(listed, lock, composed.candidates);
     for (const dep of pkg.requires || []) {
       const sameSource = available.find((candidate) => candidate.sourceId === pkg.sourceId && candidate.id === dep);
       const recorded = lock.packages[dep];
@@ -459,11 +491,21 @@ function installPlan(root, available, lock) {
   return plan;
 }
 
+// Installing a package already copied from this source keeps its pin, so the plan uses the
+// installed copy: its requirements, not those of a newer listed revision the install will not
+// use. A revision change goes through `update`.
+function keptInstall(pkg, lock, candidates = []) {
+  const recorded = lock.packages[pkg.id];
+  if (recorded?.kind !== "materialized" || recorded.sourceId !== pkg.sourceId) return pkg;
+  const installed = candidates.find((candidate) => candidate.id === pkg.id && candidate.sourceId === recorded.sourceId && candidate.revision === recorded.resolved);
+  return installed ? { ...installed, contents: contentsSummary(installed.sourceRoot) } : pkg;
+}
+
 function safeCompose() {
   try {
     return composePackageCatalog();
   } catch {
-    return { packages: [], collisions: [], unresolved: [] };
+    return { packages: [], collisions: [], unresolved: [], candidates: [] };
   }
 }
 
@@ -496,7 +538,7 @@ function validateProspective(plan) {
 function installOne(pkg, lock) {
   if (isLiveSource({ type: pkg.sourceType })) {
     const previous = lock.packages[pkg.id];
-    const record = recordLiveInstall(pkg);
+    const record = recordLiveInstall(pkg, { replace: true });
     // Switching from a copied package to a live one leaves nothing pointing at the old copy.
     if (previous?.kind === "materialized") deleteMaterializedCopy(previous.installedPath);
     return { qualifiedName: pkg.qualifiedName, kind: "live", path: record.resolved, changed: true };
@@ -504,33 +546,57 @@ function installOne(pkg, lock) {
   const record = findSource(pkg.sourceId);
   if (!record) throw new PackageServiceError(`package source ${pkg.sourceId} no longer exists`, { code: "unavailable" });
   const adapter = createSourceAdapter(record);
-  const resolution = adapter.resolve(pkg.id);
   const current = lock.packages[pkg.id];
+  const pinnedHere = current && current.sourceId === pkg.sourceId && current.kind === "materialized";
   // Already installed from this source: install never moves the pin. A newer revision goes
   // through `update`, which shows the change and re-applies an active package.
-  if (current && current.sourceId === resolution.sourceId && current.kind === "materialized" && fs.existsSync(current.installedPath || "")) {
-    const newer = current.resolved !== resolution.resolved ? resolution.resolved : null;
+  if (pinnedHere && fs.existsSync(current.installedPath || "")) {
+    const listed = adapter.resolve(pkg.id);
+    const newer = listed && listed.resolved !== current.resolved ? listed.resolved : null;
     return { qualifiedName: pkg.qualifiedName, kind: "materialized", revision: current.resolved, changed: false, newerRevision: newer };
   }
-  // Installed from this source but the copy is gone: restore the recorded revision, never the
-  // listing's newer one.
-  const pinned = current && current.sourceId === resolution.sourceId && current.kind === "materialized"
-    ? { ...resolution, resolved: current.resolved, integrity: current.integrity }
-    : resolution;
+  let resolution;
+  if (pinnedHere) {
+    // Installed from this source but the copy is gone: restore the recorded revision, never the
+    // listing's newer one.
+    resolution = pinnedResolution(current, record);
+  } else {
+    // The listing is read again here. A refresh since the plan was made must not install a
+    // revision the plan, and the preview the user confirmed, did not name.
+    resolution = adapter.resolve(pkg.id);
+    if (!resolution || resolution.resolved !== pkg.revision || (pkg.integrity && resolution.integrity !== pkg.integrity)) {
+      throw planChangedError(pkg.qualifiedName, [pkg]);
+    }
+  }
   let folder;
   try {
-    folder = adapter.materialize(pinned);
+    folder = adapter.materialize(resolution);
   } catch (err) {
-    if (pinned === resolution) throw err;
-    throw new PackageServiceError(`the installed copy of ${pkg.qualifiedName} is missing and its revision ${current.resolved.slice(0, 12)} is no longer cached; run \`roborepo package update ${pkg.id}\` to review and install the current revision`, { code: "unavailable" });
+    if (!pinnedHere) throw toServiceError(err);
+    throw new PackageServiceError(`the installed copy of ${pkg.qualifiedName} is missing and its revision ${current.resolved.slice(0, 12)} is no longer cached; run \`roborepo package update ${pkg.id}\` to restore it`, { code: "unavailable" });
   }
   const { record: written, previous } = promoteMaterialized({
     sourceFolder: folder,
-    resolution: pinned,
+    resolution,
     metadata: { collection: pkg.collection || null, url: record.url },
   });
   if (previous?.kind === "materialized" && previous.installedPath !== written.installedPath) deleteMaterializedCopy(previous.installedPath);
   return { qualifiedName: pkg.qualifiedName, kind: "materialized", revision: written.resolved, changed: true };
+}
+
+// The resolution of an installed copy's own recorded revision, for restoring that copy.
+function pinnedResolution(current, record) {
+  return {
+    sourceId: current.sourceId,
+    packageId: current.packageId,
+    sourceType: current.sourceType || "git",
+    trust: record.trust,
+    kind: "materialized",
+    selector: current.selector ?? null,
+    resolved: current.resolved,
+    integrity: current.integrity,
+    url: current.url ?? record.url,
+  };
 }
 
 // Move an installed package to its source's newest revision (for a trusted source, the commit the
@@ -539,9 +605,16 @@ function installOne(pkg, lock) {
 // re-records it.
 // `expectedRevision` is the revision the caller showed the user; when given, the update moves to
 // exactly that revision, so a branch that moved during the prompt cannot slip in unreviewed.
-export async function updatePackage(reference, { confirmed = false, expectedRevision = null, reapply = null } = {}) {
-  if (expectedRevision !== null && !/^[0-9a-f]{40}$/.test(String(expectedRevision))) {
-    throw new PackageServiceError(`invalid revision: ${expectedRevision}`, { code: "usage" });
+// `expectedFrom` is the installed revision the shown change started from. When another command
+// moved the pin while the user read the change, the update asks again with the current change
+// rather than replacing a revision whose differences were never shown.
+// When `reapply` fails, the update is rolled back: the previous record and copy stay, so a retry
+// starts from the old revision again rather than finding the new one "up to date".
+export async function updatePackage(reference, { confirmed = false, expectedRevision = null, expectedFrom = null, reapply = null } = {}) {
+  for (const revision of [expectedRevision, expectedFrom]) {
+    if (revision !== null && !/^[0-9a-f]{40}$/.test(String(revision))) {
+      throw new PackageServiceError(`invalid revision: ${revision}`, { code: "usage" });
+    }
   }
   const lock = readPackageLock();
   const { packageId, sourceId } = parsePackageReference(reference);
@@ -564,12 +637,35 @@ export async function updatePackage(reference, { confirmed = false, expectedRevi
   const refreshed = runRefresh(record, expectedRevision ? { revision: expectedRevision } : {});
   const latest = refreshed.catalog.revision;
   const name = qualifiedName(current.sourceId, packageId);
-  if (latest === current.resolved) return { qualifiedName: name, changed: false, revision: latest };
-  const entry = refreshed.catalog.packages.find((item) => item.packageId === packageId);
-  if (!entry) throw new PackageServiceError(`${name} is no longer in ${record.display || record.id} at ${latest.slice(0, 12)}; the installed copy stays as it is`, { code: "unavailable" });
   const adapter = createSourceAdapter(record);
+  const entry = refreshed.catalog.packages.find((item) => item.packageId === packageId);
+  if (latest === current.resolved) {
+    if (fs.existsSync(path.join(current.installedPath || "", "package.config.json"))) return { qualifiedName: name, changed: false, revision: latest };
+    // The pin is current but its copy is gone: restore the copy at the same revision. The user
+    // accepted that revision when it was installed, so this needs no new confirmation.
+    const resolution = pinnedResolution(current, record);
+    let folder;
+    try {
+      folder = adapter.materialize(resolution);
+    } catch (err) {
+      throw toServiceError(err);
+    }
+    promoteMaterialized({ sourceFolder: folder, resolution, metadata: { collection: entry?.collection || null, url: record.url } });
+    return { qualifiedName: name, changed: false, restored: true, revision: latest };
+  }
+  if (!entry) throw new PackageServiceError(`${name} is no longer in ${record.display || record.id} at ${latest.slice(0, 12)}; the installed copy stays as it is`, { code: "unavailable" });
   const resolution = adapter.resolve(packageId);
-  const nextFolder = adapter.materialize(resolution);
+  // `resolve` reads the source's listing again. If another refresh moved it in between, the copy
+  // would come from a revision this change does not show.
+  if (!resolution || resolution.resolved !== latest || (resolution.integrity || null) !== (entry.integrity || null)) {
+    throw new PackageServiceError(`${record.display || record.id} changed while ${name} was being updated; run the update again`, { code: "refused" });
+  }
+  let nextFolder;
+  try {
+    nextFolder = adapter.materialize(resolution);
+  } catch (err) {
+    throw toServiceError(err);
+  }
   const change = {
     qualifiedName: name,
     from: current.resolved,
@@ -580,17 +676,50 @@ export async function updatePackage(reference, { confirmed = false, expectedRevi
   if (!confirmed) {
     throw new PackageServiceError(`${name} has a new revision ${latest.slice(0, 12)}; review the change and confirm to update`, { code: "confirmationRequired", details: { change } });
   }
-  const pkg = availableFromSource(record).find((candidate) => candidate.id === packageId);
+  if (expectedFrom && expectedFrom !== current.resolved) {
+    throw new PackageServiceError(`${name} is now installed at ${current.resolved.slice(0, 12)}, not ${expectedFrom.slice(0, 12)} as shown; review the change and confirm again`, { code: "confirmationRequired", details: { change } });
+  }
+  // The package as it will be after the update, read from the folder being installed.
+  const pkg = normalizePackageEntry({ sourceId: record.id, packageId, root: nextFolder, file: path.join(nextFolder, "package.config.json"), collection: entry.collection, revision: latest }, record);
   validateProspective([pkg]);
+  const candidates = safeCompose().candidates || [];
+  const before = candidates.find((candidate) => candidate.id === packageId && candidate.sourceId === current.sourceId && candidate.revision === current.resolved) || null;
+  // The prompt can wait a long time; the pin must still be the one the change was computed from.
+  const pinned = readPackageLock().packages[packageId];
+  if (!pinned || pinned.sourceId !== current.sourceId || pinned.resolved !== current.resolved) {
+    throw new PackageServiceError(`${name} changed while this update was waiting; run the update again to review the current change`, { code: "confirmationRequired" });
+  }
   const { record: written, previous } = promoteMaterialized({
     sourceFolder: nextFolder,
     resolution,
     metadata: { collection: pkg.collection || null, url: record.url },
   });
-  const reapplied = reapply ? await reapply(packageId) : false;
+  let reapplied = false;
+  if (reapply) {
+    try {
+      reapplied = await reapply(packageId, { previous: before });
+    } catch (err) {
+      await rollBackUpdate({ packageId, previous, written, reapply });
+      throw new PackageServiceError(`${name} could not be re-applied at ${latest.slice(0, 12)}: ${err?.message || err}\nkept ${current.resolved.slice(0, 12)}; run the update again once the cause is fixed`, { code: "invalid" });
+    }
+  }
   if (previous?.installedPath && previous.installedPath !== written.installedPath) deleteMaterializedCopy(previous.installedPath);
   pruneGitCache(record.id, [latest, ...Object.values(readPackageLock().packages).filter((r) => r.sourceId === record.id).map((r) => r.resolved)]);
   return { ...change, changed: true, reapplied };
+}
+
+// Undo an update whose re-apply failed: point the lock at the previous copy again, re-apply that
+// revision (which also removes what the new one registered and the old one does not), then delete
+// the new copy. The previous copy was never deleted, so this needs no network.
+async function rollBackUpdate({ packageId, previous, written, reapply }) {
+  const after = (safeCompose().candidates || []).find((candidate) => candidate.id === packageId && candidate.revision === written.resolved) || null;
+  writeLockRecord(previous);
+  try {
+    await reapply(packageId, { previous: after });
+  } catch (err) {
+    console.warn(`warn: re-applying ${packageId} at ${previous.resolved.slice(0, 12)} also failed (${err?.message || err}); run \`roborepo config apply\` to repair the harnesses`);
+  }
+  if (written.installedPath !== previous.installedPath) deleteMaterializedCopy(written.installedPath);
 }
 
 // Files added, removed, and changed between two package folders.
@@ -634,20 +763,25 @@ export async function removePackage(reference, { disable = null } = {}) {
   const record = lock.packages[packageId];
   const composed = safeCompose();
   const pkg = composed.packages.find((entry) => entry.id === packageId);
-  // The catalog's choice (which honours a replace override) decides the source, then the lock.
-  const effectiveSource = pkg?.sourceId || record?.sourceId;
-  if (sourceId && effectiveSource && sourceId !== effectiveSource) {
-    throw new PackageServiceError(`${packageId} is installed from ${effectiveSource}, not ${sourceId}`, { code: "usage" });
+  // The lock record is what removal deletes, so it names the source. The catalog's choice can
+  // differ: a workspace replace override makes `local` effective while a git copy stays recorded.
+  const recordedSource = record?.sourceId || pkg?.sourceId;
+  if (sourceId && recordedSource && sourceId !== recordedSource) {
+    throw new PackageServiceError(`${packageId} is installed from ${recordedSource}, not ${sourceId}`, { code: "usage" });
   }
-  const tab = pkg?.tab || (record ? sourceTab({ type: record.sourceType || "git" }) : null);
-  if (tab === "system" || effectiveSource === BUILTIN_SOURCE_ID) {
+  const tab = record ? sourceTab({ type: record.sourceType || "git" }) : pkg?.tab;
+  if (tab === "system" || recordedSource === BUILTIN_SOURCE_ID) {
     throw new PackageServiceError(`${packageId} is a System package and cannot be removed; disable it instead`, { code: "refused" });
   }
   if (!record && !pkg) throw new PackageServiceError(`${reference} is not installed`, { code: "usage" });
   if (!record) return { qualifiedName: pkg.qualifiedName, removed: false, disabled: false, message: "not installed; nothing to remove" };
+  // Whether the recorded package is the one the catalog uses. A shadowed record goes without
+  // touching the package that shadows it: nothing requires the shadowed copy, and the effective
+  // package stays on.
+  const recordInUse = !pkg || pkg.sourceId === record.sourceId;
 
   // A copied package leaves the catalog when removed; refuse while another package requires it.
-  if (record.kind === "materialized") {
+  if (record.kind === "materialized" && recordInUse) {
     const dependents = dependentsOf([packageId], composed.packages);
     if (dependents.length > 0) {
       throw new PackageServiceError(`${packageId} is required by ${dependents.join(", ")}; remove ${dependents.length === 1 ? "it" : "them"} first. Nothing was removed`, { code: "refused", details: { dependents } });
@@ -656,7 +790,7 @@ export async function removePackage(reference, { disable = null } = {}) {
 
   const active = new Set(effectiveEnabledIds(composed.packages));
   let disabled = false;
-  if (active.has(packageId)) {
+  if (pkg && recordInUse && active.has(packageId)) {
     if (!disable) throw new PackageServiceError(`${packageId} is active; disable it first`, { code: "refused" });
     const roots = selectedRootIds(composed.packages, readEnabledPackagesRegistry());
     let result;
@@ -689,12 +823,21 @@ export function packageView({ includeAvailable = true } = {}) {
   const sources = readSourceConfig().sources;
   const composed = composePackageCatalog({ lock, sources });
   const active = new Set(effectiveEnabledIds(composed.packages));
-  const rows = composed.packages.map((pkg) => viewRow(pkg, { lock, active, available: true, sources }));
+  // An ID is active through the one source the catalog uses for it. Another source's row with the
+  // same ID (a git copy shadowed by a local override, say) is not active.
+  const inUse = new Map(composed.packages.map((pkg) => [pkg.id, pkg.sourceId]));
+  const context = { lock, active, inUse, sources };
+  const rows = composed.packages.map((pkg) => viewRow(pkg, { ...context, available: true }));
+  // What each enabled git source's current listing offers.
+  const offered = new Map();
+  for (const record of sources) {
+    if (record.enabled && record.type === "git") offered.set(record.id, availableFromSource(record));
+  }
   if (includeAvailable) {
-    for (const record of sources) {
-      if (!record.enabled || record.type !== "git") continue;
+    for (const [sourceId, packages] of offered) {
+      const record = sources.find((entry) => entry.id === sourceId);
       const latest = readGitCatalog(record.id)?.revision || null;
-      for (const pkg of availableFromSource(record)) {
+      for (const pkg of packages) {
         const existing = rows.find((row) => row.id === pkg.id && row.sourceId === pkg.sourceId);
         if (existing) {
           const installedUrl = lock.packages[existing.id]?.url;
@@ -706,12 +849,17 @@ export function packageView({ includeAvailable = true } = {}) {
           existing.updateAvailable = Boolean(existing.revision && latest && existing.revision !== latest);
           continue;
         }
-        rows.push(viewRow(pkg, { lock, active, available: true, sources }));
+        rows.push(viewRow(pkg, { ...context, available: true }));
       }
     }
   }
+  // An installed copy stays usable after its source stops offering it (the source was removed, or
+  // its current revision dropped the package); the row then says it is no longer available.
   for (const row of rows) {
-    if (row.sourceType === "git" && row.installed && !sources.some((record) => record.id === row.sourceId)) row.available = false;
+    if (row.sourceType !== "git" || !row.installed) continue;
+    const record = sources.find((entry) => entry.id === row.sourceId);
+    if (!record) row.available = false;
+    else if (offered.has(record.id) && !offered.get(record.id).some((pkg) => pkg.id === row.id)) row.available = false;
   }
   return {
     tabs: SOURCE_TABS.map((tab) => ({ ...tab, count: rows.filter((row) => row.tab === tab.id).length })),
@@ -722,9 +870,11 @@ export function packageView({ includeAvailable = true } = {}) {
   };
 }
 
-function viewRow(pkg, { lock, active, available, sources }) {
+function viewRow(pkg, { lock, active, inUse, available, sources }) {
   const record = lock.packages[pkg.id];
   const installedHere = record && record.sourceId === pkg.sourceId;
+  const live = isLiveSource({ type: pkg.sourceType });
+  const activeHere = inUse.get(pkg.id) === pkg.sourceId && active.has(pkg.id);
   return {
     id: pkg.id,
     qualifiedName: pkg.qualifiedName,
@@ -738,8 +888,8 @@ function viewRow(pkg, { lock, active, available, sources }) {
     sourceBadge: sourceBadge(pkg, sources),
     collection: pkg.collection || null,
     available,
-    installed: Boolean(installedHere) || (isLiveSource({ type: pkg.sourceType }) && active.has(pkg.id)),
-    active: installedHere || isLiveSource({ type: pkg.sourceType }) ? active.has(pkg.id) : false,
+    installed: Boolean(installedHere) || (live && activeHere),
+    active: installedHere || live ? activeHere : false,
     revision: installedHere ? record.resolved : pkg.revision || null,
     latestRevision: pkg.sourceType === "git" ? pkg.revision || null : null,
     updateAvailable: false,

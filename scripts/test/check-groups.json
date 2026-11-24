@@ -9,6 +9,7 @@
     "package-provenance-check.mjs",
     "package-resolution-check.mjs",
     "package-source-git-check.mjs",
+    "package-update-check.mjs",
     "wizard-recommendations-check.mjs",
     "package-relationships-check.mjs",
     "initialization-lifecycle-check.mjs",

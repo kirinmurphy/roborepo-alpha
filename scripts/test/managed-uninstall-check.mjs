@@ -44,6 +44,7 @@ const PRESERVED_STATE_ENTRIES = ["workspace", "workspace-root.json"];
 try {
   testNestedWorkspacePreservedByDefault();
   testRelocatedWorkspaceUntouched();
+  testWorkspaceInsidePackageStoreSurvives();
   testDeleteWorkspaceOptIn();
   testRelocatedNeverDeletedEvenWithOptIn();
   testNoninteractiveRefusesWithoutYes();
@@ -130,6 +131,32 @@ function testRelocatedWorkspaceUntouched() {
     fs.existsSync(path.join(f.stateDir, "workspace-root.json")),
     "the pointer must survive alongside the tree it names, so a reinstall can still find it",
   );
+}
+
+// `workspace use` accepts any folder, including one inside the package store that uninstall
+// removes. A default uninstall still keeps it, and removes the store's own files around it.
+function testWorkspaceInsidePackageStoreSurvives() {
+  for (const relative of [path.join("packages", "my-workspace"), "packages"]) {
+    const home = path.join(tmp, `case-${++caseId}`);
+    const stateDir = path.join(home, ".roborepo");
+    const workspace = path.join(stateDir, relative);
+    const skill = path.join(workspace, "skills", "mine.md");
+    fs.mkdirSync(path.dirname(skill), { recursive: true });
+    fs.writeFileSync(skill, "USER AUTHORED\n");
+    fs.writeFileSync(path.join(stateDir, "workspace-root.json"), JSON.stringify({ workspaceRoot: workspace }) + "\n");
+    if (relative !== "packages") {
+      fs.writeFileSync(path.join(stateDir, "packages", "package-lock.json"), "{}\n");
+      fs.mkdirSync(path.join(stateDir, "packages", "installed", "src"), { recursive: true });
+    }
+    const f = { home, stateDir, workspace, skill };
+    const result = runCli(f, ["uninstall", "--yes"]);
+    assert.equal(result.status, 0, `uninstall failed:\n${result.stdout}\n${result.stderr}`);
+    assert.equal(fs.readFileSync(skill, "utf8"), "USER AUTHORED\n", `a workspace at <stateRoot>/${relative} must survive a default uninstall`);
+    if (relative !== "packages") {
+      assert.ok(!fs.existsSync(path.join(stateDir, "packages", "package-lock.json")), "the package lock is still removed");
+      assert.ok(!fs.existsSync(path.join(stateDir, "packages", "installed")), "installed copies are still removed");
+    }
+  }
 }
 
 function testDeleteWorkspaceOptIn() {

@@ -395,6 +395,41 @@ remove_path() {
   fi
 }
 
+# Removes ${path} like remove_path, except when the workspace is ${path} itself or sits below it.
+# Then only the siblings along the way to the workspace are removed, and the folders that lead to
+# it are kept, so a default uninstall never deletes user-authored workspace content.
+remove_path_keeping_workspace() {
+  local path="${1%/}"
+  local workspace="${2%/}"
+  local child
+  if [[ -z "${workspace}" ]] || { [[ "${workspace}" != "${path}" ]] && [[ "${workspace}" != "${path}/"* ]]; }; then
+    remove_path "${path}" "remove"
+    return 0
+  fi
+  [[ "${workspace}" == "${path}" ]] && return 0
+  [[ -d "${path}" && ! -L "${path}" ]] || return 0
+  for child in "${path}"/* "${path}"/.[!.]* "${path}"/..?*; do
+    [[ -e "${child}" || -L "${child}" ]] || continue
+    remove_path_keeping_workspace "${child}" "${workspace}"
+  done
+}
+
+# True when ${path} is the workspace, or a real folder whose entries all lead only to it: what
+# remove_path_keeping_workspace leaves behind on purpose.
+holds_only_workspace() {
+  local path="${1%/}"
+  local workspace="${2%/}"
+  local child
+  [[ -n "${workspace}" ]] || return 1
+  [[ "${path}" == "${workspace}" ]] && return 0
+  [[ "${workspace}" == "${path}/"* && -d "${path}" && ! -L "${path}" ]] || return 1
+  for child in "${path}"/* "${path}"/.[!.]* "${path}"/..?*; do
+    [[ -e "${child}" || -L "${child}" ]] || continue
+    holds_only_workspace "${child}" "${workspace}" || return 1
+  done
+  return 0
+}
+
 remove_empty_dir() {
   local path="$1"
   [[ -d "${path}" ]] || return 0
@@ -456,7 +491,9 @@ remove_runtime_state() {
   # Package sources and the managed package store (lock, catalog caches, installed copies). A path
   # source's folder is never under here, so this removes no user-authored package.
   remove_path "${state_dir}/package-sources.json" "remove"
-  remove_path "${state_dir}/packages" "remove"
+  # `workspace use` accepts any folder, including one inside the package store, so this removal
+  # keeps a workspace that sits there.
+  remove_path_keeping_workspace "${state_dir}/packages" "${workspace}"
   remove_path "${state_dir}/telemetry" "remove"
   remove_path "${state_dir}/telemetry-backups" "remove"
   remove_path "${state_dir}/backups" "remove"
@@ -611,7 +648,7 @@ check_no_active_remnants() {
     if [[ -n "${package_bin}" && "${path}" == "${package_bin}" ]]; then
       continue
     fi
-    if [[ -e "${path}" || -L "${path}" ]]; then
+    if [[ -e "${path}" || -L "${path}" ]] && ! holds_only_workspace "${path}" "$(cli_workspace_dir)"; then
       echo "remnant: ${path}" >&2
       failed=1
     fi
@@ -625,8 +662,8 @@ check_no_active_remnants() {
     workspace="$(cli_workspace_dir)"
     while IFS= read -r leftover; do
       [[ -n "${leftover}" ]] || continue
-      # A nested workspace we deliberately preserved.
-      [[ "${leftover}" == "${workspace}" ]] && continue
+      # A nested workspace we deliberately preserved, or a folder kept only because it leads to it.
+      holds_only_workspace "${leftover}" "${workspace}" && continue
       # The pointer to a preserved relocated workspace. It is kept on purpose so a reinstall can
       # still find that workspace, so it is not a remnant either — but only while the workspace it
       # names actually exists; a dangling pointer IS leftover state.

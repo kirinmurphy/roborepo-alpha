@@ -107,6 +107,12 @@ export function validateSourceRecord(record) {
   if ((record.type === "bundled") !== (id === BUILTIN_SOURCE_ID)) {
     throw new PackageSourceError(`package source ${id}: only the ${BUILTIN_SOURCE_ID} source is bundled with RoboRepo`);
   }
+  // `local` is always the workspace folder, and only `local` follows the workspace. Any other
+  // record under that ID would count as present and stop the workspace source from being
+  // restored, so the workspace packages folder would drop out of discovery.
+  if ((record.workspace === true) !== (id === LOCAL_SOURCE_ID) || (id === LOCAL_SOURCE_ID && record.type !== "path")) {
+    throw new PackageSourceError(`package source ${id}: only the ${LOCAL_SOURCE_ID} source is the workspace folder, and it is a path source with workspace: true`);
+  }
   if (record.type === "bundled" && record.trust !== "official") {
     throw new PackageSourceError(`package source ${id}: the bundled library is official`);
   }

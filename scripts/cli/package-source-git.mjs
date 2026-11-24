@@ -85,20 +85,30 @@ export function trustedEntryFor(url, entries = readTrustedCatalog()) {
 // ---------------------------------------------------------------------------------------------
 // Git transport
 
-function git(args, { cwd } = {}) {
+// How long one network operation (ls-remote, fetch) may take. A server that accepts the connection
+// and then stops sending would otherwise hold a refresh open forever; a slow but working clone of a
+// large repo still finishes well inside this.
+export const REMOTE_GIT_TIMEOUT_MS = 120_000;
+
+// `timeoutMs` is set only for operations that talk to the remote; local ones run to completion.
+function git(args, { cwd, timeoutMs } = {}) {
   const result = spawnSync("git", ["-c", "credential.helper=", ...args], {
     cwd,
     encoding: "utf8",
+    timeout: timeoutMs,
     // Never stop for a username prompt: a private or missing repo fails instead of hanging.
     env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_ASKPASS: "", SSH_ASKPASS: "" },
   });
+  if (result.error?.code === "ETIMEDOUT") {
+    throw new PackageSourceError(`git ${args[0] === "--git-dir" ? args[2] : args[0]} did not finish within ${timeoutMs / 1000} seconds; the repository is not responding`, { code: "unavailable" });
+  }
   if (result.error) throw new PackageSourceError(`git is not available: ${result.error.message}`, { code: "unavailable" });
   return result;
 }
 
 // The commit the repository's default branch points at.
-export function resolveHeadCommit(url) {
-  const result = git(["ls-remote", url, "HEAD"]);
+export function resolveHeadCommit(url, { timeoutMs = REMOTE_GIT_TIMEOUT_MS } = {}) {
+  const result = git(["ls-remote", url, "HEAD"], { timeoutMs });
   const sha = result.status === 0 ? result.stdout.split(/\s+/)[0] : "";
   if (!SHA_RE.test(sha)) {
     const reason = (result.stderr || "").trim().split("\n").at(-1) || "no default branch";
@@ -115,8 +125,9 @@ function fetchCommit(url, sha, dest) {
     const init = git(["init", "-q", "--bare", gitDir]);
     if (init.status !== 0) throw new PackageSourceError(`git init failed: ${init.stderr.trim()}`);
     // Fetch the one commit; a server that refuses fetch-by-SHA gets a full fetch of its branches.
-    let fetched = git(["--git-dir", gitDir, "fetch", "-q", "--depth", "1", url, sha]);
-    if (fetched.status !== 0) fetched = git(["--git-dir", gitDir, "fetch", "-q", url, "+refs/heads/*:refs/heads/*"]);
+    const remote = { timeoutMs: REMOTE_GIT_TIMEOUT_MS };
+    let fetched = git(["--git-dir", gitDir, "fetch", "-q", "--depth", "1", url, sha], remote);
+    if (fetched.status !== 0) fetched = git(["--git-dir", gitDir, "fetch", "-q", url, "+refs/heads/*:refs/heads/*"], remote);
     if (fetched.status !== 0) {
       throw new PackageSourceError(`cannot fetch ${url}: ${fetched.stderr.trim().split("\n").at(-1)}`, { code: "unavailable" });
     }
@@ -137,7 +148,9 @@ function fetchCommit(url, sha, dest) {
 // ---------------------------------------------------------------------------------------------
 // Scanning a checked-out tree into packages
 
-// Returns [{ packageId, build(destDir), collection }] for the formats the tree contains.
+// Returns [{ packageId, build(destDir), collection }] for the formats the tree contains. `build` may
+// return { notInstalled: [relative paths] }: files kept beside the package only so the contents
+// summary can name them.
 export function scanSourceTree(tree, { sourceId, display }) {
   refuseSymlinks(tree);
   const manifests = roboRepoManifests(tree);
@@ -150,7 +163,8 @@ export function scanSourceTree(tree, { sourceId, display }) {
   }
   const pluginFile = path.join(tree, ".claude-plugin", "plugin.json");
   if (fs.existsSync(pluginFile)) return [pluginPackage(tree, pluginFile, display, sourceId)];
-  const skills = skillFolders(tree, sourceId);
+  const root = rootSkill(tree, sourceId);
+  const skills = root ? [root] : skillsDirFolders(tree);
   if (skills.length === 0) throw new PackageSourceError(`${display} has no packages: no package.config.json, .claude-plugin/plugin.json, or skills/*/SKILL.md`, { code: "no-packages" });
   const collection = skills.length >= 2 ? { id: sourceId, title: display } : null;
   return skills.map((skill) => ({
@@ -185,7 +199,11 @@ function roboRepoManifests(tree) {
 function pluginPackage(tree, pluginFile, display, sourceId) {
   const plugin = readManifest(pluginFile);
   const id = slugify(plugin.name || sourceId);
-  const skills = skillFolders(tree, sourceId);
+  // A plugin's skills live in skills/*. A root SKILL.md counts only when there are none: as a skill
+  // folder it would copy the whole plugin, skills/ included, into one skill.
+  const listed = skillsDirFolders(tree);
+  const root = rootSkill(tree, sourceId);
+  const skills = listed.length > 0 ? listed : root ? [root] : [];
   if (skills.length === 0) throw new PackageSourceError(`${display}: plugin ${id} has no skills RoboRepo can install`, { code: "no-packages" });
   return {
     packageId: id,
@@ -204,17 +222,19 @@ function pluginPackage(tree, pluginFile, display, sourceId) {
         description: oneLine(plugin.description) || `The ${id} plugin from ${display}.`,
         skills: skills.map((skill) => skill.id),
       });
+      return { notInstalled: listRelativeFiles(dest).filter((rel) => rel.startsWith("plugin/")) };
     },
   };
 }
 
 // A repo whose root is one skill is named by the skill's frontmatter `name`, or by its source.
-function skillFolders(tree, sourceId) {
-  if (fs.existsSync(path.join(tree, "SKILL.md"))) {
-    const { name, description } = readSkillFrontmatter(path.join(tree, "SKILL.md"));
-    const id = SLUG_RE.test(name) ? name : sourceId;
-    return [{ id, dir: tree, description }];
-  }
+function rootSkill(tree, sourceId) {
+  if (!fs.existsSync(path.join(tree, "SKILL.md"))) return null;
+  const { name, description } = readSkillFrontmatter(path.join(tree, "SKILL.md"));
+  return { id: SLUG_RE.test(name) ? name : sourceId, dir: tree, description };
+}
+
+function skillsDirFolders(tree) {
   return safeReaddir(path.join(tree, "skills"))
     .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(tree, "skills", entry.name, "SKILL.md")))
     .map((entry) => ({ id: entry.name, dir: path.join(tree, "skills", entry.name) }))
@@ -282,7 +302,9 @@ function safeReaddir(dir) {
 }
 
 // What a package will put on this machine, for the user to read before installing it.
-export function contentsSummary(packageDir) {
+// `notInstalled` names files the builder kept only for this summary; a path alone cannot tell them
+// apart from a declared resource that happens to sit under the same folder.
+export function contentsSummary(packageDir, { notInstalled = [] } = {}) {
   const config = readManifest(path.join(packageDir, "package.config.json"));
   const resources = Array.isArray(config.resources) ? config.resources : [];
   const of = (type) => resources.filter((resource) => resource.type === type);
@@ -300,7 +322,7 @@ export function contentsSummary(packageDir) {
     runtimeAssets: of("package-runtime-asset").map((resource) => resource.source),
     services: of("service").map((resource) => resource.id),
     scripts: files.filter((rel) => SCRIPT_EXTENSIONS.has(path.extname(rel)) || isExecutable(path.join(packageDir, rel))),
-    notInstalled: files.filter((rel) => rel.startsWith("plugin/")),
+    notInstalled: [...notInstalled].sort(),
     requires: Array.isArray(config.requires) ? config.requires : [],
   };
 }
@@ -377,9 +399,11 @@ export function refreshGitSource(record, { revision = null, validate = null } = 
   }
   target ||= resolveHeadCommit(record.url);
   const current = readGitCatalog(record.id);
-  if (current?.revision === target && fs.existsSync(revisionCacheDir(record.id, target))) {
-    return { catalog: current, changed: false };
-  }
+  // Reuse the cache only when every listed package is still there; one deleted package folder
+  // would otherwise stay missing until the branch moved.
+  const cached = current?.revision === target && current.packages.every((item) =>
+    fs.existsSync(path.join(revisionCacheDir(record.id, target), "packages", item.packageId, "package.config.json")));
+  if (cached) return { catalog: current, changed: false };
   const revisionDir = revisionCacheDir(record.id, target);
   const building = `${revisionDir}.building-${process.pid}`;
   fs.rmSync(building, { recursive: true, force: true });
@@ -396,11 +420,11 @@ export function refreshGitSource(record, { revision = null, validate = null } = 
       seen.add(item.packageId);
       const dest = path.join(building, "packages", item.packageId);
       fs.mkdirSync(dest, { recursive: true });
-      item.build(dest);
+      const built = item.build(dest) || {};
       if (validate) validate(dest, item.packageId);
       // The content hash of what refresh built; install verifies its copy against it, so a cache
       // altered after refresh fails instead of installing.
-      packages.push({ packageId: item.packageId, collection: item.collection, contents: contentsSummary(dest), integrity: hashPackageTree(dest) });
+      packages.push({ packageId: item.packageId, collection: item.collection, contents: contentsSummary(dest, { notInstalled: built.notInstalled }), integrity: hashPackageTree(dest) });
     }
     fs.rmSync(tree, { recursive: true, force: true });
     fs.rmSync(revisionDir, { recursive: true, force: true });

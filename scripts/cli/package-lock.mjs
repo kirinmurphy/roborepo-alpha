@@ -14,8 +14,12 @@
 // This is not a dependency lockfile: it records provenance for reproducibility, nothing more.
 import { packageLockPath, writeJsonStateAtomic } from "./state-paths.mjs";
 import fs from "node:fs";
+import path from "node:path";
 
 export const LOCK_SCHEMA_VERSION = 1;
+// The content-hash format hashPackageTree writes. The lock refuses an integrity value in any other
+// format, so a copy hashed differently reads as "reinstall it" rather than as a tampered store.
+export const PACKAGE_HASH_PREFIX = "sha256v2-";
 const KINDS = new Set(["live", "materialized"]);
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -35,7 +39,9 @@ export function validateLockRecord(record) {
   if (typeof record.resolved !== "string" || record.resolved === "") throw new PackageLockError(`${label}: resolved is required`);
   if (record.kind === "materialized") {
     if (typeof record.installedPath !== "string" || record.installedPath === "") throw new PackageLockError(`${label}: installedPath is required`);
-    if (typeof record.integrity !== "string" || !record.integrity.startsWith("sha256-")) throw new PackageLockError(`${label}: integrity must be a sha256 hash`);
+    if (typeof record.integrity !== "string" || !record.integrity.startsWith(PACKAGE_HASH_PREFIX)) {
+      throw new PackageLockError(`${label}: integrity must be a ${PACKAGE_HASH_PREFIX} hash; reinstall the package`);
+    }
   }
   return {
     sourceId: record.sourceId,
@@ -90,16 +96,127 @@ export function lockRecordFor(packageId, lock = readPackageLock()) {
 }
 
 export function writeLockRecord(record) {
-  const valid = validateLockRecord({ installedAt: new Date().toISOString(), ...record });
-  const lock = readPackageLock();
-  writePackageLock({ ...lock.packages, [valid.packageId]: valid });
-  return valid;
+  return withPackageLock(() => {
+    const valid = validateLockRecord({ installedAt: new Date().toISOString(), ...record });
+    const lock = readPackageLock();
+    writePackageLock({ ...lock.packages, [valid.packageId]: valid });
+    return valid;
+  });
 }
 
 export function removeLockRecord(packageId) {
-  const lock = readPackageLock();
-  if (!lock.packages[packageId]) return false;
-  const { [packageId]: _removed, ...rest } = lock.packages;
-  writePackageLock(rest);
-  return true;
+  return withPackageLock(() => {
+    const lock = readPackageLock();
+    if (!lock.packages[packageId]) return false;
+    const { [packageId]: _removed, ...rest } = lock.packages;
+    writePackageLock(rest);
+    return true;
+  });
+}
+
+// Exclusive access to the package lock across processes. Every change reads the whole lock, edits
+// one record and writes it back, so two overlapping CLI runs would otherwise each write their own
+// copy and silently drop the other's change. Wrap a whole operation that decides from the lock and
+// then writes it (look up the current record, move files, record the result) so no other process
+// can change the record in between.
+//
+// The lock is a file created exclusively beside package-lock.json holding the owner's pid, the
+// same scheme as the worktree cleanup lock. That one is asynchronous and gives up when busy;
+// package-lock writes are synchronous and must wait their turn, so this is a blocking variant. A
+// lock whose owner process is gone is taken over. Nested calls in the same process run inside the
+// outer hold, and an async `fn` keeps the lock until its promise settles.
+let heldDepth = 0;
+const WAIT_MS = 10_000;
+const POLL_MS = 20;
+
+export function withPackageLock(fn, { lockPath = `${packageLockPath}.lock`, waitMs = WAIT_MS } = {}) {
+  if (heldDepth > 0) return fn();
+  const handle = acquireLock(lockPath, waitMs);
+  heldDepth += 1;
+  const release = () => {
+    heldDepth -= 1;
+    fs.closeSync(handle);
+    fs.rmSync(lockPath, { force: true });
+  };
+  let result;
+  try {
+    result = fn();
+  } catch (err) {
+    release();
+    throw err;
+  }
+  if (result && typeof result.then === "function") return Promise.resolve(result).finally(release);
+  release();
+  return result;
+}
+
+function acquireLock(lockPath, waitMs) {
+  fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+  const deadline = Date.now() + waitMs;
+  while (true) {
+    let handle = openExclusive(lockPath);
+    if (handle == null && staleLock(lockPath)) handle = takeOverStaleLock(lockPath);
+    if (handle != null) {
+      fs.writeSync(handle, `${process.pid}\n`);
+      return handle;
+    }
+    if (Date.now() >= deadline) {
+      throw new PackageLockError(`the package lock is held by another RoboRepo process (${lockPath}); try again when it finishes`);
+    }
+    sleepSync(POLL_MS);
+  }
+}
+
+// Recheck under an exclusive marker so two contenders cannot both remove the stale file, one of
+// them deleting the lock the other has just created.
+function takeOverStaleLock(lockPath) {
+  const marker = `${lockPath}.recover`;
+  const claim = openExclusive(marker);
+  if (claim == null) return null;
+  try {
+    if (staleLock(lockPath)) fs.rmSync(lockPath, { force: true });
+  } finally {
+    fs.closeSync(claim);
+    fs.rmSync(marker, { force: true });
+  }
+  return openExclusive(lockPath);
+}
+
+function openExclusive(file) {
+  try {
+    return fs.openSync(file, "wx");
+  } catch (err) {
+    if (err?.code === "EEXIST") return null;
+    throw err;
+  }
+}
+
+// Only a recorded pid with no live process is stale: an empty file may belong to a process that
+// has created it and not yet written its pid.
+function staleLock(file) {
+  let handle;
+  try {
+    handle = fs.openSync(file, "r");
+    const pid = Number.parseInt(fs.readFileSync(handle, "utf8"), 10);
+    if (!Number.isInteger(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return false;
+    } catch (err) {
+      if (err.code !== "ESRCH") return false;
+    }
+    // Compare with the inode still held open, so a lock recreated meanwhile is not removed.
+    const observed = fs.fstatSync(handle);
+    const current = fs.lstatSync(file);
+    return observed.dev === current.dev && observed.ino === current.ino;
+  } catch {
+    return false;
+  } finally {
+    if (handle != null) fs.closeSync(handle);
+  }
+}
+
+const sleepCell = new Int32Array(new SharedArrayBuffer(4));
+function sleepSync(ms) {
+  Atomics.wait(sleepCell, 0, 0, ms);
 }

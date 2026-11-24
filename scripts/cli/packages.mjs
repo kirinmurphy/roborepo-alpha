@@ -697,17 +697,69 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
 }
 
 // Re-apply one effective package from its current catalog entry, for when its installed copy
-// moved (an update to a new revision). Returns false when the package is not effective.
-export async function reapplyPackage(pkgId) {
+// moved (an update to a new revision). `previous` is the package as it was before the move, read
+// from its old copy, which must still exist. Returns false when the package is not effective;
+// throws when a package fails to apply, so the caller can roll the move back.
+export async function reapplyPackage(pkgId, { previous = null } = {}) {
   assertHarnessWriteAllowed();
-  const catalog = loadPackageCatalog({ includeUnavailable: true });
-  const pkg = catalog.find((entry) => entry.id === pkgId);
-  if (!pkg || !effectiveEnabledIds(catalog).includes(pkgId)) return false;
-  await applyPackageComponents(pkg);
+  const fullCatalog = loadPackageCatalog({ includeUnavailable: true });
+  const pkg = fullCatalog.find((entry) => entry.id === pkgId);
+  if (!pkg || !effectiveEnabledIds(fullCatalog).includes(pkgId)) return false;
+  // Registrations the previous revision made that this one no longer declares, or declares
+  // differently, go first, through the same removal disable uses. Removing before applying keeps
+  // an entry both revisions share from being taken out after the new one wrote it.
+  const dropped = droppedComponents(previous, pkg);
+  if (dropped.length) await removePackageComponents({ ...previous, components: dropped });
+  // A new revision can add a requirement, which becomes effective with it; apply the whole
+  // required closure, dependencies first, the way enable does.
+  const available = loadPackageCatalog();
+  // A package already effective stays re-applied even if it is no longer available to enable.
+  const catalog = available.some((entry) => entry.id === pkgId) ? available : [...available, pkg];
+  const order = requiredClosure(catalog, [pkgId]);
+  warnUnavailableRequirements(order, catalog);
+  const blocked = await applyInOrder(order, catalog, async (target) => {
+    if (target.id !== pkgId) console.log(`enabling included package: ${target.label}`);
+    await applyPackageComponents(target);
+  });
   // Skills or commands the old revision had and the new one dropped are no longer owned by any
   // package; the same cleanup reconcile runs removes them.
   cleanupPackageProjections();
+  if (blocked.size) {
+    throw new Error([...blocked].map(([id, message]) => `${id}: ${message}`).join("; "));
+  }
   return true;
+}
+
+// Component types whose registration lives outside the package folder and is not swept by
+// projection cleanup, so an update has to remove them itself.
+const UPDATE_REMOVED_TYPES = new Set(["mcp", "hooks", "config-patch"]);
+
+// Components of `previous` that `next` no longer declares in the same form. A hooks fragment is
+// compared by content, since each revision's copy has its own path.
+function droppedComponents(previous, next) {
+  if (!previous) return [];
+  const kept = new Set(next.components.map((component) => componentKey(component)));
+  return previous.components.filter((component) => UPDATE_REMOVED_TYPES.has(component.type) && !kept.has(componentKey(component)));
+}
+
+function componentKey(component) {
+  switch (component.type) {
+    case "mcp":
+      return `mcp:${component.preset}`;
+    case "hooks": {
+      let fragment = "";
+      try {
+        fragment = fs.readFileSync(path.join(repoRoot, component.source), "utf8");
+      } catch {
+        fragment = `missing:${component.source}`;
+      }
+      return `hooks:${component.harness}:${(component.scripts || []).map((script) => path.basename(script)).join(",")}:${fragment}`;
+    }
+    case "config-patch":
+      return `config-patch:${component.harness}:${JSON.stringify(component.patches)}`;
+    default:
+      return `${component.type}:${JSON.stringify(component)}`;
+  }
 }
 
 export async function reconcileEnabledPackages(rest = []) {

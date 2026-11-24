@@ -15,6 +15,20 @@ import { pathToFileURL } from "node:url";
 import { isolateGitConfig } from "./lib/git-config.mjs";
 import { makeSourceRoots, repoRoot, runCli, runModules, writeRulesPackage } from "./fixtures/package-sources.mjs";
 
+// Injected `git -c` config never reaches the environment CLI children run with.
+{
+  const injected = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "/nonexistent", GIT_CONFIG_PARAMETERS: "'core.hooksPath=/nonexistent'" };
+  const saved = Object.fromEntries(Object.keys(injected).map((key) => [key, process.env[key]]));
+  Object.assign(process.env, injected);
+  const probe = makeSourceRoots("roborepo-package-source-env-");
+  for (const [key, value] of Object.entries(saved)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  probe.cleanup();
+  assert.deepEqual(Object.keys(probe.env).filter((key) => key in injected), [], "fixture env drops injected git config");
+}
+
 const roots = (() => {
   const made = makeSourceRoots("roborepo-package-source-git-");
   const restore = isolateGitConfig(made.tmp);
@@ -62,12 +76,16 @@ const json = (...args) => {
   assert.equal(result.status, 0, `${args.join(" ")} should succeed\n${result.output}`);
   return JSON.parse(result.stdout);
 };
+// No lock file yet reads as empty; a malformed one fails the check.
 const lock = () => {
+  let text;
   try {
-    return JSON.parse(fs.readFileSync(path.join(roots.stateRoot, "packages", "package-lock.json"), "utf8")).packages;
-  } catch {
-    return {};
+    text = fs.readFileSync(path.join(roots.stateRoot, "packages", "package-lock.json"), "utf8");
+  } catch (err) {
+    if (err?.code === "ENOENT") return {};
+    throw err;
   }
+  return JSON.parse(text).packages;
 };
 const sourcesFile = path.join(roots.stateRoot, "package-sources.json");
 
@@ -103,7 +121,7 @@ try {
   const record = lock()["audit-one"];
   assert.equal(record.kind, "materialized");
   assert.equal(record.resolved, skillsRepo.first, "the lock pins the exact commit");
-  assert.match(record.integrity, /^sha256-[0-9a-f]{64}$/);
+  assert.match(record.integrity, /^sha256v2-[0-9a-f]{64}$/);
   assert.ok(record.installedPath.startsWith(path.join(roots.stateRoot, "packages", "installed", "audits", skillsRepo.first)));
   assert.ok(fs.existsSync(path.join(record.installedPath, "skills", "audit-one", "SKILL.md")));
   assert.match(ok("package", "install", "audits/audit-one", "--yes"), /already installed/, "install is idempotent");
@@ -175,9 +193,11 @@ try {
   ok("package", "remove", "audit-two");
 
   // ---------------------------------------------------------------------------------------------
-  // A Claude Code plugin is one package holding every skill.
+  // A Claude Code plugin is one package holding every skill in skills/*; a root SKILL.md does not
+  // hide them.
   const pluginRepo = makeRepo("review-plugin", {
     ".claude-plugin/plugin.json": JSON.stringify({ name: "review-kit", description: "Review helpers." }),
+    "SKILL.md": skill("review-root", "A root skill beside the plugin's skills."),
     "skills/review-a/SKILL.md": skill("review-a", "Review A."),
     "skills/review-b/SKILL.md": skill("review-b", "Review B."),
     "hooks/hooks.json": "{}",
@@ -211,6 +231,19 @@ try {
   });
   json("package", "source", "add", manifestRepo.url, "--id", "robo");
   assert.match(cli("package", "install", "robo/robo-hooked").output, /hooks: hooks\.json \(claude\)/);
+  // A declared resource under plugin/ is installed, so it is not labeled as a plugin file.
+  const pluginDirRepo = makeRepo("robo-plugin-dir", {
+    "package.config.json": JSON.stringify({
+      schemaVersion: 1, id: "robo-plugin-dir", label: "Robo Plugin Dir", description: "A hook under plugin/.",
+      presentation: { category: "integrations" },
+      resources: [{ type: "hooks", harness: "claude", source: "plugin/hooks.json" }],
+    }),
+    "plugin/hooks.json": JSON.stringify({ hooks: {} }),
+  });
+  json("package", "source", "add", pluginDirRepo.url, "--id", "robo-plugin-dir");
+  const pluginDirPreview = cli("package", "install", "robo-plugin-dir/robo-plugin-dir").output;
+  assert.match(pluginDirPreview, /hooks: plugin\/hooks\.json \(claude\)/);
+  assert.doesNotMatch(pluginDirPreview, /plugin files not installed/, `a declared hook is not a preview-only file\n${pluginDirPreview}`);
 
   // ---------------------------------------------------------------------------------------------
   // The trusted catalog: an entry pins a reviewed commit even after the branch moved, installs
@@ -311,9 +344,21 @@ try {
   assert.notEqual(addSkill.status, 0);
   assert.match(addSkill.output, /installed from deps; copy it into a local folder/);
 
+  // Refresh reuses a complete cache, and rebuilds one missing a listed package even though the
+  // branch has not moved.
+  const depsCatalogFile = path.join(roots.stateRoot, "packages", "catalogs", "deps.json");
+  const depsCatalog = JSON.parse(fs.readFileSync(depsCatalogFile, "utf8"));
+  ok("package", "source", "refresh", "deps");
+  assert.equal(JSON.parse(fs.readFileSync(depsCatalogFile, "utf8")).refreshedAt, depsCatalog.refreshedAt, "a complete cache is reused");
+  const cachedHooked = path.join(roots.stateRoot, "packages", "cache", "deps", depsCatalog.revision, "packages", "dep-hooked");
+  fs.rmSync(cachedHooked, { recursive: true, force: true });
+  ok("package", "source", "refresh", "deps");
+  assert.ok(fs.existsSync(path.join(cachedHooked, "package.config.json")), "a missing cached package is rebuilt");
+  assert.equal(JSON.parse(fs.readFileSync(depsCatalogFile, "utf8")).revision, depsCatalog.revision);
+
   // A cache altered after refresh fails integrity at install and leaves the prior record alone.
   const robo = JSON.parse(fs.readFileSync(path.join(roots.stateRoot, "packages", "catalogs", "robo.json"), "utf8"));
-  assert.match(robo.packages[0].integrity, /^sha256-/, "refresh records each package's content hash");
+  assert.match(robo.packages[0].integrity, /^sha256v2-/, "refresh records each package's content hash");
   fs.appendFileSync(path.join(roots.stateRoot, "packages", "cache", "robo", robo.revision, "packages", "robo-hooked", "hooks.json"), "\n");
   const tampered = cli("package", "install", "robo/robo-hooked", "--yes");
   assert.notEqual(tampered.status, 0);
@@ -375,6 +420,20 @@ try {
     assert.ok(!fs.existsSync(path.join(roots.stateRoot, "packages", "catalogs", `${id}.json`)), `no catalog for ${id}`);
     assert.ok(!fs.existsSync(path.join(roots.stateRoot, "packages", "cache", id)) || fs.readdirSync(path.join(roots.stateRoot, "packages", "cache", id)).length === 0, `no cache for ${id}`);
   }
+
+  // A remote that stops responding fails as unavailable instead of hanging the refresh.
+  const fakeBin = path.join(roots.tmp, "hanging-git");
+  fs.mkdirSync(fakeBin, { recursive: true });
+  fs.writeFileSync(path.join(fakeBin, "git"), "#!/bin/sh\nexec sleep 30\n", { mode: 0o755 });
+  const started = Date.now();
+  const hung = runModules({ ...roots.env, PATH: `${fakeBin}${path.delimiter}${process.env.PATH}` }, { g: "scripts/cli/package-source-git.mjs" }, `
+    try { g.resolveHeadCommit("https://github.com/owner/repo.git", { timeoutMs: 300 }); return "resolved"; }
+    catch (err) { return { code: err.code, message: err.message }; }
+  `);
+  assert.ok(hung.ok, hung.error);
+  assert.equal(hung.value.code, "unavailable");
+  assert.match(hung.value.message, /git ls-remote did not finish within/);
+  assert.ok(Date.now() - started < 20_000, "the deadline ends the wait");
 
   // The adapter contract holds for a git source too.
   const contract = runModules(roots.env, { s: "scripts/cli/package-sources.mjs", a: "scripts/cli/package-source-adapters.mjs", g: "scripts/cli/package-source-git.mjs" }, `

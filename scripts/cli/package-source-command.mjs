@@ -104,6 +104,8 @@ export function packageSourceCommand(args = []) {
       }
       case "refresh": {
         const results = refreshSources(positional[0] || null);
+        // Set before the output branches, so a failed source fails a --json run too.
+        if (results.some((result) => result.error)) process.exitCode = 5;
         if (json) return emitJson(results);
         if (results.length === 0) console.log("no git package sources to refresh");
         for (const result of results) {
@@ -111,7 +113,6 @@ export function packageSourceCommand(args = []) {
           else if (result.error) console.log(`${result.id}: refresh failed (${result.error}); keeping the listing at ${short(result.revision)}`);
           else console.log(`${result.id}: ${result.changed ? `now at ${short(result.revision)}` : `up to date at ${short(result.revision)}`} (${result.packages.length} package(s))`);
         }
-        if (results.some((result) => result.error)) process.exitCode = 5;
         return;
       }
       case "info": {
@@ -144,22 +145,35 @@ export function packageInstallCommand(rest = []) {
   return run(async () => {
     const [reference] = positional;
     if (!reference) throw new PackageServiceError("usage: roborepo package install <package|source/package> [--yes]", { code: "usage" });
-    const preview = previewInstall(reference);
-    // Every remote package the install brings, dependencies included, is shown before any prompt.
-    for (const entry of preview.packages.filter((item) => item.sourceType === "git")) {
-      console.log(`${entry.qualifiedName} (${entry.trust}) at ${short(entry.revision)} contains:`);
-      for (const line of formatContentsSummary(entry.contents)) console.log(line);
-    }
-    let confirmed = flags.has("yes");
-    if (preview.needsConfirmation && !confirmed && interactive(flags)) {
-      const unverified = preview.packages.filter((item) => item.trust === "unverified").map((item) => item.qualifiedName);
-      confirmed = await confirm(`Install ${unverified.join(", ")} from an unverified source?`);
-      if (!confirmed) {
-        console.log("not installed");
-        return;
+    let preview;
+    let result;
+    // The install is bound to the plan shown here (`expectedPlan`). If a source changed before the
+    // install ran, the service refuses; an interactive user sees the new plan and is asked again,
+    // and any other run exits with the confirmation-required status.
+    for (let attempt = 1; ; attempt++) {
+      preview = previewInstall(reference);
+      // Every remote package the install brings, dependencies included, is shown before any prompt.
+      for (const entry of preview.packages.filter((item) => item.sourceType === "git")) {
+        console.log(`${entry.qualifiedName} (${entry.trust}) at ${short(entry.revision)} contains:`);
+        for (const line of formatContentsSummary(entry.contents)) console.log(line);
+      }
+      let confirmed = flags.has("yes");
+      if (preview.needsConfirmation && !confirmed && interactive(flags)) {
+        const unverified = preview.packages.filter((item) => item.trust === "unverified").map((item) => item.qualifiedName);
+        confirmed = await confirm(`Install ${unverified.join(", ")} from an unverified source?`);
+        if (!confirmed) {
+          console.log("not installed");
+          return;
+        }
+      }
+      try {
+        result = installPackage(reference, { confirmed, expectedPlan: preview.plan });
+        break;
+      } catch (err) {
+        if (!(err instanceof PackageServiceError) || !err.details?.planChanged || flags.has("yes") || !interactive(flags) || attempt >= 3) throw err;
+        console.log(err.message);
       }
     }
-    const result = installPackage(reference, { confirmed });
     if (flags.has("json")) return emitJson(result);
     for (const item of result.installed) {
       const where = item.kind === "live" ? `in place at ${item.path}` : `at ${short(item.revision)}`;
@@ -177,18 +191,28 @@ export function packageUpdateCommand(rest = []) {
     if (!reference) throw new PackageServiceError("usage: roborepo package update <package> [--yes]", { code: "usage" });
     const { reapplyPackage } = await import("./packages.mjs");
     let result;
-    try {
-      result = await updatePackage(reference, { confirmed: flags.has("yes"), reapply: reapplyPackage });
-    } catch (err) {
-      if (!(err instanceof PackageServiceError) || err.code !== "confirmationRequired") throw err;
-      const change = err.details.change;
-      printChange(change);
-      if (!interactive(flags) || !(await confirm(`Move ${change.qualifiedName} to ${short(change.to)}?`))) throw err;
-      result = await updatePackage(reference, { confirmed: true, expectedRevision: change.to, reapply: reapplyPackage });
-      result.shown = true;
+    let options = { confirmed: flags.has("yes") };
+    let shown = false;
+    // A confirmed retry is bound to the change shown: both its target and its starting revision.
+    // If either moved during the prompt, the service sends back the current change to show again.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        result = await updatePackage(reference, { ...options, reapply: reapplyPackage });
+        break;
+      } catch (err) {
+        if (!(err instanceof PackageServiceError) || err.code !== "confirmationRequired" || !err.details?.change) throw err;
+        const change = err.details.change;
+        if (shown) console.log(err.message);
+        printChange(change);
+        if (!interactive(flags) || attempt >= 3 || !(await confirm(`Move ${change.qualifiedName} to ${short(change.to)}?`))) throw err;
+        options = { confirmed: true, expectedRevision: change.to, expectedFrom: change.from };
+        shown = true;
+      }
     }
+    result.shown = shown;
     if (flags.has("json")) return emitJson(result);
     if (result.live) console.log(`${result.qualifiedName}: ${result.message}`);
+    else if (result.restored) console.log(`${result.qualifiedName}: restored the missing installed copy at ${short(result.revision)}`);
     else if (!result.changed) console.log(`${result.qualifiedName}: up to date at ${short(result.revision)}`);
     else {
       // With --yes the change was never shown before it was made; show it now.

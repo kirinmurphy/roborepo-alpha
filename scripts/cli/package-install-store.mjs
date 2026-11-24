@@ -13,7 +13,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { packageStoreDir } from "./state-paths.mjs";
 import { isLiveSource } from "./package-sources.mjs";
-import { lockRecordFor, removeLockRecord, writeLockRecord } from "./package-lock.mjs";
+import { PACKAGE_HASH_PREFIX, lockRecordFor, removeLockRecord, withPackageLock, writeLockRecord } from "./package-lock.mjs";
 
 export const installedDir = path.join(packageStoreDir, "installed");
 export const cacheDir = path.join(packageStoreDir, "cache");
@@ -25,48 +25,70 @@ const stagingDir = path.join(packageStoreDir, "staging");
 export const SOURCE_METADATA_FILE = ".roborepo-source.json";
 const HASH_EXCLUDED = new Set([".git", SOURCE_METADATA_FILE]);
 
-// "sha256-<hex>" over every file's relative path and bytes, in sorted order, so the same tree
-// hashes the same on every platform.
-export function hashPackageTree(dir) {
+// "sha256v2-<hex>": SHA-256 over every entry in the tree, named by "/"-separated relative path and
+// sorted by name within each folder (code-unit order, never locale order), so the same tree hashes
+// the same on every platform.
+// Each entry is framed as `<kind>:<path byte length>:<path><content byte length>:<content>`. The
+// lengths make the framing unambiguous: without them, one file holding "x\0b\0y" hashed the same
+// as two files "a" and "b", so changed contents could pass an integrity check.
+//
+// A symbolic link is hashed by its target text (kind "l"), so a live package's fingerprint notices
+// a changed link. With `rejectLinks`, a link throws instead: a copy RoboRepo installs must be plain
+// files, because a link would let the copy read content the integrity hash never covered.
+export function hashPackageTree(dir, { rejectLinks = false } = {}) {
   const hash = crypto.createHash("sha256");
-  for (const rel of listFiles(dir)) {
-    hash.update(rel.split(path.sep).join("/"));
-    hash.update("\0");
-    hash.update(fs.readFileSync(path.join(dir, rel)));
-    hash.update("\0");
+  for (const { rel, kind } of listEntries(dir)) {
+    if (kind === "l" && rejectLinks) throw new Error(`${dir}: symbolic links are not allowed in an installed package (${rel})`);
+    const content = kind === "l" ? Buffer.from(fs.readlinkSync(path.join(dir, rel)), "utf8") : fs.readFileSync(path.join(dir, rel));
+    const name = Buffer.from(rel, "utf8");
+    hash.update(`${kind}:${name.length}:`);
+    hash.update(name);
+    hash.update(`${content.length}:`);
+    hash.update(content);
   }
-  return `sha256-${hash.digest("hex")}`;
+  return `${PACKAGE_HASH_PREFIX}${hash.digest("hex")}`;
 }
 
-function listFiles(dir, prefix = "") {
+// Files and symbolic links under `dir`, as "/"-separated relative paths in sorted order.
+function listEntries(dir, prefix = "") {
   const out = [];
-  for (const entry of fs.readdirSync(path.join(dir, prefix), { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-    if (HASH_EXCLUDED.has(entry.name)) continue;
-    const rel = path.join(prefix, entry.name);
-    if (entry.isDirectory()) out.push(...listFiles(dir, rel));
-    else if (entry.isFile()) out.push(rel);
+  const entries = fs.readdirSync(prefix ? path.join(dir, ...prefix.split("/")) : dir, { withFileTypes: true })
+    .filter((entry) => !HASH_EXCLUDED.has(entry.name))
+    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  for (const entry of entries) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isSymbolicLink()) out.push({ rel, kind: "l" });
+    else if (entry.isDirectory()) out.push(...listEntries(dir, rel));
+    else if (entry.isFile()) out.push({ rel, kind: "f" });
   }
   return out;
 }
 
 // Record a live package as installed, or refresh its record. The fingerprint is retaken each time
 // so drift reads as "changed since RoboRepo last applied it".
-export function recordLiveInstall(pkg) {
+export function recordLiveInstall(pkg, { replace = false } = {}) {
   if (!pkg?.sourceId || !isLiveSource({ type: pkg.sourceType })) return null;
   const fingerprint = hashPackageTree(pkg.sourceRoot);
-  const current = lockRecordFor(pkg.id);
-  if (current && current.kind === "live" && current.sourceId === pkg.sourceId
-    && current.resolved === pkg.sourceRoot && current.fingerprint === fingerprint) {
-    return current;
-  }
-  return writeLockRecord({
-    sourceId: pkg.sourceId,
-    packageId: pkg.id,
-    sourceType: pkg.sourceType,
-    trust: pkg.trust,
-    kind: "live",
-    resolved: pkg.sourceRoot,
-    fingerprint,
+  return withPackageLock(() => {
+    const current = lockRecordFor(pkg.id);
+    // Applying a local override over an installed Git copy leaves the Git record in place: the
+    // override wins by catalog rule anyway, and overwriting the record would orphan the copy and
+    // make `package remove <source>/<id>` unable to find it. Only an explicit install of the live
+    // package (`replace`) switches the record.
+    if (!replace && current?.kind === "materialized" && current.sourceId !== pkg.sourceId) return current;
+    if (current && current.kind === "live" && current.sourceId === pkg.sourceId
+      && current.resolved === pkg.sourceRoot && current.fingerprint === fingerprint) {
+      return current;
+    }
+    return writeLockRecord({
+      sourceId: pkg.sourceId,
+      packageId: pkg.id,
+      sourceType: pkg.sourceType,
+      trust: pkg.trust,
+      kind: "live",
+      resolved: pkg.sourceRoot,
+      fingerprint,
+    });
   });
 }
 
@@ -79,7 +101,13 @@ export function installedPathFor(sourceId, revision, packageId) {
 // predates recorded hashes), move it into place, then write the lock record. Any failure before
 // the lock write leaves the previous record and copy untouched. Returns the new lock record and
 // the previous one, so the caller can remove the old copy once nothing points at it.
+// The whole sequence holds the package lock, so the previous record it returns is still current
+// when the new one replaces it.
 export function promoteMaterialized({ sourceFolder, resolution, metadata = null }) {
+  return withPackageLock(() => promoteMaterializedLocked({ sourceFolder, resolution, metadata }));
+}
+
+function promoteMaterializedLocked({ sourceFolder, resolution, metadata }) {
   const { sourceId, packageId, resolved } = resolution;
   const target = installedPathFor(sourceId, resolved, packageId);
   const previous = lockRecordFor(packageId);
@@ -87,7 +115,7 @@ export function promoteMaterialized({ sourceFolder, resolution, metadata = null 
   const staged = fs.mkdtempSync(path.join(stagingDir, `${packageId}-`));
   try {
     fs.cpSync(sourceFolder, staged, { recursive: true, filter: (src) => path.basename(src) !== ".git" });
-    const integrity = hashPackageTree(staged);
+    const integrity = hashPackageTree(staged, { rejectLinks: true });
     if (resolution.integrity && resolution.integrity !== integrity) {
       throw new Error(`${sourceId}/${packageId}: integrity mismatch (expected ${resolution.integrity}, got ${integrity})`);
     }
@@ -95,7 +123,7 @@ export function promoteMaterialized({ sourceFolder, resolution, metadata = null 
     if (fs.existsSync(target)) {
       // The same revision is already installed: an identical copy is reused, a different one is
       // a tampered store and refused.
-      if (hashPackageTree(target) !== integrity) throw new Error(`${sourceId}/${packageId}: the installed copy at ${target} does not match its revision`);
+      if (hashPackageTree(target, { rejectLinks: true }) !== integrity) throw new Error(`${sourceId}/${packageId}: the installed copy at ${target} does not match its revision`);
     } else {
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.renameSync(staged, target);
@@ -130,11 +158,13 @@ export function deleteMaterializedCopy(installedPath) {
 // Forget an installed package: its lock record, and its copy when RoboRepo made one. Returns what
 // was removed.
 export function removeInstalled(packageId) {
-  const record = lockRecordFor(packageId);
-  if (!record) return { removed: false, record: null, deletedCopy: false };
-  removeLockRecord(packageId);
-  const deletedCopy = record.kind === "materialized" ? deleteMaterializedCopy(record.installedPath) : false;
-  return { removed: true, record, deletedCopy };
+  return withPackageLock(() => {
+    const record = lockRecordFor(packageId);
+    if (!record) return { removed: false, record: null, deletedCopy: false };
+    removeLockRecord(packageId);
+    const deletedCopy = record.kind === "materialized" ? deleteMaterializedCopy(record.installedPath) : false;
+    return { removed: true, record, deletedCopy };
+  });
 }
 
 function isInside(parent, child) {

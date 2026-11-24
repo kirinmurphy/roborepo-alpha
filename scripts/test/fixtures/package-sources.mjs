@@ -35,6 +35,11 @@ export function makeSourceRoots(prefix = "roborepo-package-sources-") {
     ROBOREPO_MODE: "development",
     SKIP_MCP: "1",
   };
+  // Drop `git -c` config a runner injects through the environment (an agent session sets
+  // core.hooksPath this way), so CLI children run fixture git commands without the runner's hooks.
+  for (const key of Object.keys(env)) {
+    if (/^GIT_CONFIG_(COUNT|PARAMETERS|KEY_\d+|VALUE_\d+)$/.test(key)) delete env[key];
+  }
   return {
     tmp,
     appRoot,
