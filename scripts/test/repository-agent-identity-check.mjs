@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// The portal's GitHub bot identity routes below the browser: the status read (listed repos only,
-// GitHub repos only, a five-minute cache that `fresh` skips, no token in the answer), the setup
-// launch (always `roborepo github setup` in the repo's own folder, a reason when it cannot open),
-// the routes' handling of `fresh` and of a non-empty setup body, and the real status read against a
-// fake `gh` with the package on and off.
+// The portal's GitHub bot identity routes below the browser: the account read (once for every repo,
+// a five-minute cache that `fresh` skips, no token in the answer), each repo's read (listed GitHub
+// repos only, nothing per repo while the account cannot be used), turning the package on only when
+// that is the one step left, the setup launch (always `roborepo github setup` in the repo's own
+// folder, a reason when it cannot open), the routes' handling of `fresh` and of a non-empty body,
+// and the real reads against a fake `gh` with the package on and off.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -13,7 +14,9 @@ import { fileURLToPath } from "node:url";
 import {
   defaultRegistry, registerLocalRoot, registerLocalRootPath, rootId, upsertRepository, writeRegistry,
 } from "../../modules/repositories/index.mjs";
-import { clearAgentIdentityCache, launchAgentIdentitySetup, loadRepositoryAgentIdentity } from "../cli/repository-agent-identity.mjs";
+import {
+  clearAgentIdentityCache, launchAgentIdentitySetup, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity,
+} from "../cli/repository-agent-identity.mjs";
 import { launchInTerminal } from "../cli/terminal-launch.mjs";
 import { shellQuote } from "../harnesses/shell-quote.mjs";
 import { repositoriesRoutes } from "../cli/portal-routes-repositories.mjs";
@@ -39,6 +42,7 @@ try {
   writeRegistry({ stateRoot, registry });
 
   await statusReadIsCachedAndCarriesNoToken(checkout);
+  await packageTurnsOnOnlyAsTheLastStep();
   await setupLaunchIsTheServersChoice(checkout);
   terminalLaunchStartsInTheGivenFolder(checkout);
   await routesPassFreshAndRefuseABody();
@@ -48,38 +52,58 @@ try {
   fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
 
+function readyAccount(overrides = {}) {
+  return {
+    state: "healthy", botLogin: "robo-bot", savedLogin: "robo-bot", userLogin: "me", signedIn: true, packageEnabled: true,
+    expiresAt: null, scopes: ["repo", "read:org"], reason: null, problems: [], ...overrides,
+  };
+}
+
 async function statusReadIsCachedAndCarriesNoToken(checkout) {
   clearAgentIdentityCache();
+  const accountReads = [];
   const reads = [];
   let clock = 1_000;
+  let account = readyAccount({ token: TOKEN });
+  const readAccountReport = (options) => { accountReads.push(options); return Promise.resolve(account); };
   const read = (options) => {
     reads.push(options);
     // `token` stands for anything a future report might carry; the portal answer names its fields.
     return Promise.resolve({
-      state: "problem", repository: "example/project", botLogin: "robo-bot", userLogin: "me", packageEnabled: true,
-      expiresAt: null, scopes: ["repo"], reason: null, token: TOKEN,
-      problems: [{ id: "expired", severity: "problem", message: "The bot's token has expired.", fix: "Run roborepo github setup in your own terminal.", extra: TOKEN }],
+      state: "problem", repository: "example/project", botLogin: options.botLogin, userAdmin: true, reason: null, token: TOKEN, ownerMessage: null,
+      problems: [{ id: "invite-pending", severity: "problem", message: "robo-bot has been invited to example/project but has not accepted yet.", fix: "Run roborepo github setup in this repo, in your own terminal; it accepts the invitation as the bot.", extra: TOKEN }],
     });
   };
-  const load = (options = {}) => loadRepositoryAgentIdentity({ repositoryId: GITHUB, stateRoot, platform: "darwin", now: () => clock, read, ...options });
+  const load = (options = {}) => loadRepositoryAgentIdentity({ repositoryId: GITHUB, stateRoot, platform: "darwin", now: () => clock, read, readAccountReport, ...options });
 
-  const first = await load();
-  assert.equal(reads.length, 1);
+  // Home reads every repo at once: they share one account read.
+  const [first] = await Promise.all([load(), load({ repositoryId: NO_CHECKOUT }), loadAgentIdentityAccount({ now: () => clock, read: readAccountReport })]);
+  assert.equal(accountReads.length, 1, "concurrent reads share one account read");
+  assert.equal(reads.length, 2, "one read per repo");
+  reads.splice(1);
   assert.equal(reads[0].cwd, checkout, "gh runs in the repo's own checkout");
   assert.equal(reads[0].repositoryId, GITHUB);
   assert.equal(reads[0].timeoutMs, 8000);
+  assert.equal(reads[0].botLogin, "robo-bot", "the repo is read for the account's bot");
+  assert.equal(first.account, "ready");
   assert.equal(first.state, "problem");
-  assert.deepEqual(first.findings, [{ id: "expired", severity: "problem", message: "The bot's token has expired.", fix: "Run roborepo github setup in your own terminal." }]);
+  assert.deepEqual(first.findings, [{ id: "invite-pending", severity: "problem", message: "robo-bot has been invited to example/project but has not accepted yet.", fix: "Run roborepo github setup in this repo, in your own terminal; it accepts the invitation as the bot.", owner: false }]);
   assert.deepEqual(first.setupLaunch, { supported: true });
-  assert.equal(first.guide.command, "roborepo github setup");
-  assert.ok(first.guide.links.some((link) => link.url === "https://github.com/settings/tokens/new"));
-  assert.ok(!JSON.stringify(first).includes(TOKEN), "no token reaches the portal answer");
+  assert.ok(!JSON.stringify(first).includes(TOKEN), "no token reaches the repo answer");
+
+  const accountView = await loadAgentIdentityAccount({ now: () => clock, read: readAccountReport, platform: "darwin" });
+  assert.equal(accountView.botLogin, "robo-bot");
+  assert.equal(accountView.guide.command, "roborepo github setup");
+  assert.ok(accountView.guide.steps.some((step) => step.id === "token" && step.url === "https://github.com/settings/tokens/new"));
+  assert.match(accountView.guide.lead, /as the bot account, not as you/);
+  assert.ok(!JSON.stringify(accountView).includes(TOKEN), "no token reaches the account answer");
 
   clock += 60_000;
   await load();
   assert.equal(reads.length, 1, "a read within five minutes is served from the cache");
   await load({ fresh: true });
   assert.equal(reads.length, 2, "fresh skips the cache");
+  assert.equal(accountReads.length, 2, "a fresh repo read also re-reads the account");
   clock += 5 * 60_000;
   await load();
   assert.equal(reads.length, 3, "an answer older than five minutes is read again");
@@ -87,16 +111,61 @@ async function statusReadIsCachedAndCarriesNoToken(checkout) {
   const linux = await load({ platform: "linux" });
   assert.equal(linux.setupLaunch.supported, false, "no one-click launch off macOS");
 
-  const elsewhere = await loadRepositoryAgentIdentity({ repositoryId: NO_CHECKOUT, stateRoot, platform: "darwin", read });
+  const elsewhere = await loadRepositoryAgentIdentity({ repositoryId: NO_CHECKOUT, stateRoot, platform: "darwin", read, readAccountReport });
   assert.equal(elsewhere.setupLaunch.supported, false, "no launch without a checkout to run the setup in");
   assert.match(elsewhere.setupLaunch.reason, /No checkout/);
   assert.equal(reads.at(-1).cwd, os.homedir(), "without a checkout, gh still runs, from the home folder");
 
+  // While the account cannot be used, a repo has nothing of its own to say.
+  for (const waiting of [
+    { state: "not-set-up", botLogin: null, savedLogin: null, signedIn: false, packageEnabled: false },
+    { state: "problem", botLogin: null, problems: [{ id: "expired", severity: "problem", message: "GitHub rejected the bot's token.", fix: "Run roborepo github setup in your own terminal." }] },
+    { state: "unavailable", reason: "GitHub could not be reached" },
+  ]) {
+    account = readyAccount(waiting);
+    const before = reads.length;
+    const answer = await load({ fresh: true });
+    assert.equal(answer.account, "waiting", waiting.state);
+    assert.equal(reads.length, before, `${waiting.state}: no repo read without a usable bot`);
+  }
+
   const before = reads.length;
-  assert.deepEqual(await loadRepositoryAgentIdentity({ repositoryId: GITLAB, stateRoot, read }), { repositoryId: GITLAB, applies: false });
+  assert.deepEqual(await loadRepositoryAgentIdentity({ repositoryId: GITLAB, stateRoot, read, readAccountReport }), { repositoryId: GITLAB, applies: false });
   assert.equal(reads.length, before, "a repo on another host never reaches GitHub");
 
-  await assert.rejects(loadRepositoryAgentIdentity({ repositoryId: "git:github.com/example/unknown", stateRoot, read }), (error) => error.code === "NOT_FOUND");
+  await assert.rejects(loadRepositoryAgentIdentity({ repositoryId: "git:github.com/example/unknown", stateRoot, read, readAccountReport }), (error) => error.code === "NOT_FOUND");
+}
+
+// The portal turns the package on only when a fresh read shows a working bot with nothing else to
+// fix; anything more is the setup's.
+async function packageTurnsOnOnlyAsTheLastStep() {
+  clearAgentIdentityCache();
+  const offOnly = readyAccount({ state: "problem", packageEnabled: false, problems: [{ id: "package-off", severity: "problem", message: "off", fix: "Turn it on: roborepo package enable github-agent-identity." }] });
+  const view = await loadAgentIdentityAccount({ fresh: true, read: () => Promise.resolve(offOnly) });
+  assert.equal(view.enableOffered, true, "a ready bot with the package off is offered Turn on");
+
+  let enabled = false;
+  const read = () => Promise.resolve(enabled ? readyAccount() : offOnly);
+  const turnOn = () => { enabled = true; return Promise.resolve({ ok: true }); };
+  const result = await turnOnAgentIdentity({ read, turnOn });
+  assert.equal(result.enabled, true);
+  assert.equal(result.account.state, "healthy", "the answer carries the account read after");
+
+  for (const [label, report] of [
+    ["expired token", readyAccount({ state: "problem", botLogin: null, packageEnabled: false, problems: [{ id: "expired", severity: "problem", message: "x", fix: "x" }, offOnly.problems[0]] })],
+    ["stale CA bundle", readyAccount({ state: "problem", packageEnabled: false, problems: [{ id: "ca-bundle-stale", severity: "warn", message: "x", fix: "x" }, offOnly.problems[0]] })],
+    ["broad scopes", readyAccount({ state: "problem", packageEnabled: false, problems: [{ id: "broad-scopes", severity: "problem", message: "x", fix: "x" }, offOnly.problems[0]] })],
+  ]) {
+    let called = false;
+    const refused = await turnOnAgentIdentity({ read: () => Promise.resolve(report), turnOn: () => { called = true; return Promise.resolve({ ok: true }); } });
+    assert.deepEqual([refused.enabled, refused.reason, called], [false, "not_ready", false], label);
+    assert.equal(refused.account.enableOffered, false, `${label}: not offered`);
+  }
+  const advice = readyAccount({ state: "problem", packageEnabled: false, problems: [{ id: "expiring", severity: "warn", message: "x", fix: "x" }, offOnly.problems[0]] });
+  assert.equal((await loadAgentIdentityAccount({ fresh: true, read: () => Promise.resolve(advice) })).enableOffered, true, "an expiry note does not stand in the way");
+  const failed = await turnOnAgentIdentity({ read: () => Promise.resolve(offOnly), turnOn: () => Promise.resolve({ ok: false, message: "The package did not install completely." }) });
+  assert.deepEqual([failed.enabled, failed.reason, failed.message], [false, "enable_failed", "The package did not install completely."]);
+  clearAgentIdentityCache();
 }
 
 async function setupLaunchIsTheServersChoice(checkout) {
@@ -140,6 +209,8 @@ async function routesPassFreshAndRefuseABody() {
       return Promise.resolve({ applies: false });
     },
     launchAgentIdentitySetup: (params) => { calls.push(["launch", params]); return Promise.resolve({ launched: true }); },
+    loadAgentIdentityAccount: (params) => { calls.push(["account", params]); return Promise.resolve({ state: "healthy" }); },
+    turnOnAgentIdentity: () => { calls.push(["enable"]); return Promise.resolve({ enabled: true }); },
   };
   const id = encodeURIComponent(GITHUB);
   const get = await request("GET", `/api/repositories/${id}/agent-identity`, "fresh=1", handlers);
@@ -157,11 +228,22 @@ async function routesPassFreshAndRefuseABody() {
   assert.equal(launched.status, 200);
   assert.deepEqual(JSON.parse(launched.body), { launched: true });
   assert.deepEqual(calls, [["launch", { repositoryId: GITHUB }]]);
+  calls.length = 0;
+
+  await request("GET", "/api/agent-identity", "fresh=1", handlers);
+  await request("GET", "/api/agent-identity", "", handlers);
+  assert.deepEqual(calls.splice(0), [["account", { fresh: true }], ["account", { fresh: false }]]);
+  assert.equal((await request("POST", "/api/agent-identity/enable", "", handlers, JSON.stringify({ id: "something-else" }))).status, 400);
+  assert.deepEqual(calls, [], "a body is refused before anything is enabled");
+  const turned = await request("POST", "/api/agent-identity/enable", "", handlers, "");
+  assert.equal(turned.status, 200);
+  assert.deepEqual(calls, [["enable"]]);
 }
 
-// The real read in a child process, because the state folder and package state are read when the
-// modules load. With the package on, a healthy bot reads as `healthy`; with it off, as a problem
-// whose fix is the setup.
+// The real reads in a child process, because the state folder and package state are read when the
+// modules load. With the package on, a healthy bot reads as `healthy` for the account and the repo;
+// with it off, the account's one finding is the package, its fix is turning it on, and the portal
+// offers Turn on.
 function realStatusAgainstFakeGh(checkout) {
   if (process.platform === "win32") return;
   const gh = createFakeGh(tmp);
@@ -187,8 +269,11 @@ function realStatusAgainstFakeGh(checkout) {
       tokens: { [TOKEN]: { login: "robo-bot", scopes: ["repo", "read:org"], expires: "2099-01-01 00:00:00 UTC", expired: false } },
       collaborators: [{ login: "robo-bot", permission: "push" }],
     }));
-    const script = `import { loadRepositoryAgentIdentity } from ${JSON.stringify(path.join(repoRoot, "scripts/cli/repository-agent-identity.mjs"))};
-      console.log(JSON.stringify(await loadRepositoryAgentIdentity({ repositoryId: ${JSON.stringify(GITHUB)}, fresh: true })));`;
+    const module = JSON.stringify(path.join(repoRoot, "scripts/cli/repository-agent-identity.mjs"));
+    const script = `import { loadAgentIdentityAccount, loadRepositoryAgentIdentity } from ${module};
+      const account = await loadAgentIdentityAccount({ fresh: true });
+      const repo = await loadRepositoryAgentIdentity({ repositoryId: ${JSON.stringify(GITHUB)} });
+      console.log(JSON.stringify({ account, repo }));`;
     // Started from another folder, as the portal is: the package state must not depend on the cwd.
     const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: tmp, env, encoding: "utf8" });
     assert.equal(result.status, 0, result.stdout + result.stderr);
@@ -196,10 +281,13 @@ function realStatusAgainstFakeGh(checkout) {
     return JSON.parse(result.stdout);
   };
   const on = read(true);
-  assert.deepEqual([on.state, on.botLogin, on.packageEnabled, on.findings], ["healthy", "robo-bot", true, []]);
+  assert.deepEqual([on.account.state, on.account.botLogin, on.account.packageEnabled, on.account.findings, on.account.enableOffered], ["healthy", "robo-bot", true, [], false]);
+  assert.deepEqual([on.repo.account, on.repo.state, on.repo.userAdmin, on.repo.findings], ["ready", "healthy", true, []]);
   const off = read(false);
-  assert.equal(off.state, "problem");
-  assert.deepEqual(off.findings.map((entry) => [entry.id, entry.fix]), [["package-off", "Run roborepo github setup in your own terminal."]]);
+  assert.equal(off.account.state, "problem");
+  assert.deepEqual(off.account.findings.map((entry) => [entry.id, entry.fix]), [["package-off", "Turn it on: roborepo package enable github-agent-identity."]]);
+  assert.equal(off.account.enableOffered, true);
+  assert.deepEqual([off.repo.state, off.repo.findings], ["healthy", []], "the package is the account's, so the repo stays clean");
 }
 
 function request(method, urlPath, qs, handlers, body = "") {

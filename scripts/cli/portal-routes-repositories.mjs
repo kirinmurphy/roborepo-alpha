@@ -63,6 +63,35 @@ export const repositoriesRoutes = defineRoutes([
   // cache); the POST opens `roborepo github setup` in a terminal and takes no body, because the
   // command, its arguments, and its folder are the server's choice alone. The token is typed in
   // that terminal, never sent here.
+  // The bot account, shared by every repo (the Home banner), and turning the package on when that
+  // is the one step left. The POST takes no body: the server decides from a fresh read.
+  {
+    method: "GET",
+    path: "/api/agent-identity",
+    handler: (req, res, { qs, handlers }) => {
+      const fresh = new URLSearchParams(qs).get("fresh") === "1";
+      Promise.resolve()
+        .then(() => handlers.loadAgentIdentityAccount({ fresh }))
+        .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (err) => sendError(res, err));
+      return true;
+    },
+  },
+  {
+    method: "POST",
+    path: "/api/agent-identity/enable",
+    handler: (req, res, { handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        if (body && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)) {
+          return send(res, 400, "application/json", JSON.stringify({ error: "expected an empty body" }));
+        }
+        Promise.resolve()
+          .then(() => handlers.turnOnAgentIdentity())
+          .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (error) => sendError(res, error));
+      });
+      return true;
+    },
+  },
   {
     method: "GET",
     path: "/api/repositories/:id/agent-identity",

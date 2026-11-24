@@ -2303,8 +2303,13 @@ test.describe("repository-first portal Home", () => {
     await page.route("**/api/config/hooks/*/status*", (route) => route.fulfill({
       json: { harness: "claude", displayName: "Claude Code", supported: true, state: "active", groups: [], guidance: null },
     }));
+    // A healthy bot account, so the banner's controls do not depend on the runner's GitHub sign-in.
+    await page.route(/\/api\/agent-identity(\?.*)?$/, (route) => route.fulfill({
+      json: { state: "healthy", botLogin: "robo-bot", signedIn: true, packageEnabled: true, expiresAt: null, scopes: ["repo", "read:org"], findings: [], enableOffered: false, setupLaunch: { supported: true }, guide: null },
+    }));
     await page.goto("/");
     await expect(roboRepoCard(page)).toBeVisible();
+    await expect(page.locator(".agent-identity-banner")).toBeVisible();
     await page.keyboard.press("Tab");
     const logo = await focusSummary(page);
     expect(logo.ariaLabel).toBe("roborepo home");
@@ -2320,6 +2325,12 @@ test.describe("repository-first portal Home", () => {
     const more = await focusSummary(page);
     expect(more.ariaLabel).toBe("More pages");
     expect(more.visible).toBe(true);
+    // The seeded RoboRepo repo is on GitHub, so the bot account's banner sits above the repo list;
+    // with a healthy account its one control is Details.
+    await page.keyboard.press("Tab");
+    const botAccount = await focusSummary(page);
+    expect(botAccount.text).toBe("Details");
+    expect(botAccount.visible).toBe(true);
     // The compact Enable prompt now sits above the Active Repos section, so its action comes before
     // the title's Manage repositories icon and both come before the first card.
     await page.keyboard.press("Tab");

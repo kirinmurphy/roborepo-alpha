@@ -1,7 +1,7 @@
 // `roborepo github status`: reads whether agents act on GitHub as a safe bot account. The guided
 // setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
 import { forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
-import { readAgentIdentity } from "../../modules/forge/agent-identity.mjs";
+import { readAccountIdentity, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
 import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
 import { isMainModule } from "./roots.mjs";
@@ -16,6 +16,12 @@ export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs,
   const repositoryId = known ?? await currentRepositoryId(cwd);
   return readAgentIdentity({ repositoryId, cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled() });
 }
+
+// The bot account alone, and one repo for a known bot: the two halves the portal shows apart.
+export const readCurrentAccountIdentity = ({ cwd = process.cwd(), timeoutMs } = {}) =>
+  readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled() });
+export const readCurrentRepoAgentAccess = ({ repositoryId, cwd = process.cwd(), timeoutMs, botLogin }) =>
+  readRepoAgentAccess({ repositoryId, cwd, stateDir, timeoutMs, botLogin });
 
 export async function githubStatusCommand(argv) {
   const rest = argv.filter((arg) => arg !== "--json");
@@ -41,13 +47,18 @@ export function formatReport(report) {
     default: {
       const headline = report.state === "healthy"
         ? `GitHub agent identity is healthy${repo}: agents act as ${report.botLogin}.`
-        : `GitHub agent identity has problems${repo}:`;
-      return [headline, ...problemLines(report.problems)].join("\n");
+        : report.state === "unverified"
+          ? `GitHub agent identity${repo}: agents act as ${report.botLogin}, but the branch rules could not be verified:`
+          : `GitHub agent identity has problems${repo}:`;
+      return [headline, ...problemLines(report.problems), ...ownerLines(report.ownerMessage)].join("\n");
     }
   }
 }
 
-const SEVERITY_LABEL = { warn: "Note", unchecked: "Not checked", problem: "Problem" };
+const SEVERITY_LABEL = { warn: "Note", unchecked: "Not checked", unverified: "Unverified", problem: "Problem" };
+
+// The message for the owner of a repo you do not administer, set off so it can be copied whole.
+const ownerLines = (message) => (message ? ["", "Message for the repo's owner:", ...message.split("\n").map((line) => `  ${line}`.trimEnd())] : []);
 
 function problemLines(problems) {
   return problems.flatMap((entry) => [`  ${SEVERITY_LABEL[entry.severity] || "Problem"}: ${entry.message}`, `    Fix: ${entry.fix}`]);
@@ -67,6 +78,10 @@ export function doctorLine(report) {
       const warn = report.problems[0];
       if (warn) return { level: "hint", text: `GitHub agent identity for ${repo}: ${warn.message} — ${fixClause(warn.fix)}` };
       return { level: "ok", text: `GitHub agent identity: agents act as ${report.botLogin} on ${repo}` };
+    }
+    case "unverified": {
+      const first = report.problems.find((entry) => entry.severity === "unverified");
+      return { level: "hint", text: `GitHub agent identity for ${repo}: ${first.message} — ${fixClause(first.fix)}` };
     }
     case "problem": {
       const first = report.problems.find((entry) => entry.severity === "problem");

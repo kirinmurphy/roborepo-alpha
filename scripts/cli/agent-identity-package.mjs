@@ -14,6 +14,26 @@ export function agentIdentityPackageEnabled() {
   }
 }
 
+// Turns the package on through the normal package enable path, which re-renders Claude and Codex
+// config. Enabling again re-applies every resource, which repairs one left missing when an earlier
+// enable failed partway. `ok` only when the package came out fully enabled: a partial outcome (a
+// setting the package could not claim, such as a GH_CONFIG_DIR you set yourself) would leave agents
+// on the wrong identity. Callers check the bot account first; this does not.
+export async function turnOnAgentIdentityPackage() {
+  const { enablePackage, PackageMutationError } = await import("./packages.mjs");
+  try {
+    const result = await enablePackage([AGENT_IDENTITY_PACKAGE_ID]);
+    const outcome = result.outcomes?.find((entry) => entry.id === AGENT_IDENTITY_PACKAGE_ID);
+    if (!result.ok || outcome?.outcome !== "enabled") {
+      return { ok: false, message: `The package did not install completely${outcome?.message ? `: ${outcome.message}` : ""}.` };
+    }
+    return { ok: true };
+  } catch (error) {
+    if (error instanceof PackageMutationError) return { ok: false, message: error.message };
+    throw error;
+  }
+}
+
 // Whether the package is selected and every resource it installs is actually in place. A package
 // can be selected with a resource missing, for example after a copy failed partway through an
 // enable, and setup then re-applies it rather than reporting it done. The probes load on demand

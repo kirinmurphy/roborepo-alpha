@@ -22,7 +22,7 @@ export const MANUAL_STEPS = [
   "On the default branch: require a pull request with 1 approval (including approval of the last push) and passing CI checks, with a bypass for repo admins only.",
 ];
 
-// `target` is `{ repositoryId, cwd, timeoutMs }`. Always resolves to a report; a failure to read
+// `target` is `{ repositoryId, cwd, timeoutMs, env }` (`env` as for a gh call). Always resolves to a report; a failure to read
 // GitHub is a state (`unavailable` or `unsupported`), not an exception.
 export async function readProtection(target) {
   const resolved = resolveTarget(target);
@@ -61,12 +61,12 @@ export async function applyProtection(target, { action = "protect", onPlanned = 
   return { before, changes: applied, refusal, report: await readProtection(target) };
 }
 
-function resolveTarget({ repositoryId, cwd = process.cwd(), timeoutMs } = {}) {
+function resolveTarget({ repositoryId, cwd = process.cwd(), timeoutMs, env } = {}) {
   const parsed = forgeTargetForRepositoryId(repositoryId);
   if (!parsed) return { report: unsupportedReport(null, "this repo has no GitHub remote") };
   const client = forgeClient(parsed.host);
   if (!client.supported) return { report: unsupportedReport(parsed.repo, `${parsed.host} is not GitHub`) };
-  return { client, repo: parsed.repo, context: { cwd, timeoutMs } };
+  return { client, repo: parsed.repo, context: { cwd, timeoutMs, ...(env ? { env } : {}) } };
 }
 
 async function readSnapshot({ client, context, repo }) {

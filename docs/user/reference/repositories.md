@@ -157,32 +157,63 @@ rules stay on. Each button runs the same steps as the matching `roborepo protect
 
 ### Agent GitHub account
 
-For a repo on github.com, the card's last line shows whether agents act on GitHub as a separate
-[bot account](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot), and **Details** (or
-**Agent GitHub account** in the menu) opens the full status:
+Agents can act on GitHub as a separate
+[bot account](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot). The account is one
+for every repo, so Home shows it once, in a banner above the repo list, whenever a listed repo is on
+github.com. Each GitHub repo card adds one line about that repo only.
+
+The banner shows the bot's login, whether the package is on, the token's scopes and expiry, and the
+next step:
 
 | State | Means |
 | --- | --- |
-| **not set up** | Agents act as you. The card offers **Open setup** |
-| **healthy** | Agents act as the bot, and every check passed |
-| **renew soon** | The bot's token expires within 14 days or has no expiry date. **Open setup** renews it |
-| **token expired**, **needs attention** | A check failed. The card shows what and how to fix it, which is **Open setup** when rerunning the setup fixes it |
-| **not checked** | A check could not run, for example GitHub did not answer; the card says why |
+| **not set up** | Agents act as you. **Open setup** runs the setup in the repo you pick |
+| **off** | The bot is ready but the package is off, so agents still act as you. **Turn on** enables the package; no setup is needed |
+| **on** | Agents act as the bot, and every account check passed |
+| **renew soon** | The token expires within 14 days or has no expiry date. **Open setup** renews it |
+| **token expired**, **needs attention** | An account check failed. The banner shows what and how to fix it |
+| **not checked** | A check could not run, for example GitHub did not answer |
 
-The card shows the same message and fix as `roborepo github status`, the token's expiry date, and
-links to the github.com pages the setup asks you to visit.
+**Turn on** appears only when a fresh read shows a working bot with nothing else to fix; it does what
+the setup's last step does. Agent sessions already open keep acting as you until restarted.
+
+Each repo card's line appears once the bot account works:
+
+| Line | Means |
+| --- | --- |
+| **ready** | The bot accepted its invitation, has write (not admin) access, and the branch rules stop it from merging unreviewed work |
+| **invite pending** | The bot was invited and has not accepted. Run the setup in this repo; it accepts as the bot |
+| **not invited** | In your repo, the setup sends the invitation. In a repo you do not administer, ask its owner |
+| **rules unverified** | GitHub applies the branch rules, but you are not an admin of the repo, so RoboRepo cannot see who may bypass them. Never shown as ready |
+| **branch rules missing** | Run `roborepo protect`, or use **Branch protection** in the repo's menu. In a repo you do not administer, ask its owner |
+| **too much access** | The bot is an admin of the repo, so it could lift its own limits |
+| **not checked** | GitHub did not answer for this repo |
+
+**Details** on the banner or a line (or **Agent GitHub account** in the repo's menu) opens a card with
+a checklist; confirmed items are marked and dimmed. For a repo someone else administers, the card has
+a message to copy and send the owner: invite the bot with Write access, and the branch rules to add.
+`roborepo github status` prints the same message.
+
+While the account is not set up, or its token needs renewing, the account card lists the github.com
+steps in their own panel. They are done signed in as the bot, often in another browser or a private
+window, so each shows the address to copy there instead of a link that would open in your own
+session. A step the status already confirms (the account exists, the token works) is marked done.
 
 **Open setup** opens a terminal running `roborepo github setup` in the repo's folder (macOS). On
-another OS, or when the terminal does not open, the card shows the command to copy instead. The
+another OS, or when the terminal does not open, the page shows the command to copy instead. The
 token is typed only at that terminal's hidden prompt, never in the portal. When you come back to the
-portal window, the card reads that repo's status again; other repos reuse a result for five minutes.
+portal window, it reads the account and that repo again; other repos reuse a result for five minutes.
 
-The card uses two routes. `:id` is the repo's canonical id, percent-encoded:
+The routes. `:id` is the repo's canonical id, percent-encoded:
 
 | Route | Does |
 | --- | --- |
-| `GET /api/repositories/:id/agent-identity` | The status: state, each finding's id, severity, message, and fix, the reason a check could not run, the token's expiry, and whether the one-click setup works here. `{ "applies": false }` for a repo not on github.com. Never a token. `?fresh=1` skips the five-minute cache |
-| `POST /api/repositories/:id/agent-identity/setup` | Opens the setup in a terminal and returns `launched`, or the reason it could not. It takes no body: the command and folder are the server's choice. Like every portal write, it requires the portal's origin and token |
+| `GET /api/agent-identity` | The bot account: state, login, whether the package is on, the token's expiry and scopes, each finding's id, severity, message, and fix, whether **Turn on** is offered, and the github.com steps. Never a token. `?fresh=1` skips the five-minute cache |
+| `POST /api/agent-identity/enable` | Turns the package on when a fresh read shows that is the only step left; otherwise returns `not_ready`. It takes no body |
+| `GET /api/repositories/:id/agent-identity` | One repo: its state and findings, whether you administer it, the message for its owner when you do not, and whether the one-click setup works here. `account: "waiting"` while the bot account cannot be used; `{ "applies": false }` for a repo not on github.com. `?fresh=1` skips the cache |
+| `POST /api/repositories/:id/agent-identity/setup` | Opens the setup in a terminal and returns `launched`, or the reason it could not. It takes no body: the command and folder are the server's choice |
+
+Like every portal write, the two POST routes require the portal's origin and token.
 
 ### Ignore repository
 

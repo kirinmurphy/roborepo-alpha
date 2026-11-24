@@ -7,7 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { GitHubError, forgeTargetForRepositoryId } from "./index.mjs";
 import { githubClient } from "./github.mjs";
-import { readProtection } from "./protection.mjs";
+import { MANUAL_STEPS, readProtection } from "./protection.mjs";
 
 export const AGENT_IDENTITY_PACKAGE_ID = "github-agent-identity";
 // How early status and doctor start warning that the bot's token is about to expire. Two weeks
@@ -114,22 +114,21 @@ export function readAgentHosts(stateDir) {
   return { loggedIn, hasToken, user };
 }
 
-// The result's `state` is `not-set-up`, `healthy`, `problem`, or `unavailable` (`reason` says why).
-// `problems` entries are `{ id, message, fix, severity }`. `severity: "warn"` is advice (a token
-// close to expiring) and does not make the state `problem`. `severity: "unchecked"` is a check that
-// could not run (your own account, branch protection): it is not a defect, but the result is not
-// confirmed either, so the state is `unavailable` unless a problem is already known. Only a result
-// where every check ran can be `healthy`. `packageEnabled` is passed in by the caller, which knows
-// the package state.
-export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), stateDir, timeoutMs, packageEnabled = false }) {
+// The command that turns the identity on once the bot account is ready; it is all a person needs
+// when the package is the only thing missing.
+export const ENABLE_COMMAND = `roborepo package enable ${AGENT_IDENTITY_PACKAGE_ID}`;
+
+// The bot account, read once for every repo: whether it is signed in, whether GitHub takes its
+// token, the token's expiry and scopes, whether it is a different account from yours, and whether
+// the package is on. `state` is `not-set-up`, `healthy`, `problem`, or `unavailable`. `botLogin` is
+// the login GitHub confirms for the token; `savedLogin` is the one hosts.yml names, which survives
+// an expired token. `packageEnabled` is passed in by the caller, which knows the package state.
+export async function readAccountIdentity({ cwd = process.cwd(), stateDir, timeoutMs, packageEnabled = false }) {
+  const hosts = readAgentHosts(stateDir);
   const result = {
-    state: "not-set-up", repository: null, botLogin: null, userLogin: null, packageEnabled,
+    state: "not-set-up", botLogin: null, savedLogin: hosts.user, userLogin: null, signedIn: hosts.loggedIn, packageEnabled,
     expiresAt: null, scopes: null, problems: [], reason: null,
   };
-  const target = forgeTargetForRepositoryId(repositoryId);
-  if (!target || target.host !== "github.com") return { ...result, state: "unavailable", reason: "this repo has no GitHub remote" };
-  result.repository = target.repo;
-  const hosts = readAgentHosts(stateDir);
   if (!hosts.loggedIn) {
     if (!packageEnabled) return result;
     return finish(result, [problem("bot-missing", "The package is on but no bot account is signed in.", SETUP_FIX)]);
@@ -137,10 +136,9 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
 
   const problems = [];
   const bot = { cwd, timeoutMs, env: botGhEnv(stateDir) };
-  // The user's own account, even from a shell that points GH_CONFIG_DIR at the bot.
+  // Your own account, even from a shell that points GH_CONFIG_DIR at the bot.
   const user = { cwd, timeoutMs, env: { GH_CONFIG_DIR: null } };
   try {
-    if (!packageEnabled) problems.push(problem("package-off", "A bot is signed in but the github-agent-identity package is off, so agents still act as you.", SETUP_FIX));
     if (!hosts.hasToken) {
       problems.push(problem("token-in-keychain", "The bot's token is in the keychain, which agent sandboxes cannot read.", SETUP_FIX));
     }
@@ -153,7 +151,7 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
     } catch (error) {
       if (error instanceof GitHubError && error.status === 401) {
         problems.push(problem("expired", "GitHub rejected the bot's token (it expired or was revoked).", SETUP_FIX));
-        return finish(result, problems);
+        return finish(result, withPackageState(problems, packageEnabled));
       }
       throw error;
     }
@@ -168,17 +166,95 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
     } else if (result.userLogin.toLowerCase() === info.login.toLowerCase()) {
       problems.push(problem("bot-is-user", `The bot account ${info.login} is your own account, so agents would have your access.`, SETUP_FIX));
     }
-    await checkRepoAccess(bot, target.repo, info.login, problems);
-    await checkProtection({ repositoryId, cwd, timeoutMs }, problems);
   } catch (error) {
     if (!(error instanceof GitHubError)) throw error;
     // A problem already found stays reported: a later read failing does not make it go away.
     if (problems.some((entry) => entry.severity === "problem")) {
-      return finish(result, [...problems, problem("check-incomplete", `Some checks could not run: ${error.message}.`, "Rerun roborepo github status once GitHub answers.", "unchecked")]);
+      return finish(result, [...withPackageState(problems, packageEnabled), incomplete(error)]);
     }
+    return { ...result, problems: withPackageState(problems, packageEnabled), state: "unavailable", reason: error.message };
+  }
+  return finish(result, withPackageState(problems, packageEnabled));
+}
+
+// The package-off finding goes last, after what the bot account itself lacks, and names the
+// shortest step that works: with nothing else in the way, turning the package on is all that is
+// left of the setup; otherwise the setup fixes the rest and turns it on at the end.
+function withPackageState(problems, packageEnabled) {
+  if (packageEnabled) return problems;
+  const blocked = problems.some((entry) => entry.severity !== "warn" || entry.id === "ca-bundle-stale");
+  return [...problems, problem(
+    "package-off",
+    "The bot is signed in, but the github-agent-identity package is off, so agents still act as you.",
+    blocked ? "Run roborepo github setup in your own terminal; it fixes the above and turns the package on." : `Turn it on: ${ENABLE_COMMAND}.`,
+  )];
+}
+
+// Whether turning the package on is the only step left: the bot works and nothing but the package
+// (or advice such as an expiry note) is reported.
+export function packageIsOnlyStep(account) {
+  const offending = account.problems.filter((entry) => entry.id !== "package-off");
+  return !account.packageEnabled && account.signedIn && Boolean(account.botLogin)
+    && account.state !== "unavailable"
+    && offending.every((entry) => entry.severity === "warn" && entry.id !== "ca-bundle-stale");
+}
+
+// One repo, for a bot account that works: whether the bot can push there (invited, invitation
+// pending, or admin, which is too much), and whether GitHub's branch rules stop it from merging
+// unreviewed work. `userAdmin` says whether you administer the repo, which decides who can fix a
+// finding: you (setup, `roborepo protect`) or the repo's owner, who gets `ownerMessage`. `state` is
+// `healthy`, `unverified` (the rules apply but you cannot see who may bypass them), `problem`, or
+// `unavailable`.
+export async function readRepoAgentAccess({ repositoryId, cwd = process.cwd(), stateDir, timeoutMs, botLogin }) {
+  const result = {
+    state: "healthy", repository: null, botLogin, userAdmin: null, defaultBranch: null, problems: [], reason: null, ownerMessage: null,
+  };
+  const target = forgeTargetForRepositoryId(repositoryId);
+  if (!target || target.host !== "github.com") return { ...result, state: "unavailable", reason: "this repo has no GitHub remote" };
+  result.repository = target.repo;
+  const problems = [];
+  try {
+    // Read as you, so `admin` says whether you administer the repo.
+    const protection = await readProtection({ repositoryId, cwd, timeoutMs, env: { GH_CONFIG_DIR: null } });
+    const readable = !["unavailable", "unsupported"].includes(protection.state);
+    result.userAdmin = readable ? protection.admin === true : null;
+    result.defaultBranch = protection.defaultBranch || null;
+    await checkRepoAccess({ cwd, timeoutMs, env: botGhEnv(stateDir) }, target.repo, botLogin, problems, result.userAdmin);
+    checkProtection(protection, problems, result.userAdmin);
+  } catch (error) {
+    if (!(error instanceof GitHubError)) throw error;
+    if (problems.some((entry) => entry.severity === "problem")) return finishRepo(result, [...problems, incomplete(error)]);
     return { ...result, problems, state: "unavailable", reason: error.message };
   }
-  return finish(result, problems);
+  return finishRepo(result, problems);
+}
+
+// Both reads for one repo, as `roborepo github status` and doctor report them: the account's
+// findings, then the repo's. The repo is read only when the bot's token works.
+export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), stateDir, timeoutMs, packageEnabled = false }) {
+  const target = forgeTargetForRepositoryId(repositoryId);
+  const base = { repository: null, ownerMessage: null, userAdmin: null };
+  if (!target || target.host !== "github.com") {
+    return {
+      ...base, state: "unavailable", botLogin: null, userLogin: null, packageEnabled, expiresAt: null, scopes: null, problems: [],
+      reason: "this repo has no GitHub remote",
+    };
+  }
+  base.repository = target.repo;
+  const account = await readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled });
+  const merged = { ...account, ...base };
+  if (account.state === "not-set-up" || !account.botLogin) return merged;
+  // Your own sign-in failing to read is already an unchecked finding; GitHub not answering at all
+  // means the repo reads would fail the same way.
+  if (account.state === "unavailable" && account.problems.length === 0) return merged;
+  const repo = await readRepoAgentAccess({ repositoryId, cwd, stateDir, timeoutMs, botLogin: account.botLogin });
+  const problems = [...account.problems, ...repo.problems];
+  const combined = { ...merged, userAdmin: repo.userAdmin, ownerMessage: repo.ownerMessage };
+  if (repo.state === "unavailable" && repo.problems.length === 0) {
+    if (problems.some((entry) => entry.severity === "problem")) return finish(combined, [...problems, incomplete({ message: repo.reason })]);
+    return { ...combined, problems, state: "unavailable", reason: repo.reason };
+  }
+  return finish(combined, problems);
 }
 
 // What is wrong with a token by itself, from `githubClient.tokenInfo`: its expiry and its scopes.
@@ -191,9 +267,32 @@ export function tokenProblems(info) {
   return problems;
 }
 
+// A message you can send the owner of a repo you do not administer, asking for what the bot needs
+// there: an invitation with write access, and the branch rules RoboRepo would otherwise create.
+export function ownerMessage({ repo, botLogin, invite = true, protections = true }) {
+  const asks = [];
+  if (invite) asks.push(`Invite ${botLogin} to ${repo} as a collaborator with Write access (not Admin).`);
+  if (protections) {
+    asks.push("Make sure these branch rules are in place (rulesets, under Settings > Rules):");
+    for (const step of MANUAL_STEPS) asks.push(`   - ${step}`);
+  }
+  const numbered = [];
+  let n = 0;
+  for (const line of asks) numbered.push(line.startsWith("   -") ? line : `${++n}. ${line}`);
+  return [
+    `Hi! My coding agents work on GitHub as a separate bot account, ${botLogin}, instead of as me, so GitHub itself stops them from pushing to the default branch or merging without a human approval. Could you help set that up on ${repo}?`,
+    "",
+    ...numbered,
+    "",
+    `${botLogin} never needs Admin, and it should not be able to bypass these rules. Thanks!`,
+  ].join("\n");
+}
+
 function problem(id, message, fix, severity = "problem") {
   return { id, message, fix, severity };
 }
+
+const incomplete = (error) => problem("check-incomplete", `Some checks could not run: ${error.message}.`, "Rerun roborepo github status once GitHub answers.", "unchecked");
 
 function finish(result, problems) {
   if (problems.some((entry) => entry.severity === "problem")) return { ...result, problems, state: "problem" };
@@ -201,7 +300,22 @@ function finish(result, problems) {
   if (unchecked.length > 0) {
     return { ...result, problems, state: "unavailable", reason: unchecked.map((entry) => entry.message.replace(/\.$/, "")).join("; ") };
   }
+  if (problems.some((entry) => entry.severity === "unverified")) return { ...result, problems, state: "unverified" };
   return { ...result, problems, state: "healthy" };
+}
+
+function finishRepo(result, problems) {
+  const done = finish(result, problems);
+  const ownerFixes = problems.filter((entry) => entry.owner);
+  if (result.userAdmin !== false || ownerFixes.length === 0 || !result.botLogin) return done;
+  return {
+    ...done,
+    ownerMessage: ownerMessage({
+      repo: result.repository, botLogin: result.botLogin,
+      invite: ownerFixes.some((entry) => entry.id === "not-collaborator"),
+      protections: ownerFixes.some((entry) => entry.id === "protection" || entry.id === "protection-unverified"),
+    }),
+  };
 }
 
 // A token without an expiry date is only advice: it works, but nothing bounds how long a leaked
@@ -237,7 +351,11 @@ function checkScopes(scopes, problems) {
   }
 }
 
-async function checkRepoAccess(bot, repo, botLogin, problems) {
+// A finding only the repo's owner can fix, when you do not administer the repo, carries
+// `owner: true`, and its fix asks you to send them the message.
+const askOwner = (what) => `Ask the repo's owner to ${what}; Home and roborepo github status give you a message to send them.`;
+
+async function checkRepoAccess(bot, repo, botLogin, problems, userAdmin) {
   let permissions = {};
   try {
     permissions = (await githubClient.repository(bot, repo)).permissions || {};
@@ -246,24 +364,47 @@ async function checkRepoAccess(bot, repo, botLogin, problems) {
   }
   if (!permissions.push) {
     const invited = (await githubClient.userInvitations(bot)).some((invitation) => invitation.repository?.full_name?.toLowerCase() === repo.toLowerCase());
-    problems.push(problem("not-collaborator", invited
-      ? `${botLogin} has been invited to ${repo} but has not accepted yet.`
-      : `${botLogin} cannot push to ${repo}.`, SETUP_FIX));
+    if (invited) {
+      // The bot accepts the invitation itself, which setup does whoever sent it.
+      problems.push(problem("invite-pending", `${botLogin} has been invited to ${repo} but has not accepted yet.`, "Run roborepo github setup in this repo, in your own terminal; it accepts the invitation as the bot."));
+    } else if (userAdmin === false) {
+      problems.push({ ...problem("not-collaborator", `${botLogin} is not a collaborator on ${repo}, and you are not an admin there, so setup cannot invite it.`, askOwner(`invite ${botLogin} with Write access`)), owner: true });
+    } else {
+      problems.push(problem("not-collaborator", `${botLogin} cannot push to ${repo}.`, "Run roborepo github setup in this repo, in your own terminal; it sends the invitation."));
+    }
   } else if (permissions.admin) {
-    problems.push(problem("bot-is-admin", `${botLogin} is an admin of ${repo}, so it could change the branch protection meant to limit it.`, `Lower ${botLogin} to write access in the repo's collaborator settings, then rerun roborepo github status.`));
+    problems.push(problem("bot-is-admin", `${botLogin} is an admin of ${repo}, so it could change the branch protection meant to limit it.`, userAdmin === false
+      ? `Ask the repo's owner to lower ${botLogin} to Write access.`
+      : `Lower ${botLogin} to write access in the repo's collaborator settings, then rerun roborepo github status.`));
   }
 }
 
-async function checkProtection(target, problems) {
-  const report = await readProtection(target);
+// Whether GitHub stops the bot from merging unreviewed work in this repo, from the protection
+// report read as you. Rules that apply but whose bypass list you cannot see (you are not an admin)
+// are `unverified`, never healthy: the owner could let the bot bypass them.
+function checkProtection(report, problems, userAdmin) {
   if (report.state === "unavailable") {
     problems.push(problem("protection-unchecked", `Branch protection could not be read${report.reason ? ` (${report.reason})` : ""}, so this could not confirm GitHub stops the bot from merging unreviewed work.`, "Run roborepo protect --check in your own terminal.", "unchecked"));
     return;
   }
   const skipped = report.policies?.some((policy) => policy.status === "skipped");
-  if (report.state === "protected" && !skipped) return;
+  const applies = (report.state === "protected" || report.state === "unmanaged") && !skipped;
+  if (applies && report.admin && report.bypassVisible) return;
+  if (applies) {
+    problems.push({
+      ...problem("protection-unverified", "GitHub applies the branch rules, but you are not an admin of this repo, so RoboRepo cannot see who may bypass them.", askOwner("confirm them, and that the bot cannot bypass them"), "unverified"),
+      owner: true,
+    });
+    return;
+  }
   const message = skipped
     ? "The merge rule that requires approval of the last push is skipped for this repo."
     : `Branch protection for this repo is ${report.state}, so GitHub does not stop the bot from merging unreviewed work.`;
-  problems.push(problem("protection", message, "A repo admin should run roborepo protect (it asks before changing anything)."));
+  if (userAdmin === false) {
+    problems.push({ ...problem("protection", message, askOwner("add the branch rules")), owner: true });
+  } else if (userAdmin === true) {
+    problems.push(problem("protection", message, "Run roborepo protect in this repo (it asks before changing anything), or open Branch protection in the repo's menu on Home."));
+  } else {
+    problems.push(problem("protection", message, "A repo admin should run roborepo protect (it asks before changing anything)."));
+  }
 }

@@ -247,10 +247,24 @@ try {
   result = await setup("nobody-here\n");
   assert.equal(result.status, 1);
   assert.match(result.stderr, /no account named nobody-here/);
+  // A refused invitation does not stop the bot account's own steps; the final check names it and
+  // the package stays off.
   fresh({ refuseInvite: true });
-  result = await setup(`${BOT}\n`);
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /refused the invitation: Must have admin rights/);
+  result = await setup(`${BOT}\n${TOKEN}\ny\n`);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stdout, /You cannot invite robo-bot to example\/project \(GitHub: Must have admin rights/);
+  assert.match(result.stdout, /✓ Token stored/);
+  assert.match(result.stderr, /robo-bot cannot push to example\/project/);
+  assert.ok(!packageOn(), "the package stays off");
+  // In a repo someone else administers, the final check prints the message for its owner.
+  fresh({ admin: false });
+  result = await setup(`${BOT}\n${TOKEN}\ny\n`);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /you are not an admin there, so setup cannot invite it/);
+  assert.match(result.stderr, /Message for the repo's owner:\nHi!/);
+  assert.match(result.stderr, /Invite robo-bot to example\/project as a collaborator with Write access/);
+  assert.ok(!packageOn(), "the package stays off");
+  console.log("✓ A repo you cannot invite to finishes the bot's steps, leaves the package off, and prints a message for the owner.");
 
   // A failing final check leaves the package off.
   fresh({ invitePermission: "admin" });

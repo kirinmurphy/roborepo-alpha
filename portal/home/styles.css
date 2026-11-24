@@ -256,7 +256,24 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 /* The heading's ⚠ sits on the text's center line rather than its baseline, beside the label it marks. */
 .token-warnings-panel .domain-heading { align-items: center; column-gap: 8px; }
 .token-warnings-glyph { color: var(--warn); margin-right: -2px; }
-/* agent-identity.js: the GitHub bot identity's status line at a repo card's foot, and its card. */
+/* agent-identity.js: the bot account's banner above the repo list, each GitHub repo card's line,
+   and the card behind them. */
+.agent-identity-banner {
+  display: grid;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: var(--text-sm);
+}
+.agent-identity-banner[data-level="warn"] { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.agent-identity-banner[data-level="problem"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+.agent-identity-banner p { margin: 0; }
+.agent-identity-banner-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.agent-identity-facts { flex: 1 1 auto; min-width: 0; color: var(--dim); }
+.agent-identity-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.agent-identity-repo-pick { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); }
 .agent-identity-line {
   display: flex;
   flex-wrap: wrap;
@@ -282,7 +299,37 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .agent-identity-body p { margin: 0; }
 .agent-identity-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
 .agent-identity-command { display: grid; gap: 4px; }
-.agent-identity-command-line { display: flex; align-items: center; gap: 8px; }
+.agent-identity-command-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .agent-identity-command-line code { font-family: var(--mono); overflow-wrap: anywhere; }
-.agent-identity-links { margin: 8px 0; padding-left: 18px; display: grid; gap: 4px; }
-.agent-identity-links span { color: var(--dim); }
+/* A checklist: a done step is marked and dimmed, so the eye lands on what is left. */
+.agent-identity-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.agent-identity-step { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; }
+.agent-identity-step-mark {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 11px;
+  line-height: 14px;
+  text-align: center;
+}
+.agent-identity-step[data-done="true"] { opacity: 0.55; }
+.agent-identity-step[data-done="true"] .agent-identity-step-mark { color: var(--ok, var(--ink)); border-color: currentColor; }
+.agent-identity-step-body { display: grid; gap: 2px; min-width: 0; }
+.agent-identity-step-note { color: var(--dim); }
+/* The github.com steps happen in another account, so they sit in their own framed panel. */
+.agent-identity-guide {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--panel));
+}
+.agent-identity-guide h3 { margin: 0; font-size: var(--text-sm); }
+.agent-identity-guide-lead { color: var(--ink); }
+.agent-identity-owner { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.agent-identity-owner-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.agent-identity-owner pre { margin: 0; white-space: pre-wrap; font-family: var(--mono); font-size: var(--text-xs); color: var(--dim); }

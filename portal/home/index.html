@@ -8,6 +8,7 @@
         {{LOADING}}
         <div id="home-harness-banner" class="home-harness-banner" hidden></div>
         <div id="home-hook-readiness" class="home-harness-banner" hidden></div>
+        <div id="home-agent-identity" class="home-harness-banner" hidden></div>
         <div id="home-auto-discovery" class="home-auto-discovery" hidden></div>
         <section class="home-heading" aria-labelledby="home-title">
         <div class="home-title-group">
@@ -56,18 +57,67 @@
         <div data-slot="agent-identity"></div>
       </article>
     </template>
-    <!-- agent-identity.js: the GitHub bot identity's one-line status at the foot of a repo card. -->
+    <!-- agent-identity.js: the bot account's banner on Home, shown once for every GitHub repo. -->
+    <template id="tpl-agent-identity-banner">
+      <section class="agent-identity-banner" aria-labelledby="agent-identity-banner-title">
+        <div class="agent-identity-banner-head">
+          <portal-icon name="github" size="sm" aria-hidden="true"></portal-icon>
+          <strong id="agent-identity-banner-title">Agent GitHub account</strong>
+          <span class="agent-identity-state" data-slot="state"></span>
+          <span class="agent-identity-facts" data-slot="facts"></span>
+          <button type="button" data-btn="text" data-slot="details">Details</button>
+        </div>
+        <p class="agent-identity-banner-text" data-slot="message"></p>
+        <p class="agent-identity-fix" data-slot="fix" hidden></p>
+        <div class="agent-identity-actions" data-slot="actions" hidden>
+          <button type="button" data-btn="cta" data-slot="enable" hidden>Turn on</button>
+          <button type="button" data-btn="cta" data-slot="open-setup" hidden>Open setup</button>
+          <label class="agent-identity-repo-pick" data-slot="repo-pick" hidden>in <select data-slot="repo-select"></select></label>
+        </div>
+        <div class="agent-identity-command" data-slot="command-row" hidden>
+          <p class="worktree-dialog-help">Run this in your own terminal, in a GitHub repo's folder:</p>
+          <div class="agent-identity-command-line">
+            <code data-slot="command"></code>
+            <portal-copy-button data-slot="copy" label="Copy"></portal-copy-button>
+          </div>
+        </div>
+        <p class="worktree-dialog-help" data-slot="note" hidden></p>
+        <div class="item-err" data-slot="error" hidden></div>
+      </section>
+    </template>
+    <!-- agent-identity.js: what the bot can do in one repo, at the foot of its card. -->
     <template id="tpl-agent-identity-line">
       <div class="agent-identity-line" role="status">
         <portal-icon name="github" size="sm" aria-hidden="true"></portal-icon>
-        <span>Agent GitHub account:</span>
+        <span>Agent bot here:</span>
         <span class="agent-identity-state" data-slot="state"></span>
         <span class="agent-identity-line-text" data-slot="text"></span>
         <button type="button" data-btn="text" data-slot="details">Details</button>
       </div>
     </template>
-    <template id="tpl-agent-identity-link">
-      <li><a data-slot="link" target="_blank" rel="noreferrer"></a> <span data-slot="note"></span></li>
+    <!-- agent-identity.js: one step done on github.com as the bot, with its link to copy. -->
+    <template id="tpl-agent-identity-step">
+      <li class="agent-identity-step">
+        <span class="agent-identity-step-mark" data-slot="mark" aria-hidden="true"></span>
+        <div class="agent-identity-step-body">
+          <strong data-slot="label"></strong>
+          <span class="agent-identity-step-note" data-slot="note"></span>
+          <div class="agent-identity-command-line" data-slot="url-row">
+            <code data-slot="url"></code>
+            <portal-copy-button data-slot="copy" label="Copy link"></portal-copy-button>
+          </div>
+        </div>
+      </li>
+    </template>
+    <!-- agent-identity.js: one line of a checklist (a fact the status confirms, or not yet). -->
+    <template id="tpl-agent-identity-check">
+      <li class="agent-identity-step">
+        <span class="agent-identity-step-mark" data-slot="mark" aria-hidden="true"></span>
+        <div class="agent-identity-step-body">
+          <strong data-slot="label"></strong>
+          <span class="agent-identity-step-note" data-slot="note"></span>
+        </div>
+      </li>
     </template>
     <!-- worktree-dialogs.js: the card-footer offer to turn on automatic worktree cleanup. -->
     <template id="tpl-worktree-cleanup-notice">
@@ -228,8 +278,8 @@
       </form>
     </dialog>
 
-    <!-- agent-identity.js: the GitHub bot identity card. It reads status and opens the terminal
-         setup; the token is never typed here. -->
+    <!-- agent-identity.js: the bot account's card (from the banner) and one repo's card (from the
+         repo's line or menu). They read status and open the terminal setup; the token is never typed here. -->
     <dialog id="agent-identity-dialog" data-dialog-size="md" aria-labelledby="agent-identity-title">
       <div class="modal-head">
         <h2 id="agent-identity-title">Agent GitHub account</h2>
@@ -237,12 +287,19 @@
       </div>
       <div class="modal-body agent-identity-body">
         <p class="agent-identity-summary" role="status">
-          <strong data-slot="repository"></strong>
+          <strong data-slot="subject"></strong>
           <span class="agent-identity-state" data-slot="state"></span>
         </p>
         <p data-slot="message"></p>
         <p class="agent-identity-fix" data-slot="fix" hidden></p>
-        <p class="worktree-dialog-help" data-slot="expiry" hidden></p>
+        <ul class="agent-identity-steps" data-slot="checks" hidden></ul>
+        <div class="agent-identity-owner" data-slot="owner" hidden>
+          <div class="agent-identity-owner-head">
+            <strong>Message for the repo's owner</strong>
+            <portal-copy-button data-slot="owner-copy" label="Copy message"></portal-copy-button>
+          </div>
+          <pre data-slot="owner-message"></pre>
+        </div>
         <div class="agent-identity-command" data-slot="command-row" hidden>
           <p class="worktree-dialog-help">Run this in your own terminal, in this repo's folder:</p>
           <div class="agent-identity-command-line">
@@ -251,16 +308,18 @@
           </div>
         </div>
         <p class="worktree-dialog-help" data-slot="launch-note" hidden></p>
-        <details data-slot="guide">
-          <summary>What you do on github.com</summary>
-          <ul class="agent-identity-links" data-slot="links"></ul>
+        <section class="agent-identity-guide" data-slot="guide" hidden aria-labelledby="agent-identity-guide-title">
+          <h3 id="agent-identity-guide-title">On github.com, signed in as the bot</h3>
+          <p class="agent-identity-guide-lead" data-slot="guide-lead"></p>
+          <ol class="agent-identity-steps" data-slot="steps"></ol>
           <p class="worktree-dialog-help" data-slot="guide-expiry"></p>
           <p class="worktree-dialog-help" data-slot="token-warning"></p>
-        </details>
+        </section>
         <div class="item-err" data-slot="error" hidden></div>
       </div>
       <div class="modal-actions">
         <button type="button" data-btn="secondary" data-slot="recheck">Check again</button>
+        <button type="button" data-btn="cta" data-slot="enable" hidden>Turn on</button>
         <button type="button" data-btn="cta" data-slot="open-setup" hidden>Open setup</button>
       </div>
     </dialog>

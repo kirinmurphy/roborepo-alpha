@@ -81,8 +81,18 @@ try {
 
   start();
   expectLine(0, /^GitHub agent identity: agents act as robo-bot on example\/project$/);
+  // With the bot otherwise ready, turning the package on is the whole fix; with anything else
+  // wrong, the setup fixes it and turns the package on at the end.
   start({ enabled: false });
-  expectLine(1, /problem for example\/project: A bot is signed in but the github-agent-identity package is off.* — run roborepo github setup in your own terminal$/);
+  expectLine(1, /problem for example\/project: The bot is signed in, but the github-agent-identity package is off.* — turn it on: roborepo package enable github-agent-identity$/);
+  start({ enabled: false, token: { scopes: ["repo"] } });
+  expectLine(1, /lacks the read:org scope/);
+  {
+    const report = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
+    const off = report.problems.find((entry) => entry.id === "package-off");
+    assert.match(off.fix, /^Run roborepo github setup in your own terminal; it fixes the above/, "the setup is the step when more than the package is missing");
+    assert.equal(report.problems.at(-1).id, "package-off", "the package finding follows what the bot account lacks");
+  }
   start({ collaborators: [{ login: BOT, permission: "admin" }] });
   expectLine(1, /robo-bot is an admin of example\/project/);
   start({ collaborators: [] });
@@ -139,7 +149,7 @@ try {
   assert.match(partial.reason, /Resource not accessible/);
   console.log("✓ Status ignores exported tokens, flags any extra scope or a fine-grained token, and reports checks it could not run.");
   start({ rulesets: [] });
-  expectLine(1, /Branch protection for this repo is missing.* — a repo admin should run roborepo protect/);
+  expectLine(1, /Branch protection for this repo is missing.* — run roborepo protect in this repo/);
   // Protection that exists but falls short is a problem too, and each one's hint names roborepo protect.
   const withManaged = (edit) => {
     const rulesets = structuredClone(managed);
@@ -163,11 +173,38 @@ try {
     const result = line();
     assert.equal(result.status, 1, `${label}: doctor hints\n${result.stdout}${result.stderr}`);
     assert.match(result.stdout, message, label);
-    assert.match(result.stdout, /— a repo admin should run roborepo protect/, `${label}: the hint names roborepo protect`);
+    assert.match(result.stdout, /— run roborepo protect in this repo/, `${label}: the hint names roborepo protect`);
     const report = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
     assert.equal(report.state, "problem", label);
     assert.ok(report.problems.some((entry) => entry.id === "protection" && /roborepo protect/.test(entry.fix)), `${label}: status names roborepo protect`);
   }
+  console.log("✓ Missing or weakened protection names roborepo protect for an admin.");
+
+  // A repo someone else administers: you cannot see who may bypass the rules or invite the bot, so
+  // the owner gets a message, and rules that apply are "unverified", never healthy.
+  start({ admin: false });
+  let foreign = jsonReport();
+  assert.equal(foreign.state, "unverified", "rules you cannot fully see are not healthy");
+  assert.equal(foreign.userAdmin, false);
+  assert.ok(foreign.problems.some((entry) => entry.id === "protection-unverified" && entry.owner === true));
+  assert.match(foreign.ownerMessage, /without a human approval/);
+  assert.match(foreign.ownerMessage, /On the default branch: require a pull request/);
+  assert.doesNotMatch(foreign.ownerMessage, /Invite robo-bot/, "a bot that can already push is not asked for again");
+  expectLine(1, /cannot see who may bypass them\. — ask the repo's owner to confirm them/);
+  const foreignStatus = node("scripts/cli/main.mjs", ["github", "status"]);
+  assert.equal(foreignStatus.status, 0, "unverified rules are not a problem exit");
+  assert.match(foreignStatus.stdout, /but the branch rules could not be verified:\n {2}Unverified: .*\n[\s\S]*Message for the repo's owner:\n {2}Hi!/);
+  start({ admin: false, collaborators: [] });
+  foreign = jsonReport();
+  assert.equal(foreign.state, "problem");
+  const notInvited = foreign.problems.find((entry) => entry.id === "not-collaborator");
+  assert.ok(notInvited.owner && /you are not an admin there/.test(notInvited.message) && /Ask the repo's owner/.test(notInvited.fix));
+  assert.match(foreign.ownerMessage, /1\. Invite robo-bot to example\/project as a collaborator with Write access/);
+  // Rules an admin made by hand, as strict as RoboRepo's and visible to you, are as good as RoboRepo's.
+  start({ rulesets: structuredClone(managed).map((ruleset) => ({ ...ruleset, name: ruleset.name.replace(/^roborepo-/, "team-") })) });
+  assert.equal(jsonReport().state, "healthy", "hand-made rules an admin can see in full are not a problem");
+  console.log("✓ A repo you do not administer reads as unverified or names the owner, with a message for them.");
+
   start({ hosts: "keychain" });
   expectLine(1, /token is in the keychain, which agent sandboxes cannot read/);
   start({ failure: "unreachable" });

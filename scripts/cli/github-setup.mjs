@@ -9,13 +9,13 @@ import readline from "node:readline";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient, runGh } from "../../modules/forge/github.mjs";
 import {
-  AGENT_IDENTITY_PACKAGE_ID, agentGhConfigDir, agentHostsFile, botGhEnv, readAgentHosts, readAgentIdentity,
+  agentGhConfigDir, agentHostsFile, botGhEnv, readAgentHosts, readAgentIdentity,
   refreshCaBundle, tokenProblems,
 } from "../../modules/forge/agent-identity.mjs";
 import { GITHUB_PAGES, TOKEN_NOTE, TOKEN_SCOPES, expiryAdvice, scopesText } from "../../modules/forge/agent-identity-guide.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
-import { agentIdentityPackageInstalled } from "./agent-identity-package.mjs";
+import { agentIdentityPackageInstalled, turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
 import { stateDir } from "./state-paths.mjs";
 
 const sameLogin = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -168,12 +168,13 @@ async function guidedSetup({ input, open, io, cwd }) {
   // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });
   const blocking = report.problems.filter((entry) => entry.severity === "problem");
-  for (const entry of report.problems.filter((item) => item.severity === "warn")) io.log(`Note: ${entry.message}`);
+  for (const entry of report.problems.filter((item) => item.severity === "warn" || item.severity === "unverified")) io.log(`Note: ${entry.message}`);
   // Setup confirms nothing it could not check: an unread account or branch protection stops here.
   if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. Setup does not turn the package on until every check runs.`);
   if (blocking.length > 0) {
     io.error("The bot is not ready, so agents keep acting as you:");
     for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
+    if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
   }
   io.log("✓ Check: the bot account, its access and the branch protection all look right.");
@@ -183,48 +184,33 @@ async function guidedSetup({ input, open, io, cwd }) {
   if (await agentIdentityPackageInstalled()) {
     done("Package on");
   } else {
-    const { enablePackage, PackageMutationError } = await import("./packages.mjs");
-    try {
-      const result = await enablePackage([AGENT_IDENTITY_PACKAGE_ID]);
-      // `ok` only says nothing was blocked. A partial outcome (a setting the package could not
-      // claim, such as a GH_CONFIG_DIR you set yourself) would leave agents on the wrong identity.
-      const outcome = result.outcomes?.find((entry) => entry.id === AGENT_IDENTITY_PACKAGE_ID);
-      if (!result.ok || outcome?.outcome !== "enabled") {
-        stop(`The package did not install completely${outcome?.message ? `: ${outcome.message}` : ""}. Agents may not act as ${botLogin}; see the messages above.`);
-      }
-    } catch (error) {
-      if (error instanceof PackageMutationError) stop(error.message);
-      throw error;
-    }
+    const turnedOn = await turnOnAgentIdentityPackage();
+    if (!turnedOn.ok) stop(`${turnedOn.message} Agents may not act as ${botLogin}; see the messages above.`);
   }
   io.log(`Agents now act on GitHub as ${botLogin}. New agent sessions pick this up.`);
   return 0;
 }
 
 async function inviteBot({ user, repo, botLogin, io, done }) {
-  if (await githubClient.isCollaborator(user, repo, botLogin).catch(refused("check collaborators"))) {
-    done(`Invitation (${botLogin} is a collaborator)`);
-    return;
-  }
-  const invited = (await githubClient.repoInvitations(user, repo)).some((invitation) => invitation.invitee?.login?.toLowerCase() === botLogin.toLowerCase());
-  if (invited) {
-    io.log(`✓ Invitation: ${botLogin} already has a pending invitation.`);
-    return;
-  }
   try {
+    if (await githubClient.isCollaborator(user, repo, botLogin)) {
+      done(`Invitation (${botLogin} is a collaborator)`);
+      return;
+    }
+    const invited = (await githubClient.repoInvitations(user, repo)).some((invitation) => invitation.invitee?.login?.toLowerCase() === botLogin.toLowerCase());
+    if (invited) {
+      io.log(`✓ Invitation: ${botLogin} already has a pending invitation.`);
+      return;
+    }
     await githubClient.inviteCollaborator(user, repo, botLogin);
   } catch (error) {
-    if (error instanceof GitHubError) stop(`GitHub refused the invitation: ${error.message}. You must be an admin of ${repo}.`);
-    throw error;
+    if (!(error instanceof GitHubError)) throw error;
+    // Only an admin can see or send invitations. The token step that follows is the bot account's
+    // own and still worth finishing; the final check names what the repo's owner has to do here.
+    io.log(`You cannot invite ${botLogin} to ${repo} (GitHub: ${error.message}); only a repo admin can. If someone else owns it, the final check prints a message to send them. Continuing with the bot account.`);
+    return;
   }
   io.log(`✓ Invited ${botLogin} to ${repo}.`);
-}
-
-function refused(what) {
-  return (error) => {
-    if (error instanceof GitHubError) stop(`GitHub refused to ${what}: ${error.message}. You must be an admin of the repo.`);
-    throw error;
-  };
 }
 
 async function storeToken({ input, open, io, cwd, dir, botLogin, hadLogin, renewing }) {

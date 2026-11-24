@@ -77,10 +77,16 @@ The setup walks you through each step and skips the ones already done:
 6. Check everything, then enable the package. A failed check does not turn it on; if it was already
    on, it stays on.
 
-The portal's Home page tracks where this stands for each GitHub repo: the repo card shows the bot
-account's status and the next step, and **Open setup** opens this same setup in a terminal (macOS;
-elsewhere it shows the command to copy). See
-[Agent GitHub account](../reference/repositories.md#agent-github-account).
+The portal's Home page tracks where this stands: a banner shows the bot account once, with the next
+step, and each GitHub repo card shows what is left in that repo. **Open setup** opens this same setup
+in a terminal (macOS; elsewhere it shows the command to copy). If the bot is already signed in and
+only the package is off, `roborepo package enable github-agent-identity` (or **Turn on** on Home) is
+all that is left. See [Agent GitHub account](../reference/repositories.md#agent-github-account).
+
+In a repo someone else administers, the setup cannot invite the bot or add branch rules. It still
+finishes the bot account's own steps, leaves the package as it was, and prints a message to send the
+repo's owner. Until the owner invites the bot, agents there cannot push, because the package switches
+every repo to the bot at once. Rules you cannot see in full read as "unverified", never as ready.
 
 The token is stored in plaintext, mode 0600, under `~/.roborepo/github-agent/gh`, because neither
 Claude's nor Codex's sandbox can read the macOS keychain. Any process you run, agents included, can
