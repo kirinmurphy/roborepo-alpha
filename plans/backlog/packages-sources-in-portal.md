@@ -32,7 +32,7 @@ machine state, and checks that each surface sees what the other did.
 | --- | --- |
 | **Source** | A place packages come from: the built-in library (`builtin`), the workspace (`local`), another local folder, or a public GitHub repo. Stored in `~/.roborepo/package-sources.json`. |
 | **Install** | Recording a package as installed. A GitHub package is copied into the store at a pinned commit; a folder package is used in place. Install does not turn the package on. |
-| **Enable** | Applying an installed package to the harnesses. The portal already does this with its toggles. |
+| **Enable** | Applying an installed package to the harnesses, so they read it. |
 | **Tab** | Where a package appears in the portal, derived from its source: **System** (built-in), **Custom** (local folders), **Third Party** (GitHub). |
 
 ### Current behavior
@@ -53,13 +53,17 @@ CLI in `scripts/cli/package-source-command.mjs` is a thin client over it:
 | Remove | `removePackage(ref)` | `package remove` |
 | Everything a screen shows | `packageView()`: rows with `tab`, `sourceBadge`, `installed`, `active`, `revision`, `updateAvailable`, `available`, `removable`, plus `unresolved`, `shadowed`, `collisions` | `package list` |
 
-Refusals carry a code from `SERVICE_EXIT_CODES` (`confirmationRequired`, `ambiguous`,
-`unavailable`, `refused`, `invalid`) that the CLI turns into its exit status.
+Refusals carry a code from `SERVICE_EXIT_CODES` (`usage`, `ambiguous`, `confirmationRequired`,
+`unavailable`, `refused`, `invalid`) that the CLI turns into its exit status. Removing a package
+that is on needs a `disable` callback: the CLI passes one that turns the package off first.
+
+Git runs synchronously (`spawnSync` in `scripts/cli/package-source-git.mjs`), with a 120-second
+timeout. Adding a GitHub source, refreshing it, installing from it, and updating all run Git.
 
 The portal side:
 
 - The Agents page (`portal/config/`) lists packages by category under "Available Agent Tools",
-  with an on/off toggle each, through `/api/config` and `/api/config/packages` in
+  with an on/off toggle each that enables or disables the package, through `/api/config` and `/api/config/packages` in
   `scripts/cli/portal-routes-config.mjs`.
 - `scripts/cli/config.mjs` already passes each package's `tab` and `sourceBadge` to the page, but
   the page does not render either.
@@ -110,6 +114,10 @@ flowchart LR
   `portal-routes-config.mjs`. Each route parses the request, calls one service function, and maps a
   `PackageServiceError` code to an HTTP status and the service's message. No package logic lives in
   a route.
+- **Git off the server's thread:** a route whose service call runs Git (add a GitHub source,
+  refresh, install, update) runs that call in a child Node process and awaits it. Because Git is
+  synchronous, calling it inside the portal server would stop every page from answering for up to
+  two minutes.
 - **Page:** the Agents page gains the tab bar and a Sources panel. Dialogs reuse the page's existing
   dialog and busy-state patterns in `portal/config/panels.js` and `templates.js`.
 
@@ -119,7 +127,6 @@ flowchart LR
 | --- | --- |
 | `GET /api/packages` | `packageView()` |
 | `GET /api/packages/sources` | `listSources()` |
-| `GET /api/packages/sources/:id` | `sourceInfo(id)` |
 | `POST /api/packages/sources` `{ location, id? }` | `addSource()` |
 | `POST /api/packages/sources/:id/refresh` | `refreshSources(id)` |
 | `POST /api/packages/sources/:id/enabled` `{ enabled }` | `setSourceEnabled()` |
@@ -129,9 +136,10 @@ flowchart LR
 | `POST /api/packages/install` `{ ref, expectedPlan }` | `installPackage(ref, { confirmed: true, expectedPlan })` |
 | `POST /api/packages/update` `{ ref }` | `updatePackage(ref)`: unconfirmed, it refuses with `confirmationRequired` and the change to show (`details.change`), as the CLI's prompt does |
 | `POST /api/packages/update` `{ ref, confirmed: true, expectedRevision, expectedFrom }` | `updatePackage(ref, { confirmed: true, expectedRevision, expectedFrom })` |
-| `DELETE /api/packages/:ref` | `removePackage()` |
+| `DELETE /api/packages/installed/:ref` | `removePackage(ref, { disable })`, passing the same disable step the CLI passes |
 
-A refusal returns the service code in the body. `confirmationRequired` with `planChanged` tells the
+`:ref` is a package reference such as `team/tool`, URL-encoded (`team%2Ftool`) so it stays one
+path segment. A refusal returns the service code in the body. `confirmationRequired` with `planChanged` tells the
 page to show the new preview and ask again, as the CLI re-prompts.
 
 ### Screens
@@ -162,7 +170,8 @@ revision and starting point shown.
 **Remove.** A confirmation that says what happens: the package is turned off first, the installed
 copy is deleted for a GitHub package, and a Custom package's folder is never touched.
 
-**Sources panel.** Lists every source with its type, tab, trust, and package counts. Each row offers
+**Sources panel.** Lists every source with what `package source info` prints: its type, tab,
+trust, location, and package counts, from `listSources()`. Each row offers
 **Refresh** (GitHub sources), an on/off toggle, and **Remove**. Remove asks whether to keep
 installed packages, matching `--keep-installed`, which the service allows only for GitHub
 sources. `builtin` offers neither remove nor turning off, and `local` (the workspace) can be turned
@@ -199,14 +208,15 @@ it returns, which can take up to two minutes; the button shows progress and the 
 
 | Check | Proves |
 | --- | --- |
-| `scripts/test/portal-package-routes-check.mjs` (new) | Each route returns the service's result, and each service code maps to its HTTP status and message. Runs against a temp state root with a `file://` Git fixture. |
+| `scripts/test/portal-package-routes-check.mjs` (new) | Each route returns the service's result, each service code maps to its HTTP status and message, and another route answers while a GitHub refresh is running. Runs against a temp state root with a `file://` Git fixture. |
 | `scripts/test/portal-ui/package-sources.spec.mjs` (new, Playwright) | A person can add a folder and a GitHub source, install with the preview, turn the package on, update after a new commit, remove it, and remove the sources, using roles and visible text. |
 | The same spec, interleaved with CLI calls | The two surfaces agree on one state root: a step done with `roborepo package ...` shows on the page after reload, and a step done on the page shows in `roborepo package list --json`. |
 | Existing package checks (`package-*-check.mjs`) | The service the routes call is unchanged in behavior. |
 
-The parity scenario follows the lifecycle the Part 04 smoke test ran: folder and GitHub sources,
-install refused without confirmation, confirmed install, enable, new upstream commit, refresh,
-update, remove, and source removal. It alternates which surface performs each step.
+The parity scenario runs one package lifecycle: add a folder source and a GitHub source (a
+`file://` fixture repo), an install refused without confirmation, a confirmed install, enable, a new
+upstream commit, refresh, update, remove, and removing both sources. It alternates which surface
+performs each step.
 
 ### Acceptance criteria
 
@@ -222,12 +232,18 @@ update, remove, and source removal. It alternates which surface performs each st
 
 | Risk | Mitigation |
 | --- | --- |
-| A GitHub add or refresh blocks a request for up to two minutes | The service's 120-second Git timeout bounds it; the dialog shows progress, and the package lock serializes a concurrent CLI call |
+| A GitHub add, refresh, install, or update takes up to two minutes | The call runs in a child process, so other pages keep answering; the dialog shows progress, and the 120-second Git timeout bounds the wait |
+| A portal action and a CLI command run at once | Lock and store writes take the package lock. A refresh replaces a source's listing only after it validates, so a racing refresh leaves one complete listing |
 | The page shows stale state after a CLI change | The page reloads data after each action and on focus; the parity check covers a CLI change seen in the portal |
 | The Agents page grows crowded | Tabs split the list; the Sources panel sits in its own section |
 
 ## Open Questions
 
+- **Package data for the Agents page:** read `GET /api/packages` (`packageView()`) beside the
+  existing `/api/config` snapshot, or add the new fields (`revision`, `updateAvailable`,
+  `available`, `removable`) to the rows `scripts/cli/config.mjs` already builds. The first keeps the
+  page on the exact data `package list` prints; the second keeps one data load. Recommendation: the
+  first, so the parity rule has one source of truth.
 - **Sources panel placement:** a section on the Agents page, or a tab beside System, Custom, and
   Third Party. Recommendation: a section below the package tabs, so tabs stay about packages.
 
