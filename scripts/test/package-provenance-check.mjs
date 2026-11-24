@@ -287,6 +287,20 @@ function within(roots) {
       });
     `);
     assert.ok(!nestedTarget.ok && /symbolic links are not allowed/.test(nestedTarget.error), nestedTarget.error);
+
+    // An existing target that is itself a link to a matching folder is refused, not reused.
+    fs.rmSync(target, { recursive: true });
+    const elsewhere = path.join(roots.tmp, "elsewhere-pkg");
+    fs.cpSync(pkg, elsewhere, { recursive: true });
+    fs.symlinkSync(elsewhere, target);
+    const linkedTarget = runModules(roots.env, store, `
+      return st.promoteMaterialized({
+        sourceFolder: ${JSON.stringify(pkg)},
+        resolution: { sourceId: "gitsrc", packageId: "linked-pkg", resolved: "abc123", sourceType: "git", trust: "unverified", integrity: ${JSON.stringify(before.value)} },
+      });
+    `);
+    assert.ok(!linkedTarget.ok && /the package folder is a link/.test(linkedTarget.error), linkedTarget.error);
+    assert.equal(run(`return l.lockRecordFor("linked-pkg");`), null, "a linked target is never recorded");
   } finally {
     roots.cleanup();
   }

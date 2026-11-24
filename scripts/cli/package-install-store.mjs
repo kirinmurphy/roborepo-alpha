@@ -36,6 +36,9 @@ const HASH_EXCLUDED = new Set([".git", SOURCE_METADATA_FILE]);
 // a changed link. With `rejectLinks`, a link throws instead: a copy RoboRepo installs must be plain
 // files, because a link would let the copy read content the integrity hash never covered.
 export function hashPackageTree(dir, { rejectLinks = false } = {}) {
+  // The folder itself counts too: an installed copy that is a link to another folder would pass a
+  // walk that only looks beneath it.
+  if (rejectLinks && fs.lstatSync(dir).isSymbolicLink()) throw new Error(`${dir}: symbolic links are not allowed in an installed package (the package folder is a link)`);
   const hash = crypto.createHash("sha256");
   for (const { rel, kind, excluded } of listEntries(dir, { searchExcluded: rejectLinks })) {
     if (kind === "l" && rejectLinks) throw new Error(`${dir}: symbolic links are not allowed in an installed package (${rel})`);
