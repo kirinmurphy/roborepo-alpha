@@ -1,6 +1,6 @@
 ---
 id: gcfw77cq
-next_action: Start implementation with /plan-execute; its first task is a short manual check in the Claude desktop app that decides whether the title hook or the agent's rename tool covers that app
+next_action: Run /plan-review to check the session-title change and settle its three person-only checks, starting with whether the Claude desktop app shows a hook-set title
 blocked_by: []
 depends_on: []
 related: ["plan-session-launching-milestone-1", "96r9wbj0", "0ubk9sug"]
@@ -436,3 +436,7 @@ title, because nothing reliable signals that the plan work ended.
   on a clean tree: the command refuses with "package plan-suite is built in", creates no skill
   folder, and leaves plan-suite with no diff. CI runs the full gate (`npm run check`) on the pushed head
 - Validation pass 3 at 9066483f (fresh-context subagent): two actionable findings, both fixed above
+- Validation: clean on pass 4 at 6a891dcc (fresh-context subagent); three notes left as is: a full
+  path that also matches another plan's file name counts as two plans (no shared file names exist
+  today), the hook finds the store from its working directory, and a `Session title:` line anywhere
+  in a prompt sets the title, as the design's Hook row says
