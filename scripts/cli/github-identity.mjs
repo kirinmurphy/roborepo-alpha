@@ -1,8 +1,9 @@
 // `roborepo github status`: reads whether agents act on GitHub as a safe bot account. The guided
 // setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
+import fs from "node:fs";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient } from "../../modules/forge/github.mjs";
-import { botGhEnv, readAccountIdentity, readAgentHosts, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
+import { agentHostsFile, botGhEnv, readAccountIdentity, readAgentHosts, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
 import { agentGitRoutingGaps, agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
 import { isMainModule } from "./roots.mjs";
@@ -22,17 +23,25 @@ export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs,
 // steps, which need no typing, so the portal can run them. Only a repo admin can invite; anyone else
 // gets `ok: false` and GitHub's reason, and the card's message for the owner says the rest.
 export async function inviteBotToRepo({ repositoryId, cwd = process.cwd(), timeoutMs, botLogin }) {
-  const repo = forgeTargetForRepositoryId(repositoryId)?.repo;
-  if (!repo) return { ok: false, message: "This repo is not on github.com." };
+  const target = forgeTargetForRepositoryId(repositoryId);
+  if (target?.host !== "github.com" || !target.repo) return { ok: false, message: "This repo is not on github.com." };
+  const repo = target.repo;
   const user = { cwd, timeoutMs, env: { GH_CONFIG_DIR: null } };
   const bot = { cwd, timeoutMs, env: botGhEnv(stateDir) };
+  // The bot's own pending invitation is accepted first: it needs no admin rights, so a user who
+  // cannot read the repo's invitations can still finish an invitation the owner already sent.
+  const acceptPending = async () => {
+    const pending = (await githubClient.userInvitations(bot)).find((invitation) => invitation.repository?.full_name?.toLowerCase() === repo.toLowerCase());
+    if (pending) await githubClient.acceptInvitation(bot, pending.id);
+    return !!pending;
+  };
   try {
+    if (await acceptPending()) return { ok: true };
     if (!(await githubClient.isCollaborator(user, repo, botLogin))) {
       const invited = (await githubClient.repoInvitations(user, repo)).some((invitation) => invitation.invitee?.login?.toLowerCase() === botLogin.toLowerCase());
       if (!invited) await githubClient.inviteCollaborator(user, repo, botLogin);
+      await acceptPending();
     }
-    const pending = (await githubClient.userInvitations(bot)).find((invitation) => invitation.repository?.full_name?.toLowerCase() === repo.toLowerCase());
-    if (pending) await githubClient.acceptInvitation(bot, pending.id);
   } catch (error) {
     if (!(error instanceof GitHubError)) throw error;
     return { ok: false, message: `GitHub refused: ${error.message}. Only an admin of the repo can invite the bot.` };
@@ -44,11 +53,23 @@ export async function inviteBotToRepo({ repositoryId, cwd = process.cwd(), timeo
 // call: whether the package is on, which harnesses' agents still push as you, and what gh's hosts
 // file names (signed in, token in the file, the saved login; never the token itself). The portal
 // re-reads these on every request and reuses its GitHub reads only while they are unchanged.
+// `credentials` is when and how large hosts.yml was last written: a token replaced for the same
+// bot changes it, so a cached "expired" is not served for the new token. It is never the token.
 export const readLocalAccountFacts = () => ({
   packageEnabled: agentIdentityPackageEnabled(),
   gitGaps: agentGitRoutingGaps(),
   hosts: readAgentHosts(stateDir),
+  credentials: credentialRevision(),
 });
+
+function credentialRevision() {
+  try {
+    const stat = fs.statSync(agentHostsFile(stateDir));
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return null;
+  }
+}
 
 // The bot account alone, and one repo for a known bot: the two halves the portal shows apart.
 // `local` lets the portal pass the facts it already read, so the report matches what it cached on.

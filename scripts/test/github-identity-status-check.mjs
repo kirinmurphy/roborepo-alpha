@@ -208,6 +208,37 @@ try {
   // Rules an admin made by hand, as strict as RoboRepo's and visible to you, are as good as RoboRepo's.
   start({ rulesets: structuredClone(managed).map((ruleset) => ({ ...ruleset, name: ruleset.name.replace(/^roborepo-/, "team-") })) });
   assert.equal(jsonReport().state, "healthy", "hand-made rules an admin can see in full are not a problem");
+  // The portal's invite step: a non-GitHub repo makes no GitHub call, and a bot invitation the owner
+  // already sent is accepted even when you cannot read the repo's invitations.
+  const invite = (repositoryId) => {
+    const script = `import { inviteBotToRepo } from ${JSON.stringify(path.join(repoRoot, "scripts/cli/github-identity.mjs"))};\nconsole.log(JSON.stringify(await inviteBotToRepo({ repositoryId: ${JSON.stringify(repositoryId)}, botLogin: ${JSON.stringify(BOT)} })));`;
+    const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: checkout, env, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return JSON.parse(run.stdout);
+  };
+  start();
+  assert.deepEqual(invite("git:gitlab.com/example/project"), { ok: false, message: "This repo is not on github.com." });
+  assert.deepEqual(gh.calls(), [], "a repo on another host reaches no GitHub repo");
+  start({ admin: false, collaborators: [], invitations: [{ id: 7, invitee: BOT, repo: "example/project" }] });
+  assert.deepEqual(invite("git:github.com/example/project"), { ok: true });
+  assert.ok(gh.readState().collaborators.some((entry) => entry.login === BOT), "the bot accepted the pending invitation");
+  start();
+
+  // The portal's account cache key changes when the token is replaced for the same bot, and never
+  // holds the token.
+  const facts = () => {
+    const script = `import { readLocalAccountFacts } from ${JSON.stringify(path.join(repoRoot, "scripts/cli/github-identity.mjs"))};\nconsole.log(JSON.stringify(readLocalAccountFacts()));`;
+    const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: checkout, env, encoding: "utf8" });
+    assert.equal(run.status, 0, run.stderr);
+    return run.stdout.trim();
+  };
+  const before = facts();
+  fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    oauth_token: ${TOKEN}-renewed\n    user: ${BOT}\n`);
+  const after = facts();
+  assert.notEqual(after, before, "a replaced token changes the local facts");
+  assert.ok(!before.includes(TOKEN) && !after.includes(TOKEN), "the facts never hold the token");
+  start();
+
   // The same rules from an organization ruleset: a repo admin still cannot read its bypass list.
   start({ rulesets: structuredClone(managed).map(({ bypass_actors, ...ruleset }) => ({ ...ruleset, name: ruleset.name.replace(/^roborepo-/, "org-"), source_type: "Organization", source: "example" })) });
   const orgRules = jsonReport();

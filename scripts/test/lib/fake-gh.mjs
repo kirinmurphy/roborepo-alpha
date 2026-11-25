@@ -171,6 +171,7 @@ if (collaborator) {
   }
 }
 if (route === "invitations" && method === "GET") {
+  if (!callerAdmin) httpError(403, "Must have admin rights to Repository.");
   reply(paged((state.invitations || []).filter((entry) => entry.repo === repoName).map((entry) => ({ id: entry.id, invitee: { login: entry.invitee }, repository: { full_name: entry.repo } }))));
 }
 
