@@ -14,6 +14,7 @@ import {
   TITLE_LINE_LABEL,
   hasStagePrefix,
   leadingPlanCommand,
+  namedPlans,
   sessionTitle,
   titleFromPrompt,
   titleLine,
@@ -38,6 +39,16 @@ assert.equal(sessionTitle("plan-close", exact.slice("/plan-close: ".length)), ex
 const oneWord = sessionTitle("plan-write", "x".repeat(80));
 assert.equal(oneWord.length, SESSION_TITLE_MAX, "a single overlong word is cut mid-word");
 assert.ok(oneWord.startsWith("/plan-write: x") && oneWord.endsWith("…"));
+
+// --- Naming a plan in a prompt ----------------------------------------------------------------
+
+const sharedA = { plan: { id: "aaaaa111", relativePath: "plans/ready/shared.md" } };
+const sharedB = { plan: { id: "bbbbb222", relativePath: "plans/backlog/shared.md" } };
+assert.deepEqual(namedPlans("plans/ready/shared.md", [sharedA, sharedB]), [sharedA],
+  "an exact store-relative path names only that plan, not another sharing its file name");
+assert.deepEqual(namedPlans("aaaaa111", [sharedA, sharedB]), [sharedA], "an id names only that plan");
+assert.equal(namedPlans("plans/active/shared.md", [sharedA, sharedB]).length, 2,
+  "a stale path matching no plan exactly falls back to every plan with that file name");
 // Two prefixes contain a space; an overlong first word must still leave them whole.
 for (const [kind, prefix] of [["quick-change", "Quick Change: "], ["sub-task", "/plan sub-task: "]]) {
   const cut = sessionTitle(kind, "y".repeat(80));

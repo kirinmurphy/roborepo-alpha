@@ -80,15 +80,13 @@ export function namedPlans(text, records) {
   if (typeof text !== "string") return [];
   const words = new Set(text.split(/\s+/).map((word) => word.replace(/^[`'"(<[]+|[`'")>\],.;:!?]+$/g, "")).filter(Boolean));
   const found = new Set();
-  for (const record of records) {
-    const { id, relativePath } = record.plan;
-    const fileName = relativePath.split("/").pop();
-    for (const word of words) {
-      if ((id && word === id) || word === relativePath || word.split(/[\\/]/).pop() === fileName) {
-        found.add(record);
-        break;
-      }
-    }
+  for (const word of words) {
+    // An exact id or store-relative path names one plan; only a word that names none exactly falls
+    // back to the file name, so a full path never also matches another plan sharing its file name.
+    const exact = records.filter(({ plan }) => (plan.id && word === plan.id) || word === plan.relativePath);
+    const fileName = word.split(/[\\/]/).pop();
+    const matches = exact.length ? exact : records.filter(({ plan }) => plan.relativePath.split("/").pop() === fileName);
+    for (const record of matches) found.add(record);
   }
   return [...found];
 }
