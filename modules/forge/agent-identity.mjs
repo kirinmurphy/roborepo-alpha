@@ -278,9 +278,11 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
   const repo = await readRepoAgentAccess({ repositoryId, cwd, stateDir, timeoutMs, botLogin: account.botLogin });
   const problems = [...account.problems, ...repo.problems];
   const combined = { ...merged, userAdmin: repo.userAdmin, ownerMessage: repo.ownerMessage };
-  if (repo.state === "unavailable" && repo.problems.length === 0) {
+  // A repo read that stopped early (it may still carry what it found first, such as unread
+  // protection) keeps a known problem a problem and says some checks could not run.
+  if (repo.state === "unavailable" && repo.reason) {
     if (problems.some((entry) => entry.severity === "problem")) return finish(combined, [...problems, incomplete({ message: repo.reason })]);
-    return { ...combined, problems, state: "unavailable", reason: repo.reason };
+    if (repo.problems.length === 0) return { ...combined, problems, state: "unavailable", reason: repo.reason };
   }
   return finish(combined, problems);
 }
