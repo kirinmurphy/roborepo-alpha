@@ -61,19 +61,21 @@ export function refreshCaBundle({ stateDir }) {
     return { copied: false, changed };
   }
   const changedCopy = writeIfChanged(copy, fs.readFileSync(source), 0o644);
-  const changedConfig = writeIfChanged(
-    local,
-    `# Codex's sandbox denies *.pem files, so Git reads a copy of the system CA bundle.\n[http "https://github.com/"]\n\tsslCAInfo = ${copy}\n`,
-    0o644,
-  );
+  const changedConfig = writeIfChanged(local, caGitconfig(copy), 0o644);
   return { copied: true, changed: changedCopy || changedConfig };
 }
 
+const caGitconfig = (copy) => `# Codex's sandbox denies *.pem files, so Git reads a copy of the system CA bundle.\n[http "https://github.com/"]\n\tsslCAInfo = ${copy}\n`;
+
+// Stale when the copy differs from the system bundle, or when the Git config that points Git at the
+// copy is missing or says something else: a setup stopped between the two writes leaves a matching
+// copy that Git never reads.
 function caBundleStale(stateDir) {
   const source = findSystemCaBundle();
   if (!source) return false;
   try {
-    return Buffer.compare(fs.readFileSync(source), fs.readFileSync(agentCaBundleFile(stateDir))) !== 0;
+    if (Buffer.compare(fs.readFileSync(source), fs.readFileSync(agentCaBundleFile(stateDir))) !== 0) return true;
+    return fs.readFileSync(agentCaGitconfigFile(stateDir), "utf8") !== caGitconfig(agentCaBundleFile(stateDir));
   } catch {
     return true;
   }

@@ -37,7 +37,8 @@ try {
     PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`, ROBOREPO_SKIP_NODE_RELEASE_CHECK: "1", ROBOREPO_SKIP_PROTECTION_CHECK: "1",
   };
   delete env.ROBOREPO_SKIP_AGENT_IDENTITY_CHECK;
-  delete env.GH_CONFIG_DIR;
+  // A token exported in the caller's shell would outrank the fixture's sign-in in fake gh.
+  for (const name of ["GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN"]) delete env[name];
   const node = (script, args, extraEnv = {}) => spawnSync(process.execPath, [path.join(repoRoot, script), ...args], { cwd: checkout, env: { ...env, ...extraEnv }, encoding: "utf8" });
   const line = () => node("scripts/cli/github-identity.mjs", ["--doctor"]);
   const doctor = (extraEnv = {}) => spawnSync("bash", [path.join(repoRoot, "scripts/doctor.sh"), "--verbose"], { cwd: checkout, env: { ...env, ...extraEnv }, encoding: "utf8" });
@@ -56,7 +57,11 @@ try {
       fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    user: ${BOT}\n`);
       fs.writeFileSync(path.join(ghDir, ".fake-token"), `${TOKEN}\n`);
     }
-    if (ca === "current") fs.copyFileSync(systemCa, path.join(stateRoot, "github-agent", "ca-bundle.crt"));
+    const caCopy = path.join(stateRoot, "github-agent", "ca-bundle.crt");
+    if (ca === "current" || ca === "config-missing" || ca === "config-other") fs.copyFileSync(systemCa, caCopy);
+    const caConfig = `# Codex's sandbox denies *.pem files, so Git reads a copy of the system CA bundle.\n[http "https://github.com/"]\n\tsslCAInfo = ${caCopy}\n`;
+    if (ca === "current") fs.writeFileSync(path.join(stateRoot, "github-agent", "gitconfig.local"), caConfig);
+    if (ca === "config-other") fs.writeFileSync(path.join(stateRoot, "github-agent", "gitconfig.local"), "[http]\n\tsslCAInfo = /elsewhere.crt\n");
     if (ca === "stale") fs.writeFileSync(path.join(stateRoot, "github-agent", "ca-bundle.crt"), "an older bundle\n");
     if (enabled) fs.writeFileSync(path.join(stateRoot, "enabled-packages.json"), JSON.stringify({ schemaVersion: 2, packages: ["github-agent-identity"], disabled: [] }));
     gh.setState(fakeGitHubState({
@@ -236,7 +241,8 @@ try {
   assert.ok(noExpiry.problems.some((item) => item.id === "no-expiry" && item.severity === "warn"));
   console.log("✓ Expiry notes start 14 days out, and a token without an expiry date gets a note.");
   // The CA bundle copy Codex's sandbox reads: missing or different from the system's is a warning.
-  for (const ca of ["stale", "missing"]) {
+  // A matching copy Git is not pointed at (setup stopped before writing gitconfig.local) is stale too.
+  for (const ca of ["stale", "missing", "config-missing", "config-other"]) {
     start({ ca });
     const report = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
     const entry = report.problems.find((item) => item.id === "ca-bundle-stale");

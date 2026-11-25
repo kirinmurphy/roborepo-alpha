@@ -405,7 +405,10 @@ function realStatusAgainstFakeGh(checkout) {
   fs.writeFileSync(systemCa, "fixture bundle\n");
   fs.mkdirSync(ghDir, { recursive: true });
   fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    oauth_token: ${TOKEN}\n    user: robo-bot\n`);
-  fs.copyFileSync(systemCa, path.join(stateRoot, "github-agent", "ca-bundle.crt"));
+  // The CA copy and the Git config that points Git at it, as setup writes them.
+  const caCopy = path.join(stateRoot, "github-agent", "ca-bundle.crt");
+  fs.copyFileSync(systemCa, caCopy);
+  fs.writeFileSync(path.join(stateRoot, "github-agent", "gitconfig.local"), `# Codex's sandbox denies *.pem files, so Git reads a copy of the system CA bundle.\n[http "https://github.com/"]\n\tsslCAInfo = ${caCopy}\n`);
   const env = {
     ...process.env, ...gh.env, HOME: path.join(tmp, "home"), ROBOREPO_STATE_ROOT: stateRoot, ROBOREPO_SYSTEM_CA_BUNDLE: systemCa,
     PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`,
