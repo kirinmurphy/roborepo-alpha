@@ -403,7 +403,12 @@ function checkProtection(report, problems, userAdmin) {
   }
   const skipped = report.policies?.some((policy) => policy.status === "skipped");
   const applies = (report.state === "protected" || report.state === "unmanaged") && !skipped;
-  if (applies && report.admin && report.bypassVisible) return;
+  if (applies && report.admin && report.bypassVerified) return;
+  if (applies && report.admin) {
+    // An admin of the repo still cannot read an organization ruleset's bypass list.
+    problems.push(problem("protection-unverified", "GitHub applies the branch rules, but some come from an organization ruleset whose bypass list RoboRepo cannot read, so it cannot confirm the bot cannot bypass them.", "Ask an organization owner to confirm the bot cannot bypass them, or run roborepo protect to add the repo's own rules.", "unverified"));
+    return;
+  }
   if (applies) {
     problems.push({
       ...problem("protection-unverified", "GitHub applies the branch rules, but you are not an admin of this repo, so RoboRepo cannot see who may bypass them.", askOwner("confirm them, and that the bot cannot bypass them"), "unverified"),

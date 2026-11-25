@@ -208,6 +208,17 @@ try {
   // Rules an admin made by hand, as strict as RoboRepo's and visible to you, are as good as RoboRepo's.
   start({ rulesets: structuredClone(managed).map((ruleset) => ({ ...ruleset, name: ruleset.name.replace(/^roborepo-/, "team-") })) });
   assert.equal(jsonReport().state, "healthy", "hand-made rules an admin can see in full are not a problem");
+  // The same rules from an organization ruleset: a repo admin still cannot read its bypass list.
+  start({ rulesets: structuredClone(managed).map(({ bypass_actors, ...ruleset }) => ({ ...ruleset, name: ruleset.name.replace(/^roborepo-/, "org-"), source_type: "Organization", source: "example" })) });
+  const orgRules = jsonReport();
+  assert.equal(orgRules.state, "unverified", "rules whose bypass list nobody here can read are not healthy");
+  assert.ok(orgRules.problems.some((entry) => entry.id === "protection-unverified" && /organization ruleset/.test(entry.message)));
+  // Admin routes answer to the caller: the bot, with Write access, cannot create a ruleset.
+  const botCreate = spawnSync("gh", ["api", "--method", "POST", "repos/example/project/rulesets", "--input", "-"], {
+    cwd: checkout, env: { ...env, GH_CONFIG_DIR: ghDir }, input: JSON.stringify({ name: "x", target: "branch", enforcement: "active", rules: [] }), encoding: "utf8",
+  });
+  assert.notEqual(botCreate.status, 0, "a bot with Write access cannot create a ruleset");
+  assert.match(botCreate.stderr, /HTTP 403/);
   console.log("✓ A repo you do not administer reads as unverified or names the owner, with a message for them.");
 
   start({ hosts: "keychain" });

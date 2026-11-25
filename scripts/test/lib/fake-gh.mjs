@@ -111,8 +111,13 @@ const paged = (list) => {
   return list.slice((page - 1) * size, page * size);
 };
 const route = pathname.replace(/^repos\\/[^/]+\\/[^/]+\\/?/, "");
+// Admin rights belong to whoever is calling: the user per state.admin, a bot per its collaborator
+// role. Every admin-only route checks this, so a write made with the bot's config fails as it would.
+const callerAdmin = identity.bot
+  ? ((state.collaborators || []).find((entry) => (entry.login || "").toLowerCase() === (identity.login || "").toLowerCase())?.permission === "admin")
+  : state.admin;
 const visible = (ruleset) => {
-  if (state.admin) return ruleset;
+  if (callerAdmin) return ruleset;
   const { bypass_actors, ...rest } = ruleset;
   return rest;
 };
@@ -146,7 +151,7 @@ if (route === "") {
   const permission = identity.bot ? permissionOf(identity.login) : null;
   const permissions = identity.bot
     ? { admin: permission === "admin", push: permission === "admin" || permission === "push", pull: true }
-    : { admin: state.admin, push: true, pull: true };
+    : { admin: callerAdmin, push: true, pull: true };
   reply({ default_branch: state.defaultBranch, permissions });
 }
 const collaborator = route.match(/^collaborators\\/([^/]+)$/);
@@ -157,7 +162,7 @@ if (collaborator) {
     process.exit(0);
   }
   if (method === "PUT") {
-    if (!state.admin || state.refuseInvite) httpError(403, "Must have admin rights to Repository.");
+    if (!callerAdmin || state.refuseInvite) httpError(403, "Must have admin rights to Repository.");
     if (permissionOf(login)) process.exit(0);
     state.invitations = [...(state.invitations || []), { id: state.nextId, invitee: login, repo: repoName }];
     state.nextId += 1;
@@ -193,7 +198,7 @@ if (route === "rulesets" && method === "GET") {
   reply(paged(state.rulesets.map(({ id, name, target, source_type, source, enforcement }) => ({ id, name, target, source_type, source, enforcement }))));
 }
 if (route === "rulesets" && method === "POST") {
-  if (!state.admin) httpError(403, "Resource not accessible by personal access token");
+  if (!callerAdmin) httpError(403, "Resource not accessible by personal access token");
   if (state.refuseCreate && body.name === state.refuseCreate) httpError(422, "Validation Failed");
   const created = stored({ id: state.nextId, source_type: "Repository", source: "example/project" }, body);
   state.rulesets.push(created);
@@ -206,7 +211,7 @@ if (one) {
   const index = state.rulesets.findIndex((ruleset) => ruleset.id === Number(one[1]));
   if (index < 0) httpError(404, "Not Found");
   if (method === "GET") reply(visible(state.rulesets[index]));
-  if (!state.admin) httpError(403, "Resource not accessible by personal access token");
+  if (!callerAdmin) httpError(403, "Resource not accessible by personal access token");
   if (method === "PUT") {
     if (state.refuseUpdate && body.name === state.refuseUpdate) httpError(422, "Validation Failed");
     const { id, source_type, source } = state.rulesets[index];
@@ -227,7 +232,7 @@ if (classic) {
   const settings = (state.classicProtection || {})[decodeURIComponent(classic[1])];
   if (state.failure === "classic-refused") httpError(403, REFUSED);
   if (state.failure === "classic-rate-limited") httpError(403, "API rate limit exceeded for user ID 1.");
-  if (!state.admin || !settings) httpError(404, "Branch not protected");
+  if (!callerAdmin || !settings) httpError(404, "Branch not protected");
   reply(settings);
 }
 

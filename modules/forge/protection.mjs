@@ -191,7 +191,14 @@ export function assessProtection(snapshot) {
     const strict = (wanted) => effective.filter((rule) => ruleAtLeastAsStrict(rule, wanted));
     const missingRules = policy.rules.filter((wanted) => !strict(wanted).some((rule) => supplierBypassFits(rule, policy))).map((rule) => rule.type);
     const widerBypass = policy.rules.filter((wanted) => missingRules.includes(wanted.type) && strict(wanted).length > 0).map((rule) => rule.type);
-    return describedPolicy({ ...base, status: "absent", missingRules, widerBypass, drift: [] });
+    // Rules met only by a ruleset whose bypass list this account cannot read (an organization
+    // ruleset, or one GitHub hides): they apply, but who may bypass them is unknown.
+    const readBypass = (rule) => {
+      const supplier = byId.get(rule.ruleset_id);
+      return !!supplier && supplier.source_type === "Repository" && Array.isArray(supplier.bypass_actors) && bypassNoWider(supplier.bypass_actors, policy.bypass_actors);
+    };
+    const unreadBypass = policy.rules.filter((wanted) => !missingRules.includes(wanted.type) && !strict(wanted).some(readBypass)).map((rule) => rule.type);
+    return describedPolicy({ ...base, status: "absent", missingRules, widerBypass, unreadBypass, drift: [] });
   });
 
   const names = new Map(rulesets.map((ruleset) => [ruleset.id, ruleset.name]));
@@ -211,6 +218,8 @@ export function assessProtection(snapshot) {
 
   return {
     state, headline: STATE_HEADLINES[state], reason: null, repository: repo, defaultBranch, login, admin, bypassVisible,
+    // Whether every rule that protects the branches comes from a ruleset whose bypass list was read.
+    bypassVerified: bypassVisible && !policies.some((policy) => policy.unreadBypass?.length),
     policies, conflicts,
     requiredChecks, checksSource,
     handMade: handMadeRulesets(rulesets, { defaultBranch, bypassVisible }),
@@ -311,7 +320,7 @@ function failureReport(repo, error) {
 
 function emptyReport(repo, state) {
   return {
-    state, headline: STATE_HEADLINES[state], reason: null, repository: repo, defaultBranch: null, login: null, admin: false, bypassVisible: false,
+    state, headline: STATE_HEADLINES[state], reason: null, repository: repo, defaultBranch: null, login: null, admin: false, bypassVisible: false, bypassVerified: false,
     policies: [], conflicts: [], requiredChecks: [], checksSource: "none", handMade: [],
   };
 }
