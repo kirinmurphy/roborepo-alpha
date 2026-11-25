@@ -315,9 +315,7 @@ export function createPackageActionDialog() {
     }
   });
 
-  function show({ title, body, confirmLabel, danger = false, onConfirm = null, loading = false }) {
-    const opening = !current;
-    if (opening) current = { settle: null, running: false };
+  function render({ title, body, confirmLabel, danger = false, onConfirm = null, loading = false }) {
     current.onConfirm = onConfirm;
     titleEl.textContent = title;
     contentEl.replaceChildren(body);
@@ -327,21 +325,39 @@ export function createPackageActionDialog() {
     tmpl.idle(confirmEl);
     if (loading) tmpl.busy(confirmEl);
     confirmEl.disabled = loading || !onConfirm;
+  }
+
+  // Starts one action's flow and returns its handle. `show(next)` and `fail(message)` change the
+  // dialog only while this flow is the one open: a preview or update check that returns after the
+  // dialog was closed, or after another action opened it, is dropped rather than reopening it or
+  // replacing the other action's contents. `closed` resolves to whether the action completed.
+  function open(args) {
+    if (current) {
+      const previous = current;
+      current = null;
+      previous.settle(false);
+    }
+    const flow = { running: false, onConfirm: null, settle: null };
+    flow.closed = new Promise((resolve) => { flow.settle = resolve; });
+    current = flow;
+    render(args);
     if (!dialogEl.open) dialogEl.showModal();
-    if (!opening) return current.promise;
-    current.promise = new Promise((resolve) => { current.settle = resolve; });
-    return current.promise;
+    return {
+      show(next) {
+        if (current === flow) render(next);
+      },
+      // An error before there is anything to confirm (the update check failed): shown in place.
+      fail(message) {
+        if (current !== flow) return;
+        tmpl.idle(confirmEl);
+        confirmEl.disabled = true;
+        setError(message);
+      },
+      closed: flow.closed,
+    };
   }
 
-  // An error before there is anything to confirm (the update check failed): show it in place.
-  function fail(message) {
-    if (!current) return;
-    tmpl.idle(confirmEl);
-    confirmEl.disabled = true;
-    setError(message);
-  }
-
-  return { show, fail, isOpen: () => Boolean(current) };
+  return { open };
 }
 
 // The add-a-source dialog. `ask()` resolves to { location, id } on submit, or null.

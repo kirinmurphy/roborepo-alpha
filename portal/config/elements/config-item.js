@@ -46,8 +46,8 @@ function rowCostChip(spec) {
 // A Custom or Third Party card's source state, from the package service's view (item.packageState,
 // one `packageView()` row): its source badge, pinned commit, what its source no longer offers, and
 // the Install, Update, and Remove actions. `item.packageNote` is a state the row cannot carry (an
-// unresolved or shadowed package). Returns whether the on/off switch shows: only an installed
-// package has one.
+// unresolved or shadowed package). Returns whether the on/off switch shows: every package but a
+// GitHub one not installed yet.
 const STATE_NOTES = {
   sourceChanged: "Its source now points at a different repo",
   unavailable: "No longer offered by its source",
@@ -75,8 +75,11 @@ function renderPackageState(row, item, { onPackageAction }) {
     revisionEl.title = state.revision;
     revisionEl.hidden = false;
   }
+  // Only a GitHub package needs an install before it can be turned on. A folder package is used in
+  // place, and its switch installs it, as `roborepo package enable` does.
+  const needsInstall = state?.sourceType === "git" && !state.installed;
   const kinds = item.packageActions || [
-    ...(state.installed ? [] : ["install"]),
+    ...(needsInstall ? ["install"] : []),
     ...(state.updateAvailable && !state.sourceChanged ? ["update"] : []),
     ...(state.removable ? ["remove"] : []),
   ];
@@ -90,7 +93,7 @@ function renderPackageState(row, item, { onPackageAction }) {
     return button;
   }));
   actionsEl.hidden = kinds.length === 0;
-  return Boolean(state?.installed);
+  return !needsInstall;
 }
 
 const ACTION_LABELS = { install: "Install", update: "Update", remove: "Remove" };

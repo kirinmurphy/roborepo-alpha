@@ -230,8 +230,10 @@ of the lock here too.
 The Config page's package items (`scripts/cli/config.mjs`) carry the same `tab`, `sourceId`,
 `sourceBadge`, `trust`, and `collection` fields, read from the composed catalog.
 
-`previewInstall` and `addSource` return `warning`: `UNVERIFIED_SOURCE_WARNING` for an unverified
-source, else null. The CLI prints it and the portal shows it, so both use one wording.
+`addSource` returns `warning`: `UNVERIFIED_SOURCE_WARNING` for an unverified source, else null.
+`previewInstall`, and a plan-changed refusal's details, return `warning` naming the unverified
+packages followed by the same advice. The CLI prints the add warning and the portal shows both, so
+they share one wording.
 
 ## The portal
 

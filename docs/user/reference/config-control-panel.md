@@ -117,7 +117,8 @@ The usual path:
 1. In **Sources**, select **Add a Source** and enter a GitHub URL or a folder path (and an id if
    you want one). A GitHub repo is fetched and listed first, which can take several minutes; the
    source shows as "Adding…" and the rest of the page stays usable.
-2. On the Custom or Third Party tab, select **Install** on a card, read the preview, and confirm.
+2. For a GitHub package, on the Third Party tab, select **Install** on its card, read the preview,
+   and confirm. A folder package (Custom) needs no install: it is used in place.
 3. Turn the package on with its switch.
 4. Later, select **Update** when it appears, read the change, and confirm; or select **Remove**.
 
@@ -125,8 +126,8 @@ What a Custom or Third Party card shows:
 
 | Package state | Card shows |
 | --- | --- |
-| Not installed | **Install**, no switch. Packages a GitHub source offers that are not installed are listed under Available to Install |
-| Installed, off | The on/off switch, off |
+| A GitHub package not installed | **Install**, no switch, under Available to Install |
+| A folder package, or an installed GitHub package | The on/off switch; turning a folder package on installs it, as `roborepo package enable` does |
 | A newer commit is listed | **Update** beside the pinned commit (`@ <commit>`) |
 | Its source now points at another repo | "Its source now points at a different repo", and no **Update** |
 | Its source no longer offers it | "No longer offered by its source"; the installed copy keeps working |
@@ -136,7 +137,8 @@ What a Custom or Third Party card shows:
 Every card also shows its source badge (with `· Trusted` for a trusted repo).
 
 **Install** shows every package the install brings, dependencies included: the source, the commit,
-and the contents by kind, with the CLI's warning for an unverified source. Confirming installs
+and the contents by kind. For an unverified source it names the packages that come from it and
+gives the advice `roborepo package source add` prints. Confirming installs
 exactly what was shown. If the source was refreshed in between, the install is refused and the
 dialog shows the new preview to confirm again.
 

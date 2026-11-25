@@ -4,7 +4,6 @@
 // The child does the same call the CLI does, with the CLI's callbacks, and reports the result or
 // the refusal as JSON, which the parent turns back into a PackageServiceError so its code and
 // details reach the page unchanged.
-import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { PackageServiceError } from "./package-service.mjs";
@@ -35,7 +34,8 @@ export function runPackageServiceInChild(operation, args = [], { actor = current
   if (!OPERATIONS[operation]) return Promise.reject(new Error(`unknown package service operation: ${operation}`));
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [RUNNER_PATH], {
-      cwd: path.dirname(RUNNER_PATH),
+      // The caller's directory, so a relative path means the same here as in the server.
+      cwd: process.cwd(),
       env: { ...env, ROBOREPO_WRITE_ACTOR: actor },
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -50,7 +50,13 @@ export function runPackageServiceInChild(operation, args = [], { actor = current
         reject(new Error(stderr.trim() || `package service child exited ${code} without a result`));
         return;
       }
-      const outcome = JSON.parse(line.slice(RESULT_PREFIX.length));
+      let outcome;
+      try {
+        outcome = JSON.parse(line.slice(RESULT_PREFIX.length));
+      } catch (err) {
+        reject(new Error(`package service child sent an unreadable result: ${err.message}`));
+        return;
+      }
       if (outcome.error) {
         const { message, code: errorCode, details } = outcome.error;
         reject(outcome.error.service ? new PackageServiceError(message, { code: errorCode, details }) : new Error(message));

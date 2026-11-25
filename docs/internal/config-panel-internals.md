@@ -96,7 +96,7 @@ one response.
 
 In the All repos scope the page loads `GET /api/packages` (`packageView()`, the same data
 `roborepo package list --json` prints) and `GET /api/packages/sources` (`listSources()`) beside
-`/api/config`, on every poll, after every package or source action, and when the window regains
+`/api/config`, on every poll, after every package, source, or switch action, and when the window regains
 focus. The config snapshot still drives categories and switches; `portal/config/app.js` matches
 each Custom and Third Party item to its view row by `sourceId/id` and passes the row as
 `item.packageState`, which `config-item.js` renders as the badge, pinned commit, state notes, and

@@ -101,7 +101,12 @@ async function handleToggle(item, enabled, { offer = true } = {}) {
     if (enabled || err.code !== "INCLUDED_IN_SELECTED") throw err;
     data = await disableWithDependents(item, err.details?.includedBy || []);
   }
-  if (data.config) applySnapshot(data.config); // re-render from the authoritative post-mutation snapshot
+  // Re-render from the authoritative post-mutation snapshot. Turning a package on or off can change
+  // its installed and active state too, so the package view is re-read with it.
+  if (data.config) {
+    await loadPackageState();
+    applySnapshot(data.config);
+  }
   void offerHookReview(data.hookHarnesses);
   if (offer && enabled && data.recommendations?.length) await offerRecommendations(item, data.recommendations);
 }
@@ -160,7 +165,10 @@ async function handleBulkToggle(section, items, enabled) {
       items.map((item) => item.id),
       enabled,
     );
-    if (data.config) applySnapshot(data.config);
+    if (data.config) {
+      await loadPackageState();
+      applySnapshot(data.config);
+    }
     // One read and at most one offer for the whole batch, not one per package.
     void offerHookReview(data.hookHarnesses);
   } catch (err) {
@@ -431,25 +439,26 @@ function handlePackageAction(kind, item) {
 async function installFlow(item) {
   const ref = item.packageState.qualifiedName;
   const title = `Install ${item.label}`;
-  packageActionDialog.show({ title, body: tmpl.loadingText("Reading what it would install…"), confirmLabel: "Install", loading: true });
+  const flow = packageActionDialog.open({ title, body: tmpl.loadingText("Reading what it would install…"), confirmLabel: "Install", loading: true });
   let preview;
   try {
     preview = await api.fetchInstallPreview(ref);
   } catch (err) {
-    return packageActionDialog.fail(err.message);
+    return flow.fail(err.message);
   }
   const confirm = async () => {
     try {
       await api.installPackage(ref, preview.plan);
     } catch (err) {
       if (!err.details?.planChanged) throw err;
-      preview = { ...preview, packages: err.details.preview, plan: err.details.plan };
+      preview = { ...preview, packages: err.details.preview, plan: err.details.plan, warning: err.details.warning ?? null };
       return { body: tmpl.installPreviewBody(preview, { notice: err.message }) };
     }
     await reloadAll();
     return true;
   };
-  return packageActionDialog.show({ title, body: tmpl.installPreviewBody(preview), confirmLabel: "Install", onConfirm: confirm });
+  flow.show({ title, body: tmpl.installPreviewBody(preview), confirmLabel: "Install", onConfirm: confirm });
+  return flow.closed;
 }
 
 // The unconfirmed update returns the change to show (a GitHub fetch, so it can take a while);
@@ -458,16 +467,16 @@ async function installFlow(item) {
 async function updateFlow(item) {
   const ref = item.packageState.qualifiedName;
   const title = `Update ${item.label}`;
-  packageActionDialog.show({ title, body: tmpl.loadingText("Fetching its source for the new revision…"), confirmLabel: "Update", loading: true });
+  const flow = packageActionDialog.open({ title, body: tmpl.loadingText("Fetching its source for the new revision…"), confirmLabel: "Update", loading: true });
   let change;
   try {
     const result = await api.updatePackage(ref);
     // Nothing to confirm: up to date, a restored copy, or a folder package used in place.
-    packageActionDialog.show({ title, body: tmpl.updateResultText(result), confirmLabel: "Done", onConfirm: async () => true });
+    flow.show({ title, body: tmpl.updateResultText(result), confirmLabel: "Done", onConfirm: async () => true });
     await reloadAll();
-    return;
+    return flow.closed;
   } catch (err) {
-    if (err.code !== "confirmationRequired" || !err.details?.change) return packageActionDialog.fail(err.message);
+    if (err.code !== "confirmationRequired" || !err.details?.change) return flow.fail(err.message);
     change = err.details.change;
   }
   const confirm = async () => {
@@ -481,12 +490,13 @@ async function updateFlow(item) {
     await reloadAll();
     return true;
   };
-  return packageActionDialog.show({ title, body: tmpl.updateChangeBody(change), confirmLabel: "Update", onConfirm: confirm });
+  flow.show({ title, body: tmpl.updateChangeBody(change), confirmLabel: "Update", onConfirm: confirm });
+  return flow.closed;
 }
 
 function removeFlow(item) {
   const ref = item.removeRef || item.packageState.qualifiedName;
-  return packageActionDialog.show({
+  return packageActionDialog.open({
     title: `Remove ${item.label}`,
     body: tmpl.removePackageBody(item.packageState),
     confirmLabel: "Remove",
@@ -496,7 +506,7 @@ function removeFlow(item) {
       await reloadAll();
       return true;
     },
-  });
+  }).closed;
 }
 
 const sourceCallbacks = {
@@ -539,7 +549,7 @@ const sourceCallbacks = {
   },
   onRemove(source) {
     const { node, keepInstalled } = tmpl.removeSourceBody(source);
-    return packageActionDialog.show({
+    return packageActionDialog.open({
       title: `Remove ${source.id}`,
       body: node,
       confirmLabel: "Remove Source",
@@ -550,7 +560,7 @@ const sourceCallbacks = {
         await reloadAll();
         return true;
       },
-    });
+    }).closed;
   },
   async onExpand(source) {
     if (sourcesState.expanded.has(source.id)) {

@@ -406,7 +406,7 @@ export function previewInstall(reference) {
     tab: root.tab,
     revision: root.revision || null,
     needsConfirmation: plan.some((entry) => entry.trust === "unverified"),
-    warning: plan.some((entry) => entry.trust === "unverified") ? UNVERIFIED_SOURCE_WARNING : null,
+    warning: unverifiedWarning(plan),
     contents: root.contents || contentsSummary(root.sourceRoot),
     packages: plan.map((entry) => previewOf(entry)),
     plan: planDigest(plan),
@@ -464,8 +464,16 @@ function samePlan(digest, expected) {
 function planChangedError(name, plan) {
   return new PackageServiceError(
     `what installing ${name} would bring changed since it was shown; review it and confirm again`,
-    { code: "confirmationRequired", details: { planChanged: true, preview: plan.map((entry) => previewOf(entry)), plan: planDigest(plan) } },
+    { code: "confirmationRequired", details: { planChanged: true, preview: plan.map((entry) => previewOf(entry)), plan: planDigest(plan), warning: unverifiedWarning(plan) } },
   );
+}
+
+// What an install preview says before installing anything from an unverified source: which
+// packages, then the same advice `source add` prints.
+function unverifiedWarning(plan) {
+  const names = plan.filter((entry) => entry.trust === "unverified").map((entry) => entry.qualifiedName);
+  if (names.length === 0) return null;
+  return `${names.join(", ")} ${names.length === 1 ? "comes" : "come"} from an unverified source. ${UNVERIFIED_SOURCE_WARNING}`;
 }
 
 // The package and every package it requires that is not already resolvable. A requirement is
