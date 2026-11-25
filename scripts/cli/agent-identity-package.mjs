@@ -17,17 +17,16 @@ export const AGENT_GITCONFIG_INCLUDE = "~/.roborepo/package-runtime/github-agent
 // their agents' `git push` still goes out with your credentials even though `gh` uses the bot. Each
 // harness says where its agent shells' environment lives (its `agentShell` adapter); one without
 // that group gets no RoboRepo-rendered shell environment and is not checked. A config that is
-// missing or unreadable is skipped: this reports only what it saw.
+// missing or unreadable counts as a gap: its agents get no bot settings that this could confirm, and
+// `roborepo update` writes it.
 export function agentGitRoutingGaps({ providers = enabledAgentShellProviders(), read = readRootConfig } = {}) {
   const gaps = [];
   for (const provider of providers) {
-    let includes;
+    let includes = false;
     try {
       const text = read(provider);
       includes = includesAgentGitConfig((name) => provider.adapters.agentShell.envValue(text, name));
-    } catch {
-      continue;
-    }
+    } catch {}
     if (!includes) gaps.push(provider.manifest.displayName);
   }
   return gaps;

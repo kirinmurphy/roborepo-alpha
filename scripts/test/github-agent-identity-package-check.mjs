@@ -132,7 +132,9 @@ try {
   const countOfOne = edited((text) => text.replace(/(GIT_CONFIG_COUNT"?\s*[:=]\s*)"2"/, '$1"1"'));
   assert.deepEqual(agentGitRoutingGaps({ providers, read: byId(countOfOne) }), names, "an include beyond GIT_CONFIG_COUNT does not count");
   const [first] = providers;
-  assert.deepEqual(agentGitRoutingGaps({ providers, read: byId({ [first.id]: withoutInclude[first.id] }) }), [first.manifest.displayName], "a harness with no config is skipped");
+  const [, ...others] = providers;
+  const onlyFirst = byId({ [first.id]: baselines[first.id] });
+  assert.deepEqual(agentGitRoutingGaps({ providers, read: onlyFirst }), others.map((provider) => provider.manifest.displayName), "a harness whose config cannot be read is a gap, never healthy");
 }
 
 console.log("github-agent-identity-package ok");
