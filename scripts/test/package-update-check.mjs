@@ -357,6 +357,31 @@ try {
   assert.equal(goneResult.warning, undefined, "the cached revision supplied its files");
   assert.doesNotMatch(JSON.stringify(claudeSettings().hooks || {}), /upd-gone-hook/, "its hook is removed");
   assert.doesNotMatch(liveClaudeRules(roots.home), /Upd gone tool/, "its rules are removed");
+
+  // An enabled folder package whose source was disabled is turned off from its recorded folder,
+  // hooks included, without claiming its files are missing.
+  const liveDir = path.join(roots.tmp, "live-folder");
+  const livePkg = path.join(liveDir, "live-tool");
+  writeFiles(livePkg, {
+    "package.config.json": manifest("live-tool", {
+      resources: [
+        { type: "rules", harness: "claude", source: "rules.md" },
+        { type: "hooks", harness: "claude", source: "hooks.json" },
+      ],
+    }),
+    "rules.md": "## Upd live tool\n",
+    "hooks.json": JSON.stringify({ SessionStart: [{ matcher: "", hooks: [{ type: "command", command: "echo upd-live-hook" }] }] }),
+  });
+  ok("package", "source", "add", liveDir, "--id", "livesrc");
+  ok("package", "install", "livesrc/live-tool", "--yes");
+  ok("package", "enable", "live-tool");
+  assert.match(JSON.stringify(claudeSettings().hooks || {}), /upd-live-hook/, "the folder package's hook is applied");
+  ok("package", "source", "disable", "livesrc");
+  const removedLive = ok("package", "remove", "live-tool");
+  assert.doesNotMatch(removedLive, /missing/, `the recorded folder supplies its files\n${removedLive}`);
+  assert.doesNotMatch(JSON.stringify(claudeSettings().hooks || {}), /upd-live-hook/, "its hook is removed");
+  assert.doesNotMatch(liveClaudeRules(roots.home), /Upd live tool/, "its rules are removed");
+  assert.ok(fs.existsSync(path.join(livePkg, "hooks.json")), "the user's folder is never touched");
 } finally {
   roots.restore();
   roots.cleanup();

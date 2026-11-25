@@ -527,6 +527,19 @@ function readPinnedRevision(recorded, source, collection = null) {
   }, source);
 }
 
+// A folder package as it is in the folder its install record names, whatever its source's state.
+// Null when that folder no longer holds a readable package.
+function readRecordedFolder(record) {
+  const file = path.join(record.resolved || "", "package.config.json");
+  if (!record.resolved || !fs.existsSync(file)) return null;
+  const source = findSource(record.sourceId) || { id: record.sourceId, type: record.sourceType || "path", trust: record.trust || "local" };
+  try {
+    return normalizePackageEntry({ sourceId: source.id, packageId: record.packageId, root: record.resolved, file }, source);
+  } catch {
+    return null;
+  }
+}
+
 function missingPinnedCopyError(pkg, recorded) {
   return new PackageServiceError(`the installed copy of ${pkg.qualifiedName} is missing and its revision ${recorded.resolved.slice(0, 12)} is no longer cached; run \`roborepo package update ${pkg.id}\` to restore it`, { code: "unavailable" });
 }
@@ -844,11 +857,17 @@ export async function removePackage(reference, { disable = null, retire = null }
   const stranded = !pkg && (readEnabledPackagesRegistry().packages.includes(packageId) || readAppliedPackageIds().includes(packageId));
   let warning = null;
   if (stranded) {
-    // Its files: the copy or folder, else (copy deleted) its pinned revision from the source's cache.
-    const source = record.kind === "materialized" ? findSource(record.sourceId) : null;
-    const own = (composed.candidates || []).find((candidate) => candidate.id === packageId && candidate.sourceId === record.sourceId
-      && (record.kind !== "materialized" || candidate.revision === record.resolved))
-      || (source ? readPinnedRevision(record, source) : null);
+    // Its files, as recorded: a copied package's copy, else (copy deleted) its pinned revision from
+    // the source's cache; a folder package's recorded folder, read directly so a disabled or
+    // repointed source does not hide it or substitute another folder's package.
+    let own;
+    if (record.kind === "materialized") {
+      const source = findSource(record.sourceId);
+      own = (composed.candidates || []).find((candidate) => candidate.id === packageId && candidate.sourceId === record.sourceId && candidate.revision === record.resolved)
+        || (source ? readPinnedRevision(record, source) : null);
+    } else {
+      own = readRecordedFolder(record);
+    }
     if (!retire) throw new PackageServiceError(`${packageId} is active; disable it first`, { code: "refused" });
     if (own) {
       await retire(own);
@@ -857,7 +876,7 @@ export async function removePackage(reference, { disable = null, retire = null }
       // source may be gone too), so the cleanup that needs no files runs and the user is told
       // what may remain.
       await retire({ id: packageId, label: packageId, components: [] });
-      warning = `the files of ${packageId} are missing, so hooks, MCP servers, or config changes it added to your harnesses could not be removed; check them by hand`;
+      warning = `the files of ${packageId} are missing, so hooks and hook scripts, MCP servers, config changes, or services it added to your harnesses could not be removed; check them by hand`;
     }
     disabled = true;
   }
