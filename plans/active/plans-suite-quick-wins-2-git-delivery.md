@@ -289,6 +289,18 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 | More pushes mean more CI runs | `.github/workflows/ci.yml` cancels superseded runs on the same ref |
 | A CI fix lands after the last Validator pass | The final report lists it, and `/plan-review` runs its own Validator before approval |
 
+## Review
+
+### Findings
+- [x] `/plan-review` recorded the Result before the CI watch, so a CI fix made there moved the tip past the recorded commit with no Validator pass over it — fixed (3546603d)
+- [x] The user guide said a blocked CI check keeps the plan in `active/` even when fixing review findings, where the plan stays in `review/` — fixed (3546603d)
+
+### Verification
+- Validation pass 1 at ac48c546 (fresh-context subagent): 2 actionable `fix` findings, both fixed in 3546603d
+- `node scripts/test/plan-lifecycle-transitions-check.mjs` → ok at ac48c546; the new merge-readiness section failed before the check existed
+- `node scripts/test/plan-suite-skills-check.mjs` → ok at 3546603d
+- `bash scripts/doctor.sh --quiet` → doctor passed (98 checks) at 3546603d
+
 ## Decision Log
 
 - 2026-11-24, during promotion: kept the shared procedure in the existing
