@@ -355,6 +355,9 @@ for (const [command, expected] of cases) {
       "gh api repos/o/r", "gh api graphql -f query=x", "gh -R o/r api repos/o/r/pulls",
       // Reads that mention merge state are not merges.
       "gh api repos/o/r/pulls/12 --jq .mergeable",
+      "gh api -H 'Accept: application/vnd.github.raw+json' repos/o/r/contents/README.md",
+      "gh api --header 'Accept: application/vnd.github+json' repos/o/r/pulls",
+      "gh api graphql -F number=12 -f query='{ viewer { login } }'",
       "gh api repos/o/r/pulls --jq '.[].merged_at'",
       "gh api graphql -f query='{ repository(owner: \"o\", name: \"r\") { pullRequest(number: 1) { mergeable mergeStateStatus mergeQueueEntry { id } } } }'",
       "git log --merges -1 && gh api repos/o/r",
@@ -409,6 +412,20 @@ for (const [command, expected] of cases) {
       // A query written in a heredoc or a variable is on the command line too.
       "gh api graphql -F query=@- <<'Q'\nmutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }\nQ",
       "Q='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'; gh api graphql -f query=\"$Q\"",
+      // An Authorization header replaces the bot's token, in every spelling gh accepts.
+      "gh api -H 'Authorization: Bearer x' user",
+      "gh api -H 'authorization: token x' user",
+      "gh api -H'Authorization: token x' user",
+      "gh api -iH 'AUTHORIZATION: token x' user",
+      "gh api --header 'Authorization: token x' user",
+      "gh api --header='Authorization: token x' user",
+      "gh api -H \"$AUTH\" user",
+      // A GraphQL query from a file or stdin cannot be checked for a merge mutation.
+      "gh api graphql -F query=@request.graphql",
+      "gh api graphql --field query=@request.graphql",
+      "gh api graphql -Fquery=@request.graphql",
+      "gh api graphql --input request.json",
+      "gh api /graphql --input=request.json",
     ]) {
       assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} still denies as agent: ${command}`);
     }

@@ -532,6 +532,40 @@ function mergesThroughApi(args) {
   return commandMerges || args.some((arg) => API_MERGES.test(arg))
 }
 
+// Why the agent lift does not apply to these `gh api` arguments, or null when it does. An explicit
+// Authorization header replaces gh's configured token, so the call would act as whichever account
+// that token belongs to; a header whose name cannot be read (`-H "$H"`) may be one. A GraphQL query
+// read from a file or stdin (`-F query=@file`, `--input`) cannot be checked for a merge mutation.
+const READABLE_HEADER = /^\s*([A-Za-z0-9-]+)\s*:/
+function apiLiftRefusal(args) {
+  const headers = []
+  const fields = []
+  let input = false
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg === '-H' || arg === '--header') headers.push(args[++i] ?? '')
+    else if (arg.startsWith('--header=')) headers.push(arg.slice('--header='.length))
+    else if (/^-[A-Za-z]*H/.test(arg) && !arg.startsWith('--')) {
+      const value = arg.slice(arg.indexOf('H') + 1)
+      headers.push(value || (args[++i] ?? ''))
+    } else if (arg === '-F' || arg === '--field') fields.push(args[++i] ?? '')
+    else if (arg.startsWith('--field=')) fields.push(arg.slice('--field='.length))
+    else if (/^-F./.test(arg)) fields.push(arg.slice(2))
+    else if (arg === '--input' || arg.startsWith('--input=')) input = true
+  }
+  for (const header of headers) {
+    const name = READABLE_HEADER.exec(header)?.[1]
+    if (!name || name.toLowerCase() === 'authorization') {
+      return '`gh api` with an Authorization header, or one whose name cannot be read, acts as whichever account that token belongs to instead of the bot. Run it yourself.'
+    }
+  }
+  const graphql = args.some((arg) => /^\/?graphql$/.test(arg))
+  if (graphql && (input || fields.some((field) => /^[^=]*=@/.test(field)))) {
+    return 'a GraphQL query read from a file or stdin cannot be checked for a merge. Pass the query inline with `-f query=...`, or run it yourself.'
+  }
+  return null
+}
+
 // gh with its options removed, matched against the host's denied list.
 function classifyGh(args) {
   const words = []
@@ -542,7 +576,11 @@ function classifyGh(args) {
   const { denied: deniedList, allowedAsAgent } = HOST_CLIS.github
   const denied = deniedList.find((prefix) => prefix.every((word, k) => words[k] === word))
   if (!denied) return null
-  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive() && !mergesThroughApi(args)) return null
+  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive() && !mergesThroughApi(args)) {
+    const refusal = apiLiftRefusal(args)
+    if (!refusal) return null
+    return { decision: 'deny', reason: `roborepo: ${refusal}` }
+  }
   return {
     decision: 'deny',
     reason: `roborepo: \`gh ${denied.join(' ')}\` acts on GitHub without going through git, so the protected-branch guards cannot check it. Run it yourself.`,
