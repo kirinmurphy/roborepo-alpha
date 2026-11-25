@@ -22,6 +22,11 @@ while IFS='=' read -r name _; do
   [[ "${name}" =~ ^GIT_CONFIG_(COUNT|KEY_[0-9]+|VALUE_[0-9]+)$ ]] && unset "${name}"
 done < <(env)
 
+# With the GitHub agent identity on, an agent shell also points gh at the bot's config folder and
+# blanks GH_TOKEN and GITHUB_TOKEN. Tests that run a fake gh as "the user" would inherit the bot's
+# folder and fail where CI, which has none of these, passes.
+unset GH_CONFIG_DIR GH_TOKEN GITHUB_TOKEN
+
 run() {
   echo ""
   echo "==> $*"
