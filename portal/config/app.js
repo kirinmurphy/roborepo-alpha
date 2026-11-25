@@ -419,6 +419,8 @@ function attentionSection() {
       packageNote: `Can't be found: ${entry.reason}`,
       packageActions: ["remove"],
       removeRef: rowKey(entry.sourceId, entry.id),
+      // What removal deletes depends on the source type; null when the source is gone.
+      removeSourceType: sourcesData?.find((source) => source.id === entry.sourceId)?.type ?? null,
     }));
   const shadowed = (packageData.shadowed || []).flatMap((entry) => entry.hidden
     .filter((name) => onThisTab(name.split("/")[0]))
@@ -498,7 +500,7 @@ function removeFlow(item) {
   const ref = item.removeRef || item.packageState.qualifiedName;
   return packageActionDialog.open({
     title: `Remove ${item.label}`,
-    body: tmpl.removePackageBody(item.packageState),
+    body: tmpl.removePackageBody(item.packageState?.sourceType ?? item.removeSourceType ?? null),
     confirmLabel: "Remove",
     danger: true,
     onConfirm: async () => {
@@ -578,21 +580,34 @@ const sourceCallbacks = {
   },
 };
 
+// Only the newest read lands: a poll that started before an action and answers after the action's
+// own reload must not put the older view back.
+let packageReadSeq = 0;
+
 async function loadPackageState() {
   if (currentRepositoryScope()) return;
+  const seq = ++packageReadSeq;
   try {
-    [packageData, sourcesData] = await Promise.all([api.fetchPackages(), api.fetchSources()]);
+    const [view, sources] = await Promise.all([api.fetchPackages(), api.fetchSources()]);
+    if (seq !== packageReadSeq) return;
+    [packageData, sourcesData] = [view, sources];
     packageLoadError = null;
   } catch (err) {
-    packageLoadError = err;
+    if (seq === packageReadSeq) packageLoadError = err;
   }
 }
 
 // After any package or source action: the snapshot, the package view, and the sources, together.
+// The action already happened, so a failed re-read is logged and left to the next poll rather than
+// reported as the action failing.
 async function reloadAll() {
-  const [snap] = await Promise.all([api.fetchConfig(), loadPackageState()]);
-  last = null;
-  applySnapshot(snap);
+  try {
+    const [snap] = await Promise.all([api.fetchConfig(), loadPackageState()]);
+    last = null;
+    applySnapshot(snap);
+  } catch (err) {
+    showError(err);
+  }
 }
 
 // --------------------------------------------------------------------------- poll

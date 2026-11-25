@@ -941,12 +941,17 @@ export function updateChangeBody(change, { notice = null } = {}) {
 }
 
 // What removing a package does, in the service's terms: an active package is turned off first; a
-// GitHub package's copy is deleted; a folder package's files are never touched.
-export function removePackageBody(state) {
+// GitHub package's copy is deleted; a folder package's files are never touched. `sourceType` is
+// null when the source is gone, and the wording then covers both.
+const REMOVE_WORDING = {
+  git: "If it is on, it is turned off first. Its installed copy is then deleted.",
+  path: "If it is on, it is turned off first. Its folder is left as it is: RoboRepo only forgets the install.",
+  unknown: "If it is on, it is turned off first. An installed copy from GitHub is deleted; a folder is left as it is.",
+};
+
+export function removePackageBody(sourceType) {
   const p = document.createElement("p");
-  p.textContent = state?.sourceType === "git"
-    ? "If it is on, it is turned off first. Its installed copy is then deleted; its source still offers it to install again."
-    : "If it is on, it is turned off first. Its folder is left as it is: RoboRepo only forgets the install.";
+  p.textContent = REMOVE_WORDING[sourceType === "git" ? "git" : sourceType ? "path" : "unknown"];
   return p;
 }
 

@@ -129,6 +129,7 @@ test("package sources and installs agree between the portal and the CLI", async 
 
   // Portal: remove it. The CLI sees it gone; the source still offers it, so the card offers Install.
   await tool.getByRole("button", { name: "Remove UI Tool" }).click();
+  await expect(dialog(page)).toContainText("Its installed copy is then deleted.");
   await dialog(page).getByRole("button", { name: "Remove", exact: true }).click();
   await expect(dialog(page)).toBeHidden();
   await expect(tool.getByRole("button", { name: "Install UI Tool" })).toBeVisible();
@@ -280,6 +281,8 @@ test("cards show each state the package view reports", async ({ page }) => {
     const gone = card(page, "stfolder/stgone");
     await expect(gone.locator(".package-state-note")).toContainText("Can't be found: ");
     await gone.getByRole("button", { name: "Remove stfolder/stgone" }).click();
+    // Its source is a folder, so the dialog says its files stay.
+    await expect(dialog(page)).toContainText("Its folder is left as it is");
     await dialog(page).getByRole("button", { name: "Remove", exact: true }).click();
     await expect(dialog(page)).toBeHidden();
     await expect(gone).toHaveCount(0);
