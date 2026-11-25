@@ -133,10 +133,11 @@ function testRelocatedWorkspaceUntouched() {
   );
 }
 
-// `workspace use` accepts any folder, including one inside the package store that uninstall
-// removes. A default uninstall still keeps it, and removes the store's own files around it.
+// `workspace use` accepts any folder, including one inside the package store or the bot's folder
+// that uninstall removes. A default uninstall still keeps it, and removes the store's own files
+// around it.
 function testWorkspaceInsidePackageStoreSurvives() {
-  for (const relative of [path.join("packages", "my-workspace"), "packages"]) {
+  for (const relative of [path.join("packages", "my-workspace"), "packages", path.join("github-agent", "project")]) {
     const home = path.join(tmp, `case-${++caseId}`);
     const stateDir = path.join(home, ".roborepo");
     const workspace = path.join(stateDir, relative);
@@ -144,7 +145,11 @@ function testWorkspaceInsidePackageStoreSurvives() {
     fs.mkdirSync(path.dirname(skill), { recursive: true });
     fs.writeFileSync(skill, "USER AUTHORED\n");
     fs.writeFileSync(path.join(stateDir, "workspace-root.json"), JSON.stringify({ workspaceRoot: workspace }) + "\n");
-    if (relative !== "packages") {
+    const botHosts = path.join(stateDir, "github-agent", "gh", "hosts.yml");
+    if (relative.startsWith("github-agent")) {
+      fs.mkdirSync(path.dirname(botHosts), { recursive: true });
+      fs.writeFileSync(botHosts, "github.com:\n    user: robo-bot\n");
+    } else if (relative !== "packages") {
       fs.writeFileSync(path.join(stateDir, "packages", "package-lock.json"), "{}\n");
       fs.mkdirSync(path.join(stateDir, "packages", "installed", "src"), { recursive: true });
     }
@@ -152,7 +157,9 @@ function testWorkspaceInsidePackageStoreSurvives() {
     const result = runCli(f, ["uninstall", "--yes"]);
     assert.equal(result.status, 0, `uninstall failed:\n${result.stdout}\n${result.stderr}`);
     assert.equal(fs.readFileSync(skill, "utf8"), "USER AUTHORED\n", `a workspace at <stateRoot>/${relative} must survive a default uninstall`);
-    if (relative !== "packages") {
+    if (relative.startsWith("github-agent")) {
+      assert.ok(!fs.existsSync(botHosts), "the bot's sign-in is still removed");
+    } else if (relative !== "packages") {
       assert.ok(!fs.existsSync(path.join(stateDir, "packages", "package-lock.json")), "the package lock is still removed");
       assert.ok(!fs.existsSync(path.join(stateDir, "packages", "installed")), "installed copies are still removed");
     }

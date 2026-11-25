@@ -515,8 +515,9 @@ remove_runtime_state() {
   # on package disable and leaves the package-runtime/ directory itself; uninstall owns the whole tree.
   remove_path "${state_dir}/package-runtime" "remove"
   # The agent bot's gh login (its token in hosts.yml), CA bundle copy, and Git include, written by
-  # `roborepo github setup`. Removing it does not revoke the token on GitHub.
-  remove_path "${state_dir}/github-agent" "remove"
+  # `roborepo github setup`. Removing it does not revoke the token on GitHub. A workspace placed
+  # inside it is kept, as in the package store above.
+  remove_path_keeping_workspace "${state_dir}/github-agent" "${workspace}"
   remove_path "${state_dir}/install-state.json" "remove"
   remove_path "${state_dir}/app-root.json" "remove"
   remove_path "${state_dir}/initialization.json" "remove"
