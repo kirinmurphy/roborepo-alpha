@@ -315,7 +315,7 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - `bash scripts/doctor.sh --quiet` → doctor passed (98 checks) at 3546603d
 
 ### Result
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: 8c34801d88d211c7f9f656ce6adf3d9cfc72f1a2
 - Base commit: 5cba47f08635f5019e07aa26fb4726b9c0177e3e
 
