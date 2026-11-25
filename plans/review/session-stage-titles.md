@@ -1,6 +1,6 @@
 ---
 id: gcfw77cq
-next_action: Report the three person-only Not tested checks (desktop app title, interactive CLI picker, Codex rename line) and confirm CI on the pushed head, then rerun /plan-review to approve 24f5833f
+next_action: Report the three person-only Not tested checks (desktop app title, interactive CLI picker, Codex rename line) and confirm CI on the pushed head, then rerun /plan-review to approve 831d29a5
 blocked_by: []
 depends_on: []
 related: ["plan-session-launching-milestone-1", "96r9wbj0", "0ubk9sug"]
@@ -451,9 +451,13 @@ title, because nothing reliable signals that the plan work ended.
 - CI on PR #89: not yet run at 24f5833f; at 6a891dcc `windows-installer` passed and `check` was
   still running
 
+- /plan-review at 831d29a5 (an exact plan path now names only that plan):
+  `node scripts/test/plan-session-title-check.mjs` and `plan-suite-check.mjs` passed (outside the
+  sandbox); Validator pass 6 over 24f5833f..831d29a5 (fresh-context subagent): clean
+
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: 24f5833f4625f7fccaeca97751ebd51bc26799a1
+- Reviewed implementation commit: 831d29a5ae508956fdd493225187e32cb6f2c519
 - Base commit: 976052259a3e93d27047c52259eda32a0799082b
 - Pending: three person-only `## Not tested` checks and CI on the pushed head
