@@ -35,13 +35,21 @@ export function findSystemCaBundle() {
   return (override ? [override] : CA_BUNDLE_CANDIDATES).find((file) => fs.existsSync(file)) || null;
 }
 
+// Written beside the destination and renamed over it, so Git in a running agent shell reads the old
+// file or the new one, never a partial write.
 function writeIfChanged(file, content, mode) {
   try {
     if (Buffer.compare(fs.readFileSync(file), Buffer.from(content)) === 0) return false;
   } catch {}
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, content, { mode });
-  fs.chmodSync(file, mode);
+  const temporary = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(temporary, content, { mode });
+    fs.chmodSync(temporary, mode);
+    fs.renameSync(temporary, file);
+  } finally {
+    fs.rmSync(temporary, { force: true });
+  }
   return true;
 }
 
@@ -233,7 +241,13 @@ export async function readRepoAgentAccess({ repositoryId, cwd = process.cwd(), s
     const readable = !["unavailable", "unsupported"].includes(protection.state);
     result.userAdmin = readable ? protection.admin === true : null;
     result.defaultBranch = protection.defaultBranch || null;
-    await checkRepoAccess({ cwd, timeoutMs, env: botGhEnv(stateDir) }, target.repo, botLogin, problems, result.userAdmin);
+    try {
+      await checkRepoAccess({ cwd, timeoutMs, env: botGhEnv(stateDir) }, target.repo, botLogin, problems, result.userAdmin);
+    } catch (error) {
+      // The protection was already read: what it found stays reported when the bot's read fails.
+      if (error instanceof GitHubError) checkProtection(protection, problems, result.userAdmin);
+      throw error;
+    }
     checkProtection(protection, problems, result.userAdmin);
   } catch (error) {
     if (!(error instanceof GitHubError)) throw error;

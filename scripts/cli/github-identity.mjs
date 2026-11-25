@@ -97,7 +97,12 @@ export function formatReport(report) {
     case "not-set-up":
       return "GitHub agent identity is not set up (optional). Run roborepo github setup in your own terminal to let agents act on GitHub as a bot account.";
     case "unavailable":
-      if (report.problems?.length > 0) return [`GitHub agent identity could not be fully checked${repo}:`, ...problemLines(report.problems)].join("\n");
+      if (report.problems?.length > 0) {
+        // The reason names the read that failed, which the findings found before it do not.
+        const said = (part) => report.problems.some((entry) => entry.message.includes(part));
+        const why = report.reason && !report.reason.split("; ").every(said) ? ` (${report.reason})` : "";
+        return [`GitHub agent identity could not be fully checked${repo}${why}:`, ...problemLines(report.problems)].join("\n");
+      }
       return `GitHub agent identity could not be checked${repo}: ${report.reason}. Nothing is wrong that this check can see.`;
     default: {
       const headline = report.state === "healthy"
