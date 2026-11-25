@@ -78,7 +78,8 @@ The setup walks you through each step and skips the ones already done:
    check does not switch them; if they already use the bot, they still do.
 
 In the portal, **Agent GitHub Account** in Settings is the on/off switch. While it is off, Home
-offers the setup once (**No thanks** hides the offer for good). Once it is on, each GitHub repo shows
+offers the setup once (**No thanks** hides the offer for good). While it is on but the bot cannot
+sign in, Home shows a red warning with **Fix it** until the bot works again. Once it is on, each GitHub repo shows
 an **agent bot** badge, green when agents can work there, and the badge opens a numbered list of
 what is done and where to start. **Open setup** opens this same setup in a terminal (macOS;
 elsewhere it shows the command to copy). If the bot is already signed in and only the switch is off,

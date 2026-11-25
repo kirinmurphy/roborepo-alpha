@@ -175,6 +175,11 @@ GitHub login at all.
 repo is on github.com: **Set it up** (or **Turn on** when the bot is ready), and **No thanks**, which
 hides the offer for good and points to Settings for later.
 
+**While it is on but the bot cannot sign in** (no bot, an expired or unreadable token, or another
+problem), the same spot shows a red warning that agents can't push or open pull requests, with only
+**Fix it**, which opens the bot card. It has no **No thanks**; it goes when the bot works again, or
+when you turn the switch off in Settings.
+
 **Once it is on**, the offer is gone and each GitHub repo's title has an **agent bot** badge beside
 its GitHub link. The dot's color covers both the bot account and that repo:
 

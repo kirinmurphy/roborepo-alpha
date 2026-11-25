@@ -197,10 +197,12 @@ export function repoView(accountReport, report) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The setup offer above the repo list, while the package is off
+// The banner above the repo list: the setup offer while the package is off, and a warning while it
+// is on but the bot cannot sign in
 
-// Renders the offer once Home knows its repos. Nothing shows when no listed repo is on GitHub, when
-// the package is on (the badges take over), or once the user said "No thanks".
+// Renders the banner once Home knows its repos. Nothing shows when no listed repo is on GitHub, when
+// the package is on and the bot works (the badges take over), or, for the offer, once the user said
+// "No thanks". The warning has no "No thanks": hiding it would hide that agents' GitHub work fails.
 export function renderAgentIdentityOffer(mount, repositories) {
   if (!mount) return;
   githubRepositories = repositories.filter(supportsAgentIdentity);
@@ -212,7 +214,7 @@ export function renderAgentIdentityOffer(mount, repositories) {
   offer ??= buildOffer(mount);
   if (account) offer.render(account.report);
   openCardFromLink();
-  // An offer, not a warning: a failed read just leaves it out.
+  // A failed read just leaves the banner out; the badges and Settings say the account is unread.
   loadAccount().catch(() => { mount.hidden = true; });
 }
 
@@ -234,6 +236,7 @@ function buildOffer(mount) {
   mount.replaceChildren(node);
 
   slot("setup").addEventListener("click", () => openAccountCard());
+  slot("fix").addEventListener("click", () => openAccountCard());
   slot("enable").addEventListener("click", () => void turnOn(slot("enable"), (message) => { note = message; render(account?.report); }));
   slot("dismiss").addEventListener("click", async () => {
     slot("dismiss").disabled = true;
@@ -252,6 +255,27 @@ function buildOffer(mount) {
 
   function render(report) {
     if (!report) return;
+    const view = describeAccount(report);
+    const broken = report.packageEnabled && view.level === "problem";
+    node.setAttribute("variant", broken ? "alert" : "info");
+    slot("fix").hidden = !broken;
+    if (broken) {
+      mount.hidden = false;
+      slot("offer").hidden = false;
+      slot("declined").hidden = true;
+      slot("enable").hidden = true;
+      slot("setup").hidden = true;
+      slot("dismiss").hidden = true;
+      slot("note").hidden = true;
+      // With no bot at all the account's sentence already says agents cannot push.
+      fill(node, {
+        message: report.state === "not-set-up"
+          ? view.message
+          : `Agents can't push or open pull requests right now: ${report.botLogin || report.savedLogin || "the bot account"} needs attention. ${view.message}`,
+      });
+      return;
+    }
+    slot("dismiss").hidden = false;
     // Just declined: say where to find it later, until the page reloads.
     if (declined) {
       mount.hidden = false;

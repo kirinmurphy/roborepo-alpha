@@ -220,12 +220,27 @@ test.describe("Agent GitHub account", () => {
       if (!entry.report.packageEnabled) continue;
       current = entry;
       await openHome(page);
-      await expect(offer(page)).toBeHidden();
+      // A bot that cannot sign in turns the banner into a warning with only Fix it; otherwise none.
+      if (entry.badge === "problem") {
+        await expect(offer(page), key).toHaveClass(/notice-alert/);
+        await expect(offer(page), key).toContainText(entry.report.state === "not-set-up" ? "cannot push or open pull requests" : "Agents can't push or open pull requests right now: robo-bot needs attention.");
+        await expect(offer(page).getByRole("button", { name: "Fix it" }), key).toBeVisible();
+        for (const name of ["Set it up", "Turn on", "No thanks"]) await expect(offer(page).getByRole("button", { name }), key).toBeHidden();
+      } else {
+        await expect(offer(page), key).toBeHidden();
+      }
       await expect(badge(page, "identity-ready")).toHaveText("agent bot");
       await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", entry.badge);
       await expect(badge(page, "identity-ready")).toHaveAttribute("title", `Agent bot: ${entry.label}`);
       await shot(page, `home-badges-account-${key}`);
     }
+
+    current = ACCOUNTS["token-expired"];
+    await openHome(page);
+    await offer(page).getByRole("button", { name: "Fix it" }).click();
+    await expect(card(page)).toBeVisible();
+    await expect(card(page)).toContainText("Bot account (all repos)");
+    await page.keyboard.press("Escape");
 
     current = ACCOUNTS.healthy;
     await openHome(page);
