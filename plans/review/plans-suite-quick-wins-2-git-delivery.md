@@ -1,6 +1,6 @@
 ---
 id: i5mnkm7z
-next_action: Review complete at 8c34801d; waiting on the user's approval and their decision on the post-merge Not tested check.
+next_action: Review complete at 8c34801d; waiting on the user's approval of 8c34801d.
 blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["f0jwe76j", "w7vls1yk", "d9ywaa8d", "developer-runtime-remote-branch-status", "pvgx8oh7", "kqgr1d65", "0jped168"]
@@ -264,13 +264,14 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 
 ## Not tested
 
-- [ ] A complete plan run on a real change, using the skills as changed here: draft pull request at
+- [x] A complete plan run on a real change, using the skills as changed here: draft pull request at
       first push, CI watched without polling, a failing check fixed, marked ready, review fixes
       pushed, and the user merges. This plan's own run uses the installed skills from before the
       change, so it cannot show this. Text pins cannot show an agent follows the procedure, and
       behavior evals (`0jped168`) do not exist yet. Needs a person: the run ends in merging the pull
       request, an action the user's rules reserve to the user, and the changed skills are installed
       only after this branch merges and `roborepo update` runs.
+      — Confirmed by the user 2026-11-24: "Accept as post-merge" (the check is deferred to the first real plan run after this branch merges)
 
 ## Documentation impact
 
@@ -315,7 +316,7 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - `bash scripts/doctor.sh --quiet` → doctor passed (98 checks) at 3546603d
 
 ### Result
-- Status: pending
+- Status: complete
 - Reviewed implementation commit: 8c34801d88d211c7f9f656ce6adf3d9cfc72f1a2
 - Base commit: 5cba47f08635f5019e07aa26fb4726b9c0177e3e
 
