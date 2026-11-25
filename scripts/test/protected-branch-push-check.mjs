@@ -347,7 +347,15 @@ for (const [command, expected] of cases) {
   const notInstalled = path.join(tmp, "agent-state-off");
   installIdentity(stateRoot);
   const agentDir = path.join(stateRoot, "github-agent", "gh");
-  const asAgent = { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: agentDir };
+  // Codex's config, as the package renders it: the bot's gh for every shell. Codex hooks read it;
+  // Claude hooks ignore it.
+  const codexHome = path.join(tmp, "codex-home");
+  const codexConfig = (dir, { tokens = true } = {}) => {
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(path.join(codexHome, "config.toml"), `model = "x"\n\n[shell_environment_policy.set]\nGH_CONFIG_DIR = "${dir}"\n${tokens ? 'GH_TOKEN = ""\nGITHUB_TOKEN = ""\n' : ""}\n[other]\nGH_CONFIG_DIR = "${agentDir}"\n`);
+  };
+  codexConfig(agentDir);
+  const asAgent = { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: agentDir, CODEX_HOME: codexHome };
   const codexOptions = { toolName: "exec_command", hookPath: path.join(codexHooks, "protected-branch-push.mjs"), key: "cmd" };
   for (const options of [{}, codexOptions]) {
     const label = options.hookPath ? "Codex" : "Claude";
@@ -365,7 +373,7 @@ for (const [command, expected] of cases) {
       assert.equal(decide(command, { ...options, env: asAgent }), "defer", `${label} allows as agent: ${command}`);
       // Codex hooks never see the shell's GH_CONFIG_DIR; a Claude hook without it belongs to a session
       // whose gh acts as the user.
-      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "" } }), options.hookPath ? "defer" : "deny", `${label} with the hook's GH_CONFIG_DIR unset: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "", CODEX_HOME: codexHome } }), options.hookPath ? "defer" : "deny", `${label} with the hook's GH_CONFIG_DIR unset: ${command}`);
       assert.equal(decide(command, { ...options, env: { ...asAgent, GH_CONFIG_DIR: path.join(tmp, "other-gh") } }), "deny", `${label} denies other GH_CONFIG_DIR: ${command}`);
       // gh prefers an inherited token or host over the bot's config dir.
       for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"]) {
@@ -430,6 +438,18 @@ for (const [command, expected] of cases) {
       assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} still denies as agent: ${command}`);
     }
   }
+  // A partial enable installs the gitconfig but leaves Codex's shells on another gh: the Codex hook
+  // then keeps gh api denied.
+  const codexUnset = { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "", CODEX_HOME: codexHome };
+  for (const [label, write] of [
+    ["another GH_CONFIG_DIR", () => codexConfig(path.join(tmp, "users-own-gh"))],
+    ["tokens not emptied", () => codexConfig(agentDir, { tokens: false })],
+    ["no config", () => fs.rmSync(path.join(codexHome, "config.toml"), { force: true })],
+  ]) {
+    write();
+    assert.equal(decide("gh api repos/o/r", { ...codexOptions, env: codexUnset }), "deny", `Codex with ${label} denies gh api`);
+  }
+  codexConfig(agentDir);
   // The default state root is ~/.roborepo when ROBOREPO_STATE_ROOT is unset.
   installIdentity(path.join(tmp, ".roborepo"));
   assert.equal(decide("gh api repos/o/r", { env: { HOME: tmp, ROBOREPO_STATE_ROOT: "", GH_CONFIG_DIR: path.join(tmp, ".roborepo", "github-agent", "gh") } }), "defer", "default state root");

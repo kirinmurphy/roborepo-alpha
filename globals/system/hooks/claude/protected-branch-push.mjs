@@ -88,7 +88,8 @@ let ghIdentityChanged = false
 // Claude hooks share the session's environment, so an unset GH_CONFIG_DIR means a session started
 // before the identity was on, whose gh acts as the user: it must match exactly. Codex starts command
 // hooks with its own process environment, not the shell_environment_policy values its shells get, so
-// under Codex an unset GH_CONFIG_DIR is expected and the installed file is the signal instead.
+// under Codex an unset GH_CONFIG_DIR is expected, and the hook reads those values from Codex's config
+// instead (codexShellsActAsBot).
 function agentIdentityActive() {
   if (ghIdentityChanged) return false
   const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
@@ -96,9 +97,37 @@ function agentIdentityActive() {
   // gh prefers a token or host from the environment over its config dir, so an inherited one means
   // gh acts as whoever owns that token.
   if (GH_IDENTITY_VARIABLES.some((name) => name !== 'GH_CONFIG_DIR' && process.env[name])) return false
+  const botDir = path.join(stateRoot, 'github-agent', 'gh')
   const dir = process.env.GH_CONFIG_DIR
-  if (!dir) return forCodex
-  return path.resolve(dir) === path.resolve(path.join(stateRoot, 'github-agent', 'gh'))
+  if (!dir) return forCodex && codexShellsActAsBot(botDir)
+  return path.resolve(dir) === path.resolve(botDir)
+}
+
+// Whether Codex gives its shells the bot's gh: its [shell_environment_policy.set] table sets
+// GH_CONFIG_DIR to the bot's dir and empties GH_TOKEN and GITHUB_TOKEN. The package's gitconfig
+// alone is not enough: an enable that could not set GH_CONFIG_DIR (one the user set themselves)
+// still installs it, and gh in those shells acts as the user. The config is the one beside this
+// hook's folder (~/.codex/hooks -> ~/.codex), or CODEX_HOME's. Anything unreadable reads as no.
+function codexShellsActAsBot(botDir) {
+  let text
+  try {
+    text = fs.readFileSync(path.join(process.env.CODEX_HOME || path.dirname(hookDir), 'config.toml'), 'utf8')
+  } catch {
+    return false
+  }
+  const values = new Map()
+  let inTable = false
+  for (const line of text.split(/\r?\n/)) {
+    const header = /^\s*\[([^\]]+)\]\s*(?:#.*)?$/.exec(line)
+    if (header) {
+      inTable = header[1].replace(/[\s"]/g, '') === 'shell_environment_policy.set'
+      continue
+    }
+    const entry = inTable && /^\s*"?([A-Za-z_][A-Za-z0-9_]*)"?\s*=\s*"([^"\\]*)"\s*(?:#.*)?$/.exec(line)
+    if (entry) values.set(entry[1], entry[2])
+  }
+  const dir = values.get('GH_CONFIG_DIR')
+  return !!dir && path.resolve(dir) === path.resolve(botDir) && values.get('GH_TOKEN') === '' && values.get('GITHUB_TOKEN') === ''
 }
 
 // Whether any command in `text`, nested ones included, could make gh act as someone other than the
