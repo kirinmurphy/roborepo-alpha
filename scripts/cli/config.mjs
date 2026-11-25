@@ -18,6 +18,7 @@ import {
 } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
 import { packageSelectionStates } from "./package-state.mjs";
+import { sourceBadge } from "./package-service.mjs";
 import { bundleSelectionStates, selectedBundleRoots } from "./bundle-selection.mjs";
 import { recommendedBy, recommendedClosure, requiredBy, requiredClosure } from "./package-graph.mjs";
 import { inspectSkill, skillInventorySource } from "./skill-inventory.mjs";
@@ -179,6 +180,11 @@ export function readConfigSnapshot() {
     id: pkg.id,
     label: pkg.label,
     origin: pkg.origin,
+    sourceId: pkg.sourceId,
+    sourceType: pkg.sourceType,
+    trust: pkg.trust,
+    tab: pkg.tab,
+    collection: pkg.collection || null,
     description: pkg.description || null,
     status: packageLiveState.get(pkg.id)?.status || "disabled",
     catalogStatus: pkg.status || "available",
@@ -671,6 +677,13 @@ function packageItemBase(item, contextCost) {
     toggle: item.selectable === false ? null : "package",
     selection: item.selection || "off",
     builtIn: item.origin === "built-in",
+    // Where the package came from: its portal tab (system, custom, third-party), the source badge
+    // a card shows, its trust, and the collection a source derived for it.
+    tab: item.tab || null,
+    sourceId: item.sourceId || null,
+    sourceBadge: sourceBadge(item),
+    trust: item.trust || null,
+    collection: item.collection || null,
     urls: item.urls || [],
     resources: item.resources || item.components || [],
     note: item.status === "external" ? externalNote(externalComponentLabels(item.componentStatus)) : null,

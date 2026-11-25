@@ -1,0 +1,29 @@
+{
+  "path": [
+    "package",
+    "source",
+    "remove"
+  ],
+  "kind": "command",
+  "title": "Remove source",
+  "description": "Remove a package source",
+  "order": 70,
+  "usage": "roborepo package source remove <source> [--keep-installed] [--json]",
+  "arguments": [
+    {
+      "name": "source",
+      "required": true,
+      "interactive": {
+        "prompt": "Source id"
+      }
+    }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageSourceCommand",
+    "prependArgs": [
+      "remove"
+    ]
+  }
+}

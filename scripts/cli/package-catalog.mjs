@@ -1,8 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { repoRoot, workspacePackagesDir } from "./paths.mjs";
+import { repoRoot } from "./paths.mjs";
 import { experimentalStatePath } from "./state-paths.mjs";
 import { readWorkspaceOverrides, hasReplaceOverride } from "./workspace-resources.mjs";
+import { BUILTIN_SOURCE_ID, LOCAL_SOURCE_ID, isLiveSource, qualifiedName, readSourceConfig, sourceTab } from "./package-sources.mjs";
+import { createSourceAdapter, readManifest } from "./package-source-adapters.mjs";
+import { readPackageLock } from "./package-lock.mjs";
 import { hasHarnessProvider, getHarnessProvider } from "../harnesses/registry.mjs";
 import { requiresCycles } from "./package-graph.mjs";
 import { CONFIG_EDIT_CAPABILITY, configPatchClaims, normalizeConfigPatches } from "./package-config-patches.mjs";
@@ -68,8 +71,11 @@ export function experimentalCommand(args) {
   }
 }
 
+// The built-in library only, as the bundled source lists it. Kept for callers that ask what ships
+// with the application.
 export function readPackageManifest() {
-  return { packages: readBuiltInPackageConfigs() };
+  const builtin = readSourceConfig().sources.find((record) => record.id === BUILTIN_SOURCE_ID);
+  return { packages: sourceCandidates(builtin) };
 }
 
 export function readPackageCategories() {
@@ -100,58 +106,207 @@ export function readPackageCategories() {
   });
 }
 
-function readBuiltInPackageConfigs() {
-  return packageConfigFiles(BUILT_IN_PACKAGES_DIR)
-    .map((file) => readPackageConfig(file, "built-in"));
-}
-
-function readWorkspacePackageConfigs({ builtInIds = new Set(), overrides = readWorkspaceOverrides() } = {}) {
-  const packages = packageConfigFiles(workspacePackagesDir).map((file) => readPackageConfig(file, "workspace"));
+// Normalized packages one source offers, each carrying its provenance. Two packages with one ID
+// inside a single source are an error in that source, not a collision between sources.
+function sourceCandidates(record) {
   const seen = new Set();
-  for (const pkg of packages) {
-    if (seen.has(pkg.id)) throw new Error(`duplicate workspace package id: ${pkg.id}`);
-    if (builtInIds.has(pkg.id) && !hasReplaceOverride("package", pkg.id, overrides)) {
-      throw new Error(`workspace package '${pkg.id}' conflicts with a built-in package; add a typed package replace override to overrides/resources.json`);
+  const out = [];
+  for (const entry of createSourceAdapter(record).list()) {
+    const pkg = normalizePackageEntry(entry, record);
+    if (seen.has(pkg.id)) {
+      throw new Error(record.workspace ? `duplicate workspace package id: ${pkg.id}` : `duplicate package id ${pkg.id} in source ${record.id}`);
     }
     seen.add(pkg.id);
+    out.push(pkg);
   }
-  return packages;
+  return out;
 }
 
-function packageConfigFiles(root) {
-  let entries;
-  try {
-    entries = fs.readdirSync(root, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  return entries
-    .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
-    .map((entry) => path.join(root, entry.name, "package.config.json"))
-    .filter((file) => fs.existsSync(file))
-    .sort();
-}
-
-function readPackageConfig(file, origin) {
-  const data = JSON.parse(fs.readFileSync(file, "utf8"));
-  return normalizePackage(data, {
-    file,
-    root: path.dirname(file),
-    origin,
+// One adapter entry as a validated catalog package carrying its source's provenance. Every source
+// goes through this, so a package is validated the same way wherever it came from.
+export function normalizePackageEntry(entry, record) {
+  const config = entry.config || readManifest(entry.file);
+  return withProvenance(normalizePackage(config, { file: entry.file, root: entry.root, origin: originFor(record) }), {
+    sourceId: record.id,
+    sourceType: record.type,
+    trust: record.trust,
+    collection: entry.collection || null,
+    revision: entry.revision || null,
   });
 }
 
-function mergeWorkspacePackages(packages) {
-  const overrides = readWorkspaceOverrides();
-  const byId = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  const workspacePackages = readWorkspacePackageConfigs({ builtInIds: new Set(byId.keys()), overrides });
-  for (const pkg of workspacePackages) {
-    if (byId.has(pkg.id) && !hasReplaceOverride("package", pkg.id, overrides)) {
-      throw new Error(`workspace package '${pkg.id}' conflicts with built-in package without typed replace override`);
+// Packages copied into the managed store (from a git source) are used from that copy, recorded in
+// the lock, so they stay usable offline and after their source is removed. A copy that has gone
+// missing is reported unresolved rather than dropped silently.
+function installedCandidates(lock, unresolved) {
+  const out = [];
+  for (const record of Object.values(lock.packages)) {
+    if (record.kind !== "materialized") continue;
+    const file = path.join(record.installedPath, "package.config.json");
+    if (!fs.existsSync(file)) {
+      unresolved.push({ id: record.packageId, sourceId: record.sourceId, reason: `installed copy is missing: ${record.installedPath}` });
+      continue;
     }
-    byId.set(pkg.id, pkg);
+    const sourceType = record.sourceType || "git";
+    const pkg = normalizePackage(readManifest(file), { file, root: record.installedPath, origin: originFor({ type: sourceType }) });
+    out.push(withProvenance(pkg, {
+      sourceId: record.sourceId,
+      sourceType,
+      trust: record.trust || "unverified",
+      collection: readCollection(record.installedPath),
+      revision: record.resolved,
+    }));
   }
-  return [...byId.values()];
+  return out;
+}
+
+function readCollection(installedPath) {
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(installedPath, ".roborepo-source.json"), "utf8"));
+    return data.collection || null;
+  } catch {
+    return null;
+  }
+}
+
+function originFor(record) {
+  if (record.type === "bundled") return "built-in";
+  if (record.type === "path") return "workspace";
+  return record.type;
+}
+
+function withProvenance(pkg, { sourceId, sourceType, trust, collection, revision }) {
+  return {
+    ...pkg,
+    sourceId,
+    sourceType,
+    trust,
+    tab: sourceTab({ type: sourceType }),
+    qualifiedName: qualifiedName(sourceId, pkg.id),
+    revision,
+    // A collection derived from the source's own files: { id, title } shared by its members, or
+    // null. Derived from the source's files at its pinned revision; there is no collection record.
+    collection: collection || null,
+  };
+}
+
+// Every package every enabled source offers, plus installed copies, before same-ID resolution.
+// A disabled source contributes nothing live, but packages already installed from it stay usable.
+export function listPackageCandidates({ sources = readSourceConfig().sources, lock = readPackageLock() } = {}) {
+  const unresolved = [];
+  const candidates = [];
+  for (const record of sources) {
+    if (!record.enabled || !isLiveSource(record)) continue;
+    candidates.push(...sourceCandidates(record));
+  }
+  candidates.push(...installedCandidates(lock, unresolved));
+  return { candidates, unresolved };
+}
+
+// One package per ID, chosen by the rules that keep provenance from changing silently:
+//   1. a typed `replace` override in the workspace picks the local source;
+//   2. otherwise a lock record picks the source it names;
+//   3. otherwise a single candidate is used;
+//   4. otherwise the ID is a collision, which needs an explicit choice.
+// A lock record whose source no longer offers the package leaves the ID unresolved; another
+// source's package with that ID is never substituted.
+export function resolvePackageCandidates(candidates, { overrides = readWorkspaceOverrides(), lock = readPackageLock() } = {}) {
+  const byId = new Map();
+  for (const pkg of candidates) {
+    if (!byId.has(pkg.id)) byId.set(pkg.id, []);
+    byId.get(pkg.id).push(pkg);
+  }
+  const packages = [];
+  const collisions = [];
+  const unresolved = [];
+  const shadowed = [];
+  for (const [id, group] of byId) {
+    const local = group.find((pkg) => pkg.sourceId === LOCAL_SOURCE_ID);
+    if (local && hasReplaceOverride("package", id, overrides)) {
+      packages.push(local);
+      continue;
+    }
+    const recorded = lock.packages[id];
+    if (recorded) {
+      const chosen = group.find((pkg) => pkg.sourceId === recorded.sourceId);
+      if (chosen && movedFromRecordedFolder(chosen, recorded)) {
+        unresolved.push({ id, sourceId: recorded.sourceId, reason: `source ${recorded.sourceId} now offers ${id} from ${chosen.sourceRoot}, not the recorded folder ${recorded.resolved}`, candidates: group.map((pkg) => pkg.qualifiedName) });
+      } else if (chosen) {
+        packages.push(chosen);
+        // Other sources' packages with this ID stay out, by the recorded choice. They are reported
+        // so a newly authored package is never ignored without a word.
+        const hidden = group.filter((pkg) => pkg !== chosen).map((pkg) => pkg.qualifiedName);
+        if (hidden.length) shadowed.push({ id, chosen: chosen.qualifiedName, hidden });
+      }
+      else unresolved.push({ id, sourceId: recorded.sourceId, reason: `source ${recorded.sourceId} no longer provides ${id}`, candidates: group.map((pkg) => pkg.qualifiedName) });
+      continue;
+    }
+    if (group.length === 1) packages.push(group[0]);
+    else collisions.push({ id, candidates: group.map((pkg) => pkg.qualifiedName) });
+  }
+  // A live install whose source offers nothing under its ID any more: the source was disabled or
+  // removed, or its folder is gone. Reported unresolved so its selection survives reconcile. A
+  // built-in package that left the library is retired, not unresolved, and reconcile forgets it.
+  for (const record of Object.values(lock.packages)) {
+    if (record.kind !== "live" || byId.has(record.packageId) || record.sourceId === BUILTIN_SOURCE_ID) continue;
+    unresolved.push({ id: record.packageId, sourceId: record.sourceId, reason: `source ${record.sourceId} no longer provides ${record.packageId}`, candidates: [] });
+  }
+  return { packages, collisions, unresolved, shadowed };
+}
+
+// A folder source keeps its ID when its path is edited, so the same ID can start offering a
+// package from a different folder. The lock names the folder the package was installed from;
+// using the new one would retarget the install without the user choosing it, so it is left
+// unresolved until the user reinstalls or removes it. The workspace source and the built-in
+// library are exempt: both follow a location RoboRepo manages (the configured workspace, the
+// application folder), which moves on its own and is not a change of source.
+function movedFromRecordedFolder(pkg, recorded) {
+  if (recorded.kind !== "live" || pkg.sourceType !== "path" || pkg.sourceId === LOCAL_SOURCE_ID) return false;
+  return path.resolve(pkg.sourceRoot) !== path.resolve(recorded.resolved);
+}
+
+// A package that requires an unresolved package cannot be applied either: its requirement is not
+// in the catalog. It joins the unresolved set, so it is reported and its selection kept, instead
+// of failing catalog validation and stopping every other package from loading.
+function withUnresolvedRequirements(resolved) {
+  const unresolvedIds = new Set(resolved.unresolved.map((entry) => entry.id));
+  let packages = resolved.packages;
+  const unresolved = [...resolved.unresolved];
+  for (;;) {
+    const blocked = packages.filter((pkg) => (pkg.requires || []).some((dep) => unresolvedIds.has(dep)));
+    if (blocked.length === 0) break;
+    for (const pkg of blocked) {
+      const missing = pkg.requires.filter((dep) => unresolvedIds.has(dep));
+      unresolved.push({ id: pkg.id, sourceId: pkg.sourceId, reason: `it requires unresolved package ${missing.join(", ")}`, candidates: [pkg.qualifiedName] });
+      unresolvedIds.add(pkg.id);
+    }
+    packages = packages.filter((pkg) => !blocked.includes(pkg));
+  }
+  return { ...resolved, packages, unresolved };
+}
+
+// The resolved catalog plus what could not be resolved. Most callers want loadPackageCatalog;
+// doctor and the package service read the full result.
+export function composePackageCatalog({ sources, lock = readPackageLock(), overrides = readWorkspaceOverrides() } = {}) {
+  const listed = listPackageCandidates({ sources, lock });
+  const resolved = resolvePackageCandidates(listed.candidates, { overrides, lock });
+  const composed = withUnresolvedRequirements({ ...resolved, unresolved: [...listed.unresolved, ...resolved.unresolved] });
+  return { ...composed, candidates: listed.candidates };
+}
+
+export function shadowedMessage({ id, chosen, hidden }) {
+  return `${hidden.join(", ")} ${hidden.length === 1 ? "is" : "are"} not used: ${id} is recorded as ${chosen}. To use ${hidden[0]} instead, run \`roborepo package install ${hidden[0]}\` or add a typed package replace override`;
+}
+
+export function collisionMessage({ id, candidates }) {
+  const builtinVsLocal = candidates.length === 2
+    && candidates.includes(qualifiedName(BUILTIN_SOURCE_ID, id))
+    && candidates.includes(qualifiedName(LOCAL_SOURCE_ID, id));
+  const choose = `choose one with \`roborepo package install <source>/${id}\``;
+  if (builtinVsLocal) {
+    return `workspace package '${id}' conflicts with a built-in package; add a typed package replace override to overrides/resources.json, or ${choose}`;
+  }
+  return `package '${id}' is provided by more than one source (${candidates.join(", ")}); ${choose}`;
 }
 
 export function isPackageAvailable(pkg, env = process.env) {
@@ -159,8 +314,9 @@ export function isPackageAvailable(pkg, env = process.env) {
 }
 
 export function loadPackageCatalog({ includeUnavailable = false, env = process.env } = {}) {
-  const packages = mergeWorkspacePackages(readPackageManifest().packages || []);
-  validatePackageCatalog(packages);
+  const { packages, collisions, unresolved } = composePackageCatalog();
+  if (collisions.length > 0) throw new Error(collisions.map(collisionMessage).join("\n"));
+  validatePackageCatalog(packages, { unresolvedIds: new Set(unresolved.map((entry) => entry.id)) });
   const available = includeUnavailable ? packages : packages.filter((pkg) => isPackageAvailable(pkg, env));
   return available.sort(packageSort);
 }
@@ -182,7 +338,7 @@ export function unavailablePackageMessage(pkgId, env = process.env) {
   return pkg ? unavailablePackageReason(pkg, env) : `unknown package: ${pkgId}`;
 }
 
-export function validatePackageCatalog(packages) {
+export function validatePackageCatalog(packages, { unresolvedIds = new Set() } = {}) {
   const categories = new Set(readPackageCategories().map((category) => category.id));
   const errors = [];
   const packageIds = new Set();
@@ -227,7 +383,11 @@ export function validatePackageCatalog(packages) {
   for (const pkg of packages) {
     for (const [relation, label] of PACKAGE_RELATIONS) {
       for (const dep of pkg[relation] || []) {
-        if (isSlug(dep) && dep !== pkg.id && !packageIds.has(dep)) errors.push(`${pkg.id}: missing ${label} package: ${dep}`);
+        if (!isSlug(dep) || dep === pkg.id || packageIds.has(dep)) continue;
+        // A recommendation of an unresolved package is only unavailable for now; it is reported
+        // as unresolved on its own and must not stop the catalog from loading.
+        if (relation === "recommends" && unresolvedIds.has(dep)) continue;
+        errors.push(`${pkg.id}: missing ${label} package: ${dep}`);
       }
     }
   }

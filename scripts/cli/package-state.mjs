@@ -11,9 +11,12 @@
 // explicit deselections (load-bearing for default-enabled packages). Files written before
 // `schemaVersion: 2` also listed every package an enable pulled in through `requires`; reading one
 // drops those ids from the roots, so they stay effective through their parent and turn off with it.
+//
+// Both files also carry `sources`, a map from each listed package ID to the source it came from,
+// so every recorded package can say where it came from. Package IDs stay bare in the lists; the
+// lock (package-lock.mjs) holds the full resolution behind each source reference.
 import fs from "node:fs";
-import path from "node:path";
-import { appliedPackagesPath, enabledPackagesPath } from "./state-paths.mjs";
+import { appliedPackagesPath, enabledPackagesPath, writeJsonStateAtomic } from "./state-paths.mjs";
 import { recordConfigWrite } from "./write-log.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { dropRequiredIds, requiredClosure } from "./package-graph.mjs";
@@ -23,26 +26,61 @@ export const REGISTRY_SCHEMA_VERSION = 2;
 // Installation ownership is separate from selection: losing a dependency edge must not lose the
 // knowledge needed to remove its installed components, nor remove a package RoboRepo never applied.
 export function readAppliedPackageIds() {
+  return readAppliedRecord().packages;
+}
+
+// { packages, sources }. `sources` is null in a file written before source references existed.
+export function readAppliedRecord() {
   try {
     const data = JSON.parse(fs.readFileSync(appliedPackagesPath, "utf8"));
-    return Array.isArray(data.packages) ? data.packages : [];
+    return {
+      exists: true,
+      packages: Array.isArray(data.packages) ? data.packages : [],
+      sources: isSourceMap(data.sources) ? data.sources : null,
+    };
   } catch {
-    return [];
+    return { exists: false, packages: [], sources: null };
   }
 }
 
-export function setPackageApplied(id, applied) {
-  const ids = new Set(readAppliedPackageIds());
-  if (ids.has(id) === applied) return;
+// `pkg` (a catalog package) supplies the source reference for an apply.
+export function setPackageApplied(id, applied, pkg = null) {
+  const record = readAppliedRecord();
+  const ids = new Set(record.packages);
+  const sourceKnown = !applied || !pkg?.sourceId || record.sources?.[id] === pkg.sourceId;
+  if (ids.has(id) === applied && sourceKnown) return;
   if (applied) ids.add(id);
   else ids.delete(id);
-  writeAppliedPackageIds([...ids], `${applied ? "apply" : "remove"} package ${id}`);
+  const sources = { ...(record.sources || {}) };
+  if (applied && pkg?.sourceId) sources[id] = pkg.sourceId;
+  writeAppliedPackageIds([...ids], `${applied ? "apply" : "remove"} package ${id}`, sources);
 }
 
-function writeAppliedPackageIds(ids, reason) {
-  fs.mkdirSync(path.dirname(appliedPackagesPath), { recursive: true });
-  fs.writeFileSync(appliedPackagesPath, JSON.stringify({ packages: ids }, null, 2) + "\n");
+function writeAppliedPackageIds(ids, reason, sources = readAppliedRecord().sources || {}) {
+  writeJsonStateAtomic(appliedPackagesPath, { packages: ids, sources: pickSources(sources, ids) });
   recordConfigWrite(appliedPackagesPath, reason);
+}
+
+function isSourceMap(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+// The source references for `ids`: the catalog's current answer first, then what was recorded,
+// so a package the catalog no longer resolves keeps the reference it had.
+function sourcesFor(ids, catalog, recorded = {}) {
+  const byId = new Map(catalog.map((pkg) => [pkg.id, pkg.sourceId]));
+  const out = {};
+  for (const id of ids) {
+    const sourceId = byId.get(id) || recorded[id];
+    if (sourceId) out[id] = sourceId;
+  }
+  return out;
+}
+
+function pickSources(sources, ids) {
+  const out = {};
+  for (const id of ids) if (sources[id]) out[id] = sources[id];
+  return out;
 }
 
 // Returns { exists, schemaVersion, packages, disabled } exactly as stored. `exists` distinguishes
@@ -56,9 +94,10 @@ export function readEnabledPackagesRegistry() {
       schemaVersion: Number.isInteger(data.schemaVersion) ? data.schemaVersion : 1,
       packages: Array.isArray(data.packages) ? data.packages : [],
       disabled: Array.isArray(data.disabled) ? data.disabled : [],
+      sources: isSourceMap(data.sources) ? data.sources : null,
     };
   } catch {
-    return { exists: false, schemaVersion: REGISTRY_SCHEMA_VERSION, packages: [], disabled: [] };
+    return { exists: false, schemaVersion: REGISTRY_SCHEMA_VERSION, packages: [], disabled: [], sources: null };
   }
 }
 
@@ -104,17 +143,16 @@ export function packageSelectionStates(catalog, registry = readEnabledPackagesRe
   ]));
 }
 
-function writeRegistry(ids, disabledIds, detail = null) {
-  fs.mkdirSync(path.dirname(enabledPackagesPath), { recursive: true });
-  fs.writeFileSync(enabledPackagesPath, JSON.stringify(
-    {
-      schemaVersion: REGISTRY_SCHEMA_VERSION,
-      packages: [...new Set(ids)],
-      disabled: [...new Set(disabledIds)],
-      updatedAt: new Date().toISOString(),
-    },
-    null, 2,
-  ) + "\n");
+function writeRegistry(ids, disabledIds, detail = null, sources = readEnabledPackagesRegistry().sources || {}, schemaVersion = REGISTRY_SCHEMA_VERSION) {
+  const packages = [...new Set(ids)];
+  const disabled = [...new Set(disabledIds)];
+  writeJsonStateAtomic(enabledPackagesPath, {
+    schemaVersion,
+    packages,
+    disabled,
+    sources: pickSources(sources, [...packages, ...disabled]),
+    updatedAt: new Date().toISOString(),
+  });
   recordConfigWrite(enabledPackagesPath, detail);
 }
 
@@ -140,8 +178,10 @@ export function withPackageSelection(catalog, registry, id, enabled) {
 
 // Record or clear one selected root, then return the explicit selections.
 export function setPackageEnabled(id, enabled, catalog = loadPackageCatalog({ includeUnavailable: true })) {
-  const next = withPackageSelection(catalog, readEnabledPackagesRegistry(), id, enabled);
-  writeRegistry(next.packages, next.disabled, `${enabled ? "enable" : "disable"} ${id}`);
+  const registry = readEnabledPackagesRegistry();
+  const next = withPackageSelection(catalog, registry, id, enabled);
+  const sources = sourcesFor([...next.packages, ...next.disabled], catalog, registry.sources || {});
+  writeRegistry(next.packages, next.disabled, `${enabled ? "enable" : "disable"} ${id}`, sources);
   return next.packages;
 }
 
@@ -160,4 +200,19 @@ export function forgetPackageIds(ids, catalog = loadPackageCatalog({ includeUnav
   }
   const applied = readAppliedPackageIds();
   if (applied.some((id) => drop.has(id))) writeAppliedPackageIds(remaining(applied), `forget packages ${[...drop].join(", ")}`);
+}
+
+// Merge source references into both records without changing what either lists. Used by the
+// bare-ID migration; an absent record stays absent, and the registry keeps its schema version so
+// a version-1 list keeps its meaning.
+export function recordPackageSources(sources) {
+  const registry = readEnabledPackagesRegistry();
+  if (registry.exists) {
+    writeRegistry(registry.packages, registry.disabled, "record package sources",
+      { ...sources, ...(registry.sources || {}) }, registry.schemaVersion);
+  }
+  const applied = readAppliedRecord();
+  if (applied.exists) {
+    writeAppliedPackageIds(applied.packages, "record package sources", { ...sources, ...(applied.sources || {}) });
+  }
 }

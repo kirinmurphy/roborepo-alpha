@@ -1,0 +1,29 @@
+{
+  "path": [
+    "package",
+    "source",
+    "enable"
+  ],
+  "kind": "command",
+  "title": "Enable source",
+  "description": "Enable a package source",
+  "order": 50,
+  "usage": "roborepo package source enable <source>",
+  "arguments": [
+    {
+      "name": "source",
+      "required": true,
+      "interactive": {
+        "prompt": "Source id"
+      }
+    }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageSourceCommand",
+    "prependArgs": [
+      "enable"
+    ]
+  }
+}

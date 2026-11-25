@@ -37,6 +37,12 @@
       "order": 50
     },
     {
+      "id": "added-skills",
+      "label": "Added Skills",
+      "description": "Skills added from a Git repository that ships no RoboRepo package manifest.",
+      "order": 55
+    },
+    {
       "id": "monitoring",
       "label": "Monitoring",
       "description": "Observe what agents actually do \u2014 logs and usage capture. Never changes behavior.",

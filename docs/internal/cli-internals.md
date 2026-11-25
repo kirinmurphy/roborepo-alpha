@@ -18,7 +18,11 @@ thin composition root; commands are declared as JSON under
 | `scripts/cli/browser.mjs` + `scripts/cli/browser/` | `browser probe\|run`: package gate, provider contract and validation, Playwright and stub providers, evidence store, local-service lifecycle |
 | `scripts/cli/mcp.mjs` | `mcp add` (registration with every MCP-capable harness) |
 | `scripts/cli/presets.mjs` | `library` / `package manage` (one shared `packageLibrary` execution preset), `bundle status\|apply\|check\|remove` |
-| `scripts/cli/package-state.mjs` | the only reader and writer of `~/.roborepo/enabled-packages.json` (selected roots, the effective set, version-1 upgrade reads) and the machine-local `~/.roborepo/applied-packages.json` (packages RoboRepo installed, so reconcile can remove one that left the effective set) |
+| `scripts/cli/package-state.mjs` | the only reader and writer of `~/.roborepo/enabled-packages.json` (selected roots, the effective set, version-1 upgrade reads) and the machine-local `~/.roborepo/applied-packages.json` (packages RoboRepo installed, so reconcile can remove one that left the effective set); both carry a `sources` map naming each listed package's source |
+| `scripts/cli/package-service.mjs` | the package service: source management, available/installed/active state, install, update, remove, and the package view the CLI and portal share. CLI handlers and portal routes call it rather than reading sources, the lock, or the store |
+| `scripts/cli/package-source-command.mjs` | `package install\|update\|remove` and `package source list\|add\|remove\|enable\|disable\|refresh\|info\|trusted`: argument parsing, confirmation prompts, output, exit codes |
+| `scripts/cli/package-sources.mjs`, `package-source-adapters.mjs`, `package-source-git.mjs` | `<stateRoot>/package-sources.json`, the source adapter contract, and the bundled, path, and git adapters |
+| `scripts/cli/package-lock.mjs`, `package-install-store.mjs` | `<stateRoot>/packages/package-lock.json` (one provenance record per installed package) and the managed store under `<stateRoot>/packages/` |
 | `scripts/cli/package-graph.mjs` | pure dependency-graph helpers (required closure, `requiredBy`, `recommendedBy`, `requires` cycles) shared by packages and install bundles |
 | `scripts/cli/bundle-selection.mjs` | install bundle roots and effective set over `presets.json` and `~/.roborepo/presets/state.json` |
 | `scripts/cli/initialize.mjs` | `init` — orchestrates setup, harness discovery, the Package Library handoff, and apply |
@@ -33,7 +37,11 @@ thin composition root; commands are declared as JSON under
 | `scripts/cli/skill-lib.mjs` | shared Node core (zip, prompts, symlink helpers) |
 
 The CLI uses only `node:` built-ins — no external `zip`/`unzip`/`ln` — so it runs on macOS, Linux,
-and Windows (Git Bash).
+and Windows (Git Bash). The one exception is the git package source, which runs `git` to fetch a
+repository at one commit; RoboRepo already requires Git.
+
+Package sources, the lock, the store layout, and the service's exit codes are documented in one
+place: [Package Sources, Provenance, and the Install Store](package-sources.md).
 
 The lifecycle verbs dispatch to `scripts/install/main.sh`, `scripts/doctor.sh`, and
 `scripts/verify-install.sh`. Most maintainer-only scripts (`test-*.sh`) are intentionally not

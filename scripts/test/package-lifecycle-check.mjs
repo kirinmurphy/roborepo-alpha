@@ -14,6 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { loadPackageCatalog } from "../cli/package-catalog.mjs";
 import { makeAppRoot } from "./app-root-fixture.mjs";
+import { liveClaudeRules, makeSourceRoots, runCli, writeRulesPackage } from "./fixtures/package-sources.mjs";
 import { MULTI_SKILL_COMMAND, MULTI_SKILL_IDS, MULTI_SKILL_PACKAGE_ID, writeMultiSkillPackage } from "./fixtures/multi-skill-package.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -554,4 +555,33 @@ for (const pkgId of packageIds) {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 }
+// One package from each place packages come from today, and a `requires` edge across them: a
+// workspace package that requires a built-in one. Enabling the workspace package applies both,
+// records only the workspace package as selected, and records both as applied; disabling it removes
+// both. Runs against a mini app root so only fixture packages exist.
+{
+  const roots = makeSourceRoots("roborepo-package-cross-origin-");
+  const appliedFile = path.join(roots.stateRoot, "applied-packages.json");
+  const registryFile = path.join(roots.stateRoot, "enabled-packages.json");
+  const ok = (...args) => {
+    const result = runCli(roots.env, args);
+    assert.equal(result.status, 0, `${args.join(" ")} should succeed\n${result.output}`);
+    return result.output;
+  };
+  try {
+    writeRulesPackage(roots.builtInDir, "origin-builtin");
+    writeRulesPackage(roots.workspaceDir, "origin-workspace", { requires: ["origin-builtin"] });
+    ok("package", "enable", "origin-workspace");
+    assert.deepEqual(JSON.parse(fs.readFileSync(registryFile, "utf8")).packages, ["origin-workspace"], "only the selected root is recorded");
+    assert.deepEqual([...JSON.parse(fs.readFileSync(appliedFile, "utf8")).packages].sort(), ["origin-builtin", "origin-workspace"], "both packages are recorded as applied");
+    const rules = liveClaudeRules(roots.home);
+    assert.ok(rules.includes("## Fixture rules origin-builtin") && rules.includes("## Fixture rules origin-workspace"), "both packages' rules are live");
+    ok("package", "disable", "origin-workspace");
+    assert.deepEqual(JSON.parse(fs.readFileSync(appliedFile, "utf8")).packages, [], "disable removes both from the applied record");
+    assert.ok(!liveClaudeRules(roots.home).includes("## Fixture rules origin-builtin"), "the required built-in package's rules go with it");
+  } finally {
+    roots.cleanup();
+  }
+}
+
 console.log(`ok: package lifecycle contract (${packageIds.length} packages, a several-skill package, derived dependencies, and reconcile cleanup)`);

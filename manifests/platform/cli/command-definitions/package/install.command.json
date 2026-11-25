@@ -1,0 +1,25 @@
+{
+  "path": [
+    "package",
+    "install"
+  ],
+  "kind": "command",
+  "title": "Install package",
+  "description": "Install a package from a source without enabling it",
+  "order": 36,
+  "usage": "roborepo package install <package|source/package> [--yes] [--json]",
+  "arguments": [
+    {
+      "name": "package",
+      "required": true,
+      "interactive": {
+        "prompt": "Package (source/package)"
+      }
+    }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageInstallCommand"
+  }
+}
