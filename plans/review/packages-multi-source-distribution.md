@@ -1,6 +1,6 @@
 ---
 id: jdsobwn
-next_action: Run /plan-review on this plan. Implementation, validation, and docs are done and the pull request is open; the Decision Log entry on recorded requirements is worth confirming.
+next_action: Approved; merge pull request #84 (kirinmurphy/roborepo-alpha), then run /plan-close on this plan.
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["user-managed-packages-and-add-workflows", "f5exs0bd", "o9zwxuav", "74h2tlim"]
@@ -1095,7 +1095,8 @@ The implementation should treat these as settled unless new repository constrain
   install, so no recorded choice changes without the user naming it. Alternative not chosen:
   silently prefer the recorded source, which installs a different package than the repo expects.
   The Validator escalated this; the refusal is the conservative choice that leaves both outcomes
-  one explicit command away. Revisit in `/plan-review` if you prefer the alternative.
+  one explicit command away. Confirmed by the user in `/plan-review` on 2026-11-24 ("Approve, keep
+  refusal").
 - **2026-11-24: The trusted catalog ships empty.** The user decided that no repo is vouched for
   yet. Every Git source installs as unverified, so the user sees its contents and confirms.
   Vouching for well-known collections (for example Cloudflare's or Matt Pocock's skills) is a
@@ -1208,6 +1209,7 @@ Keep the source configuration and lock schemas in one technical reference and li
 - `/plan-review` second base sync: `main` b6cdbe55 merged at b704416b with no conflicts.
 - `/plan-review` Validator pass 6 at 9bac4530 (fresh-context subagent): no findings; all 13 `scripts/test/package-*-check.mjs` passed.
 - CI run 45528253759 at 9bac4530: success.
+- Approval: the user replied "Approve, keep refusal" in the `/plan-review` chat on 2026-11-24, after being shown the review of 9bac4530; recorded with `roborepo plans approve`.
 
 ### Result
 - Status: complete
