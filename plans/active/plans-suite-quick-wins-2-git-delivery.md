@@ -1,6 +1,6 @@
 ---
 id: i5mnkm7z
-next_action: Run /plan-execute on this plan. Start with the "branch tip is pushed" check in merge readiness and its failing test, then the handoff reference, then the two skills and their pins.
+next_action: Implementation is committed and pushed; /plan-execute is finishing its validation loop, then merges main in, opens the pull request, and submits for /plan-review.
 blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["f0jwe76j", "w7vls1yk", "d9ywaa8d", "developer-runtime-remote-branch-status", "pvgx8oh7", "kqgr1d65", "0jped168"]
@@ -233,27 +233,27 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 
 ## Implementation plan
 
-- [ ] Add the "branch tip is pushed" check to `mergeReadiness`, with cases in
+- [x] Add the "branch tip is pushed" check to `mergeReadiness`, with cases in
       `scripts/test/plan-lifecycle-transitions-check.mjs` (where the `plans approve` fixtures live;
       merge readiness has no test today): tip equal to upstream passes; tip ahead of upstream fails;
       no upstream with a remote fails; no remote passes. Write the cases first and confirm the two
       failing ones fail before the check exists.
-- [ ] Update `plan-execute/references/handoff.md`: draft at first push, the CI watch table and its
+- [x] Update `plan-execute/references/handoff.md`: draft at first push, the CI watch table and its
       rules, the mark-ready rule replacing "ready any draft", the Push and Hand off intros (the
       handoff now runs after the completion preflight and before submit), and Hand off step 7
       reporting the watched result.
-- [ ] Update `plan-execute/SKILL.md`: step 13's push and draft, pushes during the Validation Loop, the
+- [x] Update `plan-execute/SKILL.md`: step 13's push and draft, pushes during the Validation Loop, the
       new Implementation Completion order and its "Push and hand off the feature branch" subsection,
       Review Findings, Completion Conditions, and Boundaries.
-- [ ] Update `plan-execute/references/validation-loop.md` and `references/final-report.md`.
-- [ ] Update `plan-review/SKILL.md` steps 2, 5, 6, and 6a, replace its push section with a link to
+- [x] Update `plan-execute/references/validation-loop.md` and `references/final-report.md`.
+- [x] Update `plan-review/SKILL.md` steps 2, 5, 6, and 6a, replace its push section with a link to
       the shared reference, and update its Boundaries.
-- [ ] Update the pins in `scripts/test/plan-suite-skills-check.mjs`: the handoff phrases that name
+- [x] Update the pins in `scripts/test/plan-suite-skills-check.mjs`: the handoff phrases that name
       the old order ("After the submit transition, and after Review Findings commits its fixes",
       "CI's result so far", "Then hand off the feature branch"), and the plan-review boundary
       phrase. Add pins for `handoff.md`: `--draft`, the 3-attempt limit, the rule that no checks is
       not green, and `pr-ready` only after green CI and a clean Validator.
-- [ ] Update the docs under Documentation impact.
+- [x] Update the docs under Documentation impact.
 
 ## Validation
 
@@ -268,7 +268,9 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
       first push, CI watched without polling, a failing check fixed, marked ready, review fixes
       pushed, and the user merges. This plan's own run uses the installed skills from before the
       change, so it cannot show this. Text pins cannot show an agent follows the procedure, and
-      behavior evals (`0jped168`) do not exist yet.
+      behavior evals (`0jped168`) do not exist yet. Needs a person: the run ends in merging the pull
+      request, an action the user's rules reserve to the user, and the changed skills are installed
+      only after this branch merges and `roborepo update` runs.
 
 ## Documentation impact
 
@@ -303,3 +305,19 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - 2026-11-24, during promotion: the skills use `roborepo delivery pr-ready` and `retry-ci` rather
   than `gh pr ready` (in the `ask` bucket) and `gh run rerun`, because the delivery commands are
   allowed and refuse a pull request or run that does not match the pushed head.
+- 2026-11-24, during execution: "branch tip is pushed" reads the upstream with
+  `git for-each-ref --format=%(upstream) refs/heads/<branch>` instead of `<branch>@{upstream}`,
+  because `refs/heads/<branch>@{upstream}` does not resolve and a short branch name can match a tag.
+- 2026-11-24, during execution: all four merge-readiness cases failed before the check existed (the
+  check was absent from the output), not only the two cases that expect a refusal; the two refusal
+  cases are the ones whose outcome the check changes.
+- 2026-11-24, during execution: the handoff's report step became step 8, after a new step 7 "Watch
+  CI", so the order merge → recheck → push → pull request → CI → report is pinned as one sequence.
+- 2026-11-24, during execution: `/plan-review`'s push section now names which parts of the shared
+  reference it follows (Push, Watch CI, Mark ready) and leaves Hand off to `/plan-execute`, because
+  `/plan-review` synchronizes the base in its own step 2.
+- 2026-11-24, during execution: trimmed `plan-execute/SKILL.md`'s "Push and hand off" subsection to
+  a summary that defers to the reference, to stay within the 500-line skill body budget that
+  `scripts/doctor.sh` enforces.
+- 2026-11-24, during execution: regenerated `docs/internal/skill-invocation-audit.md`; the
+  `/plan-review` edits removed its side-effect keyword finding and the doctor reported the doc stale.
