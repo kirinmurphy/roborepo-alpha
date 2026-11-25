@@ -190,7 +190,7 @@ function withPackageState(problems, packageEnabled, gitGaps = []) {
     return [...problems, problem(
       "git-not-routed",
       // What happens, then why, briefly: the settings come from an install older than this check.
-      `Agents' git pushes still go out as you, because your ${gitGaps.join(" and ")} settings don't include the bot's Git settings yet.`,
+      "Agents' git pushes still go out as you, because your harness settings don't include the bot's Git settings yet.",
       "Run roborepo update, then start new agent sessions.",
     )];
   }
