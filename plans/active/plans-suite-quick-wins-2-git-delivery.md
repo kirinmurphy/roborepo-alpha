@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["f0jwe76j", "w7vls1yk", "d9ywaa8d", "developer-runtime-remote-branch-status", "pvgx8oh7", "kqgr1d65", "0jped168"]
 reviewed_commit: f9d328468e246a26ce2fd0629ce2085f3e8ca319
-worktree:
+worktree: plans-suite-quick-wins-2-git-delivery
 ---
 
 # Deliver finished plans as a watched pull request
