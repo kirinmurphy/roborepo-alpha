@@ -10,7 +10,7 @@ judgement call is needed. Security, performance, and validation stay in place th
 The page has two parts: a ranked list of the work still open, with the reason for each position, and
 a dated record of what is finished.
 
-Last reviewed: November 24, 2026, from the plan store and GitHub.
+Last reviewed: November 25, 2026, from the plan store and GitHub.
 
 ## How this page is kept
 
@@ -29,55 +29,53 @@ Last reviewed: November 24, 2026, from the plan store and GitHub.
 
 | Item | What is needed |
 | --- | --- |
-| 3. Bot account | Run the guided setup in your own terminal, then review and approve pull request 82 |
-| 5. Small changes | Answer one open question: after the agent proposes "plan" or "no plan", does it proceed or wait for a yes |
-| 7. Approval after clean merges | Two decisions, on merge readiness and on conflicted merges; the plan recommends an answer for each |
+| 1. Session titles | Review and approve pull request 89 |
+| 2. Bot account | Run the guided setup in your own terminal, then review and approve pull request 82 |
+| 3. Approval after clean merges | Two decisions, on merge readiness and on conflicted merges; the plan recommends an answer for each |
+| 7. Small changes | Answer one open question: after the agent proposes "plan" or "no plan", does it proceed or wait for a yes |
 
 ## Priority list
 
-Ranked by how much each item removes a step that needs a person, then by what it unblocks.
+Ranked by how much each item removes a step that needs a person, then by what it unblocks. Items 3
+to 6 follow the order the owner set in the store's `plans` group on November 25.
 
 | # | Plan | What the owner gets | Stage | Next step |
 | --- | --- | --- | --- | --- |
-| 1 | Deliver finished plans as a watched pull request (`i5mnkm7z`) | A built plan opens its pull request and keeps it passing unattended | Backlog | Prepare with `/plan-promote`; can start now |
-| 2 | Session Titles Show the Workflow Stage (`gcfw77cq`) | Titles such as `/plan-execute: …`, so parallel sessions are easy to tell apart | Backlog | Two Claude hook trials, then prepare; can start now |
-| 3 | GitHub agent identity (`w7vls1yk`) | GitHub itself refuses an agent's merge or push to `main` | In review, pull request 82 | Owner setup and approval |
-| 4 | A current server is running whenever a plan is ready to review (`kqgr1d65`) | Every pull request for served changes comes with a running, current server and its address, without asking | Backlog | Prepare any time; build after items 1 and 3 and pull request 84 |
-| 5 | Small changes are delivered from a worktree (`0ubk9sug`) | Work without a plan never moves the main checkout off `main`; a hook enforces it | Backlog | One open question, then prepare; build after item 3 |
-| 6 | A plan's filename can be changed with one command (`iz3vuxyi`) | A plan's group or name is fixed without archiving and recreating it under a new id | Backlog | Prepare any time; build after item 3 |
-| 7 | Approval survives clean merges of the base branch (`d9ywaa8d`) | No re-approving a plan because `main` moved and merged cleanly | Backlog | Refresh the plan and decide its questions; build after item 1 |
-| 8 | Guided context compaction (`txhlglk`) | Long build sessions keep their thread when context is summarized | Backlog | Prepare any time; build after items 1 and 4 |
+| 1 | Session Titles Show the Workflow Stage (`gcfw77cq`) | Titles such as `/plan-execute: …`, so parallel sessions are easy to tell apart | In review, pull request 89 | Owner review and approval |
+| 2 | GitHub agent identity (`w7vls1yk`) | GitHub itself refuses an agent's merge or push to `main` | In review, pull request 82 | Owner setup and approval |
+| 3 | Approval survives clean merges of the base branch (`d9ywaa8d`) | No re-approving a plan because `main` moved and merged cleanly | Backlog | Refresh the plan and decide its questions; build after item 1 |
+| 4 | Guided context compaction (`txhlglk`) | Long build sessions keep their thread when context is summarized | Backlog | Prepare and build now |
+| 5 | Closing a plan writes its case study to a folder you chose once (`r39y8kgu`) | Each closed plan leaves a case study in the owner's notes folder, without asking | Backlog | Prepare any time; build after items 2 and 3 |
+| 6 | A current server is running whenever a plan is ready to review (`kqgr1d65`) | Every pull request for served changes comes with a running, current server and its address, without asking | Backlog | Prepare any time; build after items 1, 2, 3, and 5 |
+| 7 | Small changes are delivered from a worktree (`0ubk9sug`) | Work without a plan never moves the main checkout off `main`; a hook enforces it | Backlog | One open question, then prepare; build after item 2 |
+| 8 | A plan's filename can be changed with one command (`iz3vuxyi`) | A plan's group or name is fixed without archiving and recreating it under a new id | Backlog | Prepare any time; build after item 2 |
 | 9 | Blockers and dependencies (`plan-lifecycle-suite-blockers-dependencies`) | Plans record what they wait on, so an orchestrator can pick unblocked work | Backlog | Split off the portal half and refresh |
 | 10 | Agent behavior evals (`0jped168`) | Proof that a rule or skill change alters what agents do | Backlog | Prepare any time |
-| 11 | PR autofix on any harness (`f0jwe76j`) | CI failures and review comments handled unattended, including replies on review threads | Backlog | Waits on item 3 merging |
+| 11 | PR autofix on any harness (`f0jwe76j`) | CI failures and review comments handled unattended, including replies on review threads | Backlog | Waits on item 2 merging |
 | 12 | Session launching, milestone 1 (`plan-session-launching-milestone-1`) | Plans start their own sessions | Backlog | Needs a rewrite |
 
 ### Why each item sits where it does
 
-1. **Watched pull request delivery.** The largest step toward unattended builds. Autofix (item 11)
-   and approval freshness (item 7) both build on it. Everything that held it has merged. Its own
-   `next_action` line is stale: it still names a plan closed on November 13.
-2. **Session titles.** Removes confusion met every day while running sessions in parallel. It
-   depends on nothing and names different files from item 1, so the two can build side by side.
-3. **Agent identity.** Already built and passing its checks. Items 4, 5, 6, and 11 wait on it
-   merging.
-4. **Current server at review.** Removes a request made on nearly every plan: restart the server
-   for this worktree. It edits the `/plan-execute` and `/plan-review` instructions and the final
-   report that item 1 rewrites, portal start-up code and the permission manifest that item 3
-   changes, and a state-path module that pull request 84 (multi-source packages, not on this list)
-   changes, so it builds after all three. Its server step runs after the pull request step that
-   item 1 defines. The store ranks it first in the `plans` group, above item 1; that order is fine
-   for preparing, not for building.
-5. **Small changes from a worktree.** A main checkout that stays on `main` is a precondition for
-   parallel work. It edits the same push-guard hook as item 3, so it builds after.
-6. **Plan rename command.** Small, with no open questions: a quick win. It shares plan-store code
-   and the permission manifest with item 3, so it builds after. The store ranks it above item 1 in
-   the `plans` group; here it sits below work that removes more steps.
-7. **Approval survives clean merges.** Removes a repeated approval, but shares approval-checking
-   code with item 1, and the plan text still describes plans living in the code checkout, which
-   they left when the plan store moved to its own branch.
-8. **Context compaction.** Small, but it rewrites the same `/plan-execute` instructions as items 1
-   and 4.
+1. **Session titles.** Built; its pull request is open. Items 3 and 6 edit the same plans command
+   file, so they build after it merges.
+2. **Agent identity.** Built and waiting on the owner. It also removes about seven permission
+   prompts every two days and the blocked GitHub calls agents work around. Items 5, 6, 7, 8, and 11
+   wait on it merging.
+3. **Approval survives clean merges.** Removes a repeated approval. Watched pull request delivery,
+   which it builds on, has merged. The plan text still describes plans living in the code checkout,
+   which they left when the plan store moved to its own branch.
+4. **Context compaction.** Small, with no open questions. It shares only one guide page with the
+   open pull requests, so it is the one item that can be built today.
+5. **Case study at close.** Removes a request the owner makes by hand after each plan, and the
+   need to name the destination folder each time. It edits the `/plan-close` instructions that
+   item 3 edits and the permission manifest that item 2 changes.
+6. **Current server at review.** Removes a request made on nearly every plan: restart the server
+   for this worktree. It is the largest of items 3 to 6 and shares files with items 1, 2, 3, and 5,
+   so it builds last of them.
+7. **Small changes from a worktree.** A main checkout that stays on `main` is a precondition for
+   parallel work. It edits the same push-guard hook as item 2, so it builds after.
+8. **Plan rename command.** Small, with no open questions. It shares plan-store code and the
+   permission manifest with item 2, so it builds after. The owner left it unranked in the store.
 9. **Blockers and dependencies.** The orchestrator needs this data. The plan must first be split
    from its portal half and brought up to date.
 10. **Behavior evals.** Protects quality as automation grows. Mostly new files, so it rarely
@@ -91,9 +89,10 @@ These have no ranked plan yet.
 
 | Topic | State |
 | --- | --- |
-| Request a review the moment a pull request opens, through a provider layer (CodeRabbit first, with a retry when rate limited) | Design discussion started November 24, 2026. Expected to touch items 1 and 11 and the backlog plan "Wrap-Up Codex Invocation and CodeRabbit Integration" (`wrap-up-coderabbit-integration-plan`) |
+| Remaining permission prompts, which the owner named on November 24 as the largest current slowdown | An audit of session transcripts found 45 prompts in the 2.2 days after the sandbox was installed, down from 318 in the nine days before. Proposed: item 2, then one small change allowing the sessions' shared notes folder and two read-only skill checks, then trials on worktree entry and on subagents working in temporary folders. The small change waits on item 2 |
+| Request a review the moment a pull request opens, through a provider layer (CodeRabbit first, with a retry when rate limited) | Design discussion started November 24, 2026; waiting on the owner's choice of what runs the delayed retry. Expected to touch item 11 and the backlog plan "Wrap-Up Codex Invocation and CodeRabbit Integration" (`wrap-up-coderabbit-integration-plan`) |
 | One computed "what is waiting on the owner" view across plans, as a command or a portal view | Suggested, not requested. The [Waiting on the owner](#waiting-on-the-owner) table is the hand-kept stand-in |
-| Stage Titles for Codex and Gemini Sessions (`96r9wbj0`) | In the backlog, left unranked at the owner's request; follows item 2 |
+| Stage Titles for Codex and Gemini Sessions (`96r9wbj0`) | In the backlog, left unranked at the owner's request; follows item 1 |
 
 ## Completed
 
@@ -108,8 +107,11 @@ These have no ranked plan yet.
 | Nov 22 | Doctor warns when installed config is behind (no plan) | The owner is told when to run `roborepo update` | 77 |
 | Nov 22 | Base-failure rule tightened (no plan) | A failing check counts as already broken only when it fails on `main` too | 79 |
 | Nov 23 | Two places for temporary files (`gy8ncs9u`) | Agent and test leftovers get one home and automatic cleanup | 78, 80 |
-| Nov 23 | Skills declare which skills they need (`ejsc769o`) | Shared instructions live in one skill; this cleared the hold on item 1 | 76 |
+| Nov 23 | Skills declare which skills they need (`ejsc769o`) | Shared instructions live in one skill; this cleared the hold on watched pull request delivery | 76 |
 | Nov 23 | A merged branch stays closable (no plan) | A plan can be closed after `main` is merged back into its branch | 83 |
+| Nov 25 | Keep roborepo wrappers inside the Claude sandbox | roborepo commands no longer leave the sandbox as a whole | 86 |
+| Nov 25 | Deliver finished plans as a watched pull request (`i5mnkm7z`) | A built plan opens its pull request and keeps it passing unattended | 87 |
 
-Rows dated November 22 and 23 were read from GitHub and the plan store on November 24. Earlier rows
-come from hand-over notes; the November 15 row's date and pull request were not re-checked.
+Rows dated November 22 and later were read from GitHub and the plan store. The pull request 86 row
+rests on its title alone. Earlier rows come from hand-over notes; the November 15 row's date and
+pull request were not re-checked.
