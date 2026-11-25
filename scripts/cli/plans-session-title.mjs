@@ -46,8 +46,13 @@ function titleForCommand({ command, rest }, cwd) {
   const named = namedPlans(rest, records);
   if (named.length > 1) return null;
   if (named.length === 1) return sessionTitle(command, named[0].plan.title);
-  return sessionTitle(command, rest);
+  // Only /plan-write can target a plan that does not exist yet, so only it falls back to the
+  // prompt's words. Any other command naming nothing found was given an unknown id or path, which
+  // must not become the title.
+  return command === PLAN_WRITE ? sessionTitle(command, rest) : null;
 }
+
+const PLAN_WRITE = "plan-write";
 
 function harnessArg(args) {
   const index = args.indexOf("--harness");

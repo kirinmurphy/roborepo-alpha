@@ -111,6 +111,8 @@ try {
   const silent = [
     [{ ...base, prompt: "/plan-write" }, "a bare command with no words"],
     [{ ...base, prompt: "/plan-review ttttt111 ooooo222" }, "a prompt naming several plans"],
+    [{ ...base, prompt: "/plan-review zzzz9999" }, "an unknown plan id, which must not become the title"],
+    [{ ...base, prompt: "/plan-execute plans/ready/missing.md" }, "an unknown plan path"],
     [{ ...base, prompt: "please fix the build" }, "an ordinary prompt"],
     [{ ...base, prompt: "/plan-execute ttttt111", session_title: "My own name" }, "a hand-written title"],
     [{ ...base, prompt: "/plan-execute ttttt111", session_title: "/plan-execute: Session Titles Show the Workflow Stage" }, "the title it already has"],
@@ -124,6 +126,8 @@ try {
   // Outside any plan store the command still titles from the prompt's own words, and stays silent.
   const bare = fx.repository("bare", {}, { store: false });
   assert.equal(run({ ...base, prompt: "/plan-write sketch a cache" }, { cwd: bare }).sessionTitle, "/plan-write: sketch a cache");
+  assert.equal(run({ ...base, prompt: "/plan-review ttttt111" }, { cwd: bare }), null,
+    "outside a store, a command that needs an existing plan sets no title");
 } finally {
   fx.cleanup();
 }
