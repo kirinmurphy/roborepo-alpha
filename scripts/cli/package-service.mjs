@@ -39,7 +39,7 @@ import {
   refreshGitSource,
   trustedEntryFor,
 } from "./package-source-git.mjs";
-import { effectiveEnabledIds, readEnabledPackagesRegistry, selectedRootIds } from "./package-state.mjs";
+import { effectiveEnabledIds, readAppliedPackageIds, readEnabledPackagesRegistry, selectedRootIds } from "./package-state.mjs";
 import { hasReplaceOverride, readWorkspaceOverrides } from "./workspace-resources.mjs";
 
 // Exit codes for non-interactive callers. 2 matches the CLI's existing usage/refusal code.
@@ -498,7 +498,30 @@ function keptInstall(pkg, lock, candidates = []) {
   const recorded = lock.packages[pkg.id];
   if (recorded?.kind !== "materialized" || recorded.sourceId !== pkg.sourceId) return pkg;
   const installed = candidates.find((candidate) => candidate.id === pkg.id && candidate.sourceId === recorded.sourceId && candidate.revision === recorded.resolved);
-  return installed ? { ...installed, contents: contentsSummary(installed.sourceRoot) } : pkg;
+  if (installed) return { ...installed, contents: contentsSummary(installed.sourceRoot) };
+  // The copy is gone. The install restores the pinned revision, so the preview, the plan the user
+  // confirms, and the requirements walked all come from that revision's files, not the listing's.
+  const source = findSource(pkg.sourceId);
+  if (!source) return pkg;
+  let folder;
+  try {
+    folder = createSourceAdapter(source).materialize(pinnedResolution(recorded, source));
+  } catch {
+    throw missingPinnedCopyError(pkg, recorded);
+  }
+  const pinned = normalizePackageEntry({
+    sourceId: source.id,
+    packageId: pkg.id,
+    root: folder,
+    file: path.join(folder, "package.config.json"),
+    collection: pkg.collection,
+    revision: recorded.resolved,
+  }, source);
+  return { ...pinned, contents: contentsSummary(folder) };
+}
+
+function missingPinnedCopyError(pkg, recorded) {
+  return new PackageServiceError(`the installed copy of ${pkg.qualifiedName} is missing and its revision ${recorded.resolved.slice(0, 12)} is no longer cached; run \`roborepo package update ${pkg.id}\` to restore it`, { code: "unavailable" });
 }
 
 function safeCompose() {
@@ -573,7 +596,7 @@ function installOne(pkg, lock) {
     folder = adapter.materialize(resolution);
   } catch (err) {
     if (!pinnedHere) throw toServiceError(err);
-    throw new PackageServiceError(`the installed copy of ${pkg.qualifiedName} is missing and its revision ${current.resolved.slice(0, 12)} is no longer cached; run \`roborepo package update ${pkg.id}\` to restore it`, { code: "unavailable" });
+    throw missingPinnedCopyError(pkg, current);
   }
   const { record: written, previous } = promoteMaterialized({
     sourceFolder: folder,
@@ -756,8 +779,10 @@ function safeReaddir(dir) {
 
 // Remove an installed package. A System package is never removable. An active package is first
 // turned off through `disable` (the same lifecycle the enable switch uses); if it stays on because
-// another active package requires it, nothing is removed. A path package's folder is never touched.
-export async function removePackage(reference, { disable = null } = {}) {
+// another active package requires it, nothing is removed. A package still on but no longer in the
+// catalog is turned off through `retire`, from its own files. A path package's folder is never
+// touched.
+export async function removePackage(reference, { disable = null, retire = null } = {}) {
   const { packageId, sourceId } = parsePackageReference(reference);
   const lock = readPackageLock();
   const record = lock.packages[packageId];
@@ -807,6 +832,18 @@ export async function removePackage(reference, { disable = null } = {}) {
     if (effectiveEnabledIds(after).includes(packageId)) {
       throw new PackageServiceError(`${packageId} stays active because other packages require it; nothing was removed`, { code: "refused", details: { roots, result } });
     }
+  }
+  // Selected or applied, but out of the catalog: its registrations are still in the harnesses.
+  const stranded = !pkg && (readEnabledPackagesRegistry().packages.includes(packageId) || readAppliedPackageIds().includes(packageId));
+  if (stranded) {
+    const own = (composed.candidates || []).find((candidate) => candidate.id === packageId && candidate.sourceId === record.sourceId
+      && (record.kind !== "materialized" || candidate.revision === record.resolved));
+    if (!own) {
+      throw new PackageServiceError(`${packageId} is still on, but its package files are missing, so what it registered cannot be removed; restore them with \`roborepo package update ${packageId}\` first. Nothing was removed`, { code: "refused" });
+    }
+    if (!retire) throw new PackageServiceError(`${packageId} is active; disable it first`, { code: "refused" });
+    await retire(own);
+    disabled = true;
   }
   const removed = removeInstalled(packageId);
   return { qualifiedName: qualifiedName(record.sourceId, packageId), removed: removed.removed, deletedCopy: removed.deletedCopy, disabled };

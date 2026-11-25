@@ -7,7 +7,9 @@
 // patches the new revision dropped; update restoring a missing copy at its pin; removal and the
 // package view when a local override shadows a recorded git copy; `available` cleared when a
 // source drops an installed package; a folder source refused an id a kept git install still
-// names; and a failed bulk refresh exiting non-zero under --json.
+// names; a failed bulk refresh exiting non-zero under --json; reinstalling a pinned package whose
+// copy was deleted, previewed at its pin; and removing an enabled package left unresolved by a
+// missing requirement.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -281,6 +283,44 @@ try {
   const rows = JSON.parse(bulk.stdout);
   assert.ok(rows.some((row) => row.id === "drop" && row.error), JSON.stringify(rows));
   assert.ok(rows.some((row) => row.id === "team" && !row.error), "the other sources still refresh");
+
+  // ---------------------------------------------------------------------------------------------
+  // Reinstalling a pinned package whose copy was deleted previews and restores the pinned
+  // revision, not the newer listing and the requirements only that listing adds.
+  const pin = makeRepo("pin", rulesOnly("pin-tool", "## Upd pin v1\n"));
+  ok("package", "source", "add", pin.url, "--id", "pin");
+  ok("package", "install", "pin/pin-tool", "--yes");
+  pin.commit({
+    "packages/pin-tool/package.config.json": manifest("pin-tool", { requires: ["pin-extra"], resources: [{ type: "rules", harness: "claude", source: "rules.md" }] }),
+    "packages/pin-tool/extra.sh": "#!/bin/sh\n",
+    ...rulesOnly("pin-extra"),
+  });
+  ok("package", "source", "refresh", "pin");
+  fs.rmSync(lock()["pin-tool"].installedPath, { recursive: true, force: true });
+  const restored = ok("package", "install", "pin/pin-tool", "--yes");
+  assert.match(restored, new RegExp(`pin/pin-tool \\(unverified\\) at ${pin.first.slice(0, 12)}`), `the preview names the pinned revision\n${restored}`);
+  assert.doesNotMatch(restored, /extra\.sh|pin-extra/, "the preview shows the pinned revision's contents only");
+  assert.equal(lock()["pin-tool"].resolved, pin.first, "the pin does not move");
+  assert.ok(!lock()["pin-extra"], "a requirement only the newer revision has is not installed");
+
+  // Removing an enabled package that left the catalog because a package it requires became
+  // unresolved takes out what it registered, from its own copy.
+  const strand = makeRepo("strand", {
+    "packages/strand-top/package.config.json": manifest("strand-top", { requires: ["strand-base"], resources: [{ type: "rules", harness: "claude", source: "rules.md" }] }),
+    "packages/strand-top/rules.md": "## Upd strand top\n",
+    ...rulesOnly("strand-base"),
+  });
+  ok("package", "source", "add", strand.url, "--id", "strand");
+  ok("package", "install", "strand/strand-top", "--yes");
+  ok("package", "enable", "strand-top");
+  assert.match(liveClaudeRules(roots.home), /Upd strand top/);
+  fs.rmSync(lock()["strand-base"].installedPath, { recursive: true, force: true });
+  const removedStranded = ok("package", "remove", "strand-top");
+  assert.match(removedStranded, /disabled first/, removedStranded);
+  assert.doesNotMatch(liveClaudeRules(roots.home), /Upd strand top/, "its rules are removed from the harness");
+  assert.ok(!lock()["strand-top"], "its record goes");
+  const registryAfter = JSON.parse(fs.readFileSync(path.join(roots.stateRoot, "enabled-packages.json"), "utf8"));
+  assert.ok(!registryAfter.packages.includes("strand-top"), "its selection goes");
 } finally {
   roots.restore();
   roots.cleanup();

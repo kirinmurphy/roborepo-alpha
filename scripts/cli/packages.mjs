@@ -730,6 +730,18 @@ export async function reapplyPackage(pkgId, { previous = null } = {}) {
   return true;
 }
 
+// Take out what an installed package registered while it was on, when it has since dropped out of
+// the catalog (a package it requires became unresolved). `disable` cannot reach it, since it only
+// knows catalog packages, and once its install record goes nothing else names its components.
+// `pkg` is the package read from its own copy or folder.
+export async function retireStrandedPackage(pkg) {
+  assertHarnessWriteAllowed();
+  console.log(`disabling: ${pkg.label} (no longer resolvable)`);
+  await removePackageComponents(pkg);
+  forgetPackageIds([pkg.id]);
+  cleanupPackageProjections();
+}
+
 // Component types whose registration lives outside the package folder and is not swept by
 // projection cleanup, so an update has to remove them itself.
 const UPDATE_REMOVED_TYPES = new Set(["mcp", "hooks", "config-patch"]);
