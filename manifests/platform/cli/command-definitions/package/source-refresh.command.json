@@ -1,0 +1,20 @@
+{
+  "path": [
+    "package",
+    "source",
+    "refresh"
+  ],
+  "kind": "command",
+  "title": "Refresh sources",
+  "description": "Fetch the newest listing of Git package sources",
+  "order": 40,
+  "usage": "roborepo package source refresh [source] [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageSourceCommand",
+    "prependArgs": [
+      "refresh"
+    ]
+  }
+}

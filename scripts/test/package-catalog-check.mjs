@@ -10,6 +10,7 @@ import { loadSlashCommandPlan } from "../cli/slash-commands.mjs";
 import { readConfigSnapshot } from "../cli/config.mjs";
 import { buildOnboardSteps } from "../cli/presets.mjs";
 import { MULTI_SKILL_IDS, MULTI_SKILL_PACKAGE_ID, writeMultiSkillPackage } from "./fixtures/multi-skill-package.mjs";
+import { makeSourceRoots, runModules, writeReplaceOverride, writeRulesPackage } from "./fixtures/package-sources.mjs";
 
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -447,6 +448,66 @@ try {
     assert(loadWith({ recommends: "test-harness" }).stderr.includes("recommends must be an array"), "a non-array recommends should be rejected");
   } finally {
     fs.rmSync(shapeRoot, { recursive: true, force: true });
+  }
+}
+
+// Discovery across the two places packages come from today: the app's built-in library and the
+// user's workspace. Pins the descriptor fields consumers read (id, origin, sourceRoot, sourceFile,
+// presentation, components) and the same-ID rule: a workspace package may share a built-in ID only
+// through a typed `replace` override, which then makes the workspace package the one in the catalog.
+{
+  const roots = makeSourceRoots("roborepo-package-discovery-");
+  const catalogOf = () => runModules(roots.env, { c: "scripts/cli/package-catalog.mjs" }, `
+    return c.loadPackageCatalog({ includeUnavailable: true }).map((p) => ({
+      id: p.id, origin: p.origin, sourceRoot: p.sourceRoot, sourceFile: p.sourceFile,
+      category: p.presentation.category, components: p.components.map((x) => x.type),
+      marker: p.label,
+    }));
+  `);
+  try {
+    writeRulesPackage(roots.builtInDir, "alpha");
+    writeRulesPackage(roots.workspaceDir, "beta", { requires: ["alpha"] });
+    const discovered = catalogOf();
+    assert(discovered.ok, `discovery should load: ${discovered.error}`);
+    const byId = new Map(discovered.value.map((p) => [p.id, p]));
+    assert(byId.get("alpha")?.origin === "built-in", "a package under globals/packages is built-in");
+    assert(byId.get("beta")?.origin === "workspace", "a package under the workspace packages folder is a workspace package");
+    assert(byId.get("beta").sourceRoot === path.join(roots.workspaceDir, "beta"), "sourceRoot is the package directory");
+    assert(byId.get("beta").sourceFile === path.join(roots.workspaceDir, "beta", "package.config.json"), "sourceFile is the manifest");
+    assert(byId.get("beta").components.join(",") === "rules", "components are derived from resources");
+
+    // A directory whose name differs from its manifest id is refused; this is also what makes two
+    // packages with one ID inside a single folder impossible.
+    const mismatched = writeRulesPackage(roots.workspaceDir, "gamma");
+    fs.renameSync(mismatched, path.join(roots.workspaceDir, "gamma-copy"));
+    const misnamed = catalogOf();
+    assert(!misnamed.ok && misnamed.error.includes("package directory must match id"), `misnamed package dir should fail: ${misnamed.error}`);
+    fs.rmSync(path.join(roots.workspaceDir, "gamma-copy"), { recursive: true, force: true });
+
+    // Same ID in both places, no override: a hard error naming the package and the override fix.
+    writeRulesPackage(roots.workspaceDir, "alpha", { label: "Workspace Alpha" });
+    const conflict = catalogOf();
+    assert(!conflict.ok, "a workspace package reusing a built-in ID without an override should fail");
+    assert(/'alpha'/.test(conflict.error) && conflict.error.includes("replace override"), `conflict error should name the package and the override: ${conflict.error}`);
+
+    // With a typed replace override, the workspace package takes the ID.
+    writeReplaceOverride(roots.workspace, ["alpha"]);
+    const replaced = catalogOf();
+    assert(replaced.ok, `a replace override should resolve the conflict: ${replaced.error}`);
+    const alpha = replaced.value.filter((p) => p.id === "alpha");
+    assert(alpha.length === 1 && alpha[0].origin === "workspace" && alpha[0].marker === "Workspace Alpha",
+      `the override makes the workspace package win: ${JSON.stringify(alpha)}`);
+
+    // The Config page view carries `builtIn` from the origin.
+    const view = runModules(roots.env, { cfg: "scripts/cli/config.mjs" }, `
+      const items = cfg.readConfigSnapshot().behaviorView.flatMap((s) => s.items || []).filter((i) => i.toggle === "package");
+      return items.filter((i) => ["alpha", "beta"].includes(i.id)).map((i) => [i.id, i.builtIn]).sort();
+    `);
+    assert(view.ok, `config snapshot should load: ${view.error}`);
+    assert(JSON.stringify(view.value) === JSON.stringify([["alpha", false], ["beta", false]]),
+      `builtIn follows the winning package's origin: ${JSON.stringify(view.value)}`);
+  } finally {
+    roots.cleanup();
   }
 }
 

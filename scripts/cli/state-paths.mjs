@@ -19,6 +19,20 @@ export function writeJsonState(filePath, data) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2) + "\n");
 }
+
+// Write through a temp file in the same directory and rename it into place, so a crash mid-write
+// leaves the previous file whole instead of a truncated one.
+export function writeJsonStateAtomic(filePath, data) {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  const temp = path.join(dir, `.${path.basename(filePath)}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    fs.writeFileSync(temp, JSON.stringify(data, null, 2) + "\n");
+    fs.renameSync(temp, filePath);
+  } finally {
+    fs.rmSync(temp, { force: true });
+  }
+}
 export const installStatePath = path.join(stateDir, "install-state.json");
 // Where the running application lives, for code that runs outside it. Installed harness hooks are
 // copies under the harness home, so they cannot walk back to the manifests that ship with the app,
@@ -112,6 +126,17 @@ export function portalPidPathForPort(port) {
 }
 // Registry of enabled packages — source of truth for rules rendering.
 export const enabledPackagesPath = path.join(stateDir, "enabled-packages.json");
+// Package sources: where packages come from (the built-in library, the workspace, Git repos). Owned
+// by package-sources.mjs. Machine-local: a portable workspace holds package content, not the
+// machine's list of sources.
+export const packageSourcesPath = path.join(stateDir, "package-sources.json");
+// Managed package store, owned by package-install-store.mjs and package-lock.mjs:
+//   catalogs/<source-id>.json          last good listing of a remote source
+//   cache/<source-id>/<revision>/      a fetched source tree, used for discovery and install
+//   installed/<source-id>/<revision>/  installed copies of remote packages, one dir per package
+//   package-lock.json                  the resolution behind every installed package
+export const packageStoreDir = path.join(stateDir, "packages");
+export const packageLockPath = path.join(packageStoreDir, "package-lock.json");
 // Packages RoboRepo installed on this machine, kept apart from selection so reconcile can remove a
 // package that left the effective set without removing one RoboRepo never applied.
 export const appliedPackagesPath = path.join(stateDir, "applied-packages.json");

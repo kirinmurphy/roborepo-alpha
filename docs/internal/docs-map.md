@@ -41,6 +41,7 @@ doc of record first; supporting docs should add context, not redefine the behavi
 | Branch protection and GitHub calls | [roborepo CLI Commands](../user/reference/roborepo-cli.md#branch-protection) | [roborepo CLI Internals](cli-internals.md#git-host-calls): `modules/forge/` is the one home for `gh` calls |
 | Telemetry and the telemetry portal | [Telemetry Service Reference](../user/reference/telemetry.md) | [Telemetry Walkthrough](../user/guides/telemetry.md) |
 | Inventory manifests | [Inventory Manifest README](../../manifests/inventory/README.md) | [Config-Code Separation](../architecture/config-code-separation.md) |
+| Package sources, provenance, and the install store | [Package Sources, Provenance, and the Install Store](package-sources.md) | [roborepo CLI Commands](../user/reference/roborepo-cli.md#package-sources-and-installing), [Config-Code Separation](../architecture/config-code-separation.md#package-ownership-across-roots) |
 | NPM release workflow | [NPM Release Workflow](npm-release.md) | [Testing RoboRepo](testing.md) |
 | Maintainer test matrix | [Testing RoboRepo](testing.md) | [NPM Release Workflow](npm-release.md) |
 | See what the code style audit has reviewed and changed | [Code Style Audit Log](code-style-audit.md) | [Code Style Findings](code-style-findings.md) |

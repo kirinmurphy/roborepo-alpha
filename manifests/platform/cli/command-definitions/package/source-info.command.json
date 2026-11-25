@@ -1,0 +1,29 @@
+{
+  "path": [
+    "package",
+    "source",
+    "info"
+  ],
+  "kind": "command",
+  "title": "Source info",
+  "description": "Show one package source",
+  "order": 30,
+  "usage": "roborepo package source info <source> [--json]",
+  "arguments": [
+    {
+      "name": "source",
+      "required": true,
+      "interactive": {
+        "prompt": "Source id"
+      }
+    }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageSourceCommand",
+    "prependArgs": [
+      "info"
+    ]
+  }
+}
