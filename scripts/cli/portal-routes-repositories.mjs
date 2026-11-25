@@ -60,7 +60,7 @@ export const repositoriesRoutes = defineRoutes([
   },
   postRoute("/api/repositories/:id/protection", (handlers, body, params) => handlers.applyRepositoryProtection({ repositoryId: params.id, action: body.action })),
   // The GitHub bot identity. The GET only reads status (`?fresh=1` skips the server's five-minute
-  // cache); the POST opens `roborepo github setup` in a terminal and takes no body, because the
+  // cache of GitHub's answers; local state such as the package being on is read every time); the POST opens `roborepo github setup` in a terminal and takes no body, because the
   // command, its arguments, and its folder are the server's choice alone. The token is typed in
   // that terminal, never sent here.
   // The bot account, shared by every repo, and turning the package on when that is the one step

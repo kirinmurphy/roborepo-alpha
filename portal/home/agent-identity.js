@@ -12,7 +12,9 @@ import { applyProtection, supportsProtectionPanel } from "/portal/shared/protect
 
 const ACCOUNT_URL = "/api/agent-identity";
 const repoUrl = (repositoryId) => `/api/repositories/${encodeURIComponent(repositoryId)}/agent-identity`;
-// Matches the server's cache, so re-rendering Home does not ask again sooner than it would answer.
+// Matches the server's cache of GitHub's answers, so re-rendering Home does not ask again sooner
+// than it would answer. The account is still re-read on each of Home's polls (`pollAgentIdentity`),
+// since the server re-checks the local facts, such as the package being on, on every request.
 const REUSE_MS = 5 * 60_000;
 const FOCUS_THROTTLE_MS = 2_000;
 const SETUP_COMMAND_PATTERN = /roborepo github setup/;
@@ -45,8 +47,9 @@ let card = null;
 // ---------------------------------------------------------------------------------------------
 // Reads
 
-function loadAccount({ fresh = false } = {}) {
-  if (!fresh && account && Date.now() - account.at < REUSE_MS) return Promise.resolve(account.report);
+// `reread` skips only this page's copy; `fresh` also skips the server's cache.
+function loadAccount({ fresh = false, reread = false } = {}) {
+  if (!fresh && !reread && account && Date.now() - account.at < REUSE_MS) return Promise.resolve(account.report);
   if (!fresh && accountPending) return accountPending;
   const request = portalGetJson(`${ACCOUNT_URL}${fresh ? "?fresh=1" : ""}`)
     .then((report) => {
@@ -61,6 +64,8 @@ function loadAccount({ fresh = false } = {}) {
 function showAccount(report) {
   const before = account?.report;
   account = { at: Date.now(), report };
+  // Home's poll mostly gets the same answer back; leave the page, and an open card, as they are.
+  if (before && JSON.stringify(before) === JSON.stringify(report)) return;
   // Each repo's read depends on the account on the server, so a changed account means new reads.
   const changed = before && (before.state !== report.state || before.botLogin !== report.botLogin || before.packageEnabled !== report.packageEnabled);
   for (const repositoryId of badges.keys()) {
@@ -218,6 +223,14 @@ export function renderAgentIdentityOffer(mount, repositories) {
   openCardFromLink();
   // A failed read just leaves the banner out; the badges and Settings say the account is unread.
   loadAccount().catch(() => { mount.hidden = true; });
+}
+
+// Called on each of Home's polls: re-reads the account so a change made outside the page (the
+// package turned on or off in a terminal, the setup finishing) shows within one poll. A changed
+// account re-reads the repos too (`showAccount`).
+export function pollAgentIdentity() {
+  if (githubRepositories.length === 0 || !account) return;
+  loadAccount({ reread: true }).catch(() => {});
 }
 
 // Settings' "Set it up" links to Home with ?agent-identity=setup, since the setup runs in a repo's

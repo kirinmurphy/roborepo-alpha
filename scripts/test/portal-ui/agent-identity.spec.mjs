@@ -3,8 +3,8 @@
 // the "agent bot" badge on each GitHub repo, whose color carries the account's state as well as the
 // repo's, and the card behind it, which says everything on its own (account, token, invitation,
 // branch rules, the owner's message, the github.com steps). Also **Turn on**, **Open setup** (which
-// only asks the server to open the terminal setup), the copy-command fallback, and the refresh when
-// the user comes back. The server side is covered by repository-agent-identity-check.mjs, so these
+// only asks the server to open the terminal setup), the copy-command fallback, the refresh when
+// the user comes back, and Home's poll picking up a package turned on or off in a terminal. The server side is covered by repository-agent-identity-check.mjs, so these
 // tests answer its routes with fixed reports.
 //
 // AGENT_IDENTITY_SHOTS=<folder> also saves a screenshot of each state there, for a person to look at.
@@ -576,6 +576,37 @@ test.describe("Agent GitHub account", () => {
     await card(page).getByRole("button", { name: "Invite the bot" }).click();
     await expect(card(page).locator("[data-slot=launch-note]")).toHaveText("GitHub refused: Must have admin rights to Repository. Only an admin of the repo can invite the bot.");
     await expect(card(page).locator("[data-slot=steps] > li").nth(3)).toHaveAttribute("data-done", "false");
+  });
+
+  test("the package turned off or on in a terminal shows on Home's next poll, with no reload", async ({ page }) => {
+    await page.clock.install();
+    let current = ACCOUNTS.healthy.report;
+    const { reads } = await stub(page, { accountNext: () => current });
+    await openHome(page);
+    await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
+    await expect(offer(page)).toBeHidden();
+
+    // `roborepo package disable github-agent-identity`, run elsewhere.
+    current = ACCOUNTS["package-off"].report;
+    reads.length = 0;
+    await page.clock.fastForward(10_000);
+    for (const name of NAMES) await expect(badge(page, name), name).toBeHidden();
+    await expect(offer(page).getByRole("button", { name: "Turn on" })).toBeVisible();
+    expect(reads.filter((read) => read.kind === "account")).toEqual([{ kind: "account", fresh: false }]);
+
+    current = ACCOUNTS.healthy.report;
+    await page.clock.fastForward(10_000);
+    await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
+    await expect(offer(page)).toBeHidden();
+
+    // An unchanged answer leaves an open card alone.
+    await badge(page, "identity-invited").click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 4.");
+    reads.length = 0;
+    await page.clock.fastForward(10_000);
+    await expect.poll(() => reads.filter((read) => read.kind === "account").length).toBe(1);
+    await expect(card(page)).toBeVisible();
+    expect(reads.filter((read) => read.kind === "repo")).toEqual([]);
   });
 
   test("coming back to the window re-reads an open card", async ({ page }) => {

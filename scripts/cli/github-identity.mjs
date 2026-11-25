@@ -2,7 +2,7 @@
 // setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient } from "../../modules/forge/github.mjs";
-import { botGhEnv, readAccountIdentity, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
+import { botGhEnv, readAccountIdentity, readAgentHosts, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
 import { agentGitRoutingGaps, agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
 import { isMainModule } from "./roots.mjs";
@@ -40,9 +40,20 @@ export async function inviteBotToRepo({ repositoryId, cwd = process.cwd(), timeo
   return { ok: true };
 }
 
+// What this machine alone says about the bot account, read in a few milliseconds with no GitHub
+// call: whether the package is on, which harnesses' agents still push as you, and what gh's hosts
+// file names (signed in, token in the file, the saved login; never the token itself). The portal
+// re-reads these on every request and reuses its GitHub reads only while they are unchanged.
+export const readLocalAccountFacts = () => ({
+  packageEnabled: agentIdentityPackageEnabled(),
+  gitGaps: agentGitRoutingGaps(),
+  hosts: readAgentHosts(stateDir),
+});
+
 // The bot account alone, and one repo for a known bot: the two halves the portal shows apart.
-export const readCurrentAccountIdentity = ({ cwd = process.cwd(), timeoutMs } = {}) =>
-  readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled(), gitGaps: agentGitRoutingGaps() });
+// `local` lets the portal pass the facts it already read, so the report matches what it cached on.
+export const readCurrentAccountIdentity = ({ cwd = process.cwd(), timeoutMs, local = readLocalAccountFacts() } = {}) =>
+  readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled: local.packageEnabled, gitGaps: local.gitGaps });
 export const readCurrentRepoAgentAccess = ({ repositoryId, cwd = process.cwd(), timeoutMs, botLogin }) =>
   readRepoAgentAccess({ repositoryId, cwd, stateDir, timeoutMs, botLogin });
 

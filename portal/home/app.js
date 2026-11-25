@@ -12,7 +12,7 @@ import { repositoryDirectory, unresolvedActivity } from "./templates.js";
 import { createWorktreeCleanupDialog, createWorktreeRemoveDialog } from "./worktree-dialogs.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createProtectionPanel } from "/portal/shared/protection-panel.js";
-import { openAgentIdentityCard, renderAgentIdentityOffer } from "./agent-identity.js";
+import { openAgentIdentityCard, pollAgentIdentity, renderAgentIdentityOffer } from "./agent-identity.js";
 import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
@@ -187,6 +187,8 @@ async function refresh({ force = false } = {}) {
       if (overview.unresolvedActivity.length) content.append(unresolvedActivity(overview.unresolvedActivity));
       renderedVersion = version;
     }
+    // The bot identity is not part of the overview; it is read alongside it, on the same cadence.
+    pollAgentIdentity();
     warning.hidden = true;
     portalSetUpdatedAt(new Date(), { cadenceMs: POLL_MS });
   } catch (error) {

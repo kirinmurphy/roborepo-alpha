@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // The portal's GitHub bot identity routes below the browser: the account read (once for every repo,
-// a five-minute cache that `fresh` skips, no token in the answer), each repo's read (listed GitHub
+// a five-minute cache that `fresh` skips and a local change such as the package going off drops,
+// no token in the answer), each repo's read (listed GitHub
 // repos only, nothing per repo while the account cannot be used), turning the package on only when
 // that is the one step left, Home's setup offer and its remembered "No thanks", the setup launch (always `roborepo github setup` in the repo's own
 // folder, a reason when it cannot open), the routes' handling of `fresh` and of a non-empty body,
@@ -42,6 +43,7 @@ try {
   writeRegistry({ stateRoot, registry });
 
   await statusReadIsCachedAndCarriesNoToken(checkout);
+  await localChangeDropsTheCachedAccount();
   await packageTurnsOnOnlyAsTheLastStep();
   await updateRunsOnlyForTheGitGap();
   await setupLaunchIsTheServersChoice(checkout);
@@ -137,6 +139,47 @@ async function statusReadIsCachedAndCarriesNoToken(checkout) {
   assert.equal(reads.length, before, "a repo on another host never reaches GitHub");
 
   await assert.rejects(loadRepositoryAgentIdentity({ repositoryId: "git:github.com/example/unknown", stateRoot, read, readAccountReport }), (error) => error.code === "NOT_FOUND");
+}
+
+// Home polls the account every ten seconds. GitHub's answers stay cached, but what this machine
+// alone decides is read on every request: `roborepo package disable` in a terminal shows on the
+// next poll, with no `fresh` and no reload.
+async function localChangeDropsTheCachedAccount() {
+  clearAgentIdentityCache();
+  const clock = 1_000;
+  let local = { packageEnabled: true, gitGaps: [], hosts: { loggedIn: true, hasToken: true, user: "robo-bot" } };
+  const reads = [];
+  const read = (options) => {
+    reads.push(options.local);
+    return Promise.resolve(readyAccount({ packageEnabled: options.local.packageEnabled }));
+  };
+  const poll = () => loadAgentIdentityAccount({ now: () => clock, read, readLocal: () => local });
+
+  assert.equal((await poll()).packageEnabled, true);
+  await poll();
+  assert.equal(reads.length, 1, "unchanged local facts reuse the cached GitHub read");
+
+  local = { ...local, packageEnabled: false };
+  assert.equal((await poll()).packageEnabled, false, "the package going off shows on the next poll");
+  assert.equal(reads.length, 2);
+  assert.deepEqual(reads[1], local, "the read is made with the facts the cache is keyed on");
+
+  local = { ...local, gitGaps: ["Claude Code"] };
+  await poll();
+  local = { ...local, hosts: { ...local.hosts, hasToken: false } };
+  await poll();
+  assert.equal(reads.length, 4, "a new Git gap or a changed sign-in file is read again too");
+  await poll();
+  assert.equal(reads.length, 4);
+
+  // A repo card's read goes through the same account read.
+  local = { ...local, packageEnabled: true };
+  await loadRepositoryAgentIdentity({
+    repositoryId: GITHUB, stateRoot, now: () => clock, readAccountReport: read, readLocal: () => local,
+    read: (options) => Promise.resolve({ state: "healthy", repository: "example/project", botLogin: options.botLogin, userAdmin: true, problems: [] }),
+  });
+  assert.equal(reads.length, 5, "a repo read also notices the local change");
+  clearAgentIdentityCache();
 }
 
 // The portal turns the package on only when a fresh read shows a working bot with nothing else to

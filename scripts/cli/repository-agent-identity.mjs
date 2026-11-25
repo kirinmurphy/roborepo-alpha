@@ -15,7 +15,7 @@ import { setupGuide } from "../../modules/forge/agent-identity-guide.mjs";
 import { loadRegistry } from "../../modules/repositories/registry.mjs";
 import { turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
 import { applyHarnessConfig } from "./portal-harness-refresh.mjs";
-import { inviteBotToRepo, readCurrentAccountIdentity, readCurrentRepoAgentAccess } from "./github-identity.mjs";
+import { inviteBotToRepo, readCurrentAccountIdentity, readCurrentRepoAgentAccess, readLocalAccountFacts } from "./github-identity.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 import { selectPrimaryCheckout } from "./repository-agent-config.mjs";
 import { loadRepositoryPayload } from "./repositories.mjs";
@@ -23,8 +23,11 @@ import { launchInTerminal, terminalLaunchSupported } from "./terminal-launch.mjs
 
 // Per GitHub call, as for branch protection: a slow read reports `unavailable` instead of holding Home.
 const PORTAL_TIMEOUT_MS = 8000;
-// An uncached read makes several gh calls, and Home lists every repo, so results are reused for a
-// while. `fresh` skips the cache: the page asks for it when the user returns from the setup.
+// An uncached read makes several gh calls, and Home lists every repo and polls, so GitHub's answers
+// are reused for a while. What this machine alone decides (the package, the agents' Git settings,
+// the bot's sign-in file) is re-read on every request instead, and a change there drops the reuse,
+// so `roborepo package disable` shows on Home's next poll. `fresh` skips the cache outright: the
+// page asks for it when the user returns from the setup.
 const CACHE_MS = 5 * 60_000;
 const MAIN_SCRIPT = fileURLToPath(new URL("./main.mjs", import.meta.url));
 
@@ -33,26 +36,29 @@ const MAIN_SCRIPT = fileURLToPath(new URL("./main.mjs", import.meta.url));
 const neutralFolder = () => (fs.existsSync(os.homedir()) ? os.homedir() : os.tmpdir());
 
 const repoCache = new Map();
-let accountCache = null; // { at, report }
-let accountPending = null;
+let accountCache = null; // { at, key, report }
+let accountPending = null; // { key, promise }
 
 // The bot account, shared by every repo. Concurrent callers (Home reads every repo card at once)
-// share one read.
-async function readAccount({ fresh, now, read }) {
-  if (!fresh && accountCache && now() - accountCache.at < CACHE_MS) return accountCache.report;
-  if (!fresh && accountPending) return accountPending;
-  const pending = read({ cwd: neutralFolder(), timeoutMs: PORTAL_TIMEOUT_MS }).then((report) => {
-    accountCache = { at: now(), report };
+// share one read. A cached or pending read is reused only while the local facts it was made with
+// still hold.
+async function readAccount({ fresh, now, read, readLocal = readLocalAccountFacts }) {
+  const local = readLocal();
+  const key = JSON.stringify(local);
+  if (!fresh && accountCache?.key === key && now() - accountCache.at < CACHE_MS) return accountCache.report;
+  if (!fresh && accountPending?.key === key) return accountPending.promise;
+  const promise = read({ cwd: neutralFolder(), timeoutMs: PORTAL_TIMEOUT_MS, local }).then((report) => {
+    accountCache = { at: now(), key, report };
     return report;
-  }).finally(() => { if (accountPending === pending) accountPending = null; });
-  accountPending = pending;
-  return pending;
+  }).finally(() => { if (accountPending?.promise === promise) accountPending = null; });
+  accountPending = { key, promise };
+  return promise;
 }
 
 export async function loadAgentIdentityAccount({
-  fresh = false, stateRoot = STATE_ROOT, platform = process.platform, now = Date.now, read = readCurrentAccountIdentity,
+  fresh = false, stateRoot = STATE_ROOT, platform = process.platform, now = Date.now, read = readCurrentAccountIdentity, readLocal,
 } = {}) {
-  return { ...portalAccount(await readAccount({ fresh, now, read }), { platform }), offerDismissed: offerDismissed(stateRoot) };
+  return { ...portalAccount(await readAccount({ fresh, now, read, readLocal }), { platform }), offerDismissed: offerDismissed(stateRoot) };
 }
 
 // "No thanks" to Home's setup offer. A marker file in RoboRepo's state, not in the bot's folder:
@@ -73,11 +79,11 @@ export function dismissAgentIdentityOffer({ stateRoot = STATE_ROOT, now = () => 
 // Rejects with NOT_FOUND for an id the portal does not list.
 export async function loadRepositoryAgentIdentity({
   repositoryId, stateRoot, fresh = false, platform = process.platform, now = Date.now,
-  readAccountReport = readCurrentAccountIdentity, read = readCurrentRepoAgentAccess,
+  readAccountReport = readCurrentAccountIdentity, read = readCurrentRepoAgentAccess, readLocal,
 }) {
   const { checkout } = repositoryTarget({ repositoryId, stateRoot });
   if (forgeTargetForRepositoryId(repositoryId)?.host !== "github.com") return { repositoryId, applies: false };
-  const account = await readAccount({ fresh, now, read: readAccountReport });
+  const account = await readAccount({ fresh, now, read: readAccountReport, readLocal });
   const setupLaunch = launchInfo({ checkout, platform });
   if (!accountReady(account)) return { repositoryId, applies: true, account: "waiting", state: null, findings: [], setupLaunch };
   const cached = repoCache.get(repositoryId);
