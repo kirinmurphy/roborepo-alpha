@@ -91,8 +91,12 @@ repo's owner. Until the owner invites the bot, agents there cannot push, because
 every repo to the bot at once. Rules you cannot see in full read as "unverified", never as ready.
 
 The token is stored in plaintext, mode 0600, under `~/.roborepo/github-agent/gh`, because neither
-Claude's nor Codex's sandbox can read the macOS keychain. Any process you run, agents included, can
-read it, so the bot's limited role and the token's expiry are what bound the damage.
+Claude's nor Codex's sandbox can read the macOS keychain. If `gh` already saved the bot's token in
+the keychain, the setup moves it there instead of asking for a new one. Any process you run, agents
+included, can read it, so the bot's limited role and the token's expiry are what bound the damage.
+
+The setup prints each github.com address instead of opening it, because those steps are done
+signed in as the bot, and your default browser is usually signed in as you.
 
 ### Renew the bot's token
 

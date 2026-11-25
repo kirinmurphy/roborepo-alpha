@@ -2,7 +2,6 @@
 // checks first and skips itself when already done, so rerunning is safe. It runs in the user's own
 // terminal: it reads the bot's token without echo and hands it to `gh` on stdin, never through an
 // argument, a file RoboRepo writes, or the output.
-import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
@@ -33,28 +32,18 @@ export async function githubSetupCommand() {
   }
   const input = interactiveInput();
   try {
-    process.exitCode = await runSetup({ input, open: openInBrowser });
+    process.exitCode = await runSetup({ input });
   } finally {
     input.close();
   }
 }
 
-// Opens a page with the platform opener; the URL is always printed too, so a failure costs nothing.
-function openInBrowser(url) {
-  const win = process.platform === "win32";
-  const command = process.platform === "darwin" ? "open" : win ? "cmd" : "xdg-open";
+// Runs the guided setup and returns the exit code. `input` supplies answers (ask, askHidden), `io`
+// receives the output. GitHub pages are printed, never opened: they are done signed in as the bot,
+// and the default browser is usually signed in as you.
+export async function runSetup({ input, io = { log: console.log, error: console.error }, cwd = process.cwd() }) {
   try {
-    const child = spawn(command, win ? ["/c", "start", "", url] : [url], { detached: true, stdio: "ignore" });
-    child.on("error", () => {});
-    child.unref();
-  } catch {}
-}
-
-// Runs the guided setup and returns the exit code. `input` supplies answers (ask, askHidden),
-// `open` opens a URL, `io` receives the output.
-export async function runSetup({ input, open = () => {}, io = { log: console.log, error: console.error }, cwd = process.cwd() }) {
-  try {
-    return await guidedSetup({ input, open, io, cwd });
+    return await guidedSetup({ input, io, cwd });
   } catch (error) {
     if (error instanceof Stop) {
       io.error(error.message);
@@ -68,7 +57,7 @@ export async function runSetup({ input, open = () => {}, io = { log: console.log
   }
 }
 
-async function guidedSetup({ input, open, io, cwd }) {
+async function guidedSetup({ input, io, cwd }) {
   const done = (step) => io.log(`✓ ${step}: already done`);
   const dir = agentGhConfigDir(stateDir);
   const user = { cwd, env: { GH_CONFIG_DIR: null } };
@@ -88,7 +77,7 @@ async function guidedSetup({ input, open, io, cwd }) {
   io.log(`✓ You are ${userLogin}, setting up ${repo}.`);
 
   // 2. The bot account.
-  const hosts = readAgentHosts(stateDir);
+  let hosts = readAgentHosts(stateDir);
   let botLogin = null;
   let renewing = false;
   if (hosts.loggedIn) botLogin = await githubClient.login(bot).catch(() => null);
@@ -104,8 +93,7 @@ async function guidedSetup({ input, open, io, cwd }) {
     done(`Bot account (${botLogin})`);
   } else {
     io.log("Agents act as a separate GitHub account, not as you.");
-    io.log(`Create one at ${GITHUB_PAGES.signup}, in a private browser window so your own session stays signed in.`);
-    open(GITHUB_PAGES.signup);
+    io.log(`Create one in a private window or another browser, so your own session stays signed in: ${GITHUB_PAGES.signup}`);
     io.log("Pick any name; it will show on every pull request and comment an agent makes.");
     const typed = (await input.ask("Bot account login: ")).trim();
     if (!typed) stop("No bot account login given.");
@@ -120,7 +108,13 @@ async function guidedSetup({ input, open, io, cwd }) {
   // 3. Invite the bot to the repo, as the user.
   await inviteBot({ user, repo, botLogin, io, done });
 
-  // 4. The bot's token, stored in the agent directory.
+  // 4. The bot's token, stored in the agent directory. A working token that gh put in the keychain
+  // (agents' sandboxes cannot read it) is moved to the agent directory, not asked for again.
+  if (hosts.loggedIn && !hosts.hasToken && botLogin && !renewing) {
+    const moved = await moveKeychainToken({ cwd, dir, botLogin, bot });
+    if (moved) io.log(`✓ Token: moved from the keychain to ${agentHostsFile(stateDir)}, where agents can read it.`);
+    hosts = readAgentHosts(stateDir);
+  }
   const tokenOk = botLogin && hosts.loggedIn && hosts.hasToken && await githubClient.login(bot).then((login) => sameLogin(login, botLogin), () => false);
   // A token that still works may still need replacing: it expires soon, never expires, or has the
   // wrong scopes. Offer it here, so a rerun can renew before agents start failing.
@@ -132,7 +126,7 @@ async function guidedSetup({ input, open, io, cwd }) {
     replace = answer === "" || answer === "y" || answer === "yes";
   }
   if (replace) {
-    await storeToken({ input, open, io, cwd, dir, botLogin, hadLogin: hosts.loggedIn, renewing: renewing || tokenOk });
+    await storeToken({ input, io, cwd, dir, botLogin, hadLogin: hosts.loggedIn, renewing: renewing || tokenOk });
   } else {
     done("Token");
   }
@@ -213,19 +207,17 @@ async function inviteBot({ user, repo, botLogin, io, done }) {
   io.log(`✓ Invited ${botLogin} to ${repo}.`);
 }
 
-async function storeToken({ input, open, io, cwd, dir, botLogin, hadLogin, renewing }) {
+async function storeToken({ input, io, cwd, dir, botLogin, hadLogin, renewing }) {
   const hosts = readAgentHosts(stateDir);
   if (hadLogin && !hosts.hasToken) {
     io.log("The saved login keeps its token in the keychain, so it is replaced.");
   }
   if (renewing) {
     // Regenerating keeps the token's note and scopes and only issues a new value and expiry.
-    io.log(`Sign in as ${botLogin} in a private window, then open ${GITHUB_PAGES.tokens}.`);
-    open(GITHUB_PAGES.tokens);
+    io.log(`In the browser where ${botLogin} is signed in, open ${GITHUB_PAGES.tokens}`);
     io.log(`Open the "${TOKEN_NOTE}" token and choose Regenerate token, or make a new classic token with only the ${TOKEN_SCOPES.join(" and ")} scopes.`);
   } else {
-    io.log(`Sign in as ${botLogin} in the private window, then open ${GITHUB_PAGES.newToken} (a classic token).`);
-    open(GITHUB_PAGES.newToken);
+    io.log(`In the browser where ${botLogin} is signed in, open ${GITHUB_PAGES.newToken} (a classic token).`);
     io.log(`Note: "${TOKEN_NOTE}". Scopes: ${scopesText()}.`);
   }
   io.log(`Expiry: ${expiryAdvice()}`);
@@ -233,11 +225,24 @@ async function storeToken({ input, open, io, cwd, dir, botLogin, hadLogin, renew
   io.log(`Agents' sandboxes cannot read the keychain, so the token is stored in ${agentHostsFile(stateDir)}.`);
   const token = (await input.askHidden("Paste the token (input hidden): ")).trim();
   if (!token) stop("No token given.");
+  await installToken({ token, cwd, dir, botLogin });
+  io.log(`✓ Token stored; signed in as ${botLogin}.`);
+}
 
-  // The new token signs in to a staging folder first and is checked there. Only a token for the
-  // right account with acceptable scopes replaces the live login, so a rejected one never reaches
-  // agents and the previous token keeps working.
-  const staging = path.join(path.dirname(dir), "gh-staging");
+// Reads the token gh keeps in the keychain for the bot's login and stores it in the agent directory
+// through the same checks as a pasted one. Your own terminal can read the keychain; agents cannot.
+// Returns false when gh has no token to give, so the caller asks for one instead.
+async function moveKeychainToken({ cwd, dir, botLogin, bot }) {
+  const token = (await runGh(cwd, ["auth", "token", "--hostname", "github.com"], "", { env: bot.env }).catch(() => "")).trim();
+  if (!token) return false;
+  await installToken({ token, cwd, dir, botLogin });
+  return true;
+}
+
+// Signs the token in to a staging folder and checks it there. Only a token for the right account
+// with acceptable scopes replaces the live login, so a rejected one never reaches agents and the
+// previous token keeps working.
+async function installToken({ token, cwd, dir, botLogin }) {  const staging = path.join(path.dirname(dir), "gh-staging");
   fs.rmSync(staging, { recursive: true, force: true });
   fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
   try {
@@ -265,7 +270,6 @@ async function storeToken({ input, open, io, cwd, dir, botLogin, hadLogin, renew
   } finally {
     fs.rmSync(staging, { recursive: true, force: true });
   }
-  io.log(`✓ Token stored; signed in as ${botLogin}.`);
 }
 
 function interactiveInput() {

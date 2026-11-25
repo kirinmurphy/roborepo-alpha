@@ -308,6 +308,12 @@ function authCommand() {
     fs.rmSync(path.join(configDir, ".fake-token"), { force: true });
     process.exit(0);
   }
+  if (args[1] === "token") {
+    const token = savedToken(configDir);
+    if (!token) fail(1, "no oauth token found for github.com");
+    process.stdout.write(token + "\\n");
+    process.exit(0);
+  }
   if (args[1] !== "login" || !args.includes("--with-token")) fail(1, "fake gh: unsupported auth command");
   const token = fs.readFileSync(0, "utf8").trim();
   const info = (state.tokens || {})[token];

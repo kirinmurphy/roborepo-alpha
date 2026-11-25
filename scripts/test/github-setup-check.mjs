@@ -47,7 +47,6 @@ try {
   Object.assign(process.env, env);
   delete process.env.GH_CONFIG_DIR;
   const { runSetup } = await import("../cli/github-setup.mjs");
-  const opened = [];
   // Answers come from a list, one per question, like the lines a person would type.
   const setup = async (answers) => {
     const lines = answers === "" ? [] : answers.replace(/\n$/, "").split("\n");
@@ -56,8 +55,7 @@ try {
     const io = { log: (text) => out.push(text), error: (text) => err.push(text) };
     const next = (question) => { out.push(question); return lines.shift() ?? ""; };
     const input = { ask: async (question) => next(question), askHidden: async (question) => next(question) };
-    opened.length = 0;
-    const status = await runSetup({ input, open: (url) => opened.push(url), io, cwd: checkout });
+    const status = await runSetup({ input, io, cwd: checkout });
     return { status, stdout: out.join("\n"), stderr: err.join("\n") };
   };
   const claudeSettings = () => JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
@@ -86,7 +84,9 @@ try {
   assert.match(result.stdout, /Invitation accepted as robo-bot/);
   assert.match(result.stdout, /Branch protection is now protected/);
   assert.match(result.stdout, /Agents now act on GitHub as robo-bot\. New agent sessions pick this up\./);
-  assert.deepEqual(opened, ["https://github.com/signup", "https://github.com/settings/tokens/new"], "both pages are opened for the user");
+  // The pages are printed to copy into the bot's browser, never opened in your own.
+  assert.match(result.stdout, /another browser, so your own session stays signed in: https:\/\/github\.com\/signup/);
+  assert.match(result.stdout, /In the browser where robo-bot is signed in, open https:\/\/github\.com\/settings\/tokens\/new/);
   assert.match(result.stdout, /cannot read the keychain, so the token is stored in .*hosts\.yml/);
   const state = gh.readState();
   assert.deepEqual(state.collaborators, [{ login: BOT, permission: "push" }]);
@@ -144,7 +144,7 @@ try {
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /✓ Bot account: robo-bot \(GitHub no longer accepts its saved token/);
   assert.doesNotMatch(result.stdout, /Bot account login:|github\.com\/signup|Protect the plans/);
-  assert.deepEqual(opened, ["https://github.com/settings/tokens"], "renewal opens the token list, where Regenerate is");
+  assert.match(result.stdout, /In the browser where robo-bot is signed in, open https:\/\/github\.com\/settings\/tokens$/m, "renewal names the token list, where Regenerate is");
   assert.match(result.stdout, /Regenerate token/);
   assert.match(result.stdout, /Token stored; signed in as robo-bot/);
   for (const step of ["Invitation", "Invitation accepted", "Branch protection", "Package on"]) {
@@ -218,16 +218,17 @@ try {
   assert.ok(fs.existsSync(assetFile), "the rerun reinstalled the missing file");
   console.log("✓ A selected package with a missing file is re-applied, not reported done.");
 
-  // A token kept only in the keychain is not done: setup asks again and stores it in hosts.yml.
+  // A working token kept only in the keychain is moved to hosts.yml without asking for a new one.
   fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    user: ${BOT}\n`);
   fs.writeFileSync(path.join(ghDir, ".fake-token"), `${TOKEN}\n`);
-  result = await setup(`${TOKEN}\n`);
+  result = await setup("");
   assert.equal(result.status, 0, result.stdout + result.stderr);
-  assert.match(result.stdout, /Paste the token/);
-  assert.match(result.stdout, /keeps its token in the keychain/);
+  assert.doesNotMatch(result.stdout, /Paste the token|settings\/tokens/);
+  assert.match(result.stdout, /✓ Token: moved from the keychain to .*hosts\.yml, where agents can read it\./);
+  assert.match(result.stdout, /✓ Token: already done/);
   assert.match(fs.readFileSync(path.join(ghDir, "hosts.yml"), "utf8"), /oauth_token: ghp_setupcheck/);
   assert.equal(fs.statSync(path.join(ghDir, "hosts.yml")).mode & 0o777, 0o600);
-  console.log("✓ A keychain-only login is replaced by a token in hosts.yml, mode 0600.");
+  console.log("✓ A working keychain token is moved to hosts.yml, mode 0600, without asking again.");
 
   // A token for another account is refused and never stored.
   fresh();
