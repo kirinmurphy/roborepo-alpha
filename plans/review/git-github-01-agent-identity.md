@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Run /plan-review on PR 82 (all phases built and validated). Before approving, the owner runs roborepo github setup in their own terminal to turn the identity on, then settles the open Not tested entries
+next_action: Review at b4fde55d is done apart from the owner's checks. The owner pushes local main, runs roborepo github setup in their own terminal, settles the open Not tested entries, then resumes /plan-review for approval
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["rtkmc8kf", "f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -664,6 +664,10 @@ reads status and opens the terminal.
 
 - [x] Home read "healthy" for a token with no expiry date, though the docs, doctor, and setup treat it as one to renew — fixed (d3345f4e); "token expired" also now labels only the expiry problem
 
+- [x] After main's sandbox change, agents' `roborepo github status` ran inside Claude's sandbox, which blocks the keychain and api.github.com, so a healthy identity read "unavailable" — fixed in review (aaea734f)
+- [x] Uninstall left `~/.roborepo/github-agent` (the bot's token) behind, so the remnant check failed and stopped the npm uninstall handoff — fixed in review (aaea734f); docs say the token still needs revoking on GitHub (e8583b4c)
+- [x] `npm run check` failed in agent shells with the identity on: the protection checks' fake `gh` inherited the bot's `GH_CONFIG_DIR` and answered 401 — fixed in review (b4fde55d)
+
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
 - Validation pass 1 at 43a377d4 (fresh-context subagent): 10 findings above, all fixed
@@ -676,6 +680,18 @@ reads status and opens the terminal.
 - Validation pass 7 at b39f969e (fresh-context subagent): 1 actionable finding, fixed in d3345f4e; two notes (label wording, fixed in the same commit; focus re-reads for a repo left un-renewed, kept as designed)
 - Validation pass 8 at d3345f4e (fresh-context subagent): clean; loop ended at the eight-pass cap with no fixes left unvalidated
 - Codex TLS: the CA read grants added in 35f1b186 did not work (`/**/*.pem` deny wins); replaced by the CA bundle copy in 8565a475
+- Review 2026-11-25: base synchronized at db87818d (local `main` 97605225, one commit ahead of `origin/main` bfa57f1b)
+- Review Validator pass 1 at db87818d (fresh-context subagent, implementation-review): 2 actionable fix findings, fixed in aaea734f; one note (a package-id collision reads as `package-off` in status) kept in the review packet
+- Review Validator pass 2 at aaea734f: fix confirmed correct; 2 doc findings fixed in e8583b4c
+- Review Validator pass 3 at e8583b4c (docs only): clean
+- `npm run check` at b4fde55d, outside the Claude sandbox, from an agent shell with the identity's gh variables set: 428 tests passed, 103/103 suites passed. b4fde55d itself (test orchestration only) was validated by this gate run, not by another Validator pass
+- Inside the Claude sandbox the gate fails 13 suites on worktree creation and local port binding (`Operation not permitted`); environmental, all pass outside it
+- No CI result yet for b4fde55d: the branch is not pushed (see Result)
+
+### Result
+- Status: pending — 9 person-only `## Not tested` entries open; branch push held until local `main` 97605225 is published
+- Reviewed implementation commit: b4fde55d20cc54e5643e60b1aedb23336f2ad5a4
+- Base commit: 976052259a3e93d27047c52259eda32a0799082b
 
 ## Not tested
 
