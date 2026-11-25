@@ -1202,6 +1202,17 @@ Keep the source configuration and lock schemas in one technical reference and li
 - `/plan-review` at 0fa6b43f, outside the command sandbox: `npm test` 427 passed, 0 failed; `npm run test:package-install` ok.
 - `/plan-review` Validator pass 1 at 0fa6b43f (fresh-context subagent): 2 actionable fix findings, both fixed in 411939f4.
 - At 411939f4: package-update, package-provenance, package-resolution, package-catalog, package-lifecycle, package-source-registry, and package-source-git checks → ok.
+- `/plan-review` at 411939f4, outside the command sandbox: `npm test` 426 passed, 1 failed — `cli-surface-integration-check.mjs`, the PTY timing flake recorded above; it passed when rerun alone.
+- `/plan-review` at 342a9f55, outside the command sandbox: `npm test` 427 passed, 0 failed; `npm run test:package-install` ok.
+- `/plan-review` Validator passes 2–5 (fresh-context subagents) at 411939f4, 170c682f, 342a9f55, e98b9185: 1, 1, 1, and 1 blocking or actionable fix findings, all fixed (see Findings).
+- `/plan-review` second base sync: `main` b6cdbe55 merged at b704416b with no conflicts.
+- `/plan-review` Validator pass 6 at 9bac4530 (fresh-context subagent): no findings; all 13 `scripts/test/package-*-check.mjs` passed.
+- CI run 45528253759 at 9bac4530: success.
+
+### Result
+- Status: complete
+- Reviewed implementation commit: 9bac45308463de551778e6a4f3b8adab0550b7aa
+- Base commit: b6cdbe552edcc20b150eb8e37815235bfc96f339
 
 ## References
 
