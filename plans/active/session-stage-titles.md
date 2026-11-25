@@ -130,8 +130,9 @@ The whole title, prefix included, is at most 59 characters, because the Claude d
 a title passed at launch to be under 60. A longer description is cut at a word boundary and ends
 with `…`. The plan id never appears: ids are opaque and titles are for people.
 
-A plan command that names no plan, such as `/plan-write` for a plan that does not exist yet, takes
-its description from the first words of the prompt after the command. With no words to use, or
+`/plan-write` naming no known plan, as for a plan that does not exist yet, takes its description
+from the first words of the prompt after the command. Any other plan command that names no known
+plan sets no title, since the unmatched word is an unknown id or path. With no words to use, or
 when the prompt names several plans, no title is set.
 
 Known gaps, all in the Claude Code CLI, where the agent has no rename tool and the hook acts only
@@ -212,10 +213,11 @@ shared command.
 4. If the current title is set and carries no stage prefix, print nothing and exit 0, so a
    hand-written name is never replaced. A title that carries a stage prefix is replaced, which is
    how the title follows a session to its next stage.
-5. Take the title from the prompt's title line when it has one. Only otherwise build the plan
-   snapshot, look up the plan the prompt names, and build the title from the leading plan command
-   and that plan's heading. If the prompt names no plan, use the first words after the command.
-   If there are none, or the prompt names several plans, print nothing and exit 0.
+5. Take the title from the prompt's title line when it has one. Only otherwise read each plan's id
+   and heading from the store, look up the plan the prompt names, and build the title from the
+   leading plan command and that plan's heading. If `/plan-write` names no known plan, use the
+   first words after the command. If there are none, the command is another one naming no known
+   plan, or the prompt names several plans, print nothing and exit 0.
 6. Request the hook output from the provider and print it.
 
 The command never fails a prompt: any error exits 0 with no output. Disabling plan-suite removes
@@ -284,8 +286,9 @@ Scripted checks, each asserting output a person or a harness would see:
   match the shape the trial captured: no `session_title` field when no title is set.
 - Stage change: given a current title of `/plan-execute: <plan>` and a `/plan-review` prompt for
   the same plan, it prints the `/plan-review: <plan>` title.
-- For a plan command that names no plan, it prints a title built from the first words after the
-  command. It prints nothing when there are none, and nothing for a prompt naming several plans.
+- For `/plan-write` naming no known plan, it prints a title built from the first words after the
+  command. It prints nothing when there are none, for another command with an unknown id or path,
+  and for a prompt naming several plans.
 - It prints nothing for an ordinary prompt, for a current title without a stage prefix, for
   malformed input, and for `--harness codex`; it exits 0 in every case.
 - The stage prefixes written in `globals/packages/plan-suite/rules.md` match the formatter's.
@@ -343,8 +346,9 @@ desktop app shows the new title in the session list.
 
 - **The hook runs on every prompt.** It must be fast and silent. The command exits before reading
   the plan store unless the prompt opens with a plan command and has no title line, and then reads
-  only each plan's id and heading (about 0.15 s for an ordinary or plan-command prompt in a
-  162-plan store, measured 2026-11-25).
+  only each plan's id and heading (the store read adds well under 0.1 s in a 162-plan store;
+  a whole hook run measured 0.15-0.66 s on 2026-11-25, mostly CLI startup, the same cost the
+  telemetry hook already pays).
 - **Claude's own retitling.** Claude replaces a generated title when a plan is accepted in its plan
   mode (*docs*). The next plan-command prompt sets the stage title again; a session that receives
   no further prompt keeps Claude's title.
@@ -387,7 +391,7 @@ title, because nothing reliable signals that the plan work ended.
 - The hook reads only each plan's id and H1 (`listPlanTitles` in `modules/plan-suite/index.mjs`)
   instead of building the full plan snapshot (2026-11-25). The snapshot asks Git about every plan
   and took about 6-11 s in this repository's 162-plan store, which would delay every plan-command
-  prompt; the light read takes about 0.15 s. Alternatives: the snapshot (correct but slow), or a
+  prompt; with the light read a whole hook run takes under a second, mostly CLI startup. Alternatives: the snapshot (correct but slow), or a
   cache file (faster still, but new state to keep fresh). The light read needs no new state.
 - A plan path typed in a prompt also matches a plan by file name, because plans keep their file
   name when they move between lifecycle folders; a path typed before a move still finds the plan
@@ -413,7 +417,18 @@ title, because nothing reliable signals that the plan work ended.
 
 - [x] An unknown plan id or path after a non-write plan command became the title (for example
       `/plan-review: zzzz9999`), against the no-id rule — fixed (53059b11)
+- [x] The design, Validation, and Decision Log did not record that only `/plan-write` falls back to
+      the prompt's words — fixed in this plan's Title format, Hook step 5, Validation, and Decision
+      Log; docs aligned (9066483f)
+- [x] No evidence that `npm test` ran — see Verification
 
 ### Verification
 
 - Validation pass 1 at 4d600210 (fresh-context subagent): one actionable finding, fixed above
+- Validation pass 2 at 53059b11 (fresh-context subagent): two actionable findings, both fixed
+  below; four notes, of which the doc precision, constant placement, and timing figure were applied
+- `npm test` (smoke suite) started at 4d600210: 427 passed, 1 failed. The failure, "package dev
+  add-skill: refuses a built-in package in package mode", asserts `git diff --quiet -- globals/packages/plan-suite`,
+  and that run began while this change's plan-suite edits were still uncommitted. Rerun at 9066483f
+  on a clean tree: the command refuses with "package plan-suite is built in", creates no skill
+  folder, and leaves plan-suite with no diff. CI runs the full gate (`npm run check`) on the pushed head
