@@ -37,15 +37,19 @@ try {
   // ROBOREPO_SYSTEM_CA_BUNDLE replaces the system CA bundle search with one fixture file.
   const systemCa = path.join(root, "system-ca.pem");
   fs.writeFileSync(systemCa, "-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----\n");
+  // The fixture CA comes after the caller's environment, so an exported override cannot replace it.
   const env = {
-    ROBOREPO_SYSTEM_CA_BUNDLE: systemCa,
     ...process.env, ...gh.env, HOME: home, ROBOREPO_STATE_ROOT: stateRoot, SKIP_MCP: "1",
+    ROBOREPO_SYSTEM_CA_BUNDLE: systemCa,
     PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`,
   };
-  delete env.GH_CONFIG_DIR;
+  // A gh sign-in or token from the caller's shell would outrank the fixture's in fake gh; the
+  // exported-token case below sets one on purpose.
+  const inherited = ["GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN"];
+  for (const name of inherited) delete env[name];
   // The setup module reads its state root at import, so the environment is set before importing it.
   Object.assign(process.env, env);
-  delete process.env.GH_CONFIG_DIR;
+  for (const name of inherited) delete process.env[name];
   const { runSetup } = await import("../cli/github-setup.mjs");
   // Answers come from a list, one per question, like the lines a person would type.
   const setup = async (answers) => {
