@@ -1,6 +1,6 @@
 ---
 id: gcfw77cq
-next_action: Run /plan-review to check the session-title change and settle its three person-only checks, starting with whether the Claude desktop app shows a hook-set title
+next_action: Report the three person-only Not tested checks (desktop app title, interactive CLI picker, Codex rename line) and confirm CI on the pushed head, then rerun /plan-review to approve 24f5833f
 blocked_by: []
 depends_on: []
 related: ["plan-session-launching-milestone-1", "96r9wbj0", "0ubk9sug"]
@@ -440,3 +440,20 @@ title, because nothing reliable signals that the plan work ended.
   path that also matches another plan's file name counts as two plans (no shared file names exist
   today), the hook finds the store from its working directory, and a `Session title:` line anywhere
   in a prompt sets the title, as the design's Hook row says
+- /plan-review 2026-11-25: base `main` (local, 97605225) merged at 24f5833f with no conflicts;
+  origin/main is bfa57f1b, so local main carries one unpushed docs commit
+- /plan-review at 24f5833f: `node scripts/test/plan-session-title-check.mjs`,
+  `plan-suite-check.mjs`, `harness-manifest-check.mjs`, `hook-composition-check.mjs`, and
+  `package-catalog-check.mjs` passed (the first two outside the sandbox, which blocks creating
+  worktrees in their temp fixture repos)
+- /plan-review Validator pass 5 at 24f5833f (fresh-context subagent): clean; one note left as is,
+  a `Session title:` line wins even when its stage differs from the leading command
+- CI on PR #89: not yet run at 24f5833f; at 6a891dcc `windows-installer` passed and `check` was
+  still running
+
+### Result
+
+- Status: pending
+- Reviewed implementation commit: 24f5833f4625f7fccaeca97751ebd51bc26799a1
+- Base commit: 976052259a3e93d27047c52259eda32a0799082b
+- Pending: three person-only `## Not tested` checks and CI on the pushed head
