@@ -123,6 +123,15 @@ test("package sources and installs agree between the portal and the CLI", async 
   await tool.getByRole("button", { name: "Update UI Tool" }).click();
   await expect(dialog(page)).toContainText(`${second.slice(0, 12)} → ${third.slice(0, 12)}`);
   await expect(dialog(page)).toContainText("rules.md");
+  // While the dialog is open, the CLI moves the installed revision. Confirming is refused and the
+  // dialog shows the current change, starting from what is installed now; confirming again moves
+  // to exactly the commit shown.
+  const fourth = commit(repo, { "packages/uitool/rules.md": "## UI tool v4\n" });
+  expect(cli("package", "source", "refresh", "uiteam").status).toBe(0);
+  expect(cli("package", "update", "uitool", "--yes").status).toBe(0);
+  await dialog(page).getByRole("button", { name: "Update", exact: true }).click();
+  await expect(dialog(page)).toContainText(`now installed at ${fourth.slice(0, 12)}`);
+  await expect(dialog(page)).toContainText(`${fourth.slice(0, 12)} → ${third.slice(0, 12)}`);
   await dialog(page).getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog(page)).toBeHidden();
   expect(listed("uitool")).toMatchObject({ revision: third, active: true });

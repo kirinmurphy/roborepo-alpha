@@ -11,8 +11,9 @@ import { isMainModule } from "./roots.mjs";
 import { currentWriteActor } from "./write-log.mjs";
 
 const RUNNER_PATH = fileURLToPath(import.meta.url);
-// The one line of stdout that carries the outcome. Anything else the operation prints (re-apply
-// progress) goes to stderr.
+// The one line of stdout that carries the outcome. The operation's own console.log output goes to
+// stderr, but a process it starts can still write to stdout, so the result line is matched on its
+// own line and written after a newline of its own.
 const RESULT_PREFIX = "roborepo-package-service-result:";
 
 // Operations a child may run, each the call the CLI makes for the same command.
@@ -88,7 +89,7 @@ async function runChild() {
     const service = err?.name === "PackageServiceError";
     outcome = { error: { service, message: err?.message || String(err), code: service ? err.code : null, details: service ? err.details ?? null : null } };
   }
-  process.stdout.write(`${RESULT_PREFIX}${JSON.stringify(outcome)}\n`);
+  process.stdout.write(`\n${RESULT_PREFIX}${JSON.stringify(outcome)}\n`);
 }
 
 if (isMainModule(import.meta.url)) await runChild();
