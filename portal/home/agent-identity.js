@@ -291,13 +291,20 @@ function buildOffer(mount) {
     slot("offer").hidden = false;
     slot("declined").hidden = true;
     const ready = report.enableOffered === true;
+    // A bot that exists but cannot be used yet (say its token is in the keychain): name it rather
+    // than offer to create one. Nothing fails meanwhile, since agents still act as the user.
+    const bot = report.botLogin || report.savedLogin;
+    const unfinished = !ready && report.state === "problem" && bot;
     fill(node, {
       message: ready
         ? `Your agents' bot account, ${report.botLogin}, is set up. Turn it on and agents use it instead of your account.`
-        : "Currently, agents push and open pull requests as you. Give them their own GitHub bot account to prevent admin abilities such as pushing to main and merging PRs no one approved.",
+        : unfinished
+          ? `Your agents' bot account, ${bot}, needs attention before agents can use it. Until then, agents act on GitHub as you.`
+          : "Currently, agents push and open pull requests as you. Give them their own GitHub bot account to prevent admin abilities such as pushing to main and merging PRs no one approved.",
     });
     slot("enable").hidden = !ready;
-    slot("setup").hidden = ready;
+    slot("setup").hidden = ready || unfinished;
+    slot("fix").hidden = !unfinished;
     slot("note").hidden = !note;
     slot("note").textContent = note || "";
   }

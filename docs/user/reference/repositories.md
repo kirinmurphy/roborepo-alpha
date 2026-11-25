@@ -172,8 +172,9 @@ GitHub login at all.
 | On, but the bot needs attention | **Fix it** opens the bot card; **Turn off** |
 
 **While it is off**, Home offers the setup in an info notice above the repo list, whenever a listed
-repo is on github.com: **Set it up** (or **Turn on** when the bot is ready), and **No thanks**, which
-hides the offer for good and points to Settings for later.
+repo is on github.com: **Set it up** (or **Turn on** when the bot is ready, or **Fix it** when a bot
+exists but needs attention first), and **No thanks**, which hides the offer for good and points to
+Settings for later.
 
 **While it is on but the bot cannot sign in** (no bot, an expired or unreadable token, or another
 problem), the same spot shows a red warning that agents can't push or open pull requests, with only

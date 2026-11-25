@@ -202,6 +202,22 @@ test.describe("Agent GitHub account", () => {
     await expect(offer(page).getByRole("button", { name: "Set it up" })).toBeHidden();
     await shot(page, "home-offer-package-off");
 
+    // A bot that exists but cannot be used yet is named, with Fix it, not offered from scratch.
+    const unfinished = current;
+    current = account({
+      state: "problem", packageEnabled: false,
+      findings: [finding("token-in-keychain", "problem", "The bot's token is in the keychain, which agent sandboxes cannot read.")],
+    });
+    await openHome(page);
+    await expect(offer(page)).toHaveClass(/notice-info/);
+    await expect(offer(page)).toContainText("robo-bot, needs attention before agents can use it");
+    await expect(offer(page).getByRole("button", { name: "Fix it" })).toBeVisible();
+    for (const name of ["Set it up", "Turn on"]) await expect(offer(page).getByRole("button", { name })).toBeHidden();
+    await expect(offer(page).getByRole("button", { name: "No thanks" })).toBeVisible();
+    await shot(page, "home-offer-bot-unfinished");
+    current = unfinished;
+    await openHome(page);
+
     await offer(page).getByRole("button", { name: "No thanks" }).click();
     await expect(offer(page)).toContainText("Home won't offer this again");
     await expect(offer(page).getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
