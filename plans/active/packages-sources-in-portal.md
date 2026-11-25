@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: ["jdsobwn"]
 related: ["user-managed-packages-and-add-workflows", "4qzo8h0s", "package-cli-test-guide", "f5exs0bd"]
 reviewed_commit: 5cba47f08635f5019e07aa26fb4726b9c0177e3e
-worktree:
+worktree: packages-sources-in-portal
 ---
 
 # Package Management: Part 04b - Manage Package Sources and Installs in the Portal
