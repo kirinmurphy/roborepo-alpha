@@ -1177,6 +1177,7 @@ Keep the source configuration and lock schemas in one technical reference and li
 - [x] `/plan-review` pass 1, actionable fix: reinstalling a pinned git package whose copy was deleted previewed and pulled in the listing's newer revision and its requirements while restoring the old pin — fixed in review (411939f4)
 - [x] `/plan-review` pass 2, blocking fix: after 411939f4, `package remove` refused a package still on whose own files were missing, leaving it unremovable once its source was gone — fixed in review (170c682f)
 - [x] `/plan-review` pass 2, actionable fix: the `package remove` row in `docs/user/reference/roborepo-cli.md` did not describe removing an unresolved package — fixed in review (170c682f)
+- [x] `/plan-review` pass 3, actionable fix: removing an enabled package whose copy was deleted skipped its cached pinned revision and left its hooks and skills, with a warning that pointed at a doctor check that does not exist — fixed in review (342a9f55)
 
 ### Verification
 - Validation pass 1 at aba9cc6f (fresh-context subagent): 1 blocking, 4 actionable fix findings, all fixed.
