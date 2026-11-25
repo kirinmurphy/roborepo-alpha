@@ -29,7 +29,9 @@
 //     from a development checkout.
 
 // roborepo subcommands that run outside the sandbox, each with the reason it cannot run inside.
-// Matching is by prefix, so `plans` covers every plans subcommand.
+// Matching is by prefix, so `plans` covers every plans subcommand. The trailing ` *` also matches
+// the bare command: on 2.1.309 a no-argument `git fetch` ran outside under `git fetch *`, while
+// `env git fetch` stayed sandboxed and failed, so `roborepo web` matches `roborepo web *`.
 const ROBOREPO_UNSANDBOXED_SUBCOMMANDS = Object.freeze([
   // Locks and commits the plans store, which edit-plans-store denies to every sandboxed write.
   "plans",
