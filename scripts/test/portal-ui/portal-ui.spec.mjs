@@ -32,11 +32,13 @@ test.describe("Agents page", () => {
     const modal = page.locator("dialog#config-modal");
     await expect(modal).toBeVisible();
     await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
-    await expect(modal.locator(".package-contents-summary")).toHaveText("7 skills · 1 rules fragment");
-    await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-suite-init", "/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules"]);
-    // Every row shows its own cost: a skill's when-loaded size, the rules fragment's startup size.
-    const chips = modal.locator(".package-contents-entry token-chip");
+    await expect(modal.locator(".package-contents-summary")).toHaveText("7 skills · 1 rules fragment · 1 hooks file");
+    await expect(modal.locator(".package-contents-label")).toHaveText(["/plan-suite-init", "/plan-write", "/plan-promote", "/plan-execute", "/plan-review", "/plan-close", "/plan-archive", "Rules", "Hooks"]);
+    // Every row that loads context shows its own cost: a skill's when-loaded size, the rules
+    // fragment's startup size. A hooks file loads nothing into context, so its row shows none.
+    const chips = modal.locator(".package-contents-entry token-chip:not([hidden])");
     await expect(chips).toHaveCount(8);
+    await expect(modal.locator(".package-contents-entry", { hasText: "Hooks" }).locator("token-chip")).toBeHidden();
     for (const chip of await chips.all()) {
       await expect(chip).toBeVisible();
       expect(await chip.evaluate((el) => el.tokens)).toBeGreaterThan(0);
@@ -51,7 +53,7 @@ test.describe("Agents page", () => {
 
     await modal.locator("#modal-back").click();
     await expect(modal.locator("#modal-title")).toHaveText("Development Planning Lifecycle");
-    await expect(modal.locator(".package-contents-entry")).toHaveCount(8);
+    await expect(modal.locator(".package-contents-entry")).toHaveCount(9);
     await expect(modal.locator("#modal-back")).toBeHidden();
 
     await modal.locator(".package-contents-entry", { hasText: "Rules" }).click();
