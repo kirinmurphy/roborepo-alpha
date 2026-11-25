@@ -1,6 +1,6 @@
 ---
 id: i5mnkm7z
-next_action: Review complete at 8c34801d; waiting on the user's approval of 8c34801d.
+next_action: Review rerun at 93bf5323 after review fixes; waiting for CI and a final Validator pass, then the user's approval.
 blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["f0jwe76j", "w7vls1yk", "d9ywaa8d", "developer-runtime-remote-branch-status", "pvgx8oh7", "kqgr1d65", "0jped168"]
@@ -145,7 +145,11 @@ confirm the result is for the head commit:
 | At least one check, all passed | Green | Continue | May leave draft |
 | A failure that does not occur on base | Red | Read `gh run view <id> --log-failed`, fix, commit, push, watch again | Stays draft |
 | The same check still failing after 3 fix commits for it | Blocked | Stop, record a blocker in Open Questions, report it | Stays draft |
-| A failure that also occurs on base | Not green | Record it under `### Verification` as a base failure, continue, name it as an exception | Stays draft |
+| A failure that also occurs on base | Not green | Record it under `- [x] Merge-readiness docs listed only two failure states and omitted a missing tracking ref and a local-branch upstream — fixed in review (93bf5323)
+- [x] The plan's Merge readiness state table had no row for a local-branch upstream or a missing tracking ref — fixed in review (plan record)
+- [x] handoff.md's Attempts rule named "timeout error" as retryable, then said a `timed_out` run is not retried — fixed in review (93bf5323)
+
+### Verification` as a base failure, continue, name it as an exception | Stays draft |
 | No checks reported 2 minutes after the push | Not green | Run the canonical completion gate locally once, continue, name the exception | Stays draft |
 
 "Continue" means the caller's next step. Only `/plan-execute`'s Implementation Completion submits
@@ -213,6 +217,7 @@ no CI run.
 | --- | --- |
 | The branch's tip equals `<branch>@{upstream}` | Pass |
 | The tip differs, or the repo has a remote but the branch has no upstream | Fail, with "push the branch" as the fix |
+| The upstream is a local branch (`branch.<name>.remote = .`) or its tracking ref is missing locally | Fail, with "push the branch" as the fix |
 | The repo has no remote | Pass, observed as "no remote" |
 
 It reads only local refs, so the command stays offline and fast. It depends on the fetch in
@@ -301,6 +306,8 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - [x] `/plan-review` step 6 did not say a Blocked CI result keeps `### Result` pending — fixed (d050d7a7)
 
 ### Verification
+- Review 2026-11-25: main 051d2449 merged in at a2aa8191 (sandbox settings only; no overlap with this plan's files); `plan-lifecycle-transitions-check` and `plan-suite-skills-check` → ok at a2aa8191
+- Review 2026-11-25: Validator pass (fresh-context subagent) over 8c34801d..a2aa8191 → 3 actionable `fix` findings and 1 note, all fixed in 93bf5323; `plan-suite-skills-check` → ok and `doctor.sh --quiet` → passed (98 checks) at 93bf5323
 - Review 2026-11-24: `roborepo plans sync-base --base main` → up-to-date (main 5cba47f0 already merged)
 - Review 2026-11-24: CI on pull request 87 at 8c34801d, which equals the local tip: `check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer` passed
 - Review 2026-11-24: `node scripts/test/plan-suite-skills-check.mjs` → ok and `node scripts/test/plan-lifecycle-transitions-check.mjs` → ok at 8c34801d
@@ -316,7 +323,7 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - `bash scripts/doctor.sh --quiet` → doctor passed (98 checks) at 3546603d
 
 ### Result
-- Status: complete
+- Status: pending
 - Reviewed implementation commit: 8c34801d88d211c7f9f656ce6adf3d9cfc72f1a2
 - Base commit: 5cba47f08635f5019e07aa26fb4726b9c0177e3e
 
@@ -326,6 +333,8 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - Confirmed by: human
 
 ## Decision Log
+
+- 2026-11-25, during review: merge readiness also refuses an upstream that is not a remote-tracking branch, because a local upstream at the same commit proves nothing was pushed (pull request feedback, fixed in d3c288f6).
 
 - 2026-11-24, during promotion: kept the shared procedure in the existing
   `plan-execute/references/handoff.md` instead of a new `pr-delivery.md`, because both skills
