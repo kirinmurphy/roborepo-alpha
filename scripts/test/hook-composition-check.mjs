@@ -248,6 +248,34 @@ try {
     assert.match(fs.readFileSync(liveCodexHooks, "utf8"), /hook-composition-fixture-codex/, "Codex hook lands in the real hooks file");
   }
 
+  // --- plan-suite's title hook: Claude only, and only while the package is on ---
+  {
+    const planHome = path.join(tmp, "plan-suite-home");
+    fs.mkdirSync(path.join(planHome, ".claude"), { recursive: true });
+    fs.mkdirSync(path.join(planHome, ".codex"), { recursive: true });
+    fs.writeFileSync(path.join(planHome, ".claude", "settings.json"), "{}");
+    fs.writeFileSync(path.join(planHome, ".codex", "config.toml"), "");
+    const planEnv = { ...env, HOME: planHome, ROBOREPO_STATE_ROOT: path.join(planHome, ".roborepo") };
+    const titleHook = "roborepo plans session-title --harness claude";
+    const promptHooks = () => {
+      const settings = JSON.parse(fs.readFileSync(path.join(planHome, ".claude", "settings.json"), "utf8"));
+      return (settings.hooks?.UserPromptSubmit || []).flatMap((e) => (e.hooks || []).map((h) => h.command));
+    };
+    const codexHooksText = () => {
+      const hooksPath = path.join(planHome, ".codex", "hooks.json");
+      return fs.existsSync(hooksPath) ? fs.readFileSync(hooksPath, "utf8") : "";
+    };
+
+    const enable = run(["package", "enable", "plan-suite"], planEnv);
+    assert.equal(enable.status, 0, `plan-suite enable failed: ${enable.stderr}`);
+    assert.ok(promptHooks().includes(titleHook), "enabling plan-suite adds the Claude title hook");
+    assert.doesNotMatch(codexHooksText(), /plans session-title/, "Codex gets no title hook");
+
+    const disable = run(["package", "disable", "plan-suite"], planEnv);
+    assert.equal(disable.status, 0, `plan-suite disable failed: ${disable.stderr}`);
+    assert.ok(!promptHooks().includes(titleHook), "disabling plan-suite removes the title hook");
+  }
+
   console.log("ok: cross-harness hook composition round-trips for both Claude and Codex");
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

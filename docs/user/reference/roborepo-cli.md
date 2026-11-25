@@ -166,6 +166,11 @@ restarts it when the code has changed since it started.
 See [Plan Suite Walkthrough](../guides/plan/lifecycle/plan-suite.md),
 [Telemetry Walkthrough](../guides/telemetry.md), and [Runtime](runtime.md) for the pages.
 
+The `roborepo plans` commands the plan suite runs are listed in the
+[Plans page reference](plans-portal.md#cli). One of them, `roborepo plans session-title --harness
+<id>`, is a hook rather than a command you type: with plan-suite on, Claude runs it on each prompt
+to title the session after its plan stage.
+
 ## Telemetry
 
 Telemetry is local and opt-in. See [Telemetry](telemetry.md) for what is captured.

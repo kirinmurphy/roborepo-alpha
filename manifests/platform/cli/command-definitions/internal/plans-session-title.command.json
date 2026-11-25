@@ -1,0 +1,13 @@
+{
+  "path": ["plans", "session-title"],
+  "kind": "internal",
+  "title": "Title a session after its plan stage",
+  "description": "Hook command: read a harness's prompt-hook input on standard input and print the output that titles the session after the plan stage the prompt starts",
+  "usage": "roborepo plans session-title --harness <id>",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/plans-command.mjs",
+    "export": "plansCommand",
+    "prependArgs": ["session-title"]
+  }
+}

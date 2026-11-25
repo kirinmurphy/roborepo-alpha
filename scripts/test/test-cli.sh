@@ -2025,6 +2025,10 @@ assert "markdown-render: heading ids, tables, mermaid fallback" \
 assert "plan-suite: scanning and frontmatter" \
   node "${repo_root}/scripts/test/plan-suite-check.mjs"
 
+# Session titles that name the plan stage: formatter, title hook command, and rule text.
+assert "plan-suite: session titles name the stage" \
+  node "${repo_root}/scripts/test/plan-session-title-check.mjs"
+
 # The lifecycle manifest and every committed move between lifecycle folders.
 assert "plan lifecycle: manifest loading, validation, and projection" \
   node "${repo_root}/scripts/test/plan-lifecycle-manifest-check.mjs"

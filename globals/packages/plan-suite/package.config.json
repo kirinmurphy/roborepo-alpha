@@ -147,6 +147,11 @@
     {
       "type": "rules",
       "source": "rules.md"
+    },
+    {
+      "type": "hooks",
+      "source": "hooks-claude.json",
+      "harness": "claude"
     }
   ]
 }
