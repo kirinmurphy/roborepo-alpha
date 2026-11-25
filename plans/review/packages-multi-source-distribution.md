@@ -1173,6 +1173,8 @@ Keep the source configuration and lock schemas in one technical reference and li
 - [x] The contents summary omitted runtime assets — fixed (41b7416e)
 - [x] Removing a copied package another installed package required left a dangling requirement and broke catalog load — fixed (e8991756), not revalidated by a Validator pass (cap reached)
 - [x] Disabling or removing a folder source whose package another source's package required broke catalog load — fixed (e8991756), not revalidated by a Validator pass (cap reached)
+- [ ] `/plan-review` pass 1, actionable fix: `package remove` of an enabled package left unresolved by a missing requirement skipped the disable step and left its harness registrations (`package-service.mjs` `removePackage`)
+- [ ] `/plan-review` pass 1, actionable fix: reinstalling a pinned git package whose copy was deleted previewed and pulled in the listing's newer revision and its requirements while restoring the old pin (`package-service.mjs` `keptInstall`)
 
 ### Verification
 - Validation pass 1 at aba9cc6f (fresh-context subagent): 1 blocking, 4 actionable fix findings, all fixed.
