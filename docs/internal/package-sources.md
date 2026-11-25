@@ -217,7 +217,7 @@ data and throw `PackageServiceError` with a `code`:
 | `listSources`, `sourceInfo`, `addSource`, `removeSource`, `setSourceEnabled`, `refreshSources`, `trustedCatalog` | Source management. Disabling or removing a folder source is refused while another source's package requires one of its packages |
 | `listAvailablePackages`, `resolvePackageReference` | Every (source, package) pair; one pick per the reference rules |
 | `previewInstall`, `installPackage` | Contents summary of the package and every package the install brings, then the install. `previewInstall` returns the `plan` (each package and revision); `installPackage` takes it as `expectedPlan` and refuses when the fresh plan differs. Installing a package already installed from the same source never moves its pin, plans from the installed copy, and reports a newer revision for `update` |
-| `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed against the shown starting revision (`expectedFrom`); re-apply an active package with its required packages, removing components the new revision dropped. A failed re-apply restores the old record and copy. A missing copy at an unchanged pin is restored. Refused when the source now points at a different repository than the installed copy came from |
+| `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed against the shown starting revision (`expectedFrom`). When the pin moved since, the shown target is ignored: the source is read at its newest revision (never rewound to the stale target) and the refusal carries the change from the current pin to it; re-apply an active package with its required packages, removing components the new revision dropped. A failed re-apply restores the old record and copy. A missing copy at an unchanged pin is restored. Refused when the source now points at a different repository than the installed copy came from |
 | `removePackage` | The lock record names the source to remove. Refuse System; refuse a copied package another package requires; disable an active package first, unless a local override is the active one; delete the record and any copy |
 | `packageView` | Rows with `tab`, `sourceId`, `sourceBadge`, `trust`, `collection`, `available`, `installed`, `active`, `revision`, `latestRevision`, `updateAvailable`, `removable` |
 
@@ -251,7 +251,7 @@ callbacks (`reapplyPackage` for update; `disablePackage` and `retireStrandedPack
 | `DELETE /api/packages/sources/:id?keepInstalled=1` | `removeSource()` | server |
 | `GET /api/packages/install-preview?ref=` | `previewInstall()` | server |
 | `POST /api/packages/install` `{ ref, expectedPlan }` | `installPackage(ref, { confirmed: true, expectedPlan })` | server |
-| `POST /api/packages/update` `{ ref, confirmed?, expectedRevision?, expectedFrom? }` | `updatePackage()`; unconfirmed, it refuses with `details.change` | child |
+| `POST /api/packages/update` `{ ref }` or `{ ref, confirmed: true, expectedRevision, expectedFrom }` | `updatePackage()`; unconfirmed, it refuses with `details.change`. A confirmation must name both revisions: the portal has no unreviewed `--yes` | child |
 | `DELETE /api/packages/installed/:ref` | `removePackage()` | server |
 
 A success answers `{ ok: true, result }`. A refusal answers `{ ok: false, error: { code, message,
@@ -259,7 +259,7 @@ details } }` with the service's own message: `usage` and `invalid` are 400; `amb
 `confirmationRequired`, and `refused` are 409; `unavailable` is 503; anything else is 500. `:ref` is
 URL-encoded (`team%2Ftool`) so a qualified name stays one path segment.
 
-Git runs synchronously, so the routes that run it use `scripts/cli/package-service-runner.mjs`: it
+Git runs synchronously, so the routes that run it use `scripts/cli/package-service-runner.mjs` (stopped after 15 minutes, and with the server when it exits): it
 runs the operation in a child Node process, prints the result or the refusal as one JSON line, and
 the route rebuilds the `PackageServiceError` so `details.change` and `details.planChanged` reach
 the page. The child gets `ROBOREPO_WRITE_ACTOR` from the request, so its writes are logged as

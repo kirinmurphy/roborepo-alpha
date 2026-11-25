@@ -698,10 +698,15 @@ export async function updatePackage(reference, { confirmed = false, expectedRevi
   if (current.url && record.url !== current.url) {
     throw new PackageServiceError(`${qualifiedName(current.sourceId, packageId)} was installed from ${current.url}, but source ${record.id} now points at ${record.url}; remove the package and install it again to switch repositories`, { code: "refused" });
   }
-  if (expectedRevision && record.trust === "trusted" && expectedRevision !== trustedEntryFor(record.url)?.commit) {
-    throw new PackageServiceError(`${record.id} is trusted only at its reviewed commit; ${expectedRevision.slice(0, 12)} is not it`, { code: "refused" });
+  // The pin moved since the change was shown, so that change, and its target, are stale. The
+  // source is read at its newest revision instead of the shown one: pinning the refresh to an older
+  // shown target would rewind the source's listing and offer a move backwards as the new change.
+  const pinMoved = Boolean(expectedFrom && expectedFrom !== current.resolved);
+  const target = pinMoved ? null : expectedRevision;
+  if (target && record.trust === "trusted" && target !== trustedEntryFor(record.url)?.commit) {
+    throw new PackageServiceError(`${record.id} is trusted only at its reviewed commit; ${target.slice(0, 12)} is not it`, { code: "refused" });
   }
-  const refreshed = runRefresh(record, expectedRevision ? { revision: expectedRevision } : {});
+  const refreshed = runRefresh(record, target ? { revision: target } : {});
   const latest = refreshed.catalog.revision;
   const name = qualifiedName(current.sourceId, packageId);
   const adapter = createSourceAdapter(record);

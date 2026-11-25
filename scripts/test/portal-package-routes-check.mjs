@@ -15,6 +15,7 @@ import { isolateGitConfig } from "./lib/git-config.mjs";
 import { liveClaudeRules, makeSourceRoots, repoRoot, runCli } from "./fixtures/package-sources.mjs";
 import { PackageServiceError } from "../cli/package-service.mjs";
 import { statusForServiceError } from "../cli/portal-routes-packages.mjs";
+import { runPackageServiceInChild } from "../cli/package-service-runner.mjs";
 
 // Each service code maps to one HTTP status; anything that is not a service refusal is a 500.
 const EXPECTED_STATUS = { usage: 400, invalid: 400, ambiguous: 409, confirmationRequired: 409, refused: 409, unavailable: 503 };
@@ -173,6 +174,9 @@ try {
   assert.deepEqual(change.files.changed, ["rules.md"]);
   assert.equal(cli("package", "list", "--json").status, 0);
   assert.equal(JSON.parse(cli("package", "list", "--json").stdout).packages.find((entry) => entry.id === "routetool").revision, repo.first, "an unconfirmed update moves nothing");
+  const unbound = await call("POST", "/api/packages/update", { ref: "routetool", confirmed: true });
+  assert.equal(unbound.status, 400, "a confirmation must name the change it confirms");
+  assert.equal(unbound.body.error.code, "usage");
   const movedFrom = await call("POST", "/api/packages/update", { ref: "routetool", confirmed: true, expectedRevision: second, expectedFrom: second });
   assert.equal(movedFrom.status, 409, "a confirmation bound to another starting revision asks again");
   assert.equal(movedFrom.body.error.details.change.from, repo.first);
@@ -192,6 +196,11 @@ try {
   const answeredAfter = Date.now() - started;
   const refreshed = await refreshing;
   const refreshTook = Date.now() - started;
+  // A child that runs past its ceiling is stopped and the call fails with a message.
+  await assert.rejects(
+    runPackageServiceInChild("refreshSources", ["team"], { env, actor: "portal POST /api/packages/sources/team/refresh", timeoutMs: 1000 }),
+    /did not finish within .* and was stopped/,
+  );
   fs.rmSync(slowFlag);
   assert.equal(refreshed.status, 200, JSON.stringify(refreshed.body));
   assert.equal(refreshed.body.result[0].changed, true);

@@ -292,6 +292,11 @@ function render(snap) {
     }
     return;
   }
+  if (!snap) {
+    // No snapshot: the server's message, then whatever the package view can still offer.
+    if (configError) main.replaceChildren(tmpl.configUnavailable(configError.message), ...(packageData ? renderPackageTabs([], null) : []));
+    return;
+  }
   const view = withoutPackagesControlledElsewhere(snap.behaviorView || []);
   // Package-category sections (everything the packages intro describes) vs the non-package
   // sections that follow. The intro sits between the harness file grid and the first package
@@ -361,7 +366,12 @@ function renderPackageTabs(packageSections, contextCost) {
     const sections = packageSections.map((section) => renderSection(section, contextCost)).filter(Boolean);
     return packageLoadError ? [tmpl.packageLoadFailed(packageLoadError.message), ...sections] : sections;
   }
-  const tabs = packageData.tabs;
+  // The service's counts, less the packages this page leaves to another page, so a count matches
+  // the cards under it.
+  const tabs = packageData.tabs.map((tab) => ({
+    ...tab,
+    count: tab.count - packageData.packages.filter((row) => row.tab === tab.id && PACKAGES_CONTROLLED_ELSEWHERE.has(row.id)).length,
+  }));
   if (!tabs.some((tab) => tab.id === activeTab)) activeTab = tabs[0]?.id || "system";
   const rows = new Map(packageData.packages.map((row) => [rowKey(row.sourceId, row.id), row]));
   const shown = new Set();
@@ -377,9 +387,10 @@ function renderPackageTabs(packageSections, contextCost) {
       return { ...section, items };
     })
     .filter((section) => section.items.length > 0);
-  const extra = activeTab === "system" ? [] : [availableSection(shown), attentionSection()].filter(Boolean);
+  const extra = [activeTab === "system" ? null : availableSection(shown), attentionSection()].filter(Boolean);
   const panel = document.createElement("div");
   panel.className = "package-tab-panel";
+  panel.id = "package-tab-panel";
   panel.setAttribute("role", "tabpanel");
   panel.setAttribute("aria-labelledby", `package-tab-${activeTab}`);
   const rendered = [...extra, ...sections].map((section) => renderSection(section, contextCost)).filter(Boolean);
@@ -401,9 +412,11 @@ function availableSection(shown) {
   return { categoryId: "available", category: "Available to Install", items };
 }
 
-// Installed records the catalog cannot use: unresolved (with the service's reason) and shadowed
-// (another source's package with the same id is in use). A record whose source is gone shows on
-// both Custom and Third Party, since only its source says which tab it belongs to.
+// Packages the catalog cannot use as they are: unresolved records (with the service's reason),
+// shadowed packages (another source's package with the same id is in use), and collisions (two
+// sources offer one id and nothing chose between them, so neither loads until one is installed).
+// Each shows on the tab of the source it names; a record whose source is gone shows on both Custom
+// and Third Party, since only its source says which tab it belongs to.
 function attentionSection() {
   const onThisTab = (sourceId) => {
     const tab = sourceTabOf(sourceId);
@@ -425,7 +438,18 @@ function attentionSection() {
   const shadowed = (packageData.shadowed || []).flatMap((entry) => entry.hidden
     .filter((name) => onThisTab(name.split("/")[0]))
     .map((name) => ({ id: entry.id, label: name, active: false, toggle: null, packageNote: `Hidden by ${entry.chosen}` })));
-  const items = [...unresolved, ...shadowed];
+  const collisions = (packageData.collisions || []).flatMap((entry) => entry.candidates
+    .filter((name) => onThisTab(name.split("/")[0]))
+    .map((name) => ({
+      id: entry.id,
+      label: name,
+      active: false,
+      toggle: null,
+      packageNote: `Shares its id with ${entry.candidates.filter((other) => other !== name).join(", ")}; install the one you want`,
+      packageActions: ["install"],
+      installRef: name,
+    })));
+  const items = [...unresolved, ...shadowed, ...collisions];
   if (items.length === 0) return null;
   return { categoryId: "attention", category: "Needs Attention", items };
 }
@@ -439,7 +463,7 @@ function handlePackageAction(kind, item) {
 // The install preview is bound to the plan it showed: a source refreshed in between refuses with
 // the new plan, which replaces the dialog's contents and asks again, as the CLI re-prompts.
 async function installFlow(item) {
-  const ref = item.packageState.qualifiedName;
+  const ref = item.installRef || item.packageState.qualifiedName;
   const title = `Install ${item.label}`;
   const flow = packageActionDialog.open({ title, body: tmpl.loadingText("Reading what it would install…"), confirmLabel: "Install", loading: true });
   let preview;
@@ -524,7 +548,9 @@ const sourceCallbacks = {
     try {
       const result = await api.addPackageSource(request.location, request.id);
       const count = result.packages.length;
-      sourcesState.status = { text: `Added ${result.source.id}: ${count} package${count === 1 ? "" : "s"} available.${result.warning ? ` ${result.warning}` : ""}` };
+      // As `package source add` prints: a new name clash needs a choice before either package loads.
+      const clashes = (result.collisions || []).map((collision) => `${collision.candidates.join(" and ")} share a name; install the one you want under Needs Attention.`);
+      sourcesState.status = { text: [`Added ${result.source.id}: ${count} package${count === 1 ? "" : "s"} available.`, result.warning, ...clashes].filter(Boolean).join(" ") };
     } catch (err) {
       sourcesState.status = { text: err.message, error: true };
     } finally {
@@ -602,12 +628,31 @@ async function loadPackageState() {
 // reported as the action failing.
 async function reloadAll() {
   try {
-    const [snap] = await Promise.all([api.fetchConfig(), loadPackageState()]);
+    const [snap] = await Promise.all([fetchConfigOrNull(), loadPackageState()]);
+    await rereadExpandedSources();
     last = null;
     applySnapshot(snap);
   } catch (err) {
     showError(err);
   }
+}
+
+// An expanded source's package list is re-read with everything else, so it never disagrees with
+// the counts above it; a source that is gone is collapsed.
+async function rereadExpandedSources() {
+  const ids = [...sourcesState.expanded.keys()];
+  await Promise.all(ids.map(async (id) => {
+    if (!sourcesData?.some((source) => source.id === id)) {
+      sourcesState.expanded.delete(id);
+      return;
+    }
+    try {
+      const packages = (await api.fetchSourceInfo(id)).packages;
+      if (sourcesState.expanded.has(id)) sourcesState.expanded.set(id, packages);
+    } catch (err) {
+      if (sourcesState.expanded.has(id)) sourcesState.expanded.set(id, err);
+    }
+  }));
 }
 
 // --------------------------------------------------------------------------- poll
@@ -633,7 +678,7 @@ onRepositoryScopeResolved((resolution) => {
   }
   // Back to All repos from a repo scope: the package view was not read while scoped, so read it
   // now rather than drawing stale or missing tabs until the next poll.
-  if (!resolution.scope && previous && lastSnapshot) {
+  if (!resolution.scope && previous) {
     void reloadAll();
     return;
   }
@@ -651,7 +696,13 @@ onRepositoriesChanged(() => {
 function applySnapshot(snap) {
   lastSnapshot = snap;
   // The package view and sources render beside the snapshot, so a change in either redraws too.
-  const changed = snapshotChanged(last, { snap, packageData, sourcesData, packageLoadError: packageLoadError?.message || null });
+  const changed = snapshotChanged(last, {
+    snap,
+    configError: configError?.message || null,
+    packageData,
+    sourcesData,
+    packageLoadError: packageLoadError?.message || null,
+  });
   if (changed) {
     last = changed;
     render(snap);
@@ -663,9 +714,24 @@ function showError(err) {
   console.error(err);
 }
 
+// The config snapshot, or null when the server cannot build it. A name clash between two sources
+// stops the package catalog from loading until one of them is installed, and the snapshot with it;
+// the page then still draws the package tabs and Sources, which is where the clash is resolved.
+let configError = null;
+async function fetchConfigOrNull() {
+  try {
+    const snap = await api.fetchConfig();
+    configError = null;
+    return snap;
+  } catch (err) {
+    configError = err;
+    return null;
+  }
+}
+
 async function load() {
   try {
-    const [snap, setup] = await Promise.all([api.fetchConfig(), api.fetchSetupState(), loadPackageState()]);
+    const [snap, setup] = await Promise.all([fetchConfigOrNull(), api.fetchSetupState(), loadPackageState()]);
     lastSetup = setup;
     applySnapshot(snap);
   } catch (e) {

@@ -828,6 +828,7 @@ export function packageTabs(tabs, activeTab, onSelect) {
     const button = fill(tpl("tpl-package-tab"), { label: tab.label, count: String(tab.count) });
     const selected = tab.id === activeTab;
     button.id = `package-tab-${tab.id}`;
+    button.setAttribute("aria-controls", "package-tab-panel");
     button.setAttribute("aria-selected", String(selected));
     button.tabIndex = selected ? 0 : -1;
     button.addEventListener("click", () => onSelect(tab.id));
@@ -848,6 +849,15 @@ export function emptyPackageTab(label) {
   const p = document.createElement("p");
   p.className = "package-tab-empty";
   p.textContent = label === "System" ? "No System packages." : `No ${label} packages yet. Add a source below to list its packages here.`;
+  return p;
+}
+
+// The config snapshot could not be built, with the server's reason.
+export function configUnavailable(message) {
+  const p = document.createElement("p");
+  p.className = "package-tab-empty item-status error";
+  p.setAttribute("role", "alert");
+  p.textContent = `Agent config could not be read: ${message}`;
   return p;
 }
 

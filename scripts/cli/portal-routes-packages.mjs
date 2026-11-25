@@ -166,8 +166,11 @@ export const packagesRoutes = defineRoutes([
     method: "POST",
     path: "/api/packages/update",
     handler: withBody(({ ref, confirmed = false, expectedRevision = null, expectedFrom = null }, { actor }) => {
-      if (typeof ref !== "string" || !ref || typeof confirmed !== "boolean" || !isRevision(expectedRevision) || !isRevision(expectedFrom)) {
-        throw usage("expected { ref: string, confirmed?: boolean, expectedRevision?: sha, expectedFrom?: sha }");
+      // A confirmation is bound to the change shown, so it must name both ends of it: the portal has
+      // no equivalent of the CLI's unreviewed `--yes`.
+      const bound = !confirmed || (expectedRevision && expectedFrom);
+      if (typeof ref !== "string" || !ref || typeof confirmed !== "boolean" || !isRevision(expectedRevision) || !isRevision(expectedFrom) || !bound) {
+        throw usage("expected { ref: string } or { ref: string, confirmed: true, expectedRevision: sha, expectedFrom: sha }");
       }
       const options = confirmed ? { confirmed, expectedRevision, expectedFrom } : {};
       return runPackageServiceInChild("updatePackage", [ref, options], { actor });

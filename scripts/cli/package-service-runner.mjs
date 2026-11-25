@@ -28,11 +28,27 @@ const OPERATIONS = {
 
 export const CHILD_OPERATIONS = Object.keys(OPERATIONS);
 
+// One operation makes at most three remote Git calls of up to 120 seconds each, plus a re-apply.
+// Past this ceiling the child is stopped and the request fails, rather than hanging the page.
+export const CHILD_TIMEOUT_MS = 15 * 60 * 1000;
+
+// Children still running when the server exits are stopped with it, so none is left orphaned.
+const running = new Set();
+let exitHookInstalled = false;
+function stopRunningOnExit() {
+  if (exitHookInstalled) return;
+  exitHookInstalled = true;
+  process.on("exit", () => {
+    for (const child of running) child.kill("SIGTERM");
+  });
+}
+
 // Resolves with the operation's result; rejects with a PackageServiceError for a refusal, or an
 // Error when the child fails some other way. Writes the child makes are logged as `actor`, which
 // defaults to the write actor of the request this runs under.
-export function runPackageServiceInChild(operation, args = [], { actor = currentWriteActor(), env = process.env } = {}) {
+export function runPackageServiceInChild(operation, args = [], { actor = currentWriteActor(), env = process.env, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
   if (!OPERATIONS[operation]) return Promise.reject(new Error(`unknown package service operation: ${operation}`));
+  stopRunningOnExit();
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [RUNNER_PATH], {
       // The caller's directory, so a relative path means the same here as in the server.
@@ -40,12 +56,25 @@ export function runPackageServiceInChild(operation, args = [], { actor = current
       env: { ...env, ROBOREPO_WRITE_ACTOR: actor },
       stdio: ["pipe", "pipe", "pipe"],
     });
+    running.add(child);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, timeoutMs);
+    timer.unref();
     let stdout = "";
     let stderr = "";
     child.stdout.on("data", (chunk) => { stdout += chunk; });
     child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-8000); });
     child.on("error", reject);
     child.on("close", (code) => {
+      clearTimeout(timer);
+      running.delete(child);
+      if (timedOut) {
+        reject(new Error(`${operation} did not finish within ${Math.round(timeoutMs / 60000)} minutes and was stopped`));
+        return;
+      }
       const line = stdout.split("\n").find((entry) => entry.startsWith(RESULT_PREFIX));
       if (!line) {
         reject(new Error(stderr.trim() || `package service child exited ${code} without a result`));

@@ -123,18 +123,20 @@ test("package sources and installs agree between the portal and the CLI", async 
   await tool.getByRole("button", { name: "Update UI Tool" }).click();
   await expect(dialog(page)).toContainText(`${second.slice(0, 12)} → ${third.slice(0, 12)}`);
   await expect(dialog(page)).toContainText("rules.md");
-  // While the dialog is open, the CLI moves the installed revision. Confirming is refused and the
-  // dialog shows the current change, starting from what is installed now; confirming again moves
-  // to exactly the commit shown.
+  // While the dialog is open, the CLI moves the installed revision, and the repo gains another
+  // commit. Confirming is refused and the dialog shows the current change: from what is installed
+  // now to the newest commit, never back to the stale one it showed. Confirming again moves there.
   const fourth = commit(repo, { "packages/uitool/rules.md": "## UI tool v4\n" });
   expect(cli("package", "source", "refresh", "uiteam").status).toBe(0);
   expect(cli("package", "update", "uitool", "--yes").status).toBe(0);
+  const fifth = commit(repo, { "packages/uitool/rules.md": "## UI tool v5\n" });
   await dialog(page).getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog(page)).toContainText(`now installed at ${fourth.slice(0, 12)}`);
-  await expect(dialog(page)).toContainText(`${fourth.slice(0, 12)} → ${third.slice(0, 12)}`);
+  await expect(dialog(page)).toContainText(`${fourth.slice(0, 12)} → ${fifth.slice(0, 12)}`);
+  expect(cliJson("package", "source", "list").find((source) => source.id === "uiteam").revision).toBe(fifth);
   await dialog(page).getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog(page)).toBeHidden();
-  expect(listed("uitool")).toMatchObject({ revision: third, active: true });
+  expect(listed("uitool")).toMatchObject({ revision: fifth, active: true });
 
   // Portal: remove it. The CLI sees it gone; the source still offers it, so the card offers Install.
   await tool.getByRole("button", { name: "Remove UI Tool" }).click();
@@ -175,9 +177,17 @@ test("package sources and installs agree between the portal and the CLI", async 
   await expect(page.locator(".sources-status")).toContainText("Added uiextra: 1 package available.");
   await expect(page.locator(".sources-status")).toContainText("This repository is not in RoboRepo's trusted catalog.");
   expect(cliJson("package", "source", "list").map((source) => source.id)).toContain("uiextra");
-  const extraSecond = commit(extra, { "packages/uiextra/rules.md": "## UI extra v2\n" });
+  // An expanded package list follows the refresh, as the counts above it do.
+  await sourceRow(page, "uiextra").getByRole("button", { name: "Show packages" }).click();
+  await expect(sourceRow(page, "uiextra").locator(".source-packages")).toHaveText("uiextra/uiextra");
+  const extraSecond = commit(extra, {
+    "packages/uiextra/rules.md": "## UI extra v2\n",
+    "packages/uiextratwo/package.config.json": manifest("uiextratwo", "UI Extra Two"),
+    "packages/uiextratwo/rules.md": "## UI extra two\n",
+  });
   await sourceRow(page, "uiextra").getByRole("button", { name: "Refresh uiextra" }).click();
   await expect(page.locator(".sources-status")).toHaveText(`uiextra is now at ${extraSecond.slice(0, 12)}.`);
+  await expect(sourceRow(page, "uiextra").locator(".source-packages li")).toHaveText(["uiextra/uiextra", "uiextra/uiextratwo"]);
   expect(cliJson("package", "source", "list").find((source) => source.id === "uiextra").revision).toBe(extraSecond);
   expect(cli("package", "install", "uiextra/uiextra", "--yes").status).toBe(0);
   await page.reload();
@@ -258,8 +268,30 @@ test("cards show each state the package view reports", async ({ page }) => {
   fs.writeFileSync(path.join(workspacePackages, "stshadow", "package.config.json"), manifest("stshadow", "St Shadow Local"));
   fs.writeFileSync(path.join(workspacePackages, "stshadow", "rules.md"), "## St shadow local\n");
 
+  // Collision: two folder sources offer one id and nothing chose between them.
+  for (const [dir, id] of [["st-clash-a", "stclasha"], ["st-clash-b", "stclashb"]]) {
+    const root = path.join(tmp, dir);
+    fs.mkdirSync(path.join(root, "stclash"), { recursive: true });
+    fs.writeFileSync(path.join(root, "stclash", "package.config.json"), manifest("stclash", "St Clash"));
+    fs.writeFileSync(path.join(root, "stclash", "rules.md"), "## St clash\n");
+    ok("package", "source", "add", root, "--id", id);
+  }
+
   try {
     await page.goto("/agents");
+    // The clash stops the config snapshot from loading; the page says why and keeps the tabs.
+    await expect(page.getByRole("alert").filter({ hasText: "Agent config could not be read:" })).toContainText("stclash");
+    await page.getByRole("tab", { name: /Custom/ }).click();
+    const clashA = card(page, "stclasha/stclash");
+    await expect(clashA.locator(".package-state-note")).toHaveText("Shares its id with stclashb/stclash; install the one you want");
+    await expect(card(page, "stclashb/stclash")).toBeVisible();
+    await clashA.getByRole("button", { name: "Install stclasha/stclash" }).click();
+    await dialog(page).getByRole("button", { name: "Install", exact: true }).click();
+    await expect(dialog(page)).toBeHidden();
+    await expect(clashA).toHaveCount(0);
+    await expect(page.getByText("Agent config could not be read:")).toHaveCount(0);
+    expect(listed("stclash")).toMatchObject({ sourceId: "stclasha", installed: true });
+
     await page.getByRole("tab", { name: /Third Party/ }).click();
     await expect(card(page, "St Dropped").locator(".package-state-note")).toHaveText("No longer offered by its source");
     await expect(card(page, "St Moved").locator(".package-state-note")).toHaveText("Its source now points at a different repo");
@@ -299,8 +331,8 @@ test("cards show each state the package view reports", async ({ page }) => {
   } finally {
     // Leave the shared hermetic machine as it was for later specs.
     fs.rmSync(path.join(workspacePackages, "stshadow"), { recursive: true, force: true });
-    for (const id of ["stdropped", "stmoved", "stshadow", "stgone"]) cli("package", "remove", id);
-    for (const id of ["stdrop", "stmove", "stfolder", "stshade"]) cli("package", "source", "remove", id, "--keep-installed");
+    for (const id of ["stdropped", "stmoved", "stshadow", "stgone", "stclash"]) cli("package", "remove", id);
+    for (const id of ["stdrop", "stmove", "stfolder", "stshade", "stclasha", "stclashb"]) cli("package", "source", "remove", id, "--keep-installed");
   }
 });
 
@@ -316,18 +348,18 @@ test("a refused source action shows the package service's message", async ({ pag
 
 test("package tabs and sources stay out of a single-repo scope", async ({ page }) => {
   await page.goto("/agents");
-  await expect(page.getByRole("tablist", { name: "Package sources" })).toBeVisible();
+  await expect(page.getByRole("tablist", { name: "Package tabs" })).toBeVisible();
   await page.goto("/agents?repo=roborepo");
   // The scoped view rendered (the seeded repo has no readable checkout), so an absent tab list
   // means the scope left it out, not that nothing drew.
   await expect(page.getByText("Primary checkout unavailable")).toBeVisible();
-  await expect(page.getByRole("tablist", { name: "Package sources" })).toHaveCount(0);
+  await expect(page.getByRole("tablist", { name: "Package tabs" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Sources" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Install / })).toHaveCount(0);
 
   // Back to All repos through the selector: the tabs and sources return without waiting for a poll.
   await page.getByRole("button", { name: /^Repo: / }).click();
   await page.getByRole("option", { name: "All repos", exact: true }).click();
-  await expect(page.getByRole("tablist", { name: "Package sources" })).toBeVisible({ timeout: 3_000 });
+  await expect(page.getByRole("tablist", { name: "Package tabs" })).toBeVisible({ timeout: 3_000 });
   await expect(page.getByRole("heading", { name: "Sources" })).toBeVisible({ timeout: 3_000 });
 });

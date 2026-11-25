@@ -133,8 +133,13 @@ What a Custom or Third Party card shows:
 | Its source no longer offers it | "No longer offered by its source"; the installed copy keeps working |
 | Installed but can't be found | Under Needs Attention: "Can't be found", the reason, and **Remove** |
 | Another source's package with the same id is in use | Under Needs Attention: "Hidden by `<source>/<id>`" |
+| Two sources offer the same id and none is installed | Under Needs Attention, one card per source: "Shares its id with …", and **Install** to choose that one |
 
 Every card also shows its source badge (with `· Trusted` for a trusted repo).
+
+A name clash stops RoboRepo's package catalog from loading until one of the packages is installed,
+so the rest of the Agents page cannot be shown either. The page then says why and still shows the
+tabs and Sources, so the clash can be settled there.
 
 **Install** shows every package the install brings, dependencies included: the source, the commit,
 and the contents by kind. For an unverified source it names the packages that come from it and
@@ -144,7 +149,8 @@ dialog shows the new preview to confirm again.
 
 **Update** fetches the source and shows the change: the current and new commit, the files added,
 removed, and changed, and the contents. Confirming moves to exactly that commit. If the source or
-the installed commit moved meanwhile, the dialog shows the current change to confirm again. An
+the installed commit moved meanwhile, the dialog shows the current change, from what is installed
+now to the source's newest commit, to confirm again. An
 active package is re-applied to the harnesses, as `roborepo package update` does.
 
 **Remove** turns the package off first if it is on. A Third Party package's installed copy is
