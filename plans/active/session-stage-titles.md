@@ -398,6 +398,22 @@ title, because nothing reliable signals that the plan work ended.
 - A prompt's `Session title:` line is honored only when it carries a stage prefix, so the hook
   never sets a title outside the format, and the hook prints nothing when the title is already the
   one it would set (2026-11-25).
+- Only `/plan-write` titles a session from the prompt's own words when it names no known plan
+  (2026-11-25, from Validator pass 1). It is the one command that can target a plan that does not
+  exist yet; for the other five, an unmatched word is an unknown id or path, and putting it in the
+  title would break the no-id rule. Alternative: the word fallback for every command, as first
+  built, which leaked ids such as `/plan-review: zzzz9999`.
 - The title formatter takes the plan commands from the lifecycle model rather than its own list, and
   the copied-prompt title line applies in portable mode as well as repository-aware mode
   (2026-11-25).
+
+## Review
+
+### Findings
+
+- [x] An unknown plan id or path after a non-write plan command became the title (for example
+      `/plan-review: zzzz9999`), against the no-id rule — fixed (53059b11)
+
+### Verification
+
+- Validation pass 1 at 4d600210 (fresh-context subagent): one actionable finding, fixed above
