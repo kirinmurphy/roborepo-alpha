@@ -83,6 +83,26 @@ function dropForeignHomeRules(rules, home = os.homedir()) {
   });
 }
 
+// Git reads exactly GIT_CONFIG_COUNT of the GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n pairs. The merge
+// keeps a local scalar over the repo's, so a COUNT written before a new pair existed would beat the
+// baseline's larger COUNT while the new pair itself is still copied in, and Git would silently ignore
+// it. The count is therefore derived from the pairs the merged result actually holds: every pair from
+// index 0 up to the first index missing its key or its value.
+const GIT_CONFIG_COUNT = "GIT_CONFIG_COUNT";
+
+function gitConfigPairCount(has) {
+  let count = 0;
+  while (has(`GIT_CONFIG_KEY_${count}`) && has(`GIT_CONFIG_VALUE_${count}`)) count += 1;
+  return count;
+}
+
+function reconcileGitConfigCount(env) {
+  if (!isPlainObject(env)) return;
+  const count = gitConfigPairCount((name) => typeof env[name] === "string");
+  if (count === 0 && env[GIT_CONFIG_COUNT] === undefined) return;
+  env[GIT_CONFIG_COUNT] = String(count);
+}
+
 export function mergeClaudeSettings(repoText, localText) {
   let repo = {};
   let local = {};
@@ -118,6 +138,7 @@ export function mergeClaudeSettings(repoText, localText) {
     merged.extraKnownMarketplaces = mergeObjects(repo.extraKnownMarketplaces, local.extraKnownMarketplaces);
   }
   delete merged.model;
+  reconcileGitConfigCount(merged.env);
 
   return `${JSON.stringify(merged, null, 2)}\n`;
 }
@@ -220,6 +241,23 @@ function mergeTomlSection(repoSection, localSection) {
   return merged;
 }
 
+// The table Codex takes its agent shells' environment from; see reconcileGitConfigCount.
+const CODEX_AGENT_ENV_TABLE = "[shell_environment_policy.set]";
+
+function unquoteTomlKey(key) {
+  return key && /^(["']).*\1$/.test(key) ? key.slice(1, -1) : key;
+}
+
+function reconcileTomlGitConfigCount(lines) {
+  const keys = new Set();
+  for (const { key } of tomlStatements(lines)) if (key) keys.add(unquoteTomlKey(key));
+  const count = gitConfigPairCount((name) => keys.has(name));
+  if (count === 0 && !keys.has(GIT_CONFIG_COUNT)) return lines;
+  return lines.map((line) => (unquoteTomlKey(tomlKey(line)) === GIT_CONFIG_COUNT
+    ? line.replace(/=.*$/, `= "${count}"`)
+    : line));
+}
+
 export function mergeCodexConfig(repoText, localText) {
   const repoSections = splitTomlSections(repoText);
   const localSections = splitTomlSections(localText);
@@ -230,7 +268,8 @@ export function mergeCodexConfig(repoText, localText) {
   for (const repoSection of repoSections) {
     const localSection = localByHeader.get(repoSection.header);
     emitted.add(repoSection.header);
-    out.push(...mergeTomlSection(repoSection, localSection), "");
+    const lines = mergeTomlSection(repoSection, localSection);
+    out.push(...(repoSection.header === CODEX_AGENT_ENV_TABLE ? reconcileTomlGitConfigCount(lines) : lines), "");
   }
 
   const regenerated = permissionBlockTables(localText);
