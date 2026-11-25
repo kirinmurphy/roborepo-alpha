@@ -143,6 +143,8 @@ export function mergeReadiness({ primary, record, base = "main" }) {
   check("required tasks and blockers resolved", !unfinished.length && !blockers.length,
     [...unfinished.map((task) => task.text), ...blockers].join("; ") || "all required tasks complete; no blockers", "finish required tasks and resolve blockers before merging");
   check("assigned branch available", Boolean(assessedTip), assessedTip || `no linked worktree is named ${record.plan.worktree || "(none)"}`, "restore the assigned implementation worktree");
+  const pushed = branchTipPushed(primary, worktree?.branch, assessedTip);
+  check("branch tip is pushed", pushed.ok, pushed.observed, "push the branch, then rerun readiness");
   check("explicit approval is fresh", approval.state === "fresh", approval.reason || approval.state, "record explicit human approval of the current implementation");
   check("review is complete and fresh", approval.review.state === "fresh", approval.review.reason || approval.review.state, "complete review and required checks for the current implementation");
   const basePaths = approval.review.baseChangedPaths || [];
@@ -156,4 +158,18 @@ export function mergeReadiness({ primary, record, base = "main" }) {
   check("assessed state stayed stable", fs.readFileSync(record.absolutePath, "utf8") === markdown && linkedWorktreeNamed(primary, record.plan.worktree)?.branch === worktree?.branch && tipNow === assessedTip && git(primary, ["rev-parse", base]).stdout === assessedBase,
     "branch, base, and plan compared again", "rerun readiness after concurrent changes stop");
   return { ok: checks.every((item) => item.ok), assessedTip, assessedBase, branch: worktree?.branch || null, plan: { id: record.plan.id, path: record.plan.relativePath }, checks };
+}
+
+// Compares the branch tip with its upstream from local refs only, so readiness stays offline; the
+// caller fetches first for a current upstream. A repository with no remote has nowhere to push.
+function branchTipPushed(primary, branch, tip) {
+  if (!tip) return { ok: false, observed: "no branch to compare" };
+  if (!git(primary, ["remote"]).stdout) return { ok: true, observed: "no remote" };
+  // `refs/heads/<branch>@{upstream}` does not resolve, and a short name could match a tag instead.
+  const upstreamRef = git(primary, ["for-each-ref", "--format=%(upstream)", `refs/heads/${branch}`]).stdout;
+  const upstream = upstreamRef ? git(primary, ["rev-parse", "--verify", "--quiet", upstreamRef]) : { ok: false };
+  if (!upstream.ok) return { ok: false, observed: `${branch} has no upstream` };
+  return upstream.stdout === tip
+    ? { ok: true, observed: `${tip} matches its upstream` }
+    : { ok: false, observed: `local ${tip} differs from upstream ${upstream.stdout}` };
 }

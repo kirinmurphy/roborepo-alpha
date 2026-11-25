@@ -49,6 +49,7 @@ try {
     "plans/backlog/test-gone.md": planDoc({ id: "gone0001" }),
     "plans/backlog/test-ffwd.md": planDoc({ id: "ffwd0001" }),
     "plans/backlog/test-carry.md": planDoc({ id: "carry001" }),
+    "plans/backlog/test-pushed.md": planDoc({ id: "push0001" }),
     "plans/backlog/test-unexplained.md": planDoc({ id: "unexpl01", extra: "\n## Not tested\n\n- [ ] The portal lists plans in a browser.\n" }),
     "src/app.txt": "v1\n",
   });
@@ -546,6 +547,36 @@ try {
     const kept = approved(plans(root, "archive", "archbusy", "--reason", "Abandoned."), "archive with a bound dependent");
     assert.deepEqual(kept.references, { cleared: [backlog("arch-dep")] });
     assert.match(read(dependentFile), /^depends_on: \[\]$/m);
+  }
+
+  // ── merge-readiness: the branch tip must be what was pushed ──────────────────────────────────
+  // Last, because the no-remote case removes `origin` from the repository.
+  {
+    const pushed = toReview("push0001", "test-pushed.md", "feat/pushed");
+    const tipCheck = (label) => {
+      const result = plans(root, "merge-readiness", "push0001");
+      const found = json(result, label).checks.find((check) => check.name === "branch tip is pushed");
+      assert.ok(found, `${label}: merge readiness reports whether the tip is pushed`);
+      return found;
+    };
+
+    const unpublished = tipCheck("no upstream");
+    assert.equal(unpublished.ok, false, "a branch never pushed to an existing remote is not ready");
+    assert.match(unpublished.fix, /push the branch/);
+
+    git(pushed.path, "push", "--quiet", "-u", "origin", "feat/pushed");
+    const current = tipCheck("tip equals upstream");
+    assert.equal(current.ok, true, `a tip equal to its upstream passes: ${current.observed}`);
+
+    commit(pushed.path, "Commit after the push", { "src/late.txt": "late\n" });
+    const ahead = tipCheck("tip ahead of upstream");
+    assert.equal(ahead.ok, false, "a local commit the remote does not have fails");
+    assert.match(ahead.fix, /push the branch/);
+
+    git(root, "remote", "remove", "origin");
+    const local = tipCheck("no remote");
+    assert.equal(local.ok, true, "a repository with no remote has nothing to push to");
+    assert.match(local.observed, /no remote/);
   }
 
   assert.equal(tryGit(root, "cat-file", "-e", "main:plans").status === 0, false, "no plan ever reaches the code branch");

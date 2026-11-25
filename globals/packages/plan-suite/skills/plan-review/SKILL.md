@@ -134,6 +134,9 @@ merge into the plan's own feature branch, as it does for `/plan-execute`.
 Synchronization that changes implementation content makes any recorded approval stale. That is
 expected: the review then covers the merged result.
 
+When the merge committed, push it (see Push the feature branch), opening the pull request as a draft
+when the branch has none, so CI starts on the merged result while the review checks the work.
+
 ### 3. Check the work
 
 Judge the work from the plan, the code, and the checks, not from the implementation agent's account
@@ -222,12 +225,13 @@ protects is the human's decision, and escalated findings still go to them.
 
 For each finding fixed here:
 
-1. Make the fix in the worktree, then run the checks it affects. A code or test change needs the
-   full gate on the fixed commit: CI's result once the branch is pushed (step 6 pushes it), or the
-   canonical completion gate locally, once, when no CI result can exist.
+1. Make the fix in the worktree, then run the checks it affects.
 2. Commit the fix on its own, separate from the plan record, so the human can read exactly what the
-   review changed.
-3. Check the finding off with its commit: `- [x] Missing retry test — fixed in review (<short commit>)`.
+   review changed, and push it as it lands (see Push the feature branch).
+3. A code or test change needs the full gate on the fixed commit: CI's result there, watched and
+   fixed by the shared reference's Watch CI procedure. When no checks are reported, run the
+   canonical completion gate locally, once.
+4. Check the finding off with its commit: `- [x] Missing retry test — fixed in review (<short commit>)`.
 
 A `## Not tested` entry whose reason does not hold is a **fix**: run the check here and clear the
 entry with its evidence, `— Verified by agent <date> at <commit>: <command or method> → <result>`.
@@ -247,8 +251,12 @@ the updated plan in the worktree.
 Resolve the feature branch's current tip as a full commit id: that is the implementation the human
 is asked to approve. Record `### Result` with `Status: complete`, that full reviewed implementation
 commit, and the full base commit synchronized in step 2. Commit this evidence before asking the
-human, then push the feature branch (see Push the feature branch) so the commits this review made,
-including the base merge and its fixes, reach the remote and CI runs on the reviewed commit. Plan-only
+human. Then confirm what the human will approve is what the pull request shows: run
+`roborepo delivery fetch <remote>`, read `gh pr view <branch> --json url,isDraft,headRefOid,statusCheckRollup`,
+and require `headRefOid` to equal the reviewed commit; push first when it does not (see Push the
+feature branch). Require CI green at that commit by the shared reference's Watch CI table, or name
+the exception (a base failure, or no checks reported). Link the pull request in the packet, with
+its CI result at the reviewed commit. Plan-only
 evidence commits do not change the reviewed implementation. If findings or
 required manual checks remain, keep Result pending and present those outstanding decisions instead
 of asking for approval. Say plainly that approval was not requested, and list each open finding and
@@ -311,7 +319,14 @@ human's explicit answer, quoting it: `— Confirmed by the user <date>: "<what t
    affect it; any code change on the feature branch makes it stale.
 3. Before landing, run `roborepo plans merge-readiness <plan> --json` after recording approval.
    Require a clean worktree and committed fresh Result/Approval against the current reviewed base.
+   It also refuses a branch tip that differs from its upstream, so a fix that was never pushed
+   cannot be approved as if the pull request showed it.
    Report actionable failures and the assessed tips; a pass does not authorize a merge.
+4. Mark the pull request ready with `roborepo delivery pr-ready` when it is still a draft and all of
+   these hold: merge readiness passed, CI is green at the reviewed commit, and step 5's Validator
+   loop ended on a pass with no **fix** findings, not at its cap. Otherwise leave it a draft and
+   name the condition that failed. Approval is recorded on the plans branch, so this step pushes
+   nothing to the feature branch and starts no CI run.
    Tell the user to merge the pull request `/plan-execute` opened (or to open one, when none
    exists) themselves, then run `/plan-close`. If the base
    branch moves before that merge, the user reruns `/plan-review`; `/plan-close` never
@@ -346,19 +361,11 @@ On agreement:
 ### Push the feature branch
 
 Every review run that commits to the feature branch (the base merge, fixes, or review evidence)
-ends by pushing it, so the work never lives only on this machine. Push after the run's last
-feature-branch commit; a run that committed nothing there and whose branch already matches its
-remote has nothing to push.
-
-1. Re-read the worktree's branch and Git status. Push only the plan's feature branch, never the base
-   branch or any other protected branch. Lifecycle commits are already on the plans branch.
-2. From the worktree, run `git push -u <remote> <branch>`, where `<remote>` is the branch's upstream
-   remote, or the repository's only remote when none is set. Never force-push.
-3. With no remote, or when the push is refused (a permission prompt declined, a hook, a rejected
-   non-fast-forward), do not retry, rebase, or work around it. The review stands; report the exact
-   command under Needs you and whether the session's permissions or the remote refused it.
-
-The push is a fixed step of this skill; it does not open a pull request or ask for approval.
+pushes it as each commit lands, so the work never lives only on this machine and CI runs on what the
+human is asked to approve. Push, open the draft, watch CI, and mark ready exactly as the shared
+reference [`../plan-execute/references/handoff.md`](../plan-execute/references/handoff.md) describes in its Push, Watch CI, and Mark ready sections; its Hand off section is
+`/plan-execute`'s, since this skill synchronizes the base in step 2. The review lifecycle stands
+when a push is refused: report the exact command under Needs you.
 
 ## Final Report
 
@@ -372,7 +379,8 @@ forward. A pending, stale, or missing review ends with the next actionable quest
 **Continue until a human decision**, unless the human chose to stop or defer. A complete review awaiting approval must include
 step 6's exact-commit approval question. After explicit approval,
 record it through step 6a before ending. Describe reused evidence as historical when it matters.
-Say whether the feature branch was pushed, or give the push command that did not run and why.
+Say whether the feature branch was pushed, or give the push command that did not run and why. Link
+the pull request with its draft or ready state and CI's result at the reviewed commit.
 
 ## Boundaries
 
@@ -381,8 +389,9 @@ Do not:
 - fix a finding that chooses between real alternatives, changes requirements, or changes a contract
   the plan did not specify, without the human's decision;
 - infer, assume, or record approval without the human's explicit answer;
-- merge the feature branch into the base branch, push anything but the plan's feature branch, open
-  or merge pull requests;
+- merge the feature branch into the base branch, push anything but the plan's feature branch, or
+  merge pull requests. Opening this plan's pull request as a draft and marking it ready through
+  `roborepo delivery pr-ready` are allowed;
 - change lifecycle state except the submit transition from `active/` and the reopen transition
   after an agreed scope change;
 - move a plan back to `ready/`;

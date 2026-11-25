@@ -239,5 +239,8 @@ npm test
 
 ## Merge Readiness
 
-`mergeReadiness` requires the plan's review Result and Approval committed (its output calls this the review packet), a clean index and filesystem, and a current
-reviewed base implementation before merging.
+`mergeReadiness` requires the plan's review Result and Approval committed (its output calls this the review packet), a clean index and filesystem, a current
+reviewed base implementation, and a pushed branch tip before merging. The pushed check compares the
+branch with its upstream (`for-each-ref --format=%(upstream)`) from local refs only, so the command
+makes no network call; it fails when the tip differs or the branch has no upstream while a remote
+exists, and passes, observed as "no remote", when the repository has none.
