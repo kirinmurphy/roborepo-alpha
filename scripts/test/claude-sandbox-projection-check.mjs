@@ -63,6 +63,18 @@ for (const verb of ["checkout", "switch"]) {
   assert.deepEqual(bucketOf(`Bash(git ${verb} main:*)`), ["deny"], `git ${verb} main stays denied`);
 }
 
+// Only the roborepo subcommands that cannot work in the sandbox leave it. The wrappers that launch
+// other programs stay inside, or they would carry those programs out of it.
+for (const cli of ["roborepo", "./bin/roborepo"]) {
+  assert.ok(!defaults.excludedCommands.includes(`${cli} *`), `${cli} is not excluded wholesale`);
+  for (const sub of ["plans", "delivery", "git worktrees", "update"]) {
+    assert.ok(defaults.excludedCommands.includes(`${cli} ${sub} *`), `${cli} ${sub} runs outside the sandbox`);
+  }
+  for (const sub of ["agent-run", "run", "runtime", "telemetry", "scratch", "git", "package"]) {
+    assert.ok(!defaults.excludedCommands.includes(`${cli} ${sub} *`), `${cli} ${sub} stays sandboxed`);
+  }
+}
+
 // Shell sandbox buckets.
 assert.equal(sandboxOf({ behaviors: { "sandbox-shell": "ask" } }).autoAllowBashIfSandboxed, false, "ask keeps the sandbox but prompts");
 assert.equal(sandboxOf({ behaviors: { "sandbox-shell": "ask" } }).enabled, true);

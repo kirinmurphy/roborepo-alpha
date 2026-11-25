@@ -289,6 +289,12 @@ printout, and onboarding label those rows "Claude only".
 | Defaults | `reach-allowed-hosts` allow; `reach-claude-log-upload` deny, so a `claude` command run from a sandboxed shell does not prompt for the program's Datadog log address |
 | Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm", "~/.roborepo/scratch"]`, `network.allowLocalBinding: false` |
 
+`excludedCommands` names individual `roborepo` subcommands rather than the whole CLI: the plans
+store, delivery, linked worktrees, the browser's dev server, and the commands that write harness
+config. Commands that launch other programs (`agent-run`, `run`) stay sandboxed, so a pre-approved
+wrapper cannot carry a test suite or script out of the sandbox. `sandbox-settings.mjs` gives the
+reason for each entry.
+
 Writable temp folders and denied credentials are not repeated: Claude merges the `Edit` allow and
 `Read`/`Edit` deny rules from the `permissions` key into the sandbox. `go-online` never affects
 Claude. Codex and Gemini skip both kinds. See [testing](testing.md#claude-sandbox-verification) for
