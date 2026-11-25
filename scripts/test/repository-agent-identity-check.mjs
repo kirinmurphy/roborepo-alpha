@@ -180,6 +180,7 @@ async function setupLaunchIsTheServersChoice(checkout) {
   assert.deepEqual(request.args, [path.join(repoRoot, "scripts", "cli", "main.mjs"), "github", "setup"]);
   assert.ok(path.isAbsolute(request.args[0]) && fs.existsSync(request.args[0]));
   assert.equal(request.cwd, checkout, "the setup runs in the repo's folder, so it sets up that repo");
+  assert.equal(request.closeOnSuccess, true, "a finished setup closes its window");
   assert.match(request.name, /^github-setup-[A-Za-z0-9-]+$/);
 
   const failed = await launchAgentIdentitySetup({ repositoryId: GITHUB, stateRoot, platform: "darwin", launch: () => ({ ok: false, reason: "launch_failed", error: "open exited 1" }) });
@@ -197,6 +198,29 @@ function terminalLaunchStartsInTheGivenFolder(checkout) {
   assert.deepEqual(launchInTerminal({ name: "setup", executable: process.execPath, args: ["x"], cwd: checkout }, { platform: "darwin", dir, run }), { ok: true });
   const body = fs.readFileSync(path.join(dir, "setup.command"), "utf8");
   assert.ok(body.split("\n").includes(`cd ${shellQuote(checkout)} || exit 1`), body);
+  assert.ok(body.split("\n").includes(`exec ${shellQuote(process.execPath)} x`), "without closeOnSuccess the program replaces the shell");
+
+  // closeOnSuccess: the script parses, closes only its own Terminal window (found by tty) after a
+  // success, and keeps the window open after a failure.
+  launchInTerminal({ name: "closing", executable: process.execPath, args: ["x"], cwd: checkout, closeOnSuccess: true }, { platform: "darwin", dir, run });
+  const closing = path.join(dir, "closing.command");
+  const script = fs.readFileSync(closing, "utf8");
+  assert.equal(spawnSync("sh", ["-n", closing]).status, 0, "the script parses");
+  assert.doesNotMatch(script, /^exec /m);
+  assert.match(script, /if tty of t is "'"\$tty"'" then close w/);
+  assert.match(script, /It stopped\. Read the message above, then close this window\./);
+  assert.match(script, /if \[ "\$TERM_PROGRAM" != "Apple_Terminal" \]; then\n  printf "\\nDone\. You can close this window\.\\n"/);
+  // A failing program exits with its status and never reaches the close.
+  const failing = path.join(dir, "failing.command");
+  launchInTerminal({ name: "failing", executable: "/usr/bin/false", closeOnSuccess: true }, { platform: "darwin", dir, run });
+  const failed = spawnSync("sh", [failing], { encoding: "utf8", env: { ...process.env, TERM_PROGRAM: "Apple_Terminal" } });
+  assert.equal(failed.status, 1);
+  assert.match(failed.stdout, /It stopped/);
+  // Outside Terminal a success only says the window can be closed.
+  launchInTerminal({ name: "passing", executable: "/usr/bin/true", closeOnSuccess: true }, { platform: "darwin", dir, run });
+  const passed = spawnSync("sh", [path.join(dir, "passing.command")], { encoding: "utf8", env: { ...process.env, TERM_PROGRAM: "iTerm.app" } });
+  assert.equal(passed.status, 0);
+  assert.match(passed.stdout, /Done\. You can close this window\./);
   assert.equal(launchInTerminal({ name: "setup", executable: process.execPath, cwd: "relative/folder" }, { platform: "darwin", dir, run }).reason, "no_folder");
   assert.equal(launchInTerminal({ name: "setup", executable: process.execPath, cwd: path.join(tmp, "absent") }, { platform: "darwin", dir, run }).reason, "no_folder");
 }

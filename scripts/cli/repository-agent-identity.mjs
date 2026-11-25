@@ -136,6 +136,7 @@ export async function launchAgentIdentitySetup({
     executable,
     args: [mainScript, "github", "setup"],
     cwd: checkout.path,
+    closeOnSuccess: true,
   }, { platform });
   // Whatever the setup does next, the cached status no longer describes it.
   clearAgentIdentityCache();

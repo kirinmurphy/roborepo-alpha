@@ -18,6 +18,8 @@ const FOCUS_THROTTLE_MS = 2_000;
 const SETUP_COMMAND_PATTERN = /roborepo github setup/;
 const TOKEN_FINDINGS = new Set(["expired", "expiring", "no-expiry", "fine-grained-token", "broad-scopes", "scopes-missing", "token-in-keychain"]);
 const LEVEL_RANK = { ok: 0, muted: 1, warn: 2, problem: 3 };
+// How long the card shows "All set" after the last open item is checked off, before it closes.
+const COMPLETE_CLOSE_MS = 5_000;
 
 // The bot identity is a GitHub feature: only listed GitHub repos show it. The server has the last
 // word (`applies: false`), so a repo it turns down shows nothing either.
@@ -433,11 +435,27 @@ function buildCard() {
     const accountView = describeAccount(accountReport);
     const view = target.kind === "account" ? accountView : repoView(accountReport, repoReport);
     const steps = applies ? cardSteps(accountReport, repoReport) : [];
+    const complete = steps.length > 0 && steps.every((step) => step.done);
+    // Finishing while the card is open (the setup ran, or Turn on): say so, drop the notes about
+    // what was in progress, and close shortly. A card opened already complete just stays open.
+    const justFinished = complete && target.hadOpenItems;
+    if (!complete && steps.length > 0) target.hadOpenItems = true;
+    if (complete) {
+      target.note = null;
+      target.copyFallback = false;
+    }
+    if (justFinished && !target.closeTimer) {
+      const closing = target;
+      closing.closeTimer = setTimeout(() => { if (target === closing && dialog.open) dialog.close(); }, COMPLETE_CLOSE_MS);
+    }
     fill(dialog, {
       subject: target.kind === "account" ? "Bot account (all repos)" : target.name,
       state: view.label,
-      message: applies ? summary(accountReport, view, steps) : view.message,
+      message: justFinished
+        ? `All set: ${summary(accountReport, view, steps)} This closes in ${COMPLETE_CLOSE_MS / 1000} seconds.`
+        : applies ? summary(accountReport, view, steps) : view.message,
     });
+    dialog.dataset.complete = String(complete);
     slot("state").dataset.level = view.level;
     slot("steps").hidden = steps.length === 0;
     slot("steps").replaceChildren(...steps.map(stepItem));
@@ -465,13 +483,16 @@ function buildCard() {
     const note = target.note || (offersSetup && !launchable && repoReport?.setupLaunch?.reason ? repoReport.setupLaunch.reason : null);
     slot("launch-note").hidden = !note;
     slot("launch-note").textContent = note || "";
+    // Nothing left to check once every item is done.
+    slot("recheck").hidden = complete;
   }
 
   return {
     showing: (key) => dialog.open && Boolean(target) && (key === "account" ? true : target.repositoryId === key),
     render,
     async open(next) {
-      target = { ...next, copyFallback: false, note: null };
+      if (target?.closeTimer) clearTimeout(target.closeTimer);
+      target = { ...next, copyFallback: false, note: null, hadOpenItems: false, closeTimer: null };
       fill(dialog, { subject: next.kind === "account" ? "Bot account (all repos)" : next.name, state: "checking", message: "Reading the bot's status from GitHub…" });
       slot("state").dataset.level = "muted";
       for (const name of ["steps", "bot-browser", "owner", "command-row", "launch-note", "open-setup", "enable"]) slot(name).hidden = true;

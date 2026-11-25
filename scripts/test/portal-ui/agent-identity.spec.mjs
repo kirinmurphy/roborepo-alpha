@@ -365,6 +365,31 @@ test.describe("Agent GitHub account", () => {
     expect(reads.filter((read) => read.fresh)).toEqual([{ kind: "account", fresh: true }, { kind: "repo", name: "identity-invited", fresh: true }]);
   });
 
+  test("finishing while the card is open shows All set, drops the progress note and Check again, and closes", async ({ page }) => {
+    let current = ACCOUNTS["token-expired"].report;
+    await stub(page, { accountNext: () => current, ready: () => current.state === "healthy" });
+    await openHome(page);
+    await badge(page, "identity-ready").click();
+    await card(page).getByRole("button", { name: "Open setup" }).click();
+    await expect(card(page).locator("[data-slot=launch-note]")).toContainText("A terminal opened");
+    await expect(card(page).getByRole("button", { name: "Check again" })).toBeVisible();
+
+    // The setup finished; coming back to the window re-reads and every item is done.
+    current = ACCOUNTS.healthy.report;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("All set: Agents act on GitHub as robo-bot. This closes in 5 seconds.");
+    await expect(card(page).locator("[data-slot=launch-note]")).toBeHidden();
+    await expect(card(page).getByRole("button", { name: "Check again" })).toBeHidden();
+    await expect(card(page).getByRole("button", { name: "Open setup" })).toBeHidden();
+    await shot(card(page), "repo-card-all-set");
+    await expect(card(page)).toBeHidden({ timeout: 8_000 });
+
+    // Opened when already complete: no Check again, no countdown, and it stays open.
+    await badge(page, "identity-ready").click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Agents act on GitHub as robo-bot.");
+    await expect(card(page).getByRole("button", { name: "Check again" })).toBeHidden();
+  });
+
   test("where the button cannot open a terminal, or did not, the command is shown to copy", async ({ page }) => {
     await stub(page, {
       accountNext: () => ({ ...ACCOUNTS["not-set-up"].report, setupLaunch: { supported: false } }),
