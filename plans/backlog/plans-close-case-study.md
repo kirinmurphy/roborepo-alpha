@@ -59,7 +59,7 @@ without weakening the sandbox or validation.
 | Per-repo plan config | `plans/plans-config.json` on the `repo-plans` branch. It is pushed and shared with everyone who clones the repo, so a personal home path does not belong in it. |
 | Repo name | `roborepo plans validate --json` reports `repository.name` (here `roborepo`). |
 | Sandbox | `scripts/harnesses/claude/sandbox-settings.mjs` lets Bash write only to the working folder and `CLAUDE_SANDBOX_WRITABLE_PATHS` (`~/.npm`, `~/.roborepo/scratch`). Commands that must write elsewhere are listed in `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` and allowed by rules in `manifests/inventory/agent-permissions.json`, the way `roborepo plans save` reaches the plans store. |
-| Writing outside the working folder | The file tools (Write, Edit) prompt for each file outside the session's folders. In the Claude desktop app a session can ask to add a folder (`request_directory`); once the user approves, the folder belongs to the session and its edits stop prompting. |
+| Writing outside the working folder | The file tools (Write, Edit) prompt for each file outside the session's folders. In the Claude desktop app a session can ask to add a folder (`request_directory`). Whether edits in an added folder then stop prompting is not verified: the owner's global rules record that `request_directory` alone left edits prompting when entering a worktree, and that `change_directory` was needed there. |
 | CLI commands | One `<name>.command.json` per command under `manifests/platform/cli/command-definitions/<group>/`, pointing at a module export; a group with subcommands also has a `kind: "namespace"` file (as `delivery/` does). |
 
 ## Proposed design
@@ -79,7 +79,8 @@ flowchart TD
   E -- yes --> F{already written for this plan id?}
   F -- yes --> V[One line: path of the existing case study]
   F -- no --> P[Session asks once for access to the folder]
-  P -- declined --> U[One line: draft left in scratch, with its path]
+  P -- declined --> S[Fresh-context helper writes the case study in a scratch folder]
+  S --> U[One line: the draft's path and the destination folder]
   P -- granted --> G[Fresh-context helper writes and revises the case study in the folder]
   G --> H[roborepo case-study record stores the plan id and path]
   H --> I[Final report names the saved path]
@@ -97,7 +98,7 @@ flowchart TD
 | Nothing configured | Skip and print the exact `roborepo case-study config` command. Never guess a path. |
 | Anonymize | Per-repo `anonymize`, default `true`. The skill's per-article question is answered from this value, so the step asks nothing. |
 | Topic | The plan's main design decision, read from its Decision Log and design. The skill's candidate-list question is not asked. |
-| Write path | The session asks once for access to the resolved folder before the first write (in the desktop app, `request_directory`). After approval the helper writes and edits the file there directly, through every validator pass, with no further prompts that session. If access is declined, the helper writes to `roborepo scratch case-study-<plan id>` and the report gives that path. |
+| Write path | The session asks once for access to the resolved folder before the first write, through whichever harness grant makes later edits stop prompting (see Open questions). After approval the helper writes and edits the file there directly, through every validator pass, with no further prompts that session. If access is declined, the helper writes to `roborepo scratch case-study-<plan id>` and the report gives that path. |
 | Commit | None. The file is left uncommitted in the destination repo. |
 | Which plans | Only plans whose Decision Log or design records a choice between real alternatives. |
 | Opt out | Frontmatter `case_study: skip` on the plan. |
@@ -151,7 +152,7 @@ Command rules:
 ## Implementation plan
 
 - [ ] Add `modules/case-study/` with settings, resolve and ledger, and `scripts/cli/case-study.mjs`, and the `case-study/` namespace and three command definitions.
-- [ ] Add `case-study record` to `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` and allow rules for `where` and `record` in `manifests/inventory/agent-permissions.json`.
+- [ ] Add `case-study record` to `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` and allow rules for `where` and `record` in `manifests/inventory/agent-permissions.json`; give Codex whatever route lets `roborepo plans save` write outside its sandbox today.
 - [ ] In plan-close step 12, ask for access to the resolved folder once, before the helper starts writing, and say in the request which folder and why.
 - [ ] Add step 12 and the silent `recommends` row to plan-close `SKILL.md`; add the silent-row sentence to `globals/system/rules/shared/05-skill-loading.md`.
 - [ ] Teach the plan validator and `roborepo plans save` to accept `case_study: skip` (check whether unknown frontmatter is kept today), and document it in plan-write's `references/plan-schema.md`.
@@ -193,7 +194,7 @@ Also:
 | Risk | Mitigation |
 | --- | --- |
 | Closes get longer and use more tokens for users who turned the skill on | Fresh-context helper; plans without a real design decision are skipped |
-| Once the folder is granted, the agent can edit any file in it for the rest of the session | The request names the folder and the reason; the step writes one new file and never overwrites; the grant ends with the session |
+| Once the folder is granted, the agent can edit any file in it for the rest of the session | The request names the folder and the reason; the step writes one new file and never overwrites; the grant lasts no longer than the harness keeps it (expected: the session, unverified) |
 | An anonymized article still leaks a name | The skill's anonymization rules apply, including a blacklist file or check the destination project enforces; the file is never committed, so the owner reads it before publishing |
 | Other plans edit plan-close at the same time | `kqgr1d65` changes only step 9's command (and says so), `d9ywaa8d` rewords step 6, `iz3vuxyi` edits the retry fallback, `0jped168` adds `/plan-close` eval scenarios whose fixture sessions are expected not to list `case-study` (unverified). None touch the new step; rebase on whichever lands first. |
 
@@ -204,7 +205,12 @@ Also:
 
 ## Open questions
 
-- **Claude CLI and Codex.** `request_directory` is a desktop-app tool. Whether the Claude CLI's
-  file-write prompt offers a session-wide grant for a folder, and how Codex grants one, is not
-  verified. Recommendation: `/plan-promote` checks both; where no one-time grant exists, the helper
-  writes to scratch and the report gives the draft path and the destination folder.
+- **Which grant makes the folder edit-free for the session.** Candidates: `request_directory` or
+  `change_directory` in the desktop app, `/add-dir` or the file-write prompt's session option in
+  the Claude CLI, and Codex's writable roots. None is verified to stop later prompts without moving
+  the session out of the code checkout. Recommendation: `/plan-promote` tries each in a throwaway
+  folder and records the one that works per harness; where none does, the declined branch applies
+  (draft in scratch, report gives its path and the destination).
+- **How `record` writes under `~/.roborepo` from Codex.** `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` covers
+  Claude only. Recommendation: use the route `roborepo plans save` already uses on Codex, found
+  during `/plan-promote`.
