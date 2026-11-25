@@ -300,6 +300,8 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - [x] `/plan-review` step 6 did not say a Blocked CI result keeps `### Result` pending — fixed (d050d7a7)
 
 ### Verification
+- CI on pull request 87 at 8c34801d (main merged in): `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer` passed; marked ready with `roborepo delivery pr-ready`
+- After merging main at 8c34801d: `plan-suite-skills-check`, `plan-lifecycle-transitions-check`, and `doctor.sh --quiet` (98 checks) pass
 - Validation: clean on pass 4 at d050d7a7 (fresh-context subagent); `plan-suite-skills-check`, `plan-lifecycle-transitions-check`, and `doctor.sh --quiet` all pass there
 - Validation pass 3 at 5f7a76d1 (fresh-context subagent): 2 actionable `fix` findings and 3 notes, all fixed in d050d7a7, which adds a merge-readiness case for a pruned upstream tracking ref; all three gates pass at d050d7a7
 - Validation pass 2 at 3546603d (fresh-context subagent): 2 actionable `fix` findings and 2 notes, all fixed in 5f7a76d1; generated command files regenerated with `node scripts/build/render-slash-commands.mjs`; `bash scripts/doctor.sh --quiet` → doctor passed (99 checks) at 5f7a76d1
