@@ -4,8 +4,11 @@ import { repoRoot, rootConfigActive, harnessHome, workspacePackagesDir, packageM
 import { renderHomeRules, knownHarnessIds, harnessIdsWithCapability } from "./rules-render.mjs";
 import { forgetPackageIds, readEnabledPackagesRegistry, readAppliedPackageIds, selectedRootIds, setPackageApplied, setPackageEnabled, effectiveEnabledIds, withPackageSelection } from "./package-state.mjs";
 import { recommendedClosure, requiredBy, requiredClosure, rootsRequiring } from "./package-graph.mjs";
-import { loadPackageCatalog, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
+import { composePackageCatalog, loadPackageCatalog, shadowedMessage, unavailablePackageMessage, unavailablePackageReason, validatePackageCatalog, BUILT_IN_PACKAGES_DIR, readPackageCategories } from "./package-catalog.mjs";
 import { buildPackageLiveState } from "./package-probes.mjs";
+import { recordLiveInstall } from "./package-install-store.mjs";
+import { removeLockRecord } from "./package-lock.mjs";
+import { migrateBareIdPackageStateWithReport } from "./package-provenance-migration.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { ensureClaudeMcpPermission } from "./mcp-claude.mjs";
 import { configFileMcpProviders, ensureConfigFileMcp, removeConfigFileMcp } from "./mcp-config-file.mjs";
@@ -60,8 +63,16 @@ export function packageCommand(args = []) {
       return reconcileEnabledPackages(rest);
     case "adopt-live":
       return adoptLivePackages({ dryRun: rest.includes("--dry-run") });
+    case "install":
+      return import("./package-source-command.mjs").then((m) => m.packageInstallCommand(rest));
+    case "update":
+      return import("./package-source-command.mjs").then((m) => m.packageUpdateCommand(rest));
+    case "remove":
+      return import("./package-source-command.mjs").then((m) => m.packageRemoveCommand(rest));
+    case "source":
+      return import("./package-source-command.mjs").then((m) => m.packageSourceCommand(rest));
     default:
-      console.error("usage: roborepo package list|inspect|status|create|add-skill|enable|disable|validate|reconcile|adopt-live");
+      console.error("usage: roborepo package list|inspect|status|install|update|remove|source|create|add-skill|enable|disable|validate|reconcile|adopt-live");
       process.exit(2);
   }
 }
@@ -170,6 +181,11 @@ function addSkillToPackage(rest) {
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const pkg = catalog.find((entry) => entry.id === pkgId);
   if (!pkg) throw new Error(`unknown package: ${pkgId}`);
+  // A package installed from a Git source is a managed copy pinned to a commit; editing it would
+  // break its integrity hash and be lost on the next update.
+  if (pkg.sourceType === "git") {
+    throw new Error(`package ${pkgId} is installed from ${pkg.sourceId}; copy it into a local folder to change it`);
+  }
   if (packageMode && pkg.origin === "built-in") {
     throw new Error(`package ${pkgId} is built in; app files are not edited in package mode`);
   }
@@ -313,9 +329,21 @@ function commandBody(name, description) {
   return `---\ndescription: ${description}\n---\n\n# /${name}\n\n${description}\n`;
 }
 
-function listPackages() {
+// Grouped by category, one line per package: its state, its name, and, for a package that is not
+// from the built-in library, where it comes from. `--available` adds packages a git source offers
+// that are not installed; `--json` prints the full view (available, installed, active, source,
+// tab, revision, update) that the portal reads.
+async function listPackages(rest = []) {
+  const { packageView } = await import("./package-service.mjs");
+  const view = packageView({ includeAvailable: true });
+  if (rest.includes("--json")) {
+    console.log(JSON.stringify(view, null, 2));
+    return;
+  }
+  const showAvailable = rest.includes("--available");
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const states = buildPackageLiveState(catalog);
+  const rows = new Map(view.packages.filter((row) => catalog.some((pkg) => pkg.id === row.id && pkg.sourceId === row.sourceId)).map((row) => [row.id, row]));
   const categories = readPackageCategories();
   const byCategory = new Map(categories.map((category) => [category.id, { ...category, packages: [] }]));
   for (const pkg of catalog) {
@@ -330,9 +358,31 @@ function listPackages() {
     console.log(`\n${category.label}`);
     for (const pkg of category.packages.sort((a, b) => (a.presentation.order ?? 0) - (b.presentation.order ?? 0) || a.id.localeCompare(b.id))) {
       const status = states.get(pkg.id)?.status || "disabled";
-      console.log(`  ${status.padEnd(8)} ${packageListLabel(pkg)}`);
+      const row = rows.get(pkg.id);
+      console.log(`  ${status.padEnd(8)} ${packageListLabel(pkg)}${sourceSuffix(row)}`);
     }
   }
+  for (const entry of view.shadowed || []) console.log(`\nnote: ${shadowedMessage(entry)}`);
+  for (const entry of view.unresolved || []) {
+    console.log(`\nunresolved: ${entry.id} (${entry.reason}); it is selected but not applied. Reinstall it with \`roborepo package install <source>/${entry.id}\` or remove it with \`roborepo package remove ${entry.id}\``);
+  }
+  const notInstalled = view.packages.filter((row) => !row.installed && row.sourceType === "git");
+  if (notInstalled.length === 0) return;
+  if (!showAvailable) {
+    console.log(`\n${notInstalled.length} more available from package sources; list them with \`roborepo package list --available\``);
+    return;
+  }
+  console.log("\nAvailable to install");
+  for (const row of notInstalled) console.log(`  ${row.qualifiedName.padEnd(32)} ${row.label}${row.trust === "trusted" ? " [trusted]" : ""}`);
+}
+
+// " [source]" for a package outside the built-in library, plus a note when an update is waiting.
+function sourceSuffix(row) {
+  if (!row) return "";
+  const parts = [];
+  if (row.tab !== "system") parts.push(row.sourceBadge || row.sourceId);
+  if (row.updateAvailable) parts.push("update available");
+  return parts.length ? ` [${parts.join(", ")}]` : "";
 }
 
 function packageListLabel(pkg) {
@@ -519,7 +569,10 @@ export async function enablePackage(rest, changed = new Set()) {
   const pkg = catalog.find((p) => p.id === pkgId);
   if (!pkg) throw unknownPackageError(pkgId, catalog);
   if (!pkg.selectable) throw notSelectableError(pkg, catalog, "enable");
-  if (!dryRun) assertHarnessWriteAllowed();
+  if (!dryRun) {
+    assertHarnessWriteAllowed();
+    migrateBareIdPackageStateWithReport();
+  }
 
   const order = requiredClosure(catalog, [pkg.id]);
   warnUnavailableRequirements(order, catalog);
@@ -579,7 +632,10 @@ export function disabledRecommendations(pkg, catalog, effectiveIds) {
 // Apply one package's resources to every harness. Used by enable and by reconcile, which
 // re-applies effective packages without touching the registry.
 async function applyPackageComponents(pkg, { dryRun = false } = {}) {
-  if (!dryRun) setPackageApplied(pkg.id, true);
+  if (!dryRun) {
+    setPackageApplied(pkg.id, true, pkg);
+    recordLiveInstall(pkg);
+  }
   const servicePromises = [];
   for (const component of pkg.components) {
     switch (component.type) {
@@ -653,17 +709,107 @@ async function renderPermissionsAfterPackageChange(pkg) {
   for (const file of touched) console.log(`  permissions: ${file}`);
 }
 
+// Re-apply one effective package from its current catalog entry, for when its installed copy
+// moved (an update to a new revision). `previous` is the package as it was before the move, read
+// from its old copy, which must still exist. Returns false when the package is not effective;
+// throws when a package fails to apply, so the caller can roll the move back.
+export async function reapplyPackage(pkgId, { previous = null } = {}) {
+  assertHarnessWriteAllowed();
+  const fullCatalog = loadPackageCatalog({ includeUnavailable: true });
+  const pkg = fullCatalog.find((entry) => entry.id === pkgId);
+  if (!pkg || !effectiveEnabledIds(fullCatalog).includes(pkgId)) return false;
+  // Registrations the previous revision made that this one no longer declares, or declares
+  // differently, go first, through the same removal disable uses. Removing before applying keeps
+  // an entry both revisions share from being taken out after the new one wrote it.
+  const dropped = droppedComponents(previous, pkg);
+  if (dropped.length) await removePackageComponents({ ...previous, components: dropped });
+  // A new revision can add a requirement, which becomes effective with it; apply the whole
+  // required closure, dependencies first, the way enable does.
+  const available = loadPackageCatalog();
+  // A package already effective stays re-applied even if it is no longer available to enable.
+  const catalog = available.some((entry) => entry.id === pkgId) ? available : [...available, pkg];
+  const order = requiredClosure(catalog, [pkgId]);
+  warnUnavailableRequirements(order, catalog);
+  const blocked = await applyInOrder(order, catalog, async (target) => {
+    if (target.id !== pkgId) console.log(`enabling included package: ${target.label}`);
+    await applyPackageComponents(target);
+  });
+  // Skills or commands the old revision had and the new one dropped are no longer owned by any
+  // package; the same cleanup reconcile runs removes them.
+  cleanupPackageProjections();
+  if (blocked.size) {
+    throw new Error([...blocked].map(([id, message]) => `${id}: ${message}`).join("; "));
+  }
+  return true;
+}
+
+// Take out what an installed package registered while it was on, when it has since dropped out of
+// the catalog (a package it requires became unresolved). `disable` cannot reach it, since it only
+// knows catalog packages, and once its install record goes nothing else names its components.
+// `pkg` is the package read from its own files. With no files left (`components` empty), only the
+// cleanup that needs none runs: rules re-render and orphaned skill and command projections go.
+export async function retireStrandedPackage(pkg) {
+  assertHarnessWriteAllowed();
+  console.log(`disabling: ${pkg.label} (no longer resolvable)`);
+  await removePackageComponents(pkg);
+  forgetPackageIds([pkg.id]);
+  renderHomeRules();
+  cleanupPackageProjections();
+}
+
+// Component types whose registration lives outside the package folder and is not swept by
+// projection cleanup, so an update has to remove them itself.
+const UPDATE_REMOVED_TYPES = new Set(["mcp", "hooks", "config-patch"]);
+
+// Components of `previous` that `next` no longer declares in the same form. A hooks fragment is
+// compared by content, since each revision's copy has its own path.
+function droppedComponents(previous, next) {
+  if (!previous) return [];
+  const kept = new Set(next.components.map((component) => componentKey(component)));
+  return previous.components.filter((component) => UPDATE_REMOVED_TYPES.has(component.type) && !kept.has(componentKey(component)));
+}
+
+function componentKey(component) {
+  switch (component.type) {
+    case "mcp":
+      return `mcp:${component.preset}`;
+    case "hooks": {
+      let fragment = "";
+      try {
+        fragment = fs.readFileSync(path.join(repoRoot, component.source), "utf8");
+      } catch {
+        fragment = `missing:${component.source}`;
+      }
+      return `hooks:${component.harness}:${(component.scripts || []).map((script) => path.basename(script)).join(",")}:${fragment}`;
+    }
+    case "config-patch":
+      return `config-patch:${component.harness}:${JSON.stringify(component.patches)}`;
+    default:
+      return `${component.type}:${JSON.stringify(component)}`;
+  }
+}
+
 export async function reconcileEnabledPackages(rest = []) {
   const dryRun = rest.includes("--dry-run");
-  if (!dryRun) assertHarnessWriteAllowed();
+  if (!dryRun) {
+    assertHarnessWriteAllowed();
+    migrateBareIdPackageStateWithReport();
+  }
   const catalog = loadPackageCatalog({ includeUnavailable: true });
   const enabledIds = effectiveEnabledIds(catalog);
   const known = new Set(catalog.map((pkg) => pkg.id));
   // A retired or renamed package can sit in either registry list or the applied record. All are
   // dropped, not moved to `disabled`: the catalog no longer has the package, so there is nothing
   // left to disable.
+  // An ID whose recorded source no longer offers it is unresolved, not retired: it keeps its
+  // records until the user reinstalls it from a source or removes it.
+  const unresolved = new Map(composePackageCatalog().unresolved.map((entry) => [entry.id, entry]));
   const registry = readEnabledPackagesRegistry();
-  const stale = [...new Set([...registry.packages, ...registry.disabled, ...readAppliedPackageIds()])].filter((id) => !known.has(id));
+  const listed = [...new Set([...registry.packages, ...registry.disabled, ...readAppliedPackageIds()])].filter((id) => !known.has(id));
+  for (const id of listed.filter((entry) => unresolved.has(entry))) {
+    console.warn(`  warn: package ${id} is unresolved (${unresolved.get(id).reason}); kept. Reinstall it with \`roborepo package install <source>/${id}\` or remove it with \`roborepo package remove ${id}\`.`);
+  }
+  const stale = listed.filter((id) => !unresolved.has(id));
   for (const id of stale) {
     console.warn(`${dryRun ? "  [dry-run] would remove" : "  remove"} stale package not in catalog: ${id}`);
   }
@@ -689,7 +835,11 @@ export async function reconcileEnabledPackages(rest = []) {
   }
   if (reconciled === 0) console.log("reconcile: no enabled packages");
   cleanupPackageProjections({ dryRun });
-  if (!dryRun) forgetPackageIds(stale);
+  if (!dryRun) {
+    forgetPackageIds(stale);
+    // A retired package's lock record goes with it; nothing can resolve from it again.
+    for (const id of stale) removeLockRecord(id);
+  }
   return [...changedPackageIds];
 }
 
@@ -772,7 +922,10 @@ export async function disablePackage(rest, changed = new Set()) {
       { includedBy: keepers.map((id) => ({ id, label: catalog.find((p) => p.id === id)?.label || id })) },
     );
   }
-  if (!dryRun) assertHarnessWriteAllowed();
+  if (!dryRun) {
+    assertHarnessWriteAllowed();
+    migrateBareIdPackageStateWithReport();
+  }
 
   const deselect = [...(isRoot || !keepers.length ? [pkg.id] : []), ...(cascade ? keepers : [])];
   const registry = readEnabledPackagesRegistry();

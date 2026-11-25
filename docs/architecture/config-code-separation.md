@@ -32,9 +32,27 @@ behavior: parsing, validation, prompting, linking, copying, pruning, and reporti
 | Shell snippet installs | `manifests/platform/shell-snippets.tsv` | `install-shell-snippets.sh` |
 | Merge prompts | `manifests/platform/prompts/*.md` | `install-lib.sh` |
 | Global harness config | `globals/harnesses/`, `generated/claude/`, `generated/codex/` | Installers, verify, doctor, write guard |
+| Package sources and the trusted catalog | `<stateRoot>/package-sources.json`, `manifests/inventory/trusted-package-sources.json` | `scripts/cli/package-service.mjs`, `scripts/cli/package-catalog.mjs` |
 | Shared skills | package-owned `globals/packages/*/skills/` plus system `globals/system/skills/` | `scripts/build/link-global-skills.sh`, `roborepo skill sync-global`, `roborepo skill export-to-project` |
 | Repo-local skills | `local/skills/` | `scripts/build/link-skills.sh`, doctor checks |
 | CLI implementation | command modules under `scripts/cli/` | `scripts/cli/main.mjs` dispatch |
+
+## Package Ownership Across Roots
+
+Packages follow the same three roots as everything else (`scripts/cli/roots.mjs`). Where a package
+is *offered* (its source) is separate from what is *installed* (a record, and for a remote package a
+copy), and each lives under the root that owns it:
+
+| Root | Owns | Package content there | Who may delete it |
+| --- | --- | --- | --- |
+| `appRoot` | The application | The built-in library (`globals/packages/`), offered by the `builtin` source; the trusted catalog (`manifests/inventory/trusted-package-sources.json`) | Replaced by a platform install or update |
+| `stateRoot` | RoboRepo-managed machine state | `package-sources.json`; `packages/` with the lock, Git source listings and caches, and installed copies of remote packages | RoboRepo's own commands: `package remove`, `package source remove`, uninstall |
+| `workspaceRoot` | The user | `packages/`, offered by the `local` source and used in place | The user. RoboRepo records it but never copies or deletes it |
+
+A `path` source elsewhere on disk is treated like the workspace: used in place, never deleted.
+Removing RoboRepo-managed state never recursively deletes a user-owned folder, because the lock
+names exactly which copies RoboRepo made. See
+[Package Sources, Provenance, and the Install Store](../internal/package-sources.md).
 
 ## Relationship Diagram
 

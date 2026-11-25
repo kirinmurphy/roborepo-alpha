@@ -236,16 +236,26 @@ accepted it. Otherwise the plan stays in `active/` with a `next_action` for the 
 `escalate` finding is an unchecked task, so it holds the plan in `active/` until you answer it.
 
 Either way, every `/plan-execute` and `/plan-review` run that commits to the plan's feature branch
-ends by pushing that branch, so the work is never only on your machine and CI runs on each step's
-result. Only the feature branch is pushed, never the base branch, and never with force. If the push
+pushes that branch, so the work is never only on your machine and CI runs on each step's result.
+`/plan-execute` pushes after its first implementation commit and after each validator pass's fixes,
+and opens the pull request as a draft at the first push, so the work is visible on GitHub while it
+is still being checked. Only the feature branch is pushed, never the base branch, and never with force. If the push
 is refused, the plan's lifecycle still stands and the report gives you the command to push it
 yourself.
 
-When `/plan-execute` moves a plan to `review/`, or fixes findings a review sent back, it hands the
-branch off without asking: it merges the base branch, freshly fetched, into the feature branch with
-`roborepo plans sync-base`, resolves conflicts within the plan's scope and reruns the checks the
-merge touched, pushes, and opens or updates the pull request with a written description. The
-report gives the pull request link, whether it merges cleanly, and CI's result so far. The merge
+Before `/plan-execute` moves a finished plan to `review/`, and after it fixes findings a review sent
+back, it hands the branch off without asking: it merges the base branch, freshly fetched, into the
+feature branch with `roborepo plans sync-base`, resolves conflicts within the plan's scope and
+reruns the checks the merge touched, pushes, and updates the pull request with a written
+description. It then waits for CI on that commit in the background. A failing check it can fix is
+fixed and pushed again, up to three times per check; a check still failing after that keeps a
+finished plan in `active/` instead of moving it to review, with the failure recorded as a blocker.
+When fixing review findings, the plan stays in `review/` and the blocker is reported. A failure the base branch has too, or a
+repository with no CI checks, is named in the report and never counted as passing. The pull request
+leaves draft only when CI passed at its head commit and the validator ended clean rather than at
+its pass limit. The report gives the pull request link, whether it is a draft or ready, whether it
+merges cleanly, and the CI result the wait reached. An unfinished plan never waits for CI: it stays
+in `active/` and its branch is pushed. The merge
 only ever goes from the base into the plan's branch; merging the pull request stays yours. A
 conflict that needs a decision outside the plan, or a base it cannot fast-forward, is reported
 under Needs you. When the fetch fails, the merge uses the last fetched copy of the base, and the
@@ -267,16 +277,20 @@ A new review runs these steps:
    passes;
 2. merges the base branch into the feature branch with `roborepo plans sync-base`, which does
    nothing when base has nothing new or already holds the branch's merged pull request; on a conflict the merge pauses for a careful resolution, and
-   `roborepo plans sync-base --continue` commits it once no conflicts or conflict markers remain;
+   `roborepo plans sync-base --continue` commits it once no conflicts or conflict markers remain.
+   A merge is pushed right away, opening a draft pull request if none exists;
 3. runs the repository's checks, and reruns each failure on the base branch: a failure the base has
    too is recorded as a base failure, not a finding;
 4. runs one validator pass over the merged result, with the same classes as `/plan-execute`, and
    records its findings in the plan's `## Review` section;
-5. fixes every `fix` finding in the same chat, code included, each in its own commit, and checks
-   again until a pass finds nothing to fix, for at most eight passes. A fixed finding reads
+5. fixes every `fix` finding in the same chat, code included, each in its own commit pushed as it
+   lands, takes the full gate from CI's result at the fixed commit, and checks again until a pass
+   finds nothing to fix, for at most eight passes. A fixed finding reads
    `- [x] … — fixed in review (<short commit>)`;
 6. records the Result as complete once findings and required manual checks are resolved, or pending
-   while they remain open, then shows you the review in plain language: what the plan is for, what
+   while they remain open, confirms the pull request on GitHub shows the reviewed commit and that CI
+   passed there (or names why not), then shows you the review in plain language, with the pull
+   request linked: what the plan is for, what
    changed for a person using it, each acceptance criterion as met or not, base failures, the checks
    only you can make (each with its steps, the expected result, and why an agent could not make
    it), any command a tool blocked for you to allow, and each escalated finding as a decision with
@@ -342,11 +356,15 @@ touches nothing on a code branch. Your answer and a complete review remain requi
 still runs its own test gate.
 
 Before merging, `roborepo plans merge-readiness <plan> --json` checks that the plan's review result and approval are committed (its output calls this the review packet),
-clean worktree, exact implementation, and reviewed base. A failure names the repair; a pass names
+clean worktree, exact implementation, reviewed base, and that the branch's tip is what was pushed
+(it compares with the last fetched upstream, so `/plan-review` fetches first; a repo with no remote
+passes this check). A failure names the repair; a pass names
 the assessed tips and grants no merge permission.
 
-`/plan-review` never merges your branch into the base branch. After approval, open and merge the
-pull request yourself. If base moves again before you merge, run `/plan-review` again.
+`/plan-review` never merges your branch into the base branch. After approval, when merge readiness
+passes, CI passed at the reviewed commit, and its validator ended clean, it marks the pull request
+ready; otherwise the pull request stays a draft and the report says why. Merge the pull request
+yourself. If base moves again before you merge, run `/plan-review` again.
 
 ## `/plan-close`
 

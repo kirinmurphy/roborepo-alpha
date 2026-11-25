@@ -11,6 +11,14 @@
 
 import { defineConfig } from "@playwright/test";
 
+// No fallback port. The specs register fixture repos and remove every repo source, so pointing
+// them at a default port reaches the user's real portal and writes test repos into their real
+// registry. Only run.mjs, which boots a server on a temp state root, may supply the address.
+const baseURL = process.env.PORTAL_BASE_URL;
+if (!baseURL) {
+  throw new Error("PORTAL_BASE_URL is not set. Run the portal UI suite with `npm run test:portal-ui`, which starts an isolated portal; never point it at a real one.");
+}
+
 export default defineConfig({
   testDir: ".",
   testMatch: "**/*.spec.mjs",
@@ -22,7 +30,7 @@ export default defineConfig({
   retries: process.env.CI === "true" ? 1 : 0,
   reporter: [["list"]],
   use: {
-    baseURL: process.env.PORTAL_BASE_URL || "http://127.0.0.1:4317",
+    baseURL,
     headless: true,
     viewport: { width: 1280, height: 800 },
   },

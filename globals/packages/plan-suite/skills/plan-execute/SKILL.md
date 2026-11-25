@@ -1,6 +1,6 @@
 ---
 name: plan-execute
-description: Use when starting, resuming, or fixing the implementation of a prepared repository plan. Accepts a plan in ready, active, or review. From ready it will create or safely reuse an isolated worktree and commit the start transition; in active it resumes in the recorded worktree; in review it fixes only the findings review sent back. It implements every in-scope unblocked objective without milestone check-ins, logs autonomous decisions, queues blocked questions for the end, then runs a validation loop in which a fresh-context validator checks the work and the agent fixes what it finds until a pass is clean or the eight-pass cap is reached, and moves the plan to review once that loop has ended and the completion preflight passes. Safe to rerun across sessions. Do not use for preparing a backlog plan (plan-promote), the human review or approval (plan-review), post-merge closure (plan-close), archiving (plan-archive), or implementation without an existing plan.
+description: Use when starting, resuming, or fixing the implementation of a prepared repository plan. Accepts a plan in ready, active, or review. From ready it will create or safely reuse an isolated worktree and commit the start transition; in active it resumes in the recorded worktree; in review it fixes only the findings review sent back. It implements every in-scope unblocked objective without milestone check-ins, logs autonomous decisions, queues blocked questions for the end, then runs a validation loop in which a fresh-context validator checks the work and the agent fixes what it finds until a pass is clean or the eight-pass cap is reached, and moves the plan to review once that loop has ended, the completion preflight passes, and CI on the pull request is not blocked. Safe to rerun across sessions. Do not use for preparing a backlog plan (plan-promote), the human review or approval (plan-review), post-merge closure (plan-close), archiving (plan-archive), or implementation without an existing plan.
 ---
 
 # Plan Execute
@@ -202,8 +202,8 @@ then the run proceeds without questions.
     updates with `roborepo plans save`. Do not leave completed code
     uncommitted. If the run made no implementation changes because the work was already complete,
     report that no implementation commit was needed. Never create this commit on the primary
-    checkout or base branch.
-14. Run the Validation Loop (below).
+    checkout or base branch. Then push it, opening the draft pull request.
+14. Run the Validation Loop (below), pushing each pass's fixes as they are committed.
 15. Decide implementation completion (below).
 16. Report the final state.
 
@@ -238,6 +238,7 @@ the Validator, and the record it leaves in `## Review`; the rubric the Validator
   `actionable` `fix` findings, or the eight-pass cap is reached. The cap limits passes only: the
   last pass's findings are fixed like any other's, and the run continues, recording that those fixes
   were not revalidated.
+- Push each pass's fixes once committed. A pass never waits for CI.
 
 ## Implementation Completion
 
@@ -256,23 +257,24 @@ human accepted it.
    Validation Loop that left `escalate` findings open; their unchecked findings fail the preflight.
    Record the remaining tasks, findings, or blockers, set an actionable `next_action` written for a
    cold reader, and save the plan. Push the feature branch (see Push and hand off the feature
-   branch). A later `/plan-execute` resumes from there.
-4. **Complete:** run `roborepo plans submit <plan> --json`. It reruns the preflight, then commits and
-   pushes the move from `active/` to `review/` on the plans branch. Then hand off the feature branch
-   (see Push and hand off the feature branch) and report that the plan awaits `/plan-review`.
+   branch). An unfinished plan never waits on CI. A later `/plan-execute` resumes from there.
+4. **Complete:** hand off the feature branch first (see Push and hand off the feature branch). A CI
+   check still failing after its fix attempts keeps the plan in `active/` as a blocker.
+5. **Then submit:** run `roborepo plans submit <plan> --json`. It reruns the preflight and moves the
+   plan to `review/` on the plans branch, starting no CI run. Mark the pull request ready by the
+   handoff's rule, and report that the plan awaits `/plan-review`.
 
 A check only a person can make, or one a tool blocked, stays open under `## Not tested` with its
 reason. It does not block completion; the user settles it in `/plan-review`, before approval.
 
 ### Push and hand off the feature branch
 
-Every run that commits to the feature branch ends by pushing it, only that branch and never with
-force, as [references/handoff.md](references/handoff.md) describes. After the submit transition,
-and after Review Findings commits its fixes, follow its handoff from the worktree, without asking:
-merge the base in with `roborepo plans sync-base --base <base> --json`, recheck what the merge
-changed, push, then open or update the pull request and report whether it merges cleanly and CI's
-result so far. Invoking `/plan-execute` authorizes this merge of the base into the plan's own
-feature branch. Merging the feature branch into the base stays forbidden.
+Push and hand off as [references/handoff.md](references/handoff.md) describes, from the worktree and
+without asking: push only the feature branch, never with force; the first push opens a draft pull
+request; the handoff merges the base in, pushes, updates the body, and watches CI to a result.
+Invoking `/plan-execute` authorizes this merge of the base into the plan's own feature branch.
+Merging the feature branch into the base stays forbidden. The pull request leaves draft only by the
+reference's Mark ready rule.
 
 ## Review Findings
 
@@ -293,7 +295,8 @@ A plan in `review/` returns here only to fix what review recorded.
    which decides on the scope change.
 5. Commit the fixes in the worktree and save the plan update. The plan stays in `review/`; never run a
    lifecycle transition in this mode. Hand off the feature branch (see Push and hand off the
-   feature branch), then report that `/plan-review` should run again.
+   feature branch), including its CI watch, then report CI's result and that `/plan-review` should
+   run again.
 6. With no unchecked finding, finish an incomplete handoff instead: one whose branch is ahead of its
    remote or has no open pull request. Run the handoff, and never report it done without the PR.
 
@@ -368,9 +371,9 @@ trivial:
    - changes a public API or persistent schema;
    - affects security, privacy, permissions, migration, or compatibility;
    - pushes, merges, publishes, spends money, or affects an external system. The feature-branch
-     push at the end of each run, and the handoff's base merge into the feature branch and pull
-     request update (Push and hand off the feature branch), are fixed steps of this skill, not
-     decisions.
+     pushes, the draft pull request, the handoff's base merge into the feature branch and pull
+     request update, CI fixes, and marking the pull request ready when its conditions hold (Push
+     and hand off the feature branch) are fixed steps of this skill, not decisions.
 7. A blocked decision becomes an Open Questions entry; see Blocker Policy.
 
 ### Decision Log
@@ -448,10 +451,12 @@ A run is complete when:
   explicitly says that no implementation commit was needed;
 - the feature branch was pushed after the run's last commit, or the final report gives the exact
   push command and why it did not run;
-- after a submit or review-findings fixes, the handoff merged the base and opened or updated the
-  pull request, or the final report says which handoff step did not run and why;
-- the plan was moved to `review/` if and only if the Validation Loop ended and the completion
-  preflight passed.
+- before a submit, and after review-findings fixes, the handoff merged the base, opened or updated
+  the pull request, and watched CI to a result at the head commit, which the final report gives with
+  the pull request's draft or ready state; or the final report says which handoff step did not run
+  and why;
+- the plan was moved to `review/` if and only if the Validation Loop ended, the completion
+  preflight passed, and the handoff's CI watch did not end Blocked.
 
 Completion does not authorize:
 
@@ -459,7 +464,7 @@ Completion does not authorize:
 - infinite retries around external blockers;
 - guessing through consequential product decisions;
 - pushing anything but the plan's feature branch, merging anything but the base into the plan's
-  feature branch, merging a pull request, publishing, or deleting worktrees, without explicit
+  feature branch, pull request writes beyond the handoff reference's, merging a pull request, publishing, or deleting worktrees, without explicit
   permission or repository policy;
 - any commit on the base branch;
 - leaving completed implementation changes uncommitted in the target worktree.
@@ -488,7 +493,9 @@ Do not:
 - perform `/plan-review`'s human review, or record approval;
 - own user-interface behavior;
 - create integration branches;
-- perform closeout, or merge the feature branch or its pull request into the base;
+- perform closeout, or merge the feature branch or its pull request into the base; opening this
+  plan's pull request as a draft and marking it ready through `roborepo delivery pr-ready` are
+  allowed;
 - invoke another plan command;
 - launch unrelated workflows;
 - hide failed verification or partial completion.

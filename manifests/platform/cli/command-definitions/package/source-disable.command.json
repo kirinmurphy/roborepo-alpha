@@ -1,0 +1,29 @@
+{
+  "path": [
+    "package",
+    "source",
+    "disable"
+  ],
+  "kind": "command",
+  "title": "Disable source",
+  "description": "Disable a package source",
+  "order": 60,
+  "usage": "roborepo package source disable <source>",
+  "arguments": [
+    {
+      "name": "source",
+      "required": true,
+      "interactive": {
+        "prompt": "Source id"
+      }
+    }
+  ],
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageSourceCommand",
+    "prependArgs": [
+      "disable"
+    ]
+  }
+}

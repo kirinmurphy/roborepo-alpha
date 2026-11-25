@@ -346,6 +346,28 @@ check_store_bounds() {
   fi
 }
 
+# Package provenance (package-provenance-doctor.mjs): sources readable and present, the lock
+# readable, no same-ID collision, every recorded package resolving from its recorded source. A
+# local package edited since it was applied prints a hint; authoring is expected to drift.
+check_package_provenance() {
+  if ! command -v node >/dev/null 2>&1; then
+    ok "node unavailable; skipped package provenance check"
+    return 0
+  fi
+  local output status=0
+  output="$(node "${repo_root}/scripts/cli/package-provenance-doctor.mjs" 2>&1)" || status=$?
+  while IFS= read -r line; do
+    case "${line}" in
+      fail:*) fail "${line#fail: }" ;;
+      hint:*) hint "${line#hint: }" ;;
+      "") ;;
+      *) [[ "${status}" -ne 0 ]] && fail "package provenance check: ${line}" ;;
+    esac
+  done <<< "${output}"
+  [[ "${status}" -eq 0 ]] && ok "package sources and provenance resolve"
+  return 0
+}
+
 # Path-scoped permission rules in a LIVE root config must name the real $HOME. The tracked
 # generated/<provider>/ artifact renders with a fixed placeholder home so fake-HOME test runs cannot
 # rewrite it, but that same artifact is rootConfigBaseline — install/apply merges it into the user's
@@ -756,6 +778,7 @@ if [[ "${check_installed}" -eq 1 ]]; then
   fi
   check_local_config_repair_candidates
   check_store_bounds
+  check_package_provenance
   check_live_permission_home
   check_portal_pids
   # Base install owns only roborepo-support. Optional skills are checked through their package/toggle

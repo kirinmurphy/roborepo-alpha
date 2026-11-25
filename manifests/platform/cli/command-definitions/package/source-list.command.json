@@ -1,0 +1,20 @@
+{
+  "path": [
+    "package",
+    "source",
+    "list"
+  ],
+  "kind": "command",
+  "title": "List sources",
+  "description": "List package sources",
+  "order": 10,
+  "usage": "roborepo package source list [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/package-source-command.mjs",
+    "export": "packageSourceCommand",
+    "prependArgs": [
+      "list"
+    ]
+  }
+}

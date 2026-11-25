@@ -12,6 +12,7 @@ the installer wires `~/.claude` / `~/.codex`.
 | `mcp-presets.json` | MCP server presets offered by `roborepo mcp add` | **Hand-edit.** No add command. `roborepo mcp add` *reads* a preset and writes it into live config; it never writes back here. |
 | `agent-permissions.json` | Flat permission behaviors and arbitrary command buckets (`allow` / `ask` / `deny`) | **Hand-edit.** No add command. The renderer (`roborepo config permissions --render`) reads the buckets and generates the `globals/*` blocks; it never writes back here. |
 | `package-categories.json` | Valid package presentation categories for onboarding and Config UI | **Hand-edit.** Package configs reference these stable IDs. |
+| `trusted-package-sources.json` | Vetted third-party GitHub repos, each pinned to a reviewed commit, offered as **trusted** package sources | **Hand-edit, after review.** `{ repo, commit, description }`; `commit` is a full SHA. See [Package Sources](../../docs/internal/package-sources.md#git-sources). |
 
 ## Package-owned resources
 

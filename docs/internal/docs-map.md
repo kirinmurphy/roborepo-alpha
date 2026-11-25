@@ -37,10 +37,12 @@ doc of record first; supporting docs should add context, not redefine the behavi
 | Codex hooks | [Codex Hooks](../user/reference/codex-hooks.md) | [Hooks Internals](hooks-internals.md), [Harness Anatomy and Parity](harness-anatomy.md#hooks) |
 | Feature verification and browser evidence | [roborepo CLI Commands](../user/reference/roborepo-cli.md#browser-evidence) | [roborepo CLI Internals](cli-internals.md#browser-commands), [Config Control Panel](../user/reference/config-control-panel.md) |
 | Plans portal and workflows | [Plans Portal Reference](../user/reference/plans-portal.md) | [Plan Suite Walkthrough](../user/guides/plan/lifecycle/plan-suite.md), [Plan Suite Deferred Topics](plan-suite-deferred-topics.md) |
+| See what the friction-reduction effort has finished and what is next | [Friction Reduction Ledger](friction-reduction-ledger.md) | [Plan Suite Deferred Topics](plan-suite-deferred-topics.md) |
 | Branch protection and GitHub calls | [roborepo CLI Commands](../user/reference/roborepo-cli.md#branch-protection) | [roborepo CLI Internals](cli-internals.md#git-host-calls): `modules/forge/` is the one home for `gh` calls |
 | GitHub agent identity | [roborepo CLI Commands](../user/reference/roborepo-cli.md#github-agent-identity) | [Claude Hooks](../user/reference/claude-hooks.md#acting-as-a-github-bot), [Setup And Daily Use](../user/guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot): the `github-agent-identity` package (`globals/packages/github-agent-identity/`) and `modules/forge/agent-identity.mjs` |
 | Telemetry and the telemetry portal | [Telemetry Service Reference](../user/reference/telemetry.md) | [Telemetry Walkthrough](../user/guides/telemetry.md) |
 | Inventory manifests | [Inventory Manifest README](../../manifests/inventory/README.md) | [Config-Code Separation](../architecture/config-code-separation.md) |
+| Package sources, provenance, and the install store | [Package Sources, Provenance, and the Install Store](package-sources.md) | [roborepo CLI Commands](../user/reference/roborepo-cli.md#package-sources-and-installing), [Config-Code Separation](../architecture/config-code-separation.md#package-ownership-across-roots) |
 | NPM release workflow | [NPM Release Workflow](npm-release.md) | [Testing RoboRepo](testing.md) |
 | Maintainer test matrix | [Testing RoboRepo](testing.md) | [NPM Release Workflow](npm-release.md) |
 | See what the code style audit has reviewed and changed | [Code Style Audit Log](code-style-audit.md) | [Code Style Findings](code-style-findings.md) |

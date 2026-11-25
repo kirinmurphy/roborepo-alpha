@@ -1,10 +1,13 @@
 {
-  "path": ["package", "list"],
+  "path": [
+    "package",
+    "list"
+  ],
   "kind": "command",
   "title": "List packages",
   "description": "List available packages",
   "order": 10,
-  "usage": "roborepo package list",
+  "usage": "roborepo package list [--available] [--json]",
   "onComplete": "returnToSubmenu",
   "loadingMessage": "Loading packages...",
   "continuePrompt": "Press any key to return to packages",
@@ -12,6 +15,8 @@
     "adapter": "module",
     "module": "scripts/cli/packages.mjs",
     "export": "packageCommand",
-    "prependArgs": ["list"]
+    "prependArgs": [
+      "list"
+    ]
   }
 }

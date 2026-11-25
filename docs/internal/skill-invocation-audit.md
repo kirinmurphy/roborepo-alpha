@@ -6,7 +6,7 @@
 
 - Shared skills: 18
 - Package skill resources: 18
-- Static findings: 6
+- Static findings: 5
 - Unknown manifest entries: none
 
 ## Compatibility Result
@@ -36,7 +36,7 @@ Keep shared `SKILL.md` frontmatter portable; use package-backed checks before ad
 | `plan-write` | manual | medium | true | none | Keep manual-only or command-gated. |
 | `plan-promote` | manual | medium | true | side-effect keyword | Keep manual-only or command-gated. |
 | `plan-execute` | manual | high | true | none | Keep manual-only or command-gated. |
-| `plan-review` | manual | high | true | side-effect keyword | Keep manual-only or command-gated. |
+| `plan-review` | manual | high | true | none | Keep manual-only or command-gated. |
 | `plan-close` | manual | high | true | side-effect keyword | Keep manual-only or command-gated. |
 | `plan-archive` | manual | high | true | none | Keep manual-only or command-gated. |
 | `case-study` | auto | medium | true | side-effect keyword | Keep trigger narrow; add near-miss tests. |
