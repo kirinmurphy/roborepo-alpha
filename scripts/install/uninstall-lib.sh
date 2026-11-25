@@ -514,6 +514,9 @@ remove_runtime_state() {
   # The CLI's projection cleanup prunes individual files it can attribute to a package, but it runs
   # on package disable and leaves the package-runtime/ directory itself; uninstall owns the whole tree.
   remove_path "${state_dir}/package-runtime" "remove"
+  # The agent bot's gh login (its token in hosts.yml), CA bundle copy, and Git include, written by
+  # `roborepo github setup`. Removing it does not revoke the token on GitHub.
+  remove_path "${state_dir}/github-agent" "remove"
   remove_path "${state_dir}/install-state.json" "remove"
   remove_path "${state_dir}/app-root.json" "remove"
   remove_path "${state_dir}/initialization.json" "remove"
@@ -638,6 +641,7 @@ check_no_active_remnants() {
     "${state_dir}/applied-packages.json" \
     "${state_dir}/package-sources.json" \
     "${state_dir}/packages" \
+    "${state_dir}/github-agent" \
     "${state_dir}/telemetry" \
     "${state_dir}/telemetry-backups" \
     "${state_dir}/backups" \

@@ -132,7 +132,8 @@ Turning the package off stops agents using the bot but leaves its files behind: 
 in `~/.roborepo/github-agent/gh/hosts.yml`, plus `ca-bundle.crt` and `gitconfig.local` next to it.
 To remove the token, run `GH_CONFIG_DIR="$HOME/.roborepo/github-agent/gh" gh auth logout --hostname github.com`
 (gh needs an absolute path) and revoke the token on GitHub. Delete the `github-agent` folder to
-remove the rest.
+remove the rest. Uninstalling RoboRepo deletes the `github-agent` folder, token included, but does
+not revoke the token on GitHub; revoke it there yourself.
 
 If you decline, nothing changes: agents act as you, `gh api` stays denied, posting commands ask,
 and Codex hands pushes back to you. The identity does not cover Gemini: Gemini loads only the first
