@@ -115,7 +115,7 @@ CLI shows without a restart.
 The usual path:
 
 1. In **Sources**, select **Add a Source** and enter a GitHub URL or a folder path (and an id if
-   you want one). A GitHub repo is fetched and listed first, which can take several minutes; the
+   you want one). Use a full path or one starting with `~/`. A GitHub repo is fetched and listed first, which can take several minutes; the
    source shows as "Adding…" and the rest of the page stays usable.
 2. For a GitHub package, on the Third Party tab, select **Install** on its card, read the preview,
    and confirm. A folder package (Custom) needs no install: it is used in place.
@@ -148,9 +148,10 @@ exactly what was shown. If the source was refreshed in between, the install is r
 dialog shows the new preview to confirm again.
 
 **Update** fetches the source and shows the change: the current and new commit, the files added,
-removed, and changed, and the contents. Confirming moves to exactly that commit. If the source or
-the installed commit moved meanwhile, the dialog shows the current change, from what is installed
-now to the source's newest commit, to confirm again. An
+removed, and changed, and the contents. Confirming moves to exactly that commit, even if the source
+has a newer one by then. If the installed commit moved meanwhile (another update from the CLI, say),
+confirming is refused and the dialog shows the current change, from what is installed now to the
+source's newest commit, to confirm again. An
 active package is re-applied to the harnesses, as `roborepo package update` does.
 
 **Remove** turns the package off first if it is on. A Third Party package's installed copy is

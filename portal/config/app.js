@@ -294,7 +294,7 @@ function render(snap) {
   }
   if (!snap) {
     // No snapshot: the server's message, then whatever the package view can still offer.
-    if (configError) main.replaceChildren(tmpl.configUnavailable(configError.message), ...(packageData ? renderPackageTabs([], null) : []));
+    if (configError) main.replaceChildren(tmpl.configUnavailable(configError.message), ...(packageData ? renderPackageTabs([], null, { withoutSnapshot: true }) : []));
     return;
   }
   const view = withoutPackagesControlledElsewhere(snap.behaviorView || []);
@@ -360,7 +360,7 @@ function sourceTabOf(sourceId) {
   return sourcesData?.find((source) => source.id === sourceId)?.tab || null;
 }
 
-function renderPackageTabs(packageSections, contextCost) {
+function renderPackageTabs(packageSections, contextCost, { withoutSnapshot = false } = {}) {
   if (!packageData) {
     // Without the package view the page still shows every package, untabbed, as before.
     const sections = packageSections.map((section) => renderSection(section, contextCost)).filter(Boolean);
@@ -387,14 +387,17 @@ function renderPackageTabs(packageSections, contextCost) {
       return { ...section, items };
     })
     .filter((section) => section.items.length > 0);
-  const extra = [activeTab === "system" ? null : availableSection(shown), attentionSection()].filter(Boolean);
+  const extra = [activeTab === "system" ? null : availableSection(shown, { withoutSnapshot }), attentionSection()].filter(Boolean);
   const panel = document.createElement("div");
   panel.className = "package-tab-panel";
   panel.id = "package-tab-panel";
   panel.setAttribute("role", "tabpanel");
   panel.setAttribute("aria-labelledby", `package-tab-${activeTab}`);
   const rendered = [...extra, ...sections].map((section) => renderSection(section, contextCost)).filter(Boolean);
-  panel.replaceChildren(...(rendered.length ? rendered : [tmpl.emptyPackageTab(tabs.find((tab) => tab.id === activeTab)?.label)]));
+  // Without the snapshot, installed packages have no categories or switches to show them with, so
+  // the tab says they are held back rather than calling itself empty.
+  const fallback = withoutSnapshot ? tmpl.packagesHeldBack() : tmpl.emptyPackageTab(tabs.find((tab) => tab.id === activeTab)?.label);
+  panel.replaceChildren(...rendered, ...(rendered.length && !withoutSnapshot ? [] : [fallback]));
   return [
     tmpl.packageTabs(tabs, activeTab, selectTab),
     panel,
@@ -403,10 +406,12 @@ function renderPackageTabs(packageSections, contextCost) {
 }
 
 // Packages a source offers that the config snapshot has no row for: not installed from a GitHub
-// source yet, so their only control is Install.
-function availableSection(shown) {
+// source yet, so their only control is Install. Without a snapshot no row has a match, so only
+// packages that are really not installed are listed.
+function availableSection(shown, { withoutSnapshot = false } = {}) {
   const items = packageData.packages
     .filter((row) => row.tab === activeTab && !shown.has(rowKey(row.sourceId, row.id)) && !PACKAGES_CONTROLLED_ELSEWHERE.has(row.id))
+    .filter((row) => !withoutSnapshot || (!row.installed && row.sourceType === "git"))
     .map((row) => ({ id: row.id, label: row.label, description: row.description, sourceId: row.sourceId, active: row.active, toggle: null, packageState: row }));
   if (items.length === 0) return null;
   return { categoryId: "available", category: "Available to Install", items };
@@ -694,6 +699,7 @@ onRepositoriesChanged(() => {
   return loadRepositoryInventory(scope, { keepShown: true });
 });
 function applySnapshot(snap) {
+  if (snap === STALE) return;
   lastSnapshot = snap;
   // The package view and sources render beside the snapshot, so a change in either redraws too.
   const changed = snapshotChanged(last, {
@@ -718,12 +724,19 @@ function showError(err) {
 // stops the package catalog from loading until one of them is installed, and the snapshot with it;
 // the page then still draws the package tabs and Sources, which is where the clash is resolved.
 let configError = null;
+// A read that a newer one overtook resolves to STALE, and its caller applies nothing: a poll that
+// started before an action must not put an older snapshot back over the action's own reload.
+const STALE = Symbol("stale config read");
+let configReadSeq = 0;
 async function fetchConfigOrNull() {
+  const seq = ++configReadSeq;
   try {
     const snap = await api.fetchConfig();
+    if (seq !== configReadSeq) return STALE;
     configError = null;
     return snap;
   } catch (err) {
+    if (seq !== configReadSeq) return STALE;
     configError = err;
     return null;
   }
@@ -744,7 +757,7 @@ async function load() {
 // The banner runs the harness check itself; this only re-reads what it changed. The page's own
 // poll already re-reads setup state, so the banner does not watch it separately.
 async function reloadSetup() {
-  const [snap, setup] = await Promise.all([api.fetchConfig(), api.fetchSetupState()]);
+  const [snap, setup] = await Promise.all([fetchConfigOrNull(), api.fetchSetupState()]);
   lastSetup = setup;
   applySnapshot(snap);
 }

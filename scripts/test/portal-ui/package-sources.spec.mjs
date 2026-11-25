@@ -281,6 +281,12 @@ test("cards show each state the package view reports", async ({ page }) => {
     await page.goto("/agents");
     // The clash stops the config snapshot from loading; the page says why and keeps the tabs.
     await expect(page.getByRole("alert").filter({ hasText: "Agent config could not be read:" })).toContainText("stclash");
+    // Installed packages have no categories or switches without the snapshot, so a tab holds them
+    // back and says so, rather than listing them as available.
+    await page.getByRole("tab", { name: /Third Party/ }).click();
+    await expect(page.locator(".package-tab-panel")).toContainText("Installed packages show again once the agent config can be read.");
+    await expect(card(page, "St Dropped")).toHaveCount(0);
+    await expect(card(page, "St Kept").getByRole("button", { name: "Install St Kept" })).toBeVisible();
     await page.getByRole("tab", { name: /Custom/ }).click();
     const clashA = card(page, "stclasha/stclash");
     await expect(clashA.locator(".package-state-note")).toHaveText("Shares its id with stclashb/stclash; install the one you want");

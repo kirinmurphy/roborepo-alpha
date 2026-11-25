@@ -852,6 +852,15 @@ export function emptyPackageTab(label) {
   return p;
 }
 
+// While the config snapshot cannot be read, a tab lists only what needs attention and what can be
+// installed.
+export function packagesHeldBack() {
+  const p = document.createElement("p");
+  p.className = "package-tab-empty";
+  p.textContent = "Installed packages show again once the agent config can be read.";
+  return p;
+}
+
 // The config snapshot could not be built, with the server's reason.
 export function configUnavailable(message) {
   const p = document.createElement("p");

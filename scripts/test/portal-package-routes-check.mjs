@@ -117,6 +117,14 @@ try {
   const addedFolder = await ok("POST", "/api/packages/sources", { location: folder, id: "routefolders" });
   assert.equal(addedFolder.source.id, "routefolders");
   assert.deepEqual(addedFolder.packages, ["routefolder"]);
+  // A typed `~/` path is the home folder, as in the shell the CLI runs in.
+  const homeFolder = path.join(roots.home, "tilde-packages", "routetilde");
+  fs.mkdirSync(homeFolder, { recursive: true });
+  fs.writeFileSync(path.join(homeFolder, "package.config.json"), manifest("routetilde"));
+  fs.writeFileSync(path.join(homeFolder, "rules.md"), "## Route tilde\n");
+  const addedTilde = await ok("POST", "/api/packages/sources", { location: "~/tilde-packages", id: "routetilde" });
+  assert.equal(addedTilde.source.location, path.join(roots.home, "tilde-packages"));
+  await ok("DELETE", "/api/packages/sources/routetilde");
   const addedGit = await ok("POST", "/api/packages/sources", { location: repo.url, id: "team" });
   assert.equal(addedGit.source.type, "git");
   assert.deepEqual(addedGit.packages, ["routetool"]);

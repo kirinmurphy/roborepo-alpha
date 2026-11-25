@@ -6,6 +6,7 @@
 // Calls that run Git (adding a git source, refreshing it, updating) go through a child process
 // (package-service-runner.mjs): Git runs synchronously, so in this process it would stop every
 // page from answering for as long as the remote takes.
+import os from "node:os";
 import path from "node:path";
 import { send, readJsonBody } from "./portal-routes-http.mjs";
 import { defineRoutes } from "./portal-router.mjs";
@@ -102,10 +103,12 @@ export const packagesRoutes = defineRoutes([
     handler: withBody(({ location, id = null }, { actor }) => {
       if (typeof location !== "string" || !location.trim()) throw usage("expected { location: string, id?: string }");
       if (id !== null && typeof id !== "string") throw usage("expected { location: string, id?: string }");
-      // A folder is read from disk, resolved here so it names the folder the server sees; only a
-      // git source runs Git.
-      if (isFolderLocation(location)) return addSource({ location: path.resolve(location.trim()), id: id?.trim() || null });
-      return runPackageServiceInChild("addSource", [{ location, id: id?.trim() || null }], { actor });
+      // A typed `~/…` means the home folder, as it does in the shell the CLI runs in. A folder is
+      // read from disk, resolved here so it names the folder the server sees; only a git source
+      // runs Git.
+      const typed = location.trim().replace(/^~(?=$|[\\/])/, os.homedir());
+      if (isFolderLocation(typed)) return addSource({ location: path.resolve(typed), id: id?.trim() || null });
+      return runPackageServiceInChild("addSource", [{ location: typed, id: id?.trim() || null }], { actor });
     }),
   },
   {
