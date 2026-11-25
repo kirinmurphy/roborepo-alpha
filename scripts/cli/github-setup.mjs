@@ -14,7 +14,7 @@ import {
 import { GITHUB_PAGES, TOKEN_NOTE, TOKEN_SCOPES, expiryAdvice, scopesText } from "../../modules/forge/agent-identity-guide.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
-import { agentIdentityPackageInstalled, turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
+import { agentGitRoutingGaps, agentIdentityPackageInstalled, turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
 import { stateDir } from "./state-paths.mjs";
 
 const sameLogin = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -174,12 +174,20 @@ async function guidedSetup({ input, io, cwd }) {
   io.log("✓ Check: the bot account, its access and the branch protection all look right.");
 
   // 9. Turn the package on. Enabling again re-applies every resource, which repairs one left
-  // missing when an earlier enable failed partway.
+  // missing when an earlier enable failed partway. The package being in place is not the whole
+  // switch: a harness whose agent settings leave out the bot's Git include (settings from an older
+  // install) still pushes as the user, and only the baseline merge in `roborepo update` adds it, so
+  // setup stops there rather than report success.
+  const gapsBefore = agentGitRoutingGaps();
   if (await agentIdentityPackageInstalled()) {
-    done("Package on");
+    if (gapsBefore.length === 0) done("Package on");
   } else {
     const turnedOn = await turnOnAgentIdentityPackage();
     if (!turnedOn.ok) stop(`${turnedOn.message} Agents may not act as ${botLogin}; see the messages above.`);
+  }
+  const gaps = agentGitRoutingGaps();
+  if (gaps.length > 0) {
+    stop(`The package is on, but your ${gaps.join(" and ")} settings don't include the bot's Git settings yet, so agents' git pushes still go out as you. Run roborepo update, then rerun this.`);
   }
   io.log(`Agents now act on GitHub as ${botLogin}. New agent sessions pick this up.`);
   return 0;

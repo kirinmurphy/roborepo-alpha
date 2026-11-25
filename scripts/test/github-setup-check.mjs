@@ -218,6 +218,29 @@ try {
   assert.ok(fs.existsSync(assetFile), "the rerun reinstalled the missing file");
   console.log("✓ A selected package with a missing file is re-applied, not reported done.");
 
+  // An install whose GIT_CONFIG_COUNT predates the bot's include: the package's files are all in
+  // place, but Git ignores the include. A rerun refuses to report success and names the update that adds it.
+  // Routing gaps are read only for enabled harnesses, so Codex (whose config holds the pairs) is on.
+  const harnessState = path.join(stateRoot, "harnesses", "state.json");
+  fs.mkdirSync(path.dirname(harnessState), { recursive: true });
+  fs.writeFileSync(harnessState, JSON.stringify({
+    schemaVersion: 2, lastDiscoveredAt: new Date().toISOString(),
+    providers: { codex: { enabled: true, selectionSource: "user", confidence: "confirmed", evidence: [], warnings: [] } },
+  }));
+  const codexConfig = path.join(home, ".codex", "config.toml");
+  assert.match(fs.readFileSync(codexConfig, "utf8"), /^GIT_CONFIG_VALUE_1 = "~\/\.roborepo\/package-runtime\/github-agent-identity\/gitconfig"$/m);
+  fs.writeFileSync(codexConfig, fs.readFileSync(codexConfig, "utf8").replace(/^GIT_CONFIG_COUNT = "2"$/m, 'GIT_CONFIG_COUNT = "1"'));
+  result = await setup("");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout, /Package on: already done|Agents now act/);
+  assert.match(result.stderr, /your Codex settings don't include the bot's Git settings yet.*Run roborepo update, then rerun this\./);
+  fs.writeFileSync(codexConfig, fs.readFileSync(codexConfig, "utf8").replace(/^GIT_CONFIG_COUNT = "1"$/m, 'GIT_CONFIG_COUNT = "2"'));
+  result = await setup("");
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /✓ Package on: already done/);
+  fs.rmSync(harnessState);
+  console.log("✓ A package whose Git include sits beyond GIT_CONFIG_COUNT is not reported as done.");
+
   // A working token kept only in the keychain is moved to hosts.yml without asking for a new one.
   fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    user: ${BOT}\n`);
   fs.writeFileSync(path.join(ghDir, ".fake-token"), `${TOKEN}\n`);
