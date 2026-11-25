@@ -1,9 +1,66 @@
 // Whether the github-agent-identity package is in the effective package set, so agent shells act on
 // GitHub as the bot. Kept in its own module so the permission render and the `roborepo github`
 // commands share one check without importing each other.
+import fs from "node:fs";
 import { AGENT_IDENTITY_PACKAGE_ID } from "../../modules/forge/agent-identity.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { effectiveEnabledIds } from "./package-state.mjs";
+import { rootConfigActive } from "./paths.mjs";
+
+// The Git settings file agent shells include so pushes go through the bot (credential helper, SSH
+// rewritten to HTTPS), exactly as RoboRepo renders it into each harness's agent environment.
+export const AGENT_GITCONFIG_INCLUDE = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
+
+// Harnesses whose agent shells get Git settings from RoboRepo, with how to find the pairs in each
+// live config. Gemini has no agent shell environment RoboRepo renders, so it is not listed.
+const GIT_ROUTED_HARNESSES = [
+  { id: "claude", label: "Claude Code", pairs: (text) => JSON.parse(text)?.env || {} },
+  { id: "codex", label: "Codex", pairs: tomlPairs },
+];
+
+// The harnesses whose live config exists but does not include the bot's Git settings, so their
+// agents' `git push` still goes out with your credentials even though `gh` uses the bot. A config
+// that is missing (harness not installed) or unreadable is skipped: this reports only what it saw.
+export function agentGitRoutingGaps({ configs = rootConfigActive, read = (file) => fs.readFileSync(file, "utf8") } = {}) {
+  const gaps = [];
+  for (const harness of GIT_ROUTED_HARNESSES) {
+    const file = configs[harness.id];
+    if (!file) continue;
+    let pairs;
+    try {
+      pairs = harness.pairs(read(file));
+    } catch {
+      continue;
+    }
+    if (!includesAgentGitConfig(pairs)) gaps.push(harness.label);
+  }
+  return gaps;
+}
+
+function includesAgentGitConfig(pairs) {
+  const count = Number.parseInt(pairs.GIT_CONFIG_COUNT ?? "", 10);
+  for (let i = 0; Number.isInteger(count) && i < count; i += 1) {
+    if (pairs[`GIT_CONFIG_KEY_${i}`] === "include.path" && pairs[`GIT_CONFIG_VALUE_${i}`] === AGENT_GITCONFIG_INCLUDE) return true;
+  }
+  return false;
+}
+
+// The `KEY = "value"` lines of Codex's [shell_environment_policy.set] table. Only that flat table is
+// read, so a full TOML parser is not needed.
+function tomlPairs(text) {
+  const pairs = {};
+  let inTable = false;
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (line.startsWith("[")) {
+      inTable = line === "[shell_environment_policy.set]";
+      continue;
+    }
+    const match = inTable && line.match(/^([A-Za-z0-9_]+)\s*=\s*"([^"]*)"/);
+    if (match) pairs[match[1]] = match[2];
+  }
+  return pairs;
+}
 
 // An unreadable package catalog reads as "not enabled", the safer rendering.
 export function agentIdentityPackageEnabled() {

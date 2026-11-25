@@ -62,6 +62,14 @@ const ACCOUNTS = {
     ready: false, badge: "muted", label: "not checked",
     report: account({ state: "unavailable", botLogin: null, expiresAt: null, scopes: null, reason: "GitHub could not be reached" }),
   },
+  // On and the bot works, but agents' Git settings predate the include: gh uses the bot, pushes do not.
+  "git-not-routed": {
+    ready: true, badge: "problem", label: "needs attention",
+    report: account({
+      state: "problem",
+      findings: [finding("git-not-routed", "problem", "Agents' git pushes still go out as you: Claude Code settings do not include the bot's Git settings yet.", "Run roborepo update in your own terminal, then start new agent sessions.")],
+    }),
+  },
   // Turned on from the Agents page before any bot exists: agents cannot use GitHub at all.
   "on-not-set-up": {
     ready: false, badge: "problem", label: "not set up",
@@ -239,7 +247,10 @@ test.describe("Agent GitHub account", () => {
       // A bot that cannot sign in turns the banner into a warning with only Fix it; otherwise none.
       if (entry.badge === "problem") {
         await expect(offer(page), key).toHaveClass(/notice-alert/);
-        await expect(offer(page), key).toContainText(entry.report.state === "not-set-up" ? "cannot push or open pull requests" : "Agents can't push or open pull requests right now: robo-bot needs attention.");
+        const expected = entry.report.state === "not-set-up" ? "cannot push or open pull requests"
+          : key === "git-not-routed" ? "Agents' git pushes still go out as you"
+            : "Agents can't push or open pull requests right now: robo-bot needs attention.";
+        await expect(offer(page), key).toContainText(expected);
         await expect(offer(page).getByRole("button", { name: "Fix it" }), key).toBeVisible();
         for (const name of ["Set it up", "Turn on", "No thanks"]) await expect(offer(page).getByRole("button", { name }), key).toBeHidden();
       } else {
@@ -256,6 +267,17 @@ test.describe("Agent GitHub account", () => {
     await offer(page).getByRole("button", { name: "Fix it" }).click();
     await expect(card(page)).toBeVisible();
     await expect(card(page)).toContainText("Bot account (all repos)");
+    await page.keyboard.press("Escape");
+
+    // Pushes that still go out as the user leave "Agents use the bot" open, with the fix.
+    current = ACCOUNTS["git-not-routed"];
+    await openHome(page);
+    await offer(page).getByRole("button", { name: "Fix it" }).click();
+    const useItem = card(page).locator("[data-slot=steps] > li").filter({ hasText: "Agents use the bot" });
+    await expect(useItem).toHaveAttribute("data-done", "false");
+    await expect(useItem).toContainText("git pushes still go out as you");
+    await expect(useItem).toContainText("Run roborepo update in your own terminal");
+    await shot(page, "card-git-not-routed");
     await page.keyboard.press("Escape");
 
     current = ACCOUNTS.healthy;

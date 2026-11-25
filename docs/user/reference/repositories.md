@@ -196,7 +196,9 @@ opens the repo's card: one numbered list in setup order, and a line saying which
 
 1. **Bot account**: its login.
 2. **Token**: scopes and expiry.
-3. **Agents use the bot**: the Settings switch.
+3. **Agents use the bot**: the Settings switch, and whether your live Claude Code and Codex settings
+   include the bot's Git settings. Without them `gh` uses the bot but `git push` still goes out as
+   you; this stays open, with "Run roborepo update", until they do.
 4. **Invited to this repo**: with write, not admin, access.
 5. **Branch rules**: approval required to merge.
 

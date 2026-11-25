@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { expandPackageRuntimeRefs } from "../cli/package-runtime-assets.mjs";
 import { renderCodexConfig, resolveArbitraryCommands, resolveBehaviors } from "../harnesses/permissions-render.mjs";
 import { mergeCodexConfig } from "../cli/root-config-merge.mjs";
+import { AGENT_GITCONFIG_INCLUDE, agentGitRoutingGaps } from "../cli/agent-identity-package.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
@@ -101,6 +102,27 @@ try {
   assert.doesNotMatch(codexOff, /cert\.pem/);
 } finally {
   fs.rmSync(home, { recursive: true, force: true });
+}
+
+// The card's "Agents use the bot" check: which live configs leave agents' Git without the bot's
+// settings. The generated baselines include it; configs from before it, or a missing pair, do not.
+{
+  const files = {
+    claude: path.join(repoRoot, "generated", "claude", "settings.json"),
+    codex: path.join(repoRoot, "generated", "codex", "config.toml"),
+  };
+  assert.deepEqual(agentGitRoutingGaps({ configs: files }), [], "the install baselines route agents' Git through the bot");
+  const older = {
+    claude: JSON.stringify({ env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "~/.claude/git-hooks" } }),
+    codex: `[shell_environment_policy.set]\nGIT_CONFIG_COUNT = "1"\nGIT_CONFIG_KEY_0 = "core.hooksPath"\nGIT_CONFIG_VALUE_0 = "~/.codex/git-hooks"\n`,
+  };
+  const reading = (texts) => ({ configs: { claude: "claude", codex: "codex" }, read: (id) => { if (!(id in texts)) throw new Error("missing"); return texts[id]; } });
+  assert.deepEqual(agentGitRoutingGaps(reading(older)), ["Claude Code", "Codex"], "configs without the include are reported");
+  assert.deepEqual(agentGitRoutingGaps(reading({ claude: older.claude })), ["Claude Code"], "a harness with no config is skipped");
+  // The include must be inside GIT_CONFIG_COUNT, and in Codex's set table, to count.
+  const beyondCount = JSON.stringify({ env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_1: "include.path", GIT_CONFIG_VALUE_1: AGENT_GITCONFIG_INCLUDE } });
+  const otherTable = `[other]\nGIT_CONFIG_COUNT = "1"\nGIT_CONFIG_KEY_0 = "include.path"\nGIT_CONFIG_VALUE_0 = "${AGENT_GITCONFIG_INCLUDE}"\n`;
+  assert.deepEqual(agentGitRoutingGaps(reading({ claude: beyondCount, codex: otherTable })), ["Claude Code", "Codex"]);
 }
 
 console.log("github-agent-identity-package ok");

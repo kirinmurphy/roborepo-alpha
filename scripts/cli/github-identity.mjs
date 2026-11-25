@@ -2,7 +2,7 @@
 // setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
 import { forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { readAccountIdentity, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
-import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
+import { agentGitRoutingGaps, agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
 import { isMainModule } from "./roots.mjs";
 import { stateDir } from "./state-paths.mjs";
@@ -14,12 +14,12 @@ const DOCTOR_TIMEOUT_MS = 8000;
 // `repositoryId` skips reading `cwd`'s origin when the caller already knows the repo (the portal).
 export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs, repositoryId: known = null } = {}) {
   const repositoryId = known ?? await currentRepositoryId(cwd);
-  return readAgentIdentity({ repositoryId, cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled() });
+  return readAgentIdentity({ repositoryId, cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled(), gitGaps: agentGitRoutingGaps() });
 }
 
 // The bot account alone, and one repo for a known bot: the two halves the portal shows apart.
 export const readCurrentAccountIdentity = ({ cwd = process.cwd(), timeoutMs } = {}) =>
-  readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled() });
+  readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled(), gitGaps: agentGitRoutingGaps() });
 export const readCurrentRepoAgentAccess = ({ repositoryId, cwd = process.cwd(), timeoutMs, botLogin }) =>
   readRepoAgentAccess({ repositoryId, cwd, stateDir, timeoutMs, botLogin });
 

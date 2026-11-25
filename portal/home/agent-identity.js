@@ -143,7 +143,7 @@ export function describeAccount(report) {
   }
   const fix = enable ? null : shown?.fix || null;
   const offersSetup = !enable && (report.state === "not-set-up" || SETUP_COMMAND_PATTERN.test(fix || ""));
-  return { label, level, message, fix, offersSetup, enable };
+  return { label, level, message, fix, offersSetup, enable, findingId: shown?.id || null };
 }
 
 const REPO_LABELS = {
@@ -267,9 +267,10 @@ function buildOffer(mount) {
       slot("setup").hidden = true;
       slot("dismiss").hidden = true;
       slot("note").hidden = true;
-      // With no bot at all the account's sentence already says agents cannot push.
+      // With no bot at all the account's sentence already says agents cannot push; pushes that go
+      // out as the user are not "can't push", so that finding speaks for itself.
       fill(node, {
-        message: report.state === "not-set-up"
+        message: report.state === "not-set-up" || view.findingId === "git-not-routed"
           ? view.message
           : `Agents can't push or open pull requests right now: ${report.botLogin || report.savedLogin || "the bot account"} needs attention. ${view.message}`,
       });
@@ -591,11 +592,14 @@ export function cardSteps(accountReport, repoReport = null) {
     else if (page) Object.assign(tokenStep, { action: page.note, url: page.url });
   }
 
+  // On, but agents' Git does not include the bot's settings: gh uses the bot, pushes do not.
+  const gitGap = accountReport.packageEnabled && findings.find((entry) => entry.id === "git-not-routed");
   const useStep = {
     label: "Agents use the bot",
-    done: Boolean(accountReport.packageEnabled),
-    note: accountReport.packageEnabled ? "on" : "off; agents act as you",
-    ...(accountReport.packageEnabled || accountReport.enableOffered ? {} : { action: "The setup turns this on when it finishes." }),
+    done: Boolean(accountReport.packageEnabled) && !gitGap,
+    note: gitGap ? gitGap.message : accountReport.packageEnabled ? "on" : "off; agents act as you",
+    ...(gitGap ? { action: gitGap.fix }
+      : accountReport.packageEnabled || accountReport.enableOffered ? {} : { action: "The setup turns this on when it finishes." }),
   };
   const steps = [accountStep, tokenStep, useStep];
   if (!repoReport) return steps;
