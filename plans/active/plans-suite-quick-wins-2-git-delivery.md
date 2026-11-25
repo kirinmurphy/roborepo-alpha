@@ -294,8 +294,11 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 ### Findings
 - [x] `/plan-review` recorded the Result before the CI watch, so a CI fix made there moved the tip past the recorded commit with no Validator pass over it — fixed (3546603d)
 - [x] The user guide said a blocked CI check keeps the plan in `active/` even when fixing review findings, where the plan stays in `review/` — fixed (3546603d)
+- [x] `plan-execute`'s Completion Conditions and description still moved a plan to review once the loop and preflight passed, ignoring a Blocked CI watch — fixed (5f7a76d1)
+- [x] The handoff opened the draft pull request before handling a refused push — fixed (5f7a76d1)
 
 ### Verification
+- Validation pass 2 at 3546603d (fresh-context subagent): 2 actionable `fix` findings and 2 notes, all fixed in 5f7a76d1; generated command files regenerated with `node scripts/build/render-slash-commands.mjs`; `bash scripts/doctor.sh --quiet` → doctor passed (99 checks) at 5f7a76d1
 - Validation pass 1 at ac48c546 (fresh-context subagent): 2 actionable `fix` findings, both fixed in 3546603d
 - `node scripts/test/plan-lifecycle-transitions-check.mjs` → ok at ac48c546; the new merge-readiness section failed before the check existed
 - `node scripts/test/plan-suite-skills-check.mjs` → ok at 3546603d
