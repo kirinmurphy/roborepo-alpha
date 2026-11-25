@@ -421,6 +421,9 @@ title, because nothing reliable signals that the plan work ended.
       the prompt's words — fixed in this plan's Title format, Hook step 5, Validation, and Decision
       Log; docs aligned (9066483f)
 - [x] No evidence that `npm test` ran — see Verification
+- [x] An overlong first word cut into a two-word prefix (`Quick Change…`, `/plan sub-task…`), so
+      the title lost its stage prefix — fixed (6a891dcc)
+- [x] The guide's package-contents sentence omitted plan-suite's hooks file — fixed (6a891dcc)
 
 ### Verification
 
@@ -432,3 +435,4 @@ title, because nothing reliable signals that the plan work ended.
   and that run began while this change's plan-suite edits were still uncommitted. Rerun at 9066483f
   on a clean tree: the command refuses with "package plan-suite is built in", creates no skill
   folder, and leaves plan-suite with no diff. CI runs the full gate (`npm run check`) on the pushed head
+- Validation pass 3 at 9066483f (fresh-context subagent): two actionable findings, both fixed above
