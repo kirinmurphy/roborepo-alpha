@@ -253,23 +253,24 @@ In portable mode the same line sits between the command line and the plan summar
 
 ## Implementation plan
 
-- [ ] Run Trial A in the Claude desktop app with a throwaway `UserPromptSubmit` hook that returns
+- [x] Run Trial A in the Claude desktop app with a throwaway `UserPromptSubmit` hook that returns
       a title; send a second prompt and confirm the hook input carries that title as
       `session_title`. Record both results in this plan's Decision Log. If the desktop app ignores
-      the hook's title, change only the Hook row of "How a title reaches a session".
-- [ ] Add the title formatter module and its tests.
-- [ ] Add the `session-title` capability to `scripts/harnesses/contract.mjs` and to the
+      the hook's title, change only the Hook row of "How a title reaches a session". — Moved to
+      `## Not tested` as a person-only check; see Decision Log (2026-11-25).
+- [x] Add the title formatter module and its tests.
+- [x] Add the `session-title` capability to `scripts/harnesses/contract.mjs` and to the
       `capability` enum in `scripts/harnesses/provider-manifest.schema.json`, implement the
       `sessionTitle` group in `scripts/harnesses/claude/index.mjs`, and declare it in
       `globals/harnesses/claude/provider.json`.
-- [ ] Add `roborepo plans session-title` to `scripts/cli/plans-command.mjs` (dispatch and usage
+- [x] Add `roborepo plans session-title` to `scripts/cli/plans-command.mjs` (dispatch and usage
       text) and register it with
       `manifests/platform/cli/command-definitions/internal/plans-session-title.command.json`,
       as `plans stop-servers` is.
-- [ ] Add the plan-suite hook resource and `hooks-claude.json`.
-- [ ] Add the rule section to `globals/packages/plan-suite/rules.md`.
-- [ ] Add the title line to `buildPrompt()` in both modes.
-- [ ] Update the documents listed under Documentation impact.
+- [x] Add the plan-suite hook resource and `hooks-claude.json`.
+- [x] Add the rule section to `globals/packages/plan-suite/rules.md`.
+- [x] Add the title line to `buildPrompt()` in both modes.
+- [x] Update the documents listed under Documentation impact.
 
 ## Validation
 
@@ -301,6 +302,32 @@ Scripted checks, each asserting output a person or a harness would see:
 One check needs a person: after install, a plan command in the interactive Claude CLI and in the
 desktop app shows the new title in the session list.
 
+## Not tested
+
+- [ ] Trial A: in the Claude desktop app, a hook-returned title becomes the session's title, and the
+      next prompt's hook input carries it as `session_title`. With plan-suite enabled, send
+      `/plan-review <plan id>` in a new desktop session and look at the session list; send a second
+      plan command and confirm the title moves to that stage. If the title does not change, the
+      desktop app relies on the agent's rename tool, which the rule already instructs; edit only the
+      Hook row of "How a title reaches a session" and the desktop row of the plan-suite guide's
+      Session Titles table. Needs a person: it needs plan-suite's hook installed in your live Claude
+      settings and the desktop app's session list read, a third-party system the agent cannot reach
+      from here.
+- [ ] After `roborepo package enable plan-suite` (or a reapply), a plan command typed in the
+      interactive Claude Code CLI shows `/plan-…: <plan title>` in the session picker
+      (`claude --resume`). Needs a person: the interactive CLI's session list is a third-party UI
+      the agent cannot reach; `claude -p` runs could not sign in from the sandbox during the trial.
+- [ ] In Codex, a plan command prints one `/rename /plan-…: <plan title>` line and continues
+      without waiting. Needs a person: it needs a live Codex session on your account, which an
+      agent must not use.
+- [x] The title hook prints the Claude title output for a typed plan command, a copied prompt's
+      title line, and a stage change, and prints nothing for ordinary prompts, hand-written titles,
+      malformed input, and Codex. — Verified by agent 2026-11-25 at 4d600210:
+      `node scripts/test/plan-session-title-check.mjs` → passed.
+- [x] Enabling plan-suite adds the Claude `UserPromptSubmit` title hook and no Codex hook;
+      disabling removes it. — Verified by agent 2026-11-25 at 4d600210:
+      `node scripts/test/hook-composition-check.mjs` → passed.
+
 ## Documentation impact
 
 | Document | Update |
@@ -314,8 +341,10 @@ desktop app shows the new title in the session list.
 
 ## Risks
 
-- **The hook runs on every prompt.** It must be fast and silent. The command exits before building
-  the plan snapshot unless the prompt carries a title line or opens with a plan command.
+- **The hook runs on every prompt.** It must be fast and silent. The command exits before reading
+  the plan store unless the prompt opens with a plan command and has no title line, and then reads
+  only each plan's id and heading (about 0.15 s for an ordinary or plan-command prompt in a
+  162-plan store, measured 2026-11-25).
 - **Claude's own retitling.** Claude replaces a generated title when a plan is accepted in its plan
   mode (*docs*). The next plan-command prompt sets the stage title again; a session that receives
   no further prompt keeps Claude's title.
@@ -350,6 +379,25 @@ title, because nothing reliable signals that the plan work ended.
 - Trial A moved into the implementation sequence instead of blocking promotion, because both of its
   outcomes are already designed and neither changes scope: a "no" only means the desktop app relies
   on the agent's rename tool (2026-11-25).
+- Trial A moved from the first implementation task to `## Not tested` (2026-11-25, during
+  /plan-execute). Alternatives: block the plan on it, or install a throwaway hook in the live
+  Claude settings from this session. Both outcomes were already designed and neither changes
+  scope, and editing the live settings is outside the sandbox and the run's authority, so it
+  stays a person-only check settled in /plan-review.
+- The hook reads only each plan's id and H1 (`listPlanTitles` in `modules/plan-suite/index.mjs`)
+  instead of building the full plan snapshot (2026-11-25). The snapshot asks Git about every plan
+  and took about 6-11 s in this repository's 162-plan store, which would delay every plan-command
+  prompt; the light read takes about 0.15 s. Alternatives: the snapshot (correct but slow), or a
+  cache file (faster still, but new state to keep fresh). The light read needs no new state.
+- A plan path typed in a prompt also matches a plan by file name, because plans keep their file
+  name when they move between lifecycle folders; a path typed before a move still finds the plan
+  (2026-11-25). Id and store-relative path match as `selectRepositoryPlan` does.
+- The plan command list is compiled once into the lifecycle model (`LIFECYCLE_MODEL.commands`) and
+  both `PLAN_SUITE_COMMANDS` and the formatter read it, rather than each deriving it from the states
+  (2026-11-25).
+- A prompt's `Session title:` line is honored only when it carries a stage prefix, so the hook
+  never sets a title outside the format, and the hook prints nothing when the title is already the
+  one it would set (2026-11-25).
 - The title formatter takes the plan commands from the lifecycle model rather than its own list, and
   the copied-prompt title line applies in portable mode as well as repository-aware mode
   (2026-11-25).
