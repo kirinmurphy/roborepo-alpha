@@ -520,7 +520,7 @@ The Plans page uses the normalized package catalog state. It does not inspect sk
 
 `roborepo plans merge-readiness <plan> --json` reports pre-merge readiness with repair instructions.
 Besides a fresh committed review and approval, a clean worktree, and a current reviewed base, it
-requires the branch's tip to equal its upstream, compared with local refs only; a repo with no
+requires the branch's tip to equal its remote-tracking upstream, compared with local refs only; a repo with no
 remote passes that check.
 After durable closure, cleanup uses the shared preservation assessment. Remaining or uncertain
 work keeps the checkout and offers a preview followed by **Discard all listed leftovers and
