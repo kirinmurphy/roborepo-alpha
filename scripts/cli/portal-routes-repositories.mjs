@@ -138,6 +138,22 @@ export const repositoriesRoutes = defineRoutes([
   },
   {
     method: "POST",
+    path: "/api/repositories/:id/agent-identity/invite",
+    handler: (req, res, { params, handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        if (body && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)) {
+          return send(res, 400, "application/json", JSON.stringify({ error: "expected an empty body" }));
+        }
+        Promise.resolve()
+          .then(() => handlers.inviteAgentBot({ repositoryId: params.id }))
+          .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (error) => sendError(res, error));
+      });
+      return true;
+    },
+  },
+  {
+    method: "POST",
     path: "/api/repositories/:id/agent-identity/setup",
     handler: (req, res, { params, handlers }) => {
       readJsonBody(req, (body, err) => {

@@ -1,7 +1,8 @@
 // `roborepo github status`: reads whether agents act on GitHub as a safe bot account. The guided
 // setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
-import { forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
-import { readAccountIdentity, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
+import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
+import { githubClient } from "../../modules/forge/github.mjs";
+import { botGhEnv, readAccountIdentity, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
 import { agentGitRoutingGaps, agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
 import { isMainModule } from "./roots.mjs";
@@ -15,6 +16,28 @@ const DOCTOR_TIMEOUT_MS = 8000;
 export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs, repositoryId: known = null } = {}) {
   const repositoryId = known ?? await currentRepositoryId(cwd);
   return readAgentIdentity({ repositoryId, cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled(), gitGaps: agentGitRoutingGaps() });
+}
+
+// Invites the bot to one repo as the user and accepts the invitation as the bot: the setup's invite
+// steps, which need no typing, so the portal can run them. Only a repo admin can invite; anyone else
+// gets `ok: false` and GitHub's reason, and the card's message for the owner says the rest.
+export async function inviteBotToRepo({ repositoryId, cwd = process.cwd(), timeoutMs, botLogin }) {
+  const repo = forgeTargetForRepositoryId(repositoryId)?.repo;
+  if (!repo) return { ok: false, message: "This repo is not on github.com." };
+  const user = { cwd, timeoutMs, env: { GH_CONFIG_DIR: null } };
+  const bot = { cwd, timeoutMs, env: botGhEnv(stateDir) };
+  try {
+    if (!(await githubClient.isCollaborator(user, repo, botLogin))) {
+      const invited = (await githubClient.repoInvitations(user, repo)).some((invitation) => invitation.invitee?.login?.toLowerCase() === botLogin.toLowerCase());
+      if (!invited) await githubClient.inviteCollaborator(user, repo, botLogin);
+    }
+    const pending = (await githubClient.userInvitations(bot)).find((invitation) => invitation.repository?.full_name?.toLowerCase() === repo.toLowerCase());
+    if (pending) await githubClient.acceptInvitation(bot, pending.id);
+  } catch (error) {
+    if (!(error instanceof GitHubError)) throw error;
+    return { ok: false, message: `GitHub refused: ${error.message}. Only an admin of the repo can invite the bot.` };
+  }
+  return { ok: true };
 }
 
 // The bot account alone, and one repo for a known bot: the two halves the portal shows apart.

@@ -15,7 +15,7 @@ import {
   defaultRegistry, registerLocalRoot, registerLocalRootPath, rootId, upsertRepository, writeRegistry,
 } from "../../modules/repositories/index.mjs";
 import {
-  applyAgentGitRouting, clearAgentIdentityCache, dismissAgentIdentityOffer, launchAgentIdentitySetup, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity,
+  applyAgentGitRouting, clearAgentIdentityCache, inviteAgentBot, dismissAgentIdentityOffer, launchAgentIdentitySetup, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity,
 } from "../cli/repository-agent-identity.mjs";
 import { launchInTerminal } from "../cli/terminal-launch.mjs";
 import { shellQuote } from "../harnesses/shell-quote.mjs";
@@ -45,6 +45,7 @@ try {
   await packageTurnsOnOnlyAsTheLastStep();
   await updateRunsOnlyForTheGitGap();
   await setupLaunchIsTheServersChoice(checkout);
+  await inviteNeedsAWorkingBotAndRereadsTheRepo();
   terminalLaunchStartsInTheGivenFolder(checkout);
   await offerDismissalIsRemembered();
   await routesPassFreshAndRefuseABody();
@@ -190,6 +191,40 @@ async function updateRunsOnlyForTheGitGap() {
   clearAgentIdentityCache();
 }
 
+// "Invite the bot" runs on the server for a repo with no checkout too, only with a working bot, and
+// answers with the repo read afresh.
+async function inviteNeedsAWorkingBotAndRereadsTheRepo() {
+  clearAgentIdentityCache();
+  const calls = [];
+  let accepted = false;
+  const read = ({ repositoryId }) => Promise.resolve({
+    state: accepted ? "healthy" : "problem", repository: "example/elsewhere", botLogin: "robo-bot", userAdmin: true, reason: null, ownerMessage: null,
+    problems: accepted ? [] : [{ id: "not-collaborator", severity: "problem", message: "robo-bot cannot push.", fix: "x" }], repositoryId,
+  });
+  const invite = (options) => { calls.push(options); accepted = true; return Promise.resolve({ ok: true }); };
+  const result = await inviteAgentBot({ repositoryId: NO_CHECKOUT, stateRoot, readAccountReport: () => Promise.resolve(readyAccount()), read, invite });
+  assert.equal(result.invited, true);
+  assert.equal(result.repository.state, "healthy", "the answer carries the repo read after");
+  assert.deepEqual([calls.length, calls[0].repositoryId, calls[0].botLogin], [1, NO_CHECKOUT, "robo-bot"]);
+
+  clearAgentIdentityCache();
+  const refused = await inviteAgentBot({
+    repositoryId: GITHUB, stateRoot, readAccountReport: () => Promise.resolve(readyAccount()), read,
+    invite: () => Promise.resolve({ ok: false, message: "GitHub refused: Must have admin rights." }),
+  });
+  assert.deepEqual([refused.invited, refused.reason, refused.message], [false, "refused", "GitHub refused: Must have admin rights."]);
+
+  clearAgentIdentityCache();
+  let tried = false;
+  const waiting = await inviteAgentBot({
+    repositoryId: GITHUB, stateRoot, read, invite: () => { tried = true; return Promise.resolve({ ok: true }); },
+    readAccountReport: () => Promise.resolve(readyAccount({ state: "problem", botLogin: null, problems: [{ id: "expired", severity: "problem", message: "x", fix: "x" }] })),
+  });
+  assert.deepEqual([waiting.invited, waiting.reason, tried], [false, "not_ready", false], "no invite without a working bot");
+  await assert.rejects(inviteAgentBot({ repositoryId: "git:github.com/example/unknown", stateRoot, read, invite }), (error) => error.code === "NOT_FOUND");
+  clearAgentIdentityCache();
+}
+
 async function setupLaunchIsTheServersChoice(checkout) {
   const launches = [];
   const launch = (request, options) => { launches.push({ request, options }); return { ok: true }; };
@@ -270,6 +305,7 @@ async function routesPassFreshAndRefuseABody() {
     turnOnAgentIdentity: () => { calls.push(["enable"]); return Promise.resolve({ enabled: true }); },
     dismissAgentIdentityOffer: () => { calls.push(["dismiss"]); return { offerDismissed: true }; },
     applyAgentGitRouting: () => { calls.push(["update"]); return Promise.resolve({ applied: true }); },
+    inviteAgentBot: (params) => { calls.push(["invite", params]); return Promise.resolve({ invited: true }); },
   };
   const id = encodeURIComponent(GITHUB);
   const get = await request("GET", `/api/repositories/${id}/agent-identity`, "fresh=1", handlers);
@@ -306,7 +342,12 @@ async function routesPassFreshAndRefuseABody() {
   assert.deepEqual(calls, [], "a body is refused before anything is applied");
   const updated = await request("POST", "/api/agent-identity/update", "", handlers, "");
   assert.deepEqual(JSON.parse(updated.body), { applied: true });
-  assert.deepEqual(calls, [["update"]]);
+  assert.deepEqual(calls.splice(0), [["update"]]);
+  assert.equal((await request("POST", `/api/repositories/${id}/agent-identity/invite`, "", handlers, JSON.stringify({ login: "someone" }))).status, 400);
+  assert.deepEqual(calls, [], "a body is refused before anyone is invited");
+  const inviting = await request("POST", `/api/repositories/${id}/agent-identity/invite`, "", handlers, "");
+  assert.deepEqual(JSON.parse(inviting.body), { invited: true });
+  assert.deepEqual(calls, [["invite", { repositoryId: GITHUB }]]);
 }
 
 // The real reads in a child process, because the state folder and package state are read when the

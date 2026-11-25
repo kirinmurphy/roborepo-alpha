@@ -3,12 +3,12 @@
 // repo's title carries an "agent bot" badge (green when agents can work there, red when something
 // is in the way), and the badge opens a card listing, in setup order, the bot account, its token,
 // agents using it, the bot's invitation to that repo, and the branch rules. Settings owns the on/off
-// switch and links here to set it up. The page
-// only reads status, asks the server to open `roborepo github setup` in a terminal, and asks it to
-// turn the package on when that is the one step left; the token is typed at the terminal's hidden
-// prompt and never passes through here.
+// switch and links here to set it up. The card shows one action at a time, on the first open item:
+// the server turns the package on, applies the config, invites the bot, or protects branches; the
+// login and token go through `roborepo github setup`, which the server opens in a terminal, so the
+// token is typed at its hidden prompt and never passes through here.
 import { portalFillSlots as fill, portalGetJson, portalPostJson, portalTpl as tpl, portalWireBackdropClose } from "/portal/shared/api.js";
-import { supportsProtectionPanel } from "/portal/shared/protection-panel.js";
+import { applyProtection, supportsProtectionPanel } from "/portal/shared/protection-panel.js";
 
 const ACCOUNT_URL = "/api/agent-identity";
 const repoUrl = (repositoryId) => `/api/repositories/${encodeURIComponent(repositoryId)}/agent-identity`;
@@ -78,16 +78,18 @@ function load(repositoryId, { fresh = false, reread = false } = {}) {
   if (!fresh && !reread && known && Date.now() - known.at < REUSE_MS) return Promise.resolve(known.report);
   if (!fresh && !reread && pending.has(repositoryId)) return pending.get(repositoryId);
   const request = portalGetJson(`${repoUrl(repositoryId)}${fresh ? "?fresh=1" : ""}`)
-    .then((report) => {
-      reports.set(repositoryId, { at: Date.now(), report });
-      if (!report.applies || !repoView(account?.report, report).offersSetup) watching.delete(repositoryId);
-      renderBadges(repositoryId);
-      if (card?.showing(repositoryId)) card.render();
-      return report;
-    })
+    .then((report) => showRepo(repositoryId, report))
     .finally(() => { if (pending.get(repositoryId) === request) pending.delete(repositoryId); });
   pending.set(repositoryId, request);
   return request;
+}
+
+function showRepo(repositoryId, report) {
+  reports.set(repositoryId, { at: Date.now(), report });
+  if (!report.applies || !repoView(account?.report, report).offersSetup) watching.delete(repositoryId);
+  renderBadges(repositoryId);
+  if (card?.showing(repositoryId)) card.render();
+  return report;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -468,17 +470,38 @@ function buildCard() {
   slot("close").addEventListener("click", () => dialog.close());
   portalWireBackdropClose(dialog, () => dialog.close());
   slot("recheck").addEventListener("click", () => refresh({ fresh: true }));
-  slot("enable").addEventListener("click", () => void turnOn(slot("enable"), (message) => { if (target) target.note = message; render(); }));
-  slot("update").addEventListener("click", () => void updateConfig(slot("update"), (message) => { if (target) target.note = message; render(); }));
-  slot("open-setup").addEventListener("click", async () => {
+
+  // The open item's one button. Every action but the setup runs on the server; the setup opens a
+  // terminal, because the bot's login and token are typed there and never pass through the page.
+  async function run(kind, button) {
     const opening = target;
-    const repositoryId = opening.kind === "repo" ? opening.repositoryId : firstGithubRepository();
-    const result = await openSetup(slot("open-setup"), repositoryId);
-    if (target !== opening) return;
-    opening.note = result.note;
-    if (!result.launched) opening.copyFallback = true;
-    render();
-  });
+    const say = (message) => { if (target === opening) { opening.note = message || null; render(); } };
+    if (kind === "enable") return turnOn(button, say);
+    if (kind === "update") return updateConfig(button, say);
+    if (kind === "setup") {
+      const result = await openSetup(button, setupRepository(opening));
+      if (target !== opening) return;
+      opening.note = result.note;
+      if (!result.launched) opening.copyFallback = true;
+      return render();
+    }
+    const repositoryId = opening.repositoryId;
+    await busy(button, kind === "invite" ? "Inviting…" : "Protecting…", async () => {
+      try {
+        if (kind === "invite") {
+          const result = await portalPostJson(`${repoUrl(repositoryId)}/invite`, {});
+          if (result.repository) showRepo(repositoryId, result.repository);
+          say(result.invited ? null : result.message);
+        } else {
+          const result = await applyProtection(repositoryId, "protect");
+          await load(repositoryId, { fresh: true });
+          say(result.refusal ? `Branch rules: ${result.refusal}.` : null);
+        }
+      } catch (error) {
+        say(error.message);
+      }
+    });
+  }
 
   function showError(message) {
     slot("error").hidden = !message;
@@ -503,12 +526,11 @@ function buildCard() {
     const repoReport = target.kind === "repo" ? reports.get(target.repositoryId)?.report : null;
     if (target.kind === "repo" && !repoReport) return;
     const applies = target.kind === "account" || repoReport.applies;
-    const accountView = describeAccount(accountReport);
-    const view = target.kind === "account" ? accountView : repoView(accountReport, repoReport);
+    const view = target.kind === "account" ? describeAccount(accountReport) : repoView(accountReport, repoReport);
     const steps = applies ? cardSteps(accountReport, repoReport) : [];
     const complete = steps.length > 0 && steps.every((step) => step.done);
-    // Finishing while the card is open (the setup ran, or Turn on): say so, drop the notes about
-    // what was in progress, and close shortly. A card opened already complete just stays open.
+    // Finishing while the card is open: say so, drop the notes about what was in progress, and
+    // close shortly. A card opened already complete just stays open.
     const justFinished = complete && target.hadOpenItems;
     if (!complete && steps.length > 0) target.hadOpenItems = true;
     if (complete) {
@@ -528,9 +550,21 @@ function buildCard() {
     });
     dialog.dataset.complete = String(complete);
     slot("state").dataset.level = view.level;
+
+    // One thing to do at a time: only the first open item says what to do and carries a button.
+    const current = steps.findIndex((step) => !step.done && !step.waiting);
+    const step = steps[current] || null;
+    const setupLaunch = target.kind === "repo" ? repoReport.setupLaunch : accountReport.setupLaunch;
+    const launchable = Boolean(setupRepository(target)) && Boolean(setupLaunch?.supported);
+    // Where the portal cannot open a terminal, or did not, the setup's button becomes its command.
+    const showCommand = step?.button?.kind === "setup" && (!launchable || target.copyFallback);
     slot("steps").hidden = steps.length === 0;
-    slot("steps").replaceChildren(...steps.map(stepItem));
-    slot("bot-browser").hidden = !steps.some((step) => step.url);
+    slot("steps").replaceChildren(...steps.map((entry, index) => stepItem(entry, index, {
+      current: index === current,
+      button: index === current && !showCommand ? entry.button : null,
+      onRun: run,
+    })));
+    slot("bot-browser").hidden = !step?.url;
     slot("bot-browser").textContent = accountReport.guide?.lead || "";
 
     const ownerMessage = repoReport?.ownerMessage || null;
@@ -538,13 +572,6 @@ function buildCard() {
     slot("owner-message").textContent = ownerMessage || "";
     slot("owner-copy").copySource = ownerMessage || "";
 
-    const offersSetup = applies && (view.offersSetup || accountView.offersSetup);
-    const setupRepo = target.kind === "repo" ? target.repositoryId : firstGithubRepository();
-    const launchable = offersSetup && Boolean(setupRepo) && (target.kind === "repo" ? repoReport.setupLaunch?.supported : accountReport.setupLaunch?.supported);
-    slot("enable").hidden = !(applies && accountView.enable);
-    slot("update").hidden = !(applies && gitGap(accountReport));
-    slot("open-setup").hidden = !launchable;
-    const showCommand = offersSetup && (!launchable || target.copyFallback);
     slot("command-row").hidden = !showCommand;
     if (showCommand && accountReport.guide) {
       fill(dialog, { command: accountReport.guide.command });
@@ -552,27 +579,50 @@ function buildCard() {
       if (target.kind === "repo") watching.add(target.repositoryId);
       watchingAccount = true;
     }
-    const note = target.note || (offersSetup && !launchable && repoReport?.setupLaunch?.reason ? repoReport.setupLaunch.reason : null);
+    const note = target.note || (showCommand && !launchable && setupLaunch?.reason ? setupLaunch.reason : null);
     slot("launch-note").hidden = !note;
     slot("launch-note").textContent = note || "";
-    // Nothing left to check once every item is done.
-    slot("recheck").hidden = complete;
+    // Coming back to the window re-reads an open card, so a retry is only needed when GitHub did not
+    // answer.
+    slot("recheck").hidden = view.label !== "not checked";
   }
 
   return {
     showing: (key) => dialog.open && Boolean(target) && (key === "account" ? true : target.repositoryId === key),
     render,
+    // Coming back to the window while the card is open with something left to do.
+    refreshIfOpen() {
+      if (!dialog.open || !target || dialog.dataset.complete === "true") return false;
+      void refresh({ fresh: true });
+      return true;
+    },
     async open(next) {
       if (target?.closeTimer) clearTimeout(target.closeTimer);
       target = { ...next, copyFallback: false, note: null, hadOpenItems: false, closeTimer: null };
       fill(dialog, { subject: next.kind === "account" ? "Bot account (all repos)" : next.name, state: "checking", message: "Reading the bot's status from GitHub…" });
       slot("state").dataset.level = "muted";
-      for (const name of ["steps", "bot-browser", "owner", "command-row", "launch-note", "open-setup", "enable", "update"]) slot(name).hidden = true;
+      for (const name of ["steps", "bot-browser", "owner", "command-row", "launch-note", "recheck"]) slot(name).hidden = true;
       showError(null);
       if (!dialog.open) dialog.showModal();
       await refresh({ fresh: false });
     },
   };
+}
+
+// The repo whose folder the setup opens in: the card's own repo, or for the account card the first
+// GitHub repo listed.
+const setupRepository = (target) => (target.kind === "repo" ? target.repositoryId : firstGithubRepository());
+
+async function busy(button, label, work) {
+  const idle = button.textContent;
+  button.disabled = true;
+  button.textContent = label;
+  try {
+    await work();
+  } finally {
+    button.disabled = false;
+    button.textContent = idle;
+  }
 }
 
 // One sentence above the list: what works, and where to start when something does not.
@@ -589,19 +639,28 @@ function summary(accountReport, view, steps) {
   return view.level === "warn" && accountReport.packageEnabled ? `Agents can work, but item ${first + 1} needs you soon.` : `Start at item ${first + 1}.`;
 }
 
-function stepItem(step, index) {
-  const item = fill(tpl("tpl-agent-identity-step"), { number: `${index + 1}.`, label: step.label, note: step.note || "", action: step.action || "" });
+function stepItem(step, index, { current = false, button = null, onRun = null } = {}) {
+  const action = current ? step.action : null;
+  const url = current ? step.url : null;
+  const item = fill(tpl("tpl-agent-identity-step"), { number: `${index + 1}.`, label: step.label, note: step.note || "", action: action || "" });
   item.dataset.done = String(step.done);
   item.dataset.waiting = String(Boolean(step.waiting));
+  item.dataset.current = String(current);
   const mark = item.querySelector("[data-slot=mark]");
   mark.textContent = step.done ? "✓" : "";
   if (step.done) mark.setAttribute("aria-label", "Done");
-  item.querySelector("[data-slot=action-row]").hidden = !step.action && !step.url;
-  item.querySelector("[data-slot=action]").hidden = !step.action;
-  item.querySelector("[data-slot=url-row]").hidden = !step.url;
-  if (step.url) {
-    fill(item, { url: step.url });
-    item.querySelector("[data-slot=copy]").copySource = step.url;
+  item.querySelector("[data-slot=action-row]").hidden = !action && !url && !button;
+  item.querySelector("[data-slot=action]").hidden = !action;
+  item.querySelector("[data-slot=url-row]").hidden = !url;
+  if (url) {
+    fill(item, { url });
+    item.querySelector("[data-slot=copy]").copySource = url;
+  }
+  const run = item.querySelector("[data-slot=run]");
+  run.hidden = !button;
+  if (button) {
+    run.textContent = button.label;
+    run.addEventListener("click", () => void onRun(button.kind, run));
   }
   return item;
 }
@@ -622,7 +681,8 @@ export function cardSteps(accountReport, repoReport = null) {
 
   const accountDone = Boolean(accountReport.signedIn || accountReport.savedLogin) && !has("bot-is-user");
   const accountStep = { label: "Bot account", done: accountDone, note: has("bot-is-user") ? `${login} is your own account; use a separate one` : login || "not created yet" };
-  if (!login) Object.assign(accountStep, { action: guide.get("account")?.note, url: guide.get("account")?.url });
+  const setup = { kind: "setup", label: "Open setup" };
+  if (!login) Object.assign(accountStep, { action: `${guide.get("account")?.note || ""} Then Open setup asks for its login in a terminal.`.trim(), url: guide.get("account")?.url, button: setup });
 
   const tokenDone = Boolean(accountReport.botLogin) && !tokenTrouble;
   const tokenStep = { label: "Token", done: tokenDone };
@@ -635,8 +695,9 @@ export function cardSteps(accountReport, repoReport = null) {
     // regenerated one.
     const wrongKind = ["broad-scopes", "fine-grained-token", "scopes-missing"].includes(tokenTrouble?.id);
     const page = guide.get(renewing && !wrongKind ? "renew" : "token");
-    if (tokenTrouble?.id === "token-in-keychain") tokenStep.action = "Open setup moves it where agents can read it.";
-    else if (page) Object.assign(tokenStep, { action: page.note, url: page.url });
+    if (tokenTrouble?.id === "token-in-keychain") Object.assign(tokenStep, { action: "Open setup moves it where agents can read it.", button: setup });
+    else if (page) Object.assign(tokenStep, { action: `${page.note} Then Open setup and paste it in the terminal.`, url: page.url, button: setup });
+    else Object.assign(tokenStep, { action: "Open setup and paste a new token in the terminal.", button: setup });
   }
 
   // On, but agents' Git does not include the bot's settings: gh uses the bot, pushes do not.
@@ -645,8 +706,9 @@ export function cardSteps(accountReport, repoReport = null) {
     label: "Agents use the bot",
     done: Boolean(accountReport.packageEnabled) && !gap,
     note: gap ? gap.message : accountReport.packageEnabled ? "on" : "off; agents act as you",
-    ...(gap ? { action: "Update now fixes this; then start new agent sessions." }
-      : accountReport.packageEnabled || accountReport.enableOffered ? {} : { action: "The setup turns this on when it finishes." }),
+    ...(gap ? { action: "Update now, then start new agent sessions.", button: { kind: "update", label: "Update now" } }
+      : accountReport.enableOffered ? { button: { kind: "enable", label: "Turn on" } }
+        : accountReport.packageEnabled ? {} : { action: "The setup turns this on when it finishes.", button: setup }),
   };
   const steps = [accountStep, tokenStep, useStep];
   if (!repoReport) return steps;
@@ -667,7 +729,10 @@ export function cardSteps(accountReport, repoReport = null) {
   else if (!inviteId) invite.note = "write access";
   else {
     invite.note = { "invite-pending": "invited; not accepted yet", "not-collaborator": "not invited", "bot-is-admin": "the bot is an admin; lower it to Write" }[inviteId];
-    invite.action = finding(inviteId).owner ? askOwner : inviteId === "bot-is-admin" ? null : "Open setup does this.";
+    if (finding(inviteId).owner) invite.action = askOwner;
+    else if (inviteId === "bot-is-admin") invite.action = "On github.com, in the repo's Settings under Collaborators, change the bot's role to Write.";
+    else if (inviteId === "invite-pending") Object.assign(invite, { action: "Accepts the invitation as the bot.", button: { kind: "invite", label: "Accept invitation" } });
+    else Object.assign(invite, { action: "Invites the bot as you, then accepts as the bot.", button: { kind: "invite", label: "Invite the bot" } });
   }
 
   const rulesId = ["protection", "protection-unverified", "protection-unchecked"].find(repoHas);
@@ -676,7 +741,8 @@ export function cardSteps(accountReport, repoReport = null) {
   else if (!rulesId) rules.note = "approval required to merge";
   else {
     rules.note = { protection: "missing", "protection-unverified": "applied, but you can't see who may bypass them", "protection-unchecked": "could not be read" }[rulesId];
-    rules.action = finding(rulesId).owner ? askOwner : rulesId === "protection" ? "Run roborepo protect here, or use Branch protection in the repo's menu." : null;
+    if (finding(rulesId).owner) rules.action = askOwner;
+    else if (rulesId === "protection") Object.assign(rules, { action: "Adds rules on GitHub so nothing merges without an approval.", button: { kind: "protect", label: "Protect branches" } });
   }
   return [...steps, invite, rules];
 }
@@ -684,11 +750,15 @@ export function cardSteps(accountReport, repoReport = null) {
 // ---------------------------------------------------------------------------------------------
 
 // Coming back to the window after the setup: re-read the account and only the repos being set up.
+// An open card with something left to do is re-read too: whatever was done on github.com or in a
+// terminal shows when the user comes back, with no Check again.
 function refreshOnReturn() {
-  if (document.visibilityState !== "visible" || (!watchingAccount && watching.size === 0)) return;
+  if (document.visibilityState !== "visible") return;
   if (Date.now() - lastFocusRefresh < FOCUS_THROTTLE_MS) return;
   lastFocusRefresh = Date.now();
-  if (watchingAccount) loadAccount({ fresh: true }).catch(() => {});
+  const cardRead = card?.refreshIfOpen() || false;
+  if (!watchingAccount && watching.size === 0) return;
+  if (watchingAccount && !cardRead) loadAccount({ fresh: true }).catch(() => {});
   for (const repositoryId of watching) load(repositoryId, { fresh: true }).catch(() => {});
 }
 document.addEventListener("visibilitychange", refreshOnReturn);

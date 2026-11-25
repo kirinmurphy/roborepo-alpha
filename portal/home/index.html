@@ -97,9 +97,9 @@
     <template id="tpl-agent-identity-step">
       <li class="agent-identity-step">
         <span class="agent-identity-step-mark" data-slot="mark" aria-hidden="true"></span>
+        <span class="agent-identity-step-number" data-slot="number"></span>
         <div class="agent-identity-step-body">
           <div class="agent-identity-step-head">
-            <span class="agent-identity-step-number" data-slot="number"></span>
             <strong data-slot="label"></strong>
             <span class="agent-identity-step-note" data-slot="note"></span>
           </div>
@@ -109,6 +109,7 @@
               <code data-slot="url"></code>
               <portal-copy-button data-slot="copy" label="Copy link"></portal-copy-button>
             </div>
+            <button type="button" data-btn="cta" data-slot="run" hidden></button>
           </div>
         </div>
       </li>
@@ -305,10 +306,7 @@
         <div class="item-err" data-slot="error" hidden></div>
       </div>
       <div class="modal-actions">
-        <button type="button" data-btn="secondary" data-slot="recheck">Check again</button>
-        <button type="button" data-btn="cta" data-slot="enable" hidden>Turn on</button>
-        <button type="button" data-btn="cta" data-slot="update" hidden>Update now</button>
-        <button type="button" data-btn="cta" data-slot="open-setup" hidden>Open setup</button>
+        <button type="button" data-btn="secondary" data-slot="recheck" hidden>Check again</button>
       </div>
     </dialog>
 

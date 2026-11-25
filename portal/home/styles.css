@@ -300,7 +300,8 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .agent-identity-command-line code { font-family: var(--mono); overflow-wrap: anywhere; }
 /* A checklist: a done step is marked and dimmed, so the eye lands on what is left. */
 .agent-identity-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-.agent-identity-step { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; }
+/* The number has its own column, so a wrapped line starts under the item's text, not its number. */
+.agent-identity-step { display: grid; grid-template-columns: 18px auto 1fr; gap: 8px; align-items: start; }
 .agent-identity-step-mark {
   width: 16px;
   height: 16px;
@@ -318,7 +319,7 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 .agent-identity-step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .agent-identity-step-number { color: var(--dim); }
 .agent-identity-step-note { color: var(--dim); }
-.agent-identity-step-action { display: grid; gap: 4px; }
+.agent-identity-step-action { display: grid; gap: 6px; justify-items: start; }
 .agent-identity-step-action[hidden] { display: none; }
 .agent-identity-owner { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
 .agent-identity-owner-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

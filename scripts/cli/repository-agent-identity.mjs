@@ -15,7 +15,7 @@ import { setupGuide } from "../../modules/forge/agent-identity-guide.mjs";
 import { loadRegistry } from "../../modules/repositories/registry.mjs";
 import { turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
 import { applyHarnessConfig } from "./portal-harness-refresh.mjs";
-import { readCurrentAccountIdentity, readCurrentRepoAgentAccess } from "./github-identity.mjs";
+import { inviteBotToRepo, readCurrentAccountIdentity, readCurrentRepoAgentAccess } from "./github-identity.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 import { selectPrimaryCheckout } from "./repository-agent-config.mjs";
 import { loadRepositoryPayload } from "./repositories.mjs";
@@ -134,6 +134,21 @@ export async function applyAgentGitRouting({
   const after = await readAccount({ fresh: true, now, read });
   if (!result.ok) return { applied: false, reason: "apply_failed", message: `The update did not finish: ${result.error}`, account: portalAccount(after, { platform }) };
   return { applied: true, account: portalAccount(after, { platform }) };
+}
+
+// "Invite the bot" on a repo's card: invites it as the user and accepts as the bot, with no terminal.
+// Needs a bot that works; answers with the repo read afresh, so the card shows the result.
+export async function inviteAgentBot({
+  repositoryId, stateRoot, platform = process.platform, now = Date.now,
+  readAccountReport = readCurrentAccountIdentity, read = readCurrentRepoAgentAccess, invite = inviteBotToRepo,
+}) {
+  repositoryTarget({ repositoryId, stateRoot });
+  const account = await readAccount({ fresh: false, now, read: readAccountReport });
+  if (!accountReady(account)) return { invited: false, reason: "not_ready", message: "The bot account needs fixing first." };
+  const result = await invite({ repositoryId, cwd: neutralFolder(), timeoutMs: PORTAL_TIMEOUT_MS, botLogin: account.botLogin });
+  repoCache.delete(repositoryId);
+  const repository = await loadRepositoryAgentIdentity({ repositoryId, stateRoot, fresh: true, platform, now, readAccountReport, read });
+  return result.ok ? { invited: true, repository } : { invited: false, reason: "refused", message: result.message, repository };
 }
 
 // Opens `roborepo github setup` in a new terminal, in the repo's primary checkout, after the user

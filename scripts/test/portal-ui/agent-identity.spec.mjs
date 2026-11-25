@@ -152,7 +152,7 @@ test.describe("Agent GitHub account", () => {
   // Answers the account route with `accountNext()`, each repo route with `repoNext(name)` (or
   // "waiting" while the account cannot be used), the setup route with `launch`, the enable route
   // with `enable()`, and "No thanks" with `{ offerDismissed: true }`. Records each read and post.
-  async function stub(page, { accountNext, repoNext = (name) => REPOS[name].report(name), ready = () => true, launch = { launched: true }, enable = null, update = null }) {
+  async function stub(page, { accountNext, repoNext = (name) => REPOS[name].report(name), ready = () => true, launch = { launched: true }, enable = null, update = null, invite = null }) {
     const reads = [];
     const posts = [];
     await page.route(/\/api\/agent-identity(\/enable|\/dismiss-offer|\/update)?(\?.*)?$/, async (route) => {
@@ -166,13 +166,14 @@ test.describe("Agent GitHub account", () => {
       reads.push({ kind: "account", fresh: url.searchParams.get("fresh") === "1" });
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(accountNext()) });
     });
-    await page.route(/\/api\/repositories\/[^/]+\/agent-identity(\/setup)?(\?.*)?$/, async (route) => {
+    await page.route(/\/api\/repositories\/[^/]+\/agent-identity(\/setup|\/invite)?(\?.*)?$/, async (route) => {
       const url = new URL(route.request().url());
       const repositoryId = decodeURIComponent(url.pathname.split("/")[3]);
       const name = repositoryId.split("/").pop();
       if (route.request().method() === "POST") {
-        posts.push({ kind: "setup", repositoryId, body: route.request().postData() });
-        return route.fulfill({ contentType: "application/json", body: JSON.stringify(launch) });
+        const kind = url.pathname.endsWith("/invite") ? "invite" : "setup";
+        posts.push({ kind, repositoryId, body: route.request().postData() });
+        return route.fulfill({ contentType: "application/json", body: JSON.stringify(kind === "invite" ? invite(name) : launch) });
       }
       reads.push({ kind: "repo", name, fresh: url.searchParams.get("fresh") === "1" });
       const body = !REPOS[name] ? { applies: false }
@@ -280,7 +281,7 @@ test.describe("Agent GitHub account", () => {
     const useItem = card(page).locator("[data-slot=steps] > li").filter({ hasText: "Agents use the bot" });
     await expect(useItem).toHaveAttribute("data-done", "false");
     await expect(useItem).toContainText("Agents' git pushes still go out as you, because your Claude Code and Codex settings don't include the bot's Git settings yet.");
-    await expect(useItem).toContainText("Update now fixes this; then start new agent sessions.");
+    await expect(useItem).toContainText("Update now, then start new agent sessions.");
     await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 3.");
     await expect(card(page).getByRole("button", { name: "Update now" })).toBeVisible();
     await shot(page, "card-git-not-routed");
@@ -309,14 +310,14 @@ test.describe("Agent GitHub account", () => {
     await stub(page, { accountNext: () => ACCOUNTS.healthy.report });
     await openHome(page);
     const expectations = {
-      "identity-ready": { done: [true, true, true, true, true], summary: "Agents act on GitHub as robo-bot.", setup: false, owner: false },
-      "identity-invited": { done: [true, true, true, false, true], summary: "Start at item 4.", setup: true, owner: false },
-      "identity-uninvited": { done: [true, true, true, false, true], summary: "Start at item 4.", setup: true, owner: false },
-      "identity-theirs": { done: [true, true, true, false, false], summary: "Start at item 4.", setup: false, owner: true },
-      "identity-unverified": { done: [true, true, true, true, false], summary: "Agents can work, but item 5 needs you soon.", setup: false, owner: true },
-      "identity-unprotected": { done: [true, true, true, true, false], summary: "Start at item 5.", setup: false, owner: false },
-      "identity-bot-admin": { done: [true, true, true, false, true], summary: "Start at item 4.", setup: false, owner: false },
-      "identity-unread": { done: [true, true, true, false, false], summary: "GitHub did not answer. Check again in a moment.", setup: false, owner: false },
+      "identity-ready": { done: [true, true, true, true, true], summary: "Agents act on GitHub as robo-bot.", button: null, owner: false },
+      "identity-invited": { done: [true, true, true, false, true], summary: "Start at item 4.", button: "Accept invitation", owner: false },
+      "identity-uninvited": { done: [true, true, true, false, true], summary: "Start at item 4.", button: "Invite the bot", owner: false },
+      "identity-theirs": { done: [true, true, true, false, false], summary: "Start at item 4.", button: null, owner: true },
+      "identity-unverified": { done: [true, true, true, true, false], summary: "Agents can work, but item 5 needs you soon.", button: null, owner: true },
+      "identity-unprotected": { done: [true, true, true, true, false], summary: "Start at item 5.", button: "Protect branches", owner: false },
+      "identity-bot-admin": { done: [true, true, true, false, true], summary: "Start at item 4.", button: null, owner: false },
+      "identity-unread": { done: [true, true, true, false, false], summary: "GitHub did not answer. Check again in a moment.", button: null, owner: false },
     };
     for (const [name, expected] of Object.entries(expectations)) {
       await badge(page, name).click();
@@ -331,7 +332,16 @@ test.describe("Agent GitHub account", () => {
       // No second checklist, no separate github.com panel, no "Fix:" line repeating an item.
       await expect(card(page).locator("ul, section")).toHaveCount(0);
       await expect(card(page)).not.toContainText("Fix:");
-      await expect(card(page).getByRole("button", { name: "Open setup" })).toBeVisible({ visible: expected.setup });
+      // One thing to do at a time: at most one action button, on the item to start at, and no
+      // terminal command beside it. Check again only when GitHub did not answer.
+      const actions = card(page).locator("[data-slot=run]:visible");
+      await expect(actions).toHaveCount(expected.button ? 1 : 0);
+      if (expected.button) {
+        await expect(actions).toHaveText(expected.button);
+        await expect(card(page).locator("li[data-current=true] [data-slot=run]")).toHaveText(expected.button);
+      }
+      await expect(card(page).locator("[data-slot=command-row]")).toBeHidden();
+      await expect(card(page).getByRole("button", { name: "Check again" })).toBeVisible({ visible: name === "identity-unread" });
       await expect(card(page).locator("[data-slot=owner]")).toBeVisible({ visible: expected.owner });
       if (expected.owner) {
         await expect(steps.filter({ hasText: "Ask the owner; the message below says what to do." })).not.toHaveCount(0);
@@ -364,11 +374,13 @@ test.describe("Agent GitHub account", () => {
     await expect(card(page).locator("[data-slot=subject]")).toHaveText("Bot account (all repos)");
     await expect(steps().locator(".agent-identity-step-head [data-slot=label]")).toHaveText(["Bot account", "Token", "Agents use the bot"]);
     expect(await doneOf(steps())).toEqual([false, false, false]);
-    expect(await urls()).toEqual(["https://github.com/signup", "https://github.com/settings/tokens/new", null]);
-    await expect(steps().nth(2)).toContainText("The setup turns this on when it finishes.");
+    // Only the item to start at says what to do; the others wait their turn.
+    expect(await urls()).toEqual(["https://github.com/signup", null, null]);
+    await expect(steps().nth(0)).toContainText("Then Open setup asks for its login in a terminal.");
+    await expect(steps().nth(2)).not.toContainText("The setup turns this on");
     // Addresses to copy, never links that would open in your own signed-in browser.
     await expect(card(page).locator("a")).toHaveCount(0);
-    await expect(card(page).getByRole("button", { name: "Copy link" })).toHaveCount(2);
+    await expect(card(page).getByRole("button", { name: "Copy link" })).toHaveCount(1);
     await expect(card(page).locator("[data-slot=bot-browser]")).toHaveText("Open copied links where the bot is signed in, not in your own browser.");
     await expect(card(page).getByRole("button", { name: "Open setup" })).toBeVisible();
     await shot(card(page), "account-card-not-set-up");
@@ -473,14 +485,14 @@ test.describe("Agent GitHub account", () => {
     expect(reads.filter((read) => read.fresh)).toEqual([{ kind: "account", fresh: true }, { kind: "repo", name: "identity-invited", fresh: true }]);
   });
 
-  test("finishing while the card is open shows All set, drops the progress note and Check again, and closes", async ({ page }) => {
+  test("finishing while the card is open shows All set, drops the progress note, and closes", async ({ page }) => {
     let current = ACCOUNTS["token-expired"].report;
     await stub(page, { accountNext: () => current, ready: () => current.state === "healthy" });
     await openHome(page);
     await badge(page, "identity-ready").click();
     await card(page).getByRole("button", { name: "Open setup" }).click();
     await expect(card(page).locator("[data-slot=launch-note]")).toContainText("A terminal opened");
-    await expect(card(page).getByRole("button", { name: "Check again" })).toBeVisible();
+    await expect(card(page).getByRole("button", { name: "Check again" })).toBeHidden();
 
     // The setup finished; coming back to the window re-reads and every item is done.
     current = ACCOUNTS.healthy.report;
@@ -511,15 +523,76 @@ test.describe("Agent GitHub account", () => {
 
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await stub(page, {
-      accountNext: () => ACCOUNTS.healthy.report,
+      accountNext: () => ACCOUNTS["token-expired"].report,
       launch: { launched: false, reason: "launch_failed", error: "open exited 1" },
     });
     await openHome(page);
-    await badge(page, "identity-uninvited").click();
+    await badge(page, "identity-ready").click();
     await expect(card(page).locator("[data-slot=command-row]")).toBeHidden();
     await card(page).getByRole("button", { name: "Open setup" }).click();
     await expect(card(page)).toContainText("The terminal did not open. Run the command below in your own terminal instead.");
     await expect(card(page).locator("[data-slot=command]")).toHaveText("roborepo github setup");
+    // The command stands in for the button rather than beside it.
+    await expect(card(page).getByRole("button", { name: "Open setup" })).toBeHidden();
+  });
+
+  test("Invite the bot and Protect branches run from the card, with no terminal", async ({ page }) => {
+    let invited = false;
+    let protectedRules = false;
+    const { posts } = await stub(page, {
+      accountNext: () => ACCOUNTS.healthy.report,
+      repoNext: (name) => (name === "identity-uninvited" && invited) || (name === "identity-unprotected" && protectedRules)
+        ? REPOS["identity-ready"].report(name) : REPOS[name].report(name),
+      invite: (name) => { invited = true; return { invited: true, repository: { repositoryId: `git:github.com/example/${name}`, ...REPOS["identity-ready"].report(name) } }; },
+    });
+    const protections = [];
+    await page.route(/\/api\/repositories\/[^/]+\/protection$/, async (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      protections.push(route.request().postData());
+      protectedRules = true;
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ state: "protected", policies: [], changes: [], refusal: null }) });
+    });
+    await openHome(page);
+
+    await badge(page, "identity-uninvited").click();
+    await card(page).getByRole("button", { name: "Invite the bot" }).click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("All set: Agents act on GitHub as robo-bot. This closes in 5 seconds.");
+    expect(posts).toEqual([{ kind: "invite", repositoryId: "git:github.com/example/identity-uninvited", body: "{}" }]);
+    await card(page).getByRole("button", { name: "Close" }).click();
+
+    await badge(page, "identity-unprotected").click();
+    await card(page).getByRole("button", { name: "Protect branches" }).click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("All set: Agents act on GitHub as robo-bot. This closes in 5 seconds.");
+    expect(protections).toEqual([JSON.stringify({ action: "protect" })]);
+  });
+
+  test("a failed invite keeps the item open and says why", async ({ page }) => {
+    await stub(page, {
+      accountNext: () => ACCOUNTS.healthy.report,
+      invite: (name) => ({ invited: false, reason: "refused", message: "GitHub refused: Must have admin rights to Repository. Only an admin of the repo can invite the bot.", repository: { repositoryId: `git:github.com/example/${name}`, ...REPOS[name].report(name) } }),
+    });
+    await openHome(page);
+    await badge(page, "identity-uninvited").click();
+    await card(page).getByRole("button", { name: "Invite the bot" }).click();
+    await expect(card(page).locator("[data-slot=launch-note]")).toHaveText("GitHub refused: Must have admin rights to Repository. Only an admin of the repo can invite the bot.");
+    await expect(card(page).locator("[data-slot=steps] > li").nth(3)).toHaveAttribute("data-done", "false");
+  });
+
+  test("coming back to the window re-reads an open card", async ({ page }) => {
+    let invited = false;
+    const { reads } = await stub(page, {
+      accountNext: () => ACCOUNTS.healthy.report,
+      repoNext: (name) => (name === "identity-invited" && invited ? REPOS["identity-ready"].report(name) : REPOS[name].report(name)),
+    });
+    await openHome(page);
+    await badge(page, "identity-invited").click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 4.");
+    // The bot accepted elsewhere (say, in its own browser).
+    invited = true;
+    reads.length = 0;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("All set: Agents act on GitHub as robo-bot. This closes in 5 seconds.");
+    expect(reads.filter((read) => read.fresh)).toEqual([{ kind: "account", fresh: true }, { kind: "repo", name: "identity-invited", fresh: true }]);
   });
 
   test("a repo the server turns down shows no badge", async ({ page }) => {

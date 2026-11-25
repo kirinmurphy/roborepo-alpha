@@ -82,8 +82,9 @@ offers the setup once (**No thanks** hides the offer for good). While it is on b
 sign in, Home shows a red warning with **Fix it** until the bot works again (or **Update now**, when
 the only problem is that agents' git pushes still go out as you). Once it is on, each GitHub repo shows
 an **agent bot** badge, green when agents can work there, and the badge opens a numbered list of
-what is done and where to start. **Open setup** opens this same setup in a terminal (macOS;
-elsewhere it shows the command to copy). If the bot is already signed in and only the switch is off,
+what is done and where to start, with one button on that item. Inviting the bot and protecting
+branches run from the portal; **Open setup** opens this same setup in a terminal for the login and
+token (macOS; elsewhere it shows the command to copy). If the bot is already signed in and only the switch is off,
 **Turn on** in Settings or on Home (or `roborepo package enable github-agent-identity`) is all that is
 left. See [Agent GitHub account](../reference/repositories.md#agent-github-account).
 
