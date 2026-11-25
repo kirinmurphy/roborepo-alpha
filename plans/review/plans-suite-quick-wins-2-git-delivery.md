@@ -320,6 +320,11 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - Reviewed implementation commit: 8c34801d88d211c7f9f656ce6adf3d9cfc72f1a2
 - Base commit: 5cba47f08635f5019e07aa26fb4726b9c0177e3e
 
+### Approval
+- Decision: approved
+- Reviewed implementation commit: 8c34801d88d211c7f9f656ce6adf3d9cfc72f1a2
+- Confirmed by: human
+
 ## Decision Log
 
 - 2026-11-24, during promotion: kept the shared procedure in the existing
