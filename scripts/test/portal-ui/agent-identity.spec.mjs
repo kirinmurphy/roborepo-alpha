@@ -160,7 +160,7 @@ test.describe("Agent GitHub account", () => {
       if (route.request().method() === "POST") {
         const kind = url.pathname.split("/").pop() === "dismiss-offer" ? "dismiss" : url.pathname.split("/").pop();
         posts.push({ kind, body: route.request().postData() });
-        const answer = kind === "enable" ? enable() : kind === "update" ? update() : { offerDismissed: true };
+        const answer = kind === "enable" ? await enable() : kind === "update" ? await update() : { offerDismissed: true };
         return route.fulfill({ contentType: "application/json", body: JSON.stringify(answer) });
       }
       reads.push({ kind: "account", fresh: url.searchParams.get("fresh") === "1" });
@@ -173,7 +173,7 @@ test.describe("Agent GitHub account", () => {
       if (route.request().method() === "POST") {
         const kind = url.pathname.endsWith("/invite") ? "invite" : "setup";
         posts.push({ kind, repositoryId, body: route.request().postData() });
-        return route.fulfill({ contentType: "application/json", body: JSON.stringify(kind === "invite" ? invite(name) : launch) });
+        return route.fulfill({ contentType: "application/json", body: JSON.stringify(kind === "invite" ? await invite(name) : launch) });
       }
       reads.push({ kind: "repo", name, fresh: url.searchParams.get("fresh") === "1" });
       const body = !REPOS[name] ? { applies: false }
@@ -429,6 +429,40 @@ test.describe("Agent GitHub account", () => {
     expect(posts).toEqual([{ kind: "enable", body: "{}" }]);
   });
 
+  test("a card button waiting on the server is disabled and shows a spinner with what it is doing", async ({ page }) => {
+    let on = false;
+    let release;
+    const held = () => new Promise((resolve) => { release = resolve; });
+    await stub(page, {
+      accountNext: () => (on ? ACCOUNTS.healthy.report : ACCOUNTS["package-off"].report),
+      enable: async () => { await held(); on = true; return { enabled: true, account: ACCOUNTS.healthy.report }; },
+      invite: async (name) => { await held(); return { invited: true, repository: { repositoryId: `git:github.com/example/${name}`, ...REPOS["identity-ready"].report(name) } }; },
+    });
+    // The account card, as Settings' "Set it up" opens it, then its Turn on.
+    await page.goto("/?agent-identity=setup");
+    await expect(card(page)).toBeVisible();
+    const turnOn = card(page).getByRole("button", { name: "Turn on" });
+    await turnOn.click();
+    const waiting = card(page).getByRole("button", { name: "Turning on…" });
+    await expect(waiting).toBeDisabled();
+    await expect(waiting).toHaveAttribute("aria-busy", "true");
+    await expect(waiting.locator(".button-spinner")).toBeVisible();
+    await shot(card(page), "card-turning-on");
+    release();
+    await expect(card(page).locator(".button-spinner")).toHaveCount(0);
+    await expect(card(page).getByRole("button", { name: "Turning on…" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    // Invite the bot goes through the same busy state.
+    await badge(page, "identity-uninvited").click();
+    await card(page).getByRole("button", { name: "Invite the bot" }).click();
+    const inviting = card(page).getByRole("button", { name: "Inviting…" });
+    await expect(inviting).toBeDisabled();
+    await expect(inviting.locator(".button-spinner")).toBeVisible();
+    release();
+    await expect(card(page).locator(".button-spinner")).toHaveCount(0);
+  });
+
   test("Update now posts no body; the banner says what it means for open sessions, and the card's item 3 is checked", async ({ page }) => {
     let routed = false;
     const { posts } = await stub(page, {
@@ -585,17 +619,27 @@ test.describe("Agent GitHub account", () => {
     await openHome(page);
     await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
     await expect(offer(page)).toBeHidden();
+    const accountReads = () => reads.filter((read) => read.kind === "account");
+    // One poll at a time: Home skips a tick while its previous refresh is still in flight, which a
+    // single jump of the fake clock can land on, so the clock moves on until a poll has gone out.
+    const nextPoll = async () => {
+      const before = accountReads().length;
+      await expect(async () => {
+        await page.clock.fastForward(10_000);
+        expect(accountReads().length).toBeGreaterThan(before);
+      }).toPass({ intervals: [200] });
+    };
 
     // `roborepo package disable github-agent-identity`, run elsewhere.
     current = ACCOUNTS["package-off"].report;
     reads.length = 0;
-    await page.clock.fastForward(10_000);
+    await nextPoll();
     for (const name of NAMES) await expect(badge(page, name), name).toBeHidden();
     await expect(offer(page).getByRole("button", { name: "Turn on" })).toBeVisible();
-    expect(reads.filter((read) => read.kind === "account")).toEqual([{ kind: "account", fresh: false }]);
+    expect(accountReads().every((read) => !read.fresh), "the poll needs no fresh read").toBe(true);
 
     current = ACCOUNTS.healthy.report;
-    await page.clock.fastForward(10_000);
+    await nextPoll();
     await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
     await expect(offer(page)).toBeHidden();
 
@@ -603,8 +647,7 @@ test.describe("Agent GitHub account", () => {
     await badge(page, "identity-invited").click();
     await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 4.");
     reads.length = 0;
-    await page.clock.fastForward(10_000);
-    await expect.poll(() => reads.filter((read) => read.kind === "account").length).toBe(1);
+    await nextPoll();
     await expect(card(page)).toBeVisible();
     expect(reads.filter((read) => read.kind === "repo")).toEqual([]);
   });

@@ -394,54 +394,48 @@ function renderBadge(badge, repositoryId) {
 // Actions shared by the offer and the card
 
 async function turnOn(button, onNote) {
-  button.disabled = true;
-  try {
-    const result = await portalPostJson(`${ACCOUNT_URL}/enable`, {});
-    if (result.account) showAccount(result.account);
-    onNote(result.enabled ? "Agents act as the bot in new agent sessions; ones already open keep acting as you until restarted." : result.message);
-  } catch (error) {
-    onNote(error.message);
-  } finally {
-    button.disabled = false;
-  }
+  await busy(button, "Turning on…", async () => {
+    try {
+      const result = await portalPostJson(`${ACCOUNT_URL}/enable`, {});
+      if (result.account) showAccount(result.account);
+      onNote(result.enabled ? "Agents act as the bot in new agent sessions; ones already open keep acting as you until restarted." : result.message);
+    } catch (error) {
+      onNote(error.message);
+    }
+  });
 }
 
 // Applies RoboRepo's config so agents' Git uses the bot. Takes a few seconds: the button says so.
 async function updateConfig(button, onNote) {
-  const label = button.textContent;
-  button.disabled = true;
-  button.textContent = "Updating…";
-  try {
-    const result = await portalPostJson(`${ACCOUNT_URL}/update`, {});
-    if (result.account) showAccount(result.account);
-    onNote(result.applied
-      ? "Updated. New agent sessions push as the bot; ones already open still push as you until restarted."
-      : result.message || null, Boolean(result.applied));
-  } catch (error) {
-    onNote(error.message);
-  } finally {
-    button.disabled = false;
-    button.textContent = label;
-  }
+  await busy(button, "Updating…", async () => {
+    try {
+      const result = await portalPostJson(`${ACCOUNT_URL}/update`, {});
+      if (result.account) showAccount(result.account);
+      onNote(result.applied
+        ? "Updated. New agent sessions push as the bot; ones already open still push as you until restarted."
+        : result.message || null, Boolean(result.applied));
+    } catch (error) {
+      onNote(error.message);
+    }
+  });
 }
 
 async function openSetup(button, repositoryId) {
-  button.disabled = true;
   watchingAccount = true;
   watching.add(repositoryId);
-  try {
-    const result = await portalPostJson(`${repoUrl(repositoryId)}/setup`, {});
-    return {
-      launched: result.launched,
-      note: result.launched
-        ? `A terminal opened running roborepo github setup in ${names.get(repositoryId) || "the repo"}'s folder. Finish it there; this page updates when you come back.`
-        : launchFailureNote(result),
-    };
-  } catch (error) {
-    return { launched: false, note: error.message };
-  } finally {
-    button.disabled = false;
-  }
+  return busy(button, "Opening…", async () => {
+    try {
+      const result = await portalPostJson(`${repoUrl(repositoryId)}/setup`, {});
+      return {
+        launched: result.launched,
+        note: result.launched
+          ? `A terminal opened running roborepo github setup in ${names.get(repositoryId) || "the repo"}'s folder. Finish it there; this page updates when you come back.`
+          : launchFailureNote(result),
+      };
+    } catch (error) {
+      return { launched: false, note: error.message };
+    }
+  });
 }
 
 const LAUNCH_REASONS = {
@@ -626,15 +620,23 @@ function buildCard() {
 // GitHub repo listed.
 const setupRepository = (target) => (target.kind === "repo" ? target.repositoryId : firstGithubRepository());
 
+// Every action button here waits on the server, some for seconds: while it does, the button is
+// disabled and shows the portal's inline spinner beside a label saying what is happening.
 async function busy(button, label, work) {
-  const idle = button.textContent;
+  const idle = [...button.childNodes];
+  const spinner = document.createElement("span");
+  spinner.className = "button-spinner";
+  spinner.setAttribute("aria-hidden", "true");
   button.disabled = true;
-  button.textContent = label;
+  button.setAttribute("aria-busy", "true");
+  button.replaceChildren(spinner, label);
   try {
-    await work();
+    return await work();
   } finally {
     button.disabled = false;
-    button.textContent = idle;
+    button.removeAttribute("aria-busy");
+    // A re-render may already have relabeled the button; keep that label.
+    if (button.firstChild === spinner) button.replaceChildren(...idle);
   }
 }
 
