@@ -169,6 +169,8 @@ function branchTipPushed(primary, branch, tip) {
   const upstreamRef = git(primary, ["for-each-ref", "--format=%(upstream)", `refs/heads/${branch}`]).stdout;
   const upstream = upstreamRef ? git(primary, ["rev-parse", "--verify", "--quiet", upstreamRef]) : { ok: false };
   if (!upstreamRef) return { ok: false, observed: `${branch} has no upstream` };
+  // An upstream of `remote = .` is another local branch, so equality would not show a publish.
+  if (!upstreamRef.startsWith("refs/remotes/")) return { ok: false, observed: `upstream ${upstreamRef} is not a remote-tracking branch` };
   if (!upstream.ok) return { ok: false, observed: `upstream ${upstreamRef} is missing locally` };
   return upstream.stdout === tip
     ? { ok: true, observed: `${tip} matches its upstream` }

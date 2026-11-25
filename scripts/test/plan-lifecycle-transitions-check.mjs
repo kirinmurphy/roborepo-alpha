@@ -578,6 +578,14 @@ try {
     assert.equal(pruned.ok, false, "a configured upstream with no local tracking ref fails");
     assert.match(pruned.observed, /refs\/remotes\/origin\/feat\/pushed is missing locally/);
 
+    // `branch.<name>.remote = .` tracks another local branch, which proves nothing was published.
+    git(pushed.path, "branch", "local-twin", "feat/pushed");
+    git(pushed.path, "branch", "--quiet", "--set-upstream-to=local-twin", "feat/pushed");
+    const localUpstream = tipCheck("upstream is a local branch");
+    assert.equal(localUpstream.ok, false, "a local branch at the same commit is not a pushed upstream");
+    assert.match(localUpstream.observed, /refs\/heads\/local-twin is not a remote-tracking branch/);
+    assert.match(localUpstream.fix, /push the branch/);
+
     git(root, "remote", "remove", "origin");
     const local = tipCheck("no remote");
     assert.equal(local.ok, true, "a repository with no remote has nothing to push to");
