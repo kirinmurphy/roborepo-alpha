@@ -616,6 +616,12 @@ onRepositoryScopeResolved((resolution) => {
     void loadRepositoryInventory(resolution.scope);
     return;
   }
+  // Back to All repos from a repo scope: the package view was not read while scoped, so read it
+  // now rather than drawing stale or missing tabs until the next poll.
+  if (!resolution.scope && previous && lastSnapshot) {
+    void reloadAll();
+    return;
+  }
   if (lastSnapshot) render(lastSnapshot);
   else renderScoped();
 });

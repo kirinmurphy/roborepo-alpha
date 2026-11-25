@@ -159,6 +159,8 @@ export function packageInstallCommand(rest = []) {
       }
       let confirmed = flags.has("yes");
       if (preview.needsConfirmation && !confirmed && interactive(flags)) {
+        // The same warning the portal's install dialog shows.
+        if (preview.warning) console.log(preview.warning);
         const unverified = preview.packages.filter((item) => item.trust === "unverified").map((item) => item.qualifiedName);
         confirmed = await confirm(`Install ${unverified.join(", ")} from an unverified source?`);
         if (!confirmed) {

@@ -141,6 +141,44 @@ test("package sources and installs agree between the portal and the CLI", async 
   await expect(folderCard.getByRole("checkbox", { name: "UI Folder Pkg" })).toHaveCount(1);
   await expect(folderCard.getByRole("button", { name: "Install UI Folder Pkg" })).toHaveCount(0);
 
+  // Portal: turn the folder package on, then remove it from its card. It is turned off first and
+  // its folder stays.
+  await folderCard.getByRole("checkbox", { name: "UI Folder Pkg" }).dispatchEvent("click");
+  await expect.poll(() => listed("uifolderpkg")?.active).toBe(true);
+  await folderCard.getByRole("button", { name: "Remove UI Folder Pkg" }).click();
+  await expect(dialog(page)).toContainText("Its folder is left as it is");
+  await dialog(page).getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(dialog(page)).toBeHidden();
+  expect(listed("uifolderpkg")).toMatchObject({ installed: false, active: false });
+  expect(fs.existsSync(path.join(folder, "uifolderpkg", "package.config.json"))).toBe(true);
+
+  // Portal: add a second GitHub source, refresh it after a new commit, and remove it keeping the
+  // package the CLI installed from it.
+  const extra = path.join(tmp, "ui-extra");
+  fs.mkdirSync(extra, { recursive: true });
+  fixtureGit(extra, "init", "-q");
+  commit(extra, { "packages/uiextra/package.config.json": manifest("uiextra", "UI Extra"), "packages/uiextra/rules.md": "## UI extra v1\n" });
+  await page.getByRole("button", { name: "Add a Source" }).click();
+  await page.getByLabel("GitHub URL or folder path").fill(pathToFileURL(extra).href);
+  await page.getByLabel("Id (optional)").fill("uiextra");
+  await page.getByRole("button", { name: "Add Source", exact: true }).click();
+  await expect(page.locator(".sources-status")).toContainText("Added uiextra: 1 package available.");
+  await expect(page.locator(".sources-status")).toContainText("This repository is not in RoboRepo's trusted catalog.");
+  expect(cliJson("package", "source", "list").map((source) => source.id)).toContain("uiextra");
+  const extraSecond = commit(extra, { "packages/uiextra/rules.md": "## UI extra v2\n" });
+  await sourceRow(page, "uiextra").getByRole("button", { name: "Refresh uiextra" }).click();
+  await expect(page.locator(".sources-status")).toHaveText(`uiextra is now at ${extraSecond.slice(0, 12)}.`);
+  expect(cliJson("package", "source", "list").find((source) => source.id === "uiextra").revision).toBe(extraSecond);
+  expect(cli("package", "install", "uiextra/uiextra", "--yes").status).toBe(0);
+  await page.reload();
+  await sourceRow(page, "uiextra").getByRole("button", { name: "Remove uiextra" }).click();
+  await dialog(page).getByLabel("Keep its installed packages, usable without a source").check();
+  await dialog(page).getByRole("button", { name: "Remove Source" }).click();
+  await expect(dialog(page)).toBeHidden();
+  await expect(sourceRow(page, "uiextra")).toHaveCount(0);
+  expect(listed("uiextra")).toMatchObject({ installed: true, available: false });
+  expect(cli("package", "remove", "uiextra").status).toBe(0);
+
   // CLI: remove the GitHub source. Portal: remove the folder source. Each shows in the other.
   expect(cli("package", "source", "remove", "uiteam").status).toBe(0);
   await page.reload();
@@ -274,4 +312,10 @@ test("package tabs and sources stay out of a single-repo scope", async ({ page }
   await expect(page.getByRole("tablist", { name: "Package sources" })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Sources" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Install / })).toHaveCount(0);
+
+  // Back to All repos through the selector: the tabs and sources return without waiting for a poll.
+  await page.getByRole("button", { name: /^Repo: / }).click();
+  await page.getByRole("option", { name: "All repos", exact: true }).click();
+  await expect(page.getByRole("tablist", { name: "Package sources" })).toBeVisible({ timeout: 3_000 });
+  await expect(page.getByRole("heading", { name: "Sources" })).toBeVisible({ timeout: 3_000 });
 });

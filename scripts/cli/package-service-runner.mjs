@@ -64,6 +64,9 @@ export function runPackageServiceInChild(operation, args = [], { actor = current
       }
       resolve(outcome.result);
     });
+    // A child that exits before reading its input is reported by the close handler (no result
+    // line); the broken pipe itself must not become an unhandled error in the server.
+    child.stdin.on("error", () => {});
     child.stdin.end(JSON.stringify({ operation, args }));
   });
 }
