@@ -1173,8 +1173,8 @@ Keep the source configuration and lock schemas in one technical reference and li
 - [x] The contents summary omitted runtime assets — fixed (41b7416e)
 - [x] Removing a copied package another installed package required left a dangling requirement and broke catalog load — fixed (e8991756), not revalidated by a Validator pass (cap reached)
 - [x] Disabling or removing a folder source whose package another source's package required broke catalog load — fixed (e8991756), not revalidated by a Validator pass (cap reached)
-- [ ] `/plan-review` pass 1, actionable fix: `package remove` of an enabled package left unresolved by a missing requirement skipped the disable step and left its harness registrations (`package-service.mjs` `removePackage`)
-- [ ] `/plan-review` pass 1, actionable fix: reinstalling a pinned git package whose copy was deleted previewed and pulled in the listing's newer revision and its requirements while restoring the old pin (`package-service.mjs` `keptInstall`)
+- [x] `/plan-review` pass 1, actionable fix: `package remove` of an enabled package left unresolved by a missing requirement skipped the disable step and left its harness registrations — fixed in review (411939f4)
+- [x] `/plan-review` pass 1, actionable fix: reinstalling a pinned git package whose copy was deleted previewed and pulled in the listing's newer revision and its requirements while restoring the old pin — fixed in review (411939f4)
 
 ### Verification
 - Validation pass 1 at aba9cc6f (fresh-context subagent): 1 blocking, 4 actionable fix findings, all fixed.
@@ -1192,6 +1192,10 @@ Keep the source configuration and lock schemas in one technical reference and li
 - `npm test` outside the command sandbox: 427 passed, 0 failed (run against the tree after a8b102a1's changes). Inside the sandbox, 13 plan-store, developer-runtime, and PTY checks fail on Git-worktree writes, process listing, and PTY allocation the sandbox blocks.
 - `npm run test:package-install`: ok.
 - Base failure: `scripts/test/cli-surface-integration-check.mjs` ("menu title duplicated after redraw") fails inside the command sandbox on `main` too, because the sandbox cannot allocate a PTY; it passes on this branch outside the sandbox.
+- `/plan-review`: base `main` (13d33e6c) merged at 0fa6b43f with no conflicts. CI passed at 10ad0b82 (run 45406598256); 0fa6b43f had no CI run.
+- `/plan-review` at 0fa6b43f, outside the command sandbox: `npm test` 427 passed, 0 failed; `npm run test:package-install` ok.
+- `/plan-review` Validator pass 1 at 0fa6b43f (fresh-context subagent): 2 actionable fix findings, both fixed in 411939f4.
+- At 411939f4: package-update, package-provenance, package-resolution, package-catalog, package-lifecycle, package-source-registry, and package-source-git checks → ok.
 
 ## References
 
