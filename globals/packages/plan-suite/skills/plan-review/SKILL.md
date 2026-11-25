@@ -116,7 +116,8 @@ Run `roborepo plans preflight <plan> --json`.
 From the plan's worktree, run the repository's canonical base synchronization command,
 `roborepo plans sync-base --base <base> --json`. It fetches the base branch's upstream, fast-forwards a stale
 local base, and merges the base into the feature branch, or does nothing when there is nothing new,
-so every review round runs it. `/plan-execute` runs the same command when it hands the plan off, so
+so every review round runs it. It also merges nothing once the base has absorbed the branch (state
+`landed`): after the pull request merged, a merge-back would only make the approval stale. `/plan-execute` runs the same command when it hands the plan off, so
 this step merges only what the base gained since then. Invoking `/plan-review` authorizes this
 merge into the plan's own feature branch, as it does for `/plan-execute`.
 

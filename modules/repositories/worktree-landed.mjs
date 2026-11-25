@@ -8,7 +8,7 @@ export const FIRST_PARENT_SCAN_LIMIT = 500;
 const GIT_TIMEOUT_MS = 10000;
 
 // A branch is landed only after it carried a commit of its own and some first-parent base commit
-// absorbed its current tree. Keeping the absorbing commit makes the answer stable as base moves on.
+// absorbed its current tree: a commit after the fork, or the fork itself when the tip's tree equals it. Keeping the absorbing commit makes the answer stable as base moves on.
 //
 // `recorded` is an absorbing commit an earlier check reported. It is evidence to verify, not a
 // result to trust: when it is still a first-parent base commit after the fork and still absorbs the
@@ -77,6 +77,14 @@ async function inspectLanding(cwd, branch, temporary, { base = null, recorded = 
     const absorbed = await absorbs(commit);
     if (absorbed === null) return verdict("scan unavailable", { base: baseRef, tip, fork, start, ownWork, error: scanError });
     if (absorbed) return landed(commit, false);
+  }
+  // A branch that merged base back in after it landed forks from base's tip, so no base commit
+  // follows the fork. When its tree equals the fork's, that first-parent base commit already holds
+  // everything the branch has.
+  const sameTree = await Promise.all([git(["rev-parse", `${tip}^{tree}`]), git(["rev-parse", `${fork}^{tree}`])]);
+  if (sameTree.every((result) => result.ok) && sameTree[0].stdout.trim() === sameTree[1].stdout.trim()) {
+    const firstParent = await git(["rev-list", "--first-parent", baseRef], { maxBuffer: GIT_MAX_BINARY_BUFFER });
+    if (firstParent.ok && lines(firstParent.stdout).includes(fork)) return landed(fork, false);
   }
   return verdict("not absorbed", { base: baseRef, tip, fork, start, ownWork });
 }

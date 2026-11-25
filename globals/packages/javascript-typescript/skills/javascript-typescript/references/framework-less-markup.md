@@ -29,7 +29,7 @@ write.
 ## When to promote a template-fill into a custom element
 
 A `<template>` + slot-fill function is the default. Promote a rendered unit to a light-DOM custom
-element (`class extends HTMLElement`, no shadow DOM) only when it owns real behavior beyond
+element (`class extends HTMLElement`, light DOM by default) only when it owns real behavior beyond
 "filled template with static content" — a listener it manages itself, async/in-flight state,
 error handling, or logic duplicated near-identically across two or more call sites that a shared
 element would eliminate outright (not just similar-looking markup).
@@ -60,8 +60,14 @@ Signals it's NOT worth promoting (keep it a plain function):
 
 ## Conventions for the custom-element form, once promoted
 
-- Light DOM, not shadow DOM — the page's existing CSS should keep applying to the element's
-  rendered content without a second styling mechanism.
+- Light DOM by default — the page's existing CSS should keep applying to the element's
+  rendered content without a second styling mechanism. Light DOM also keeps `querySelector`,
+  test selectors, and `aria-labelledby`/`<label for>` references working across the element.
+- Use shadow DOM only when the element must be isolated from CSS it does not control: a widget
+  embedded in third-party pages, a component library shared across apps, or a container for
+  untrusted or user-supplied HTML. Expose styling through CSS custom properties and `::part()`,
+  and use `<slot>` when callers supply content. Shadow DOM isolates styles, not scripts:
+  untrusted HTML still needs sanitizing or a sandboxed `<iframe>`.
 - Data in via properties (`el.record = value`), not attributes, for anything that isn't a plain
   string (objects, callbacks). Attributes are fine for small string values that benefit from being
   visible in the DOM (an id, a label).
@@ -70,7 +76,9 @@ Signals it's NOT worth promoting (keep it a plain function):
   keep it dependency-free so it can be reused without pulling in the page's wiring code.
 - Prefer dispatching a bubbling `CustomEvent` for "something happened, caller decides what to do"
   over the element importing and calling an app-level function directly — this avoids a layering
-  inversion where a reusable component depends on page-specific orchestration code.
+  inversion where a reusable component depends on page-specific orchestration code. An event
+  dispatched inside a shadow root needs `composed: true` as well as `bubbles: true` to reach
+  outside listeners; or dispatch it from the host element.
 - Re-render model: "set a property, rebuild the whole subtree" (`replaceChildren` on change), not
   `attributeChangedCallback`/`observedAttributes` fine-grained patching, unless the project already
   has a stronger reason to need partial updates.

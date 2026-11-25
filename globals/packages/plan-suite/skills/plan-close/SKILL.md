@@ -206,7 +206,9 @@ The full scan, which the canonical check performs and which a repository without
   after that fork, oldest first, up to the repository's scan limit. A commit absorbs the branch
   when merging the branch into that historical commit changes no tree content: compare the merge
   result's tree to the base commit's tree. The first absorbing commit proves the work landed even
-  if later base commits changed those files.
+  if later base commits changed those files. When none of them absorbs it, the fork itself does
+  if it is a base first-parent commit with the same tree as the branch tip: the branch merged base
+  back in after it landed.
 - If no scanned first-parent commit absorbs the branch, the scan limit is exceeded, or any required
   Git evidence is unavailable, report `landed: unconfirmed` and refuse.
 
