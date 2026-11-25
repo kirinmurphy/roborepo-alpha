@@ -1,6 +1,6 @@
 ---
 id: gcfw77cq
-next_action: Report the three person-only Not tested checks (desktop app title, interactive CLI picker, Codex rename line) and confirm CI on the pushed head, then rerun /plan-review to approve 831d29a5
+next_action: Report the three person-only Not tested checks (desktop app title, interactive CLI picker, Codex rename line) and confirm CI on the pushed head, then rerun /plan-review to approve 8d398564
 blocked_by: []
 depends_on: []
 related: ["plan-session-launching-milestone-1", "96r9wbj0", "0ubk9sug"]
@@ -424,6 +424,8 @@ title, because nothing reliable signals that the plan work ended.
 - [x] An overlong first word cut into a two-word prefix (`Quick Change…`, `/plan sub-task…`), so
       the title lost its stage prefix — fixed (6a891dcc)
 - [x] The guide's package-contents sentence omitted plan-suite's hooks file — fixed (6a891dcc)
+- [x] The portal UI test for plan-suite's contents view still expected no Hooks row, failing CI —
+      fixed in review (8d398564)
 
 ### Verification
 
@@ -448,16 +450,19 @@ title, because nothing reliable signals that the plan work ended.
   worktrees in their temp fixture repos)
 - /plan-review Validator pass 5 at 24f5833f (fresh-context subagent): clean; one note left as is,
   a `Session title:` line wins even when its stage differs from the leading command
-- CI on PR #89: not yet run at 24f5833f; at 6a891dcc `windows-installer` passed and `check` was
-  still running
-
 - /plan-review at 831d29a5 (an exact plan path now names only that plan):
   `node scripts/test/plan-session-title-check.mjs` and `plan-suite-check.mjs` passed (outside the
   sandbox); Validator pass 6 over 24f5833f..831d29a5 (fresh-context subagent): clean
+- CI run 45644386426 at 831d29a5: `check (ubuntu-latest)` failed one portal UI test, which still
+  expected plan-suite's contents view without the new Hooks row; `check (macos-latest)` was
+  cancelled with it; `windows-installer` passed. Fixed in 8d398564; the test passes locally
+  (`node scripts/test/portal-ui/run.mjs portal-ui.spec.mjs -g "several skills"`)
+- Validator pass 7 over 831d29a5..8d398564 (fresh-context subagent): clean
+- CI at 8d398564: not yet reported
 
 ### Result
 
 - Status: pending
-- Reviewed implementation commit: 831d29a5ae508956fdd493225187e32cb6f2c519
+- Reviewed implementation commit: 8d398564f240060aaf7f53665231959953b459bd
 - Base commit: 976052259a3e93d27047c52259eda32a0799082b
 - Pending: three person-only `## Not tested` checks and CI on the pushed head
