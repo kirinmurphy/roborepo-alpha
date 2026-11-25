@@ -237,6 +237,7 @@ export function packageRemoveCommand(rest = []) {
     if (!reference) throw new PackageServiceError("usage: roborepo package remove <package>", { code: "usage" });
     const { disablePackage, retireStrandedPackage } = await import("./packages.mjs");
     const result = await removePackage(reference, { disable: (id) => disablePackage([id]), retire: retireStrandedPackage });
+    if (result.warning) console.warn(`warn: ${result.warning}`);
     if (flags.has("json")) return emitJson(result);
     if (!result.removed) console.log(`${result.qualifiedName}: ${result.message || "nothing to remove"}`);
     else console.log(`removed ${result.qualifiedName}${result.disabled ? " (disabled first)" : ""}${result.deletedCopy ? "; deleted its installed copy" : ""}`);

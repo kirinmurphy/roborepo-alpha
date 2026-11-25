@@ -39,7 +39,7 @@ import {
   refreshGitSource,
   trustedEntryFor,
 } from "./package-source-git.mjs";
-import { effectiveEnabledIds, readAppliedPackageIds, readEnabledPackagesRegistry, selectedRootIds } from "./package-state.mjs";
+import { effectiveEnabledIds, forgetPackageIds, readAppliedPackageIds, readEnabledPackagesRegistry, selectedRootIds } from "./package-state.mjs";
 import { hasReplaceOverride, readWorkspaceOverrides } from "./workspace-resources.mjs";
 
 // Exit codes for non-interactive callers. 2 matches the CLI's existing usage/refusal code.
@@ -835,18 +835,23 @@ export async function removePackage(reference, { disable = null, retire = null }
   }
   // Selected or applied, but out of the catalog: its registrations are still in the harnesses.
   const stranded = !pkg && (readEnabledPackagesRegistry().packages.includes(packageId) || readAppliedPackageIds().includes(packageId));
+  let warning = null;
   if (stranded) {
     const own = (composed.candidates || []).find((candidate) => candidate.id === packageId && candidate.sourceId === record.sourceId
       && (record.kind !== "materialized" || candidate.revision === record.resolved));
-    if (!own) {
-      throw new PackageServiceError(`${packageId} is still on, but its package files are missing, so what it registered cannot be removed; restore them with \`roborepo package update ${packageId}\` first. Nothing was removed`, { code: "refused" });
+    if (own) {
+      if (!retire) throw new PackageServiceError(`${packageId} is active; disable it first`, { code: "refused" });
+      await retire(own);
+      disabled = true;
+    } else {
+      // Its files are gone, so nothing says what it registered. Refusing would leave a package no
+      // command can clear (its source may be gone too); remove it and say what may remain.
+      forgetPackageIds([packageId], composed.packages);
+      warning = `the files of ${packageId} are missing, so anything it registered in your harnesses could not be removed; run \`roborepo doctor\` to check for leftovers`;
     }
-    if (!retire) throw new PackageServiceError(`${packageId} is active; disable it first`, { code: "refused" });
-    await retire(own);
-    disabled = true;
   }
   const removed = removeInstalled(packageId);
-  return { qualifiedName: qualifiedName(record.sourceId, packageId), removed: removed.removed, deletedCopy: removed.deletedCopy, disabled };
+  return { qualifiedName: qualifiedName(record.sourceId, packageId), removed: removed.removed, deletedCopy: removed.deletedCopy, disabled, ...(warning ? { warning } : {}) };
 }
 
 // ---------------------------------------------------------------------------------------------

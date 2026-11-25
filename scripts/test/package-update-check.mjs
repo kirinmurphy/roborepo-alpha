@@ -321,6 +321,17 @@ try {
   assert.ok(!lock()["strand-top"], "its record goes");
   const registryAfter = JSON.parse(fs.readFileSync(path.join(roots.stateRoot, "enabled-packages.json"), "utf8"));
   assert.ok(!registryAfter.packages.includes("strand-top"), "its selection goes");
+
+  // A package still recorded as applied whose own files are missing, from a source that is gone,
+  // is still removable: it goes with a warning instead of staying stuck.
+  ok("package", "source", "remove", "strand", "--keep-installed");
+  const appliedIds = () => JSON.parse(fs.readFileSync(path.join(roots.stateRoot, "applied-packages.json"), "utf8")).packages;
+  assert.ok(appliedIds().includes("strand-base"), "the requirement was applied with its root");
+  const removedMissing = cli("package", "remove", "strand-base");
+  assert.equal(removedMissing.status, 0, `a package with missing files can be removed\n${removedMissing.output}`);
+  assert.match(removedMissing.output, /could not be removed/, "and the user is told what may remain");
+  assert.ok(!lock()["strand-base"], "its record goes");
+  assert.ok(!appliedIds().includes("strand-base"), "it is no longer recorded as applied");
 } finally {
   roots.restore();
   roots.cleanup();
