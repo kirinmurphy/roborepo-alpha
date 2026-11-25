@@ -508,8 +508,8 @@ function keptInstall(pkg, lock, candidates = []) {
   return { ...pinned, contents: contentsSummary(pinned.sourceRoot) };
 }
 
-// A copied package as it was at its recorded revision, read from the source's revision cache (or
-// fetched by that exact commit), for when its installed copy is gone. Null when it cannot be had.
+// A copied package as it was at its recorded revision, read from the source's local revision cache
+// (never the network), for when its installed copy is gone. Null when that revision is not cached.
 function readPinnedRevision(recorded, source, collection = null) {
   let folder;
   try {
