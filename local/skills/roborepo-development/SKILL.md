@@ -75,6 +75,14 @@ Everything else (the two symlink levels, the layer table) lives in
   cross-harness behavior; Claude, Codex, and Gemini can implement the same capability differently.
   `validateCapabilityAdapters` checks that each declared capability has its required methods, but
   it cannot prove their behavior. Add behavior checks for the providers affected by the change.
+- **Harness-specific code lives in providers; platform code never names a harness.** Common
+  behavior goes in the capability contract and adapters; anything one harness does its own way
+  (config paths, file formats, env keys, display names) goes in that provider under
+  `globals/harnesses/<id>/` and `scripts/harnesses/`. Platform code, portal copy, and findings get
+  the harnesses from the registry's list of enabled providers, which changes with the user's setup,
+  never from a static list or a hard-coded `"claude"` / `"Codex"` branch. Text a person reads
+  says "your harness settings" unless it names harnesses from that list. Before adding a harness
+  check outside a provider, ask which provider method should answer it; if none does, add one.
 - **Adding any skill:** prefer `roborepo package dev create` / `package dev add-skill`. Shared skill →
   a package under `globals/packages/`, then run `roborepo skill sync-global` to refresh the machine-local cache and
   harness views. Shared command surfaces are rendered from package `slash-command` resources; run
