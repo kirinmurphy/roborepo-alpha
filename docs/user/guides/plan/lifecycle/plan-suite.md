@@ -118,8 +118,9 @@ The Plans page shows an onboarding banner until the suite is enabled. Its button
 and each command in the list has a **Details** button that shows that command's
 skill. The Agents page shows them under **Development Workflows** as the **Development Planning
 Lifecycle** card, with its own toggle.
-Click the Development Planning Lifecycle card's name to list its seven skills and its rules
-fragment, each of which opens its source.
+Click the Development Planning Lifecycle card's name to list its seven skills, its rules
+fragment, and its hooks file (the Claude session-title hook; see Session Titles), each of which
+opens its source.
 
 From the CLI:
 

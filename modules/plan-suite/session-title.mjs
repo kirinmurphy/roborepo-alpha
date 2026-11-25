@@ -33,12 +33,16 @@ export function sessionTitle(kind, description) {
   const prefix = KIND_PREFIXES.get(kind);
   const text = collapse(description);
   if (!prefix || !text) return null;
-  return fitTitle(`${prefix} ${text}`);
+  return fitTitle(prefix, text);
 }
 
 export function hasStagePrefix(title) {
-  if (typeof title !== "string") return false;
-  return STAGE_PREFIXES.some((prefix) => title.startsWith(`${prefix} `));
+  return stagePrefixOf(title) !== null;
+}
+
+function stagePrefixOf(title) {
+  if (typeof title !== "string") return null;
+  return STAGE_PREFIXES.find((prefix) => title.startsWith(`${prefix} `)) ?? null;
 }
 
 export function titleLine(title) {
@@ -53,7 +57,9 @@ export function titleFromPrompt(prompt) {
     const trimmed = line.trim();
     if (!trimmed.startsWith(`${TITLE_LINE_LABEL} `)) continue;
     const title = collapse(trimmed.slice(TITLE_LINE_LABEL.length));
-    return hasStagePrefix(title) ? fitTitle(title) : null;
+    const prefix = stagePrefixOf(title);
+    const description = prefix ? collapse(title.slice(prefix.length)) : "";
+    return description ? fitTitle(prefix, description) : null;
   }
   return null;
 }
@@ -87,16 +93,18 @@ export function namedPlans(text, records) {
   return [...found];
 }
 
-// Cuts a title over SESSION_TITLE_MAX at a word boundary and ends it with an ellipsis. The prefix is
-// never cut; a single word longer than the room left is cut mid-word.
-function fitTitle(title) {
+// Joins prefix and description, cutting a description that would take the title past
+// SESSION_TITLE_MAX at a word boundary and ending it with an ellipsis. Only the description is ever
+// cut, since two prefixes contain a space of their own; a single word longer than the room left is
+// cut mid-word.
+function fitTitle(prefix, description) {
+  const title = `${prefix} ${description}`;
   if (title.length <= SESSION_TITLE_MAX) return title;
-  const room = SESSION_TITLE_MAX - ELLIPSIS.length;
-  const head = title.slice(0, room + 1);
+  const room = SESSION_TITLE_MAX - prefix.length - 1 - ELLIPSIS.length;
+  const head = description.slice(0, room + 1);
   const boundary = head.lastIndexOf(" ");
-  const prefixEnd = title.indexOf(" ") + 1;
-  const cut = boundary > prefixEnd ? head.slice(0, boundary) : head.slice(0, room);
-  return `${cut.replace(/[\s.,;:!?-]+$/, "")}${ELLIPSIS}`;
+  const atWord = boundary > 0 ? head.slice(0, boundary).replace(/[\s.,;:!?-]+$/, "") : "";
+  return `${prefix} ${atWord || description.slice(0, room)}${ELLIPSIS}`;
 }
 
 function collapse(text) {

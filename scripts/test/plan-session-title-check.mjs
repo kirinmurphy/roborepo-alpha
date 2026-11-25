@@ -38,6 +38,14 @@ assert.equal(sessionTitle("plan-close", exact.slice("/plan-close: ".length)), ex
 const oneWord = sessionTitle("plan-write", "x".repeat(80));
 assert.equal(oneWord.length, SESSION_TITLE_MAX, "a single overlong word is cut mid-word");
 assert.ok(oneWord.startsWith("/plan-write: x") && oneWord.endsWith("…"));
+// Two prefixes contain a space; an overlong first word must still leave them whole.
+for (const [kind, prefix] of [["quick-change", "Quick Change: "], ["sub-task", "/plan sub-task: "]]) {
+  const cut = sessionTitle(kind, "y".repeat(80));
+  assert.equal(cut.length, SESSION_TITLE_MAX, `${kind}: cut to the limit`);
+  assert.ok(cut.startsWith(`${prefix}y`) && cut.endsWith("…"), `${kind}: the prefix survives the cut: ${cut}`);
+}
+const lineCut = titleFromPrompt(`Session title: Quick Change: ${"z".repeat(80)}`);
+assert.ok(lineCut.startsWith("Quick Change: z") && lineCut.length === SESSION_TITLE_MAX, `a title line keeps its prefix when cut: ${lineCut}`);
 
 assert.deepEqual(
   STAGE_PREFIXES.filter((prefix) => prefix.startsWith("/plan-")).map((prefix) => prefix.slice(1, -1)).sort(),
