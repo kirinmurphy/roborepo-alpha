@@ -67,7 +67,7 @@ const ACCOUNTS = {
     ready: true, badge: "problem", label: "needs attention",
     report: account({
       state: "problem",
-      findings: [finding("git-not-routed", "problem", "Agents' git pushes still go out as you.", "Run roborepo update, then start new agent sessions.")],
+      findings: [finding("git-not-routed", "problem", "Agents' git pushes still go out as you, because your Claude Code and Codex settings don't include the bot's Git settings yet.", "Run roborepo update, then start new agent sessions.")],
     }),
   },
   // Turned on from the Agents page before any bot exists: agents cannot use GitHub at all.
@@ -279,7 +279,7 @@ test.describe("Agent GitHub account", () => {
     await badge(page, "identity-ready").click();
     const useItem = card(page).locator("[data-slot=steps] > li").filter({ hasText: "Agents use the bot" });
     await expect(useItem).toHaveAttribute("data-done", "false");
-    await expect(useItem).toContainText("Agents' git pushes still go out as you.");
+    await expect(useItem).toContainText("Agents' git pushes still go out as you, because your Claude Code and Codex settings don't include the bot's Git settings yet.");
     await expect(useItem).toContainText("Update now fixes this; then start new agent sessions.");
     await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 3.");
     await expect(card(page).getByRole("button", { name: "Update now" })).toBeVisible();
