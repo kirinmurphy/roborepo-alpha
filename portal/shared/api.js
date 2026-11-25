@@ -16,20 +16,28 @@ export async function portalGetJson(path) {
     const isStructured = data.error && typeof data.error === "object";
     const err = new Error(isStructured ? data.error.message : data.error || data.message || "request failed");
     err.status = res.status;
-    if (isStructured) err.code = data.error.code;
+    if (isStructured) {
+      err.code = data.error.code;
+      err.details = data.error.details;
+    }
     throw err;
   }
   return data;
 }
 
-export async function portalPostJson(path, body) {
+export function portalPostJson(path, body) {
+  return portalSendJson("POST", path, body);
+}
+
+// Any token-guarded mutation (POST, PATCH, PUT, DELETE), with the same error handling as a POST.
+export async function portalSendJson(method, path, body) {
   const res = await fetch(path, {
-    method: "POST",
+    method,
     headers: {
       "Content-Type": "application/json",
       "X-Cli-Portal-Token": portalConfig().token,
     },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json();
   if (!res.ok || data.ok === false) {

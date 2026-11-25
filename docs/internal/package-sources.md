@@ -15,6 +15,7 @@ the root ownership rules are in
 - The managed store
 - Git sources
 - The package service and CLI
+- The portal
 - Doctor
 - Migration from bare-ID state
 - Code map
@@ -229,6 +230,39 @@ of the lock here too.
 The Config page's package items (`scripts/cli/config.mjs`) carry the same `tab`, `sourceId`,
 `sourceBadge`, `trust`, and `collection` fields, read from the composed catalog.
 
+`previewInstall` and `addSource` return `warning`: `UNVERIFIED_SOURCE_WARNING` for an unverified
+source, else null. The CLI prints it and the portal shows it, so both use one wording.
+
+## The portal
+
+The Agents page is the service's second client, beside the CLI. `scripts/cli/portal-routes-packages.mjs`
+maps each route to the one service call the CLI makes for the same command, with the CLI's
+callbacks (`reapplyPackage` for update; `disablePackage` and `retireStrandedPackage` for remove):
+
+| Route | Service call | Runs in |
+| --- | --- | --- |
+| `GET /api/packages` | `packageView()` | server |
+| `GET /api/packages/sources`, `GET /api/packages/sources/:id` | `listSources()`, `sourceInfo(id)` | server |
+| `POST /api/packages/sources` `{ location, id? }` | `addSource()` | child for a git URL, server for a folder (`isFolderLocation`) |
+| `POST /api/packages/sources/:id/refresh` | `refreshSources(id)` | child |
+| `POST /api/packages/sources/:id/enabled` `{ enabled }` | `setSourceEnabled()` | server |
+| `DELETE /api/packages/sources/:id?keepInstalled=1` | `removeSource()` | server |
+| `GET /api/packages/install-preview?ref=` | `previewInstall()` | server |
+| `POST /api/packages/install` `{ ref, expectedPlan }` | `installPackage(ref, { confirmed: true, expectedPlan })` | server |
+| `POST /api/packages/update` `{ ref, confirmed?, expectedRevision?, expectedFrom? }` | `updatePackage()`; unconfirmed, it refuses with `details.change` | child |
+| `DELETE /api/packages/installed/:ref` | `removePackage()` | server |
+
+A success answers `{ ok: true, result }`. A refusal answers `{ ok: false, error: { code, message,
+details } }` with the service's own message: `usage` and `invalid` are 400; `ambiguous`,
+`confirmationRequired`, and `refused` are 409; `unavailable` is 503; anything else is 500. `:ref` is
+URL-encoded (`team%2Ftool`) so a qualified name stays one path segment.
+
+Git runs synchronously, so the routes that run it use `scripts/cli/package-service-runner.mjs`: it
+runs the operation in a child Node process, prints the result or the refusal as one JSON line, and
+the route rebuilds the `PackageServiceError` so `details.change` and `details.planChanged` reach
+the page. The child gets `ROBOREPO_WRITE_ACTOR` from the request, so its writes are logged as
+`portal POST /api/packages/...`.
+
 ## Doctor
 
 `scripts/cli/package-provenance-doctor.mjs`, run by `doctor --installed`:
@@ -266,5 +300,7 @@ supported install still has bare-ID state.
 | `package-state.mjs` | Selection and applied records, with their `sources` maps |
 | `package-service.mjs` | The domain operations the CLI and portal call |
 | `package-source-command.mjs` | `package install`, `update`, `remove`, and `package source *` |
+| `portal-routes-packages.mjs` | The `/api/packages` routes: the portal's client of the service |
+| `package-service-runner.mjs` | Runs a service call that runs Git in a child process, for the portal |
 | `package-provenance-doctor.mjs` | Doctor findings |
 | `package-provenance-migration.mjs` | The one-time bare-ID migration |

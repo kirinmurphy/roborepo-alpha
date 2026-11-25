@@ -10,6 +10,7 @@
     "package-resolution-check.mjs",
     "package-source-git-check.mjs",
     "package-update-check.mjs",
+    "portal-package-routes-check.mjs",
     "wizard-recommendations-check.mjs",
     "package-relationships-check.mjs",
     "initialization-lifecycle-check.mjs",

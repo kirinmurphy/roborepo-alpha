@@ -254,6 +254,135 @@ export function createDisableDependentsDialog() {
   return { confirm };
 }
 
+// The package action dialog: an install preview, an update's change, or a removal, each confirmed
+// here. `show({ title, body, confirmLabel, danger, onConfirm })` opens it; `onConfirm()` runs the
+// action while the confirm button shows progress, and resolves to `true` when it is done (the dialog
+// closes) or to `{ body }` to show a new body and ask again (a changed install plan or update
+// change). A thrown error shows its message, the package service's own, and leaves the dialog open.
+// `loading` opens it with confirm disabled until `show` is called again with the body.
+export function createPackageActionDialog() {
+  const dialogEl = document.getElementById("package-action-modal");
+  const titleEl = document.getElementById("package-action-title");
+  const contentEl = document.getElementById("package-action-content");
+  const errorEl = document.getElementById("package-action-error");
+  const confirmEl = document.getElementById("package-action-confirm");
+  let current = null; // { onConfirm, settle, running }
+
+  function finish(done) {
+    if (current?.running) return;
+    const settle = current?.settle;
+    current = null;
+    if (dialogEl.open) dialogEl.close();
+    settle?.(done);
+  }
+
+  function setError(message) {
+    errorEl.textContent = message || "";
+    errorEl.hidden = !message;
+  }
+
+  function setRunning(running) {
+    if (current) current.running = running;
+    if (running) {
+      tmpl.busy(confirmEl);
+    } else {
+      tmpl.idle(confirmEl);
+    }
+  }
+
+  document.getElementById("package-action-close").addEventListener("click", () => finish(false));
+  document.getElementById("package-action-cancel").addEventListener("click", () => finish(false));
+  dialogEl.addEventListener("cancel", (event) => {
+    // Escape does not abandon an action that is still running.
+    if (current?.running) event.preventDefault();
+    else finish(false);
+  });
+  portalWireBackdropClose(dialogEl, () => finish(false));
+
+  confirmEl.addEventListener("click", async () => {
+    const action = current?.onConfirm;
+    if (!action || current.running) return;
+    setError("");
+    setRunning(true);
+    try {
+      const outcome = await action();
+      setRunning(false);
+      if (outcome === true) return finish(true);
+      if (outcome?.body) contentEl.replaceChildren(outcome.body);
+    } catch (err) {
+      setRunning(false);
+      setError(err?.message || String(err));
+    }
+  });
+
+  function show({ title, body, confirmLabel, danger = false, onConfirm = null, loading = false }) {
+    const opening = !current;
+    if (opening) current = { settle: null, running: false };
+    current.onConfirm = onConfirm;
+    titleEl.textContent = title;
+    contentEl.replaceChildren(body);
+    setError("");
+    confirmEl.textContent = confirmLabel;
+    confirmEl.dataset.btn = danger ? "danger" : "cta";
+    tmpl.idle(confirmEl);
+    if (loading) tmpl.busy(confirmEl);
+    confirmEl.disabled = loading || !onConfirm;
+    if (!dialogEl.open) dialogEl.showModal();
+    if (!opening) return current.promise;
+    current.promise = new Promise((resolve) => { current.settle = resolve; });
+    return current.promise;
+  }
+
+  // An error before there is anything to confirm (the update check failed): show it in place.
+  function fail(message) {
+    if (!current) return;
+    tmpl.idle(confirmEl);
+    confirmEl.disabled = true;
+    setError(message);
+  }
+
+  return { show, fail, isOpen: () => Boolean(current) };
+}
+
+// The add-a-source dialog. `ask()` resolves to { location, id } on submit, or null.
+export function createAddSourceDialog() {
+  const dialogEl = document.getElementById("add-source-modal");
+  const formEl = document.getElementById("add-source-form");
+  const locationEl = document.getElementById("add-source-location");
+  const idEl = document.getElementById("add-source-id");
+  let settle = null;
+
+  function finish(value) {
+    const resolve = settle;
+    settle = null;
+    if (dialogEl.open) dialogEl.close();
+    resolve?.(value);
+  }
+
+  document.getElementById("add-source-close").addEventListener("click", () => finish(null));
+  document.getElementById("add-source-cancel").addEventListener("click", () => finish(null));
+  dialogEl.addEventListener("cancel", () => finish(null));
+  portalWireBackdropClose(dialogEl, () => finish(null));
+  formEl.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const location = locationEl.value.trim();
+    if (!location) return;
+    finish({ location, id: idEl.value.trim() || null });
+  });
+
+  function ask() {
+    finish(null);
+    formEl.reset();
+    return new Promise((resolve) => {
+      settle = resolve;
+      dialogEl.showModal();
+      locationEl.focus();
+    });
+  }
+
+  return { ask };
+}
+
 // The recommendations dialog: after an enable that left some recommended packages off, it lists
 // them as the page's own rows. Each switch turns its package on or off at once through the page's
 // toggle, so the dialog itself enables nothing. The footer reads "No Thanks" until one of them is

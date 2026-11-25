@@ -1200,3 +1200,245 @@ dialog#config-modal .modal-path {
   font-size: var(--text-xs);
   color: var(--dim);
 }
+
+/* Package source tabs: System / Custom / Third Party, above the package sections. */
+.package-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+}
+.package-tab {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--dim);
+  padding: 6px 12px;
+  margin-bottom: -1px;
+}
+.package-tab:hover {
+  background: none;
+  color: var(--ink);
+}
+.package-tab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+.package-tab-count {
+  font-size: var(--text-2xs);
+  color: var(--dim);
+  font-weight: 400;
+}
+.package-tab-panel {
+  display: grid;
+  gap: 16px;
+}
+.package-tab-empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--dim);
+}
+
+/* A Custom or Third Party card's commit, state note, and Install / Update / Remove. */
+.item-revision {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--dim);
+}
+.package-state-note {
+  color: var(--warn);
+}
+.package-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-right: 8px;
+}
+.package-action {
+  font-size: var(--text-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.package-action-spinner {
+  width: 10px;
+  height: 10px;
+}
+
+/* The package action dialog: install preview, update change, removal. */
+.package-action-body,
+.add-source-body {
+  padding: 16px 20px;
+}
+.package-action-body p {
+  margin: 0 0 8px;
+}
+.package-action-error {
+  color: var(--danger);
+  white-space: pre-wrap;
+}
+.package-action-loading {
+  color: var(--dim);
+}
+.package-action-footer,
+.add-source-body + .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.package-preview-notice {
+  color: var(--warn);
+}
+.package-preview-warning {
+  color: var(--warn);
+  font-weight: 600;
+}
+.package-preview-entry + .package-preview-entry {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.package-preview-name {
+  margin: 0;
+  font-size: var(--text-sm);
+}
+.package-preview-meta {
+  font-size: var(--text-2xs);
+  color: var(--dim);
+}
+.package-preview-contents {
+  margin: 0;
+  display: grid;
+  /* One row per kind; a page-wide dl rule would otherwise pair the rows into columns. */
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+.package-preview-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: 8px;
+  font-size: var(--text-xs);
+}
+.package-preview-row dt {
+  color: var(--dim);
+}
+.package-preview-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Add a source. */
+.add-source-body {
+  display: grid;
+  gap: 12px;
+}
+.add-source-field {
+  display: grid;
+  gap: 4px;
+  font-size: var(--text-xs);
+}
+.add-source-field input {
+  font: inherit;
+  padding: 6px 8px;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.add-source-note {
+  margin: 0;
+  font-size: var(--text-2xs);
+  color: var(--dim);
+}
+
+/* The Sources section. */
+.sources-status {
+  margin: 0 0 12px;
+  font-size: var(--text-xs);
+  color: var(--ok);
+}
+.sources-status.error {
+  color: var(--danger);
+  white-space: pre-wrap;
+}
+.sources-list {
+  display: grid;
+}
+.source-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.source-row:first-child {
+  border-top: none;
+}
+.source-pending {
+  justify-content: flex-start;
+  align-items: center;
+  color: var(--dim);
+  font-size: var(--text-xs);
+}
+.source-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.source-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.source-name {
+  font-weight: 600;
+}
+.source-location {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--dim);
+  overflow-wrap: anywhere;
+}
+.source-counts {
+  font-size: var(--text-2xs);
+  color: var(--desc-dim);
+}
+.source-expand {
+  justify-self: start;
+  font-size: var(--text-2xs);
+}
+.source-packages {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+}
+.source-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+.source-keep {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: var(--text-xs);
+}
+@media (max-width: 640px) {
+  .source-row {
+    flex-direction: column;
+  }
+  .source-actions {
+    justify-content: flex-start;
+  }
+}

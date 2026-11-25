@@ -309,7 +309,7 @@ export function configItemElement(item, actions) {
 // render, so individual and group selections can never disagree (bidirectional by construction:
 // any mutation re-renders from the fresh server snapshot). All-on => on + "Deselect All";
 // anything else (mixed or all-off) => off + "Select All".
-export function standardSection(section, { onInspectClick, onToggle, onBulkToggle, onDependency, contextCost }) {
+export function standardSection(section, { onInspectClick, onToggle, onBulkToggle, onDependency, onPackageAction, contextCost }) {
   const panel = tpl("tpl-section-packages");
   panel.classList.toggle("wide", !!section.wide);
   toggleSlot(panel, "heading", true, section.category);
@@ -318,7 +318,7 @@ export function standardSection(section, { onInspectClick, onToggle, onBulkToggl
 
   const itemsSlot = panel.querySelector('[data-slot="items"]');
   itemsSlot.replaceChildren(
-    ...section.items.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, onDependency, contextCost })),
+    ...section.items.map((item) => configItemElement(item, { onInspect: onInspectClick, onToggle, onDependency, onPackageAction, contextCost })),
   );
 
   const bulkWrap = panel.querySelector('[data-slot="bulk"]');
@@ -811,4 +811,268 @@ function errorText(err) {
   div.className = "maintenance-error";
   div.textContent = (err && err.message) || String(err);
   return div;
+}
+
+// --------------------------------------------------------------------------- package sources
+//
+// The System / Custom / Third Party tabs, the install and update previews, and the Sources
+// section. All state comes from the package service's view (/api/packages) and source list
+// (/api/packages/sources); nothing here computes package state.
+
+const short = (sha) => (sha ? sha.slice(0, 12) : "");
+
+// `tabs` is packageView().tabs ({ id, label, count }).
+export function packageTabs(tabs, activeTab, onSelect) {
+  const bar = tpl("tpl-package-tabs");
+  bar.replaceChildren(...tabs.map((tab) => {
+    const button = fill(tpl("tpl-package-tab"), { label: tab.label, count: String(tab.count) });
+    const selected = tab.id === activeTab;
+    button.id = `package-tab-${tab.id}`;
+    button.setAttribute("aria-selected", String(selected));
+    button.tabIndex = selected ? 0 : -1;
+    button.addEventListener("click", () => onSelect(tab.id));
+    return button;
+  }));
+  // Arrow keys move between tabs, as a tab list does.
+  bar.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+    const index = tabs.findIndex((tab) => tab.id === activeTab);
+    const next = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    onSelect(next.id, { focus: true });
+  });
+  return bar;
+}
+
+// A tab with no packages says so, rather than showing nothing under its name.
+export function emptyPackageTab(label) {
+  const p = document.createElement("p");
+  p.className = "package-tab-empty";
+  p.textContent = label === "System" ? "No System packages." : `No ${label} packages yet. Add a source below to list its packages here.`;
+  return p;
+}
+
+// The package view could not be read: the page still lists every package, untabbed.
+export function packageLoadFailed(message) {
+  const p = document.createElement("p");
+  p.className = "package-tab-empty item-status error";
+  p.textContent = `Package sources could not be read: ${message}`;
+  return p;
+}
+
+export function loadingText(text) {
+  const p = document.createElement("p");
+  p.className = "package-action-loading";
+  p.setAttribute("role", "status");
+  p.textContent = text;
+  return p;
+}
+
+// An update that needed no confirmation, in the CLI's words.
+export function updateResultText(result) {
+  const p = document.createElement("p");
+  if (result.live) p.textContent = `${result.qualifiedName}: ${result.message}.`;
+  else if (result.restored) p.textContent = `${result.qualifiedName}: restored the missing installed copy at ${short(result.revision)}.`;
+  else p.textContent = `${result.qualifiedName}: up to date at ${short(result.revision)}.`;
+  return p;
+}
+
+// The labels `roborepo package install` prints for a package's contents, in the same order.
+const CONTENTS_ROWS = [
+  ["skills", "Skills"],
+  ["slashCommands", "Slash commands"],
+  ["rules", "Rules"],
+  ["hooks", "Hooks"],
+  ["mcpServers", "MCP servers"],
+  ["permissions", "Config changes"],
+  ["runtimeAssets", "Runtime assets"],
+  ["services", "Services"],
+  ["scripts", "Scripts"],
+  ["requires", "Requires"],
+  ["notInstalled", "Plugin files not installed"],
+];
+
+function contentsRows(contents = {}, extra = []) {
+  const rows = [...extra, ...CONTENTS_ROWS.map(([key, label]) => [label, contents?.[key] || []])].filter(([, items]) => items.length > 0);
+  if (rows.length === 0) rows.push(["Contents", ["nothing listed"]]);
+  return rows.map(([label, items]) => fill(tpl("tpl-package-contents-row"), { label, items: items.join(", ") }));
+}
+
+function previewEntry({ name, meta, contents, extra = [] }) {
+  const node = fill(tpl("tpl-package-preview-entry"), { name, meta });
+  node.querySelector('[data-slot="contents"]').replaceChildren(...contentsRows(contents, extra));
+  return node;
+}
+
+function previewShell({ notice, warning, entries }) {
+  const node = tpl("tpl-package-preview");
+  const noticeEl = node.querySelector('[data-slot="notice"]');
+  noticeEl.textContent = notice || "";
+  noticeEl.hidden = !notice;
+  const warningEl = node.querySelector('[data-slot="warning"]');
+  warningEl.textContent = warning || "";
+  warningEl.hidden = !warning;
+  node.querySelector('[data-slot="entries"]').replaceChildren(...entries);
+  return node;
+}
+
+// An install preview (previewInstall()): every package the install brings, dependencies included.
+// `notice` says why it is shown again, after a changed plan.
+export function installPreviewBody(preview, { notice = null } = {}) {
+  const entries = preview.packages.map((entry) => previewEntry({
+    name: entry.qualifiedName,
+    meta: [entry.sourceType === "git" ? "GitHub" : "Folder", entry.trust, entry.revision ? `commit ${short(entry.revision)}` : "used in place"].join(" · "),
+    contents: entry.contents,
+  }));
+  return previewShell({ notice, warning: preview.warning, entries });
+}
+
+// An update's change (details.change from the unconfirmed update).
+export function updateChangeBody(change, { notice = null } = {}) {
+  const files = change.files || {};
+  return previewShell({
+    notice,
+    entries: [previewEntry({
+      name: change.qualifiedName,
+      meta: `${short(change.from)} → ${short(change.to)}`,
+      contents: change.contents,
+      extra: [["Files added", files.added || []], ["Files removed", files.removed || []], ["Files changed", files.changed || []]],
+    })],
+  });
+}
+
+// What removing a package does, in the service's terms: an active package is turned off first; a
+// GitHub package's copy is deleted; a folder package's files are never touched.
+export function removePackageBody(state) {
+  const p = document.createElement("p");
+  p.textContent = state?.sourceType === "git"
+    ? "If it is on, it is turned off first. Its installed copy is then deleted; its source still offers it to install again."
+    : "If it is on, it is turned off first. Its folder is left as it is: RoboRepo only forgets the install.";
+  return p;
+}
+
+// The remove-a-source confirmation. Only a GitHub source can keep its installed packages
+// (`--keep-installed`); a folder's packages are used in place.
+export function removeSourceBody(source) {
+  const node = tpl("tpl-source-remove");
+  const name = source.id;
+  node.querySelector('[data-slot="lead"]').textContent = source.installed.length
+    ? `${name} has installed packages: ${source.installed.join(", ")}.`
+    : `RoboRepo stops listing packages from ${name}. No files are deleted.`;
+  const keep = node.querySelector('[data-slot="keep"]');
+  keep.hidden = !(source.type === "git" && source.installed.length);
+  const input = node.querySelector('[data-slot="keep-input"]');
+  return { node, keepInstalled: () => !keep.hidden && input.checked };
+}
+
+function sourceCounts(source) {
+  const parts = [`${source.available} available`, `${source.installed.length} installed`];
+  if (source.revision) parts.push(`at ${short(source.revision)}`);
+  return parts.join(" · ");
+}
+
+// `state`: { pending: [{ location }], status: { text, error } | null, expanded: Map<id, ids[] |
+// "loading" | Error>, busy: Set<id> }. Callbacks: onAdd(), onRefresh(source, button),
+// onToggle(source, enabled), onRemove(source), onExpand(source).
+export function sourcesSection(sources, state, callbacks) {
+  const panel = tpl("tpl-sources-section");
+  panel.querySelector('[data-slot="add"]').addEventListener("click", () => callbacks.onAdd());
+  const status = panel.querySelector('[data-slot="status"]');
+  status.textContent = state.status?.text || "";
+  status.classList.toggle("error", Boolean(state.status?.error));
+  status.hidden = !state.status?.text;
+  const rows = sources.map((source) => sourceRow(source, state, callbacks));
+  const pending = state.pending.map((entry) => {
+    const row = document.createElement("div");
+    row.className = "source-row source-pending";
+    const spinner = document.createElement("span");
+    spinner.className = "spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    const text = document.createElement("span");
+    text.setAttribute("role", "status");
+    text.textContent = `Adding ${entry.location}…`;
+    row.append(spinner, text);
+    return row;
+  });
+  panel.querySelector('[data-slot="list"]').replaceChildren(...rows, ...pending);
+  return panel;
+}
+
+// Named by its id, as `roborepo package source list` names it; the location line says where it is.
+function sourceRow(source, state, { onRefresh, onToggle, onRemove, onExpand }) {
+  const name = source.id;
+  const row = fill(tpl("tpl-source-row"), {
+    name,
+    tab: source.tabLabel,
+    trust: source.trust,
+    location: source.location,
+    counts: sourceCounts(source),
+    error: source.error || "",
+  });
+  row.dataset.sourceId = source.id;
+  row.querySelector('[data-slot="disabled"]').hidden = source.enabled;
+  row.querySelector('[data-slot="error"]').hidden = !source.error;
+  const statusEl = row.querySelector('[data-slot="status"]');
+  const actions = row.querySelector('[data-slot="actions"]');
+  if (source.type === "git") {
+    const refresh = actionButton("Refresh", `Refresh ${name}`);
+    if (state.busy.has(source.id)) busy(refresh);
+    refresh.addEventListener("click", () => onRefresh(source, refresh));
+    actions.append(refresh);
+  }
+  // The built-in library cannot be turned off; every other source can.
+  if (source.id !== "builtin") {
+    const toggle = document.createElement("config-toggle");
+    toggle.item = { active: source.enabled, label: `${name} source on` };
+    toggle.onToggle = (item, enabled) => onToggle(source, enabled);
+    toggle.statusSlot = statusEl;
+    actions.append(toggle);
+  }
+  if (source.removable) {
+    const remove = actionButton("Remove", `Remove ${name}`);
+    remove.addEventListener("click", () => onRemove(source));
+    actions.append(remove);
+  }
+  const expand = row.querySelector('[data-slot="expand"]');
+  const list = row.querySelector('[data-slot="packages"]');
+  const shown = state.expanded.get(source.id);
+  if (shown) {
+    expand.textContent = "Hide packages";
+    expand.setAttribute("aria-expanded", "true");
+    list.hidden = false;
+    const items = shown === "loading" ? ["Loading…"]
+      : shown instanceof Error ? [shown.message]
+      : shown.length ? shown.map((id) => `${source.id}/${id}`) : ["No packages."];
+    list.replaceChildren(...items.map((text) => {
+      const li = document.createElement("li");
+      li.textContent = text;
+      return li;
+    }));
+  }
+  expand.addEventListener("click", () => onExpand(source));
+  return row;
+}
+
+function actionButton(text, ariaLabel) {
+  const button = tpl("tpl-package-action");
+  button.textContent = text;
+  button.setAttribute("aria-label", ariaLabel);
+  return button;
+}
+
+// A button whose request is running: disabled and marked busy, with a spinner before its text.
+export function busy(button) {
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  if (!button.querySelector(".spinner")) {
+    const spinner = document.createElement("span");
+    spinner.className = "spinner package-action-spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    button.prepend(spinner);
+  }
+}
+
+export function idle(button) {
+  button.disabled = false;
+  button.removeAttribute("aria-busy");
+  button.querySelector(".spinner")?.remove();
 }
