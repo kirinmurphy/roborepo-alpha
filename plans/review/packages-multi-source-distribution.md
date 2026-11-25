@@ -1221,6 +1221,33 @@ Keep the source configuration and lock schemas in one technical reference and li
 - Reviewed implementation commit: 9bac45308463de551778e6a4f3b8adab0550b7aa
 - Confirmed by: human
 
+## Completion Summary
+
+Landed on `main` in pull request #84 (kirinmurphy/roborepo-alpha), merge commit 5cba47f0. RoboRepo
+now discovers packages through configured sources: the built-in library through a temporary
+`bundled` adapter, the workspace as the `local` path source, and public GitHub repos through the
+`git` source pinned to a commit. Selections record which source each package came from, installed
+copies live in a managed store under the state root, and `roborepo package source …`, `install`,
+`update`, and `remove` expose the lifecycle. The trusted catalog ships empty by decision. The
+official registry, unbundling, and uninstall scopes remain with [[f5exs0bd]].
+
+## Verification
+
+- CI run 45533189729 on `main` at 5cba47f08635f5019e07aa26fb4726b9c0177e3e: success (the full gate).
+- `/plan-close` on `main` at 5cba47f0: all 14 `scripts/test/package-*-check.mjs` → ok.
+- `roborepo plans validate jdsobwn --json`: 0 findings.
+- Docs of record checked against the landed code: `docs/architecture/config-code-separation.md`,
+  `local/skills/roborepo-development/references/package-development.md`,
+  `docs/user/reference/roborepo-cli.md`, `docs/user/reference/config-control-panel.md`,
+  `docs/internal/cli-internals.md`; each describes package sources, and
+  `manifests/inventory/trusted-package-sources.json` ships with no entries, as decided.
+- Implementation review: the landed tree equals the reviewed commit (merging the branch tip into
+  the absorbing commit changes nothing), and `/plan-review` Validator pass 6 at that commit had no
+  findings; no new findings at closure.
+- Approval: fresh, approved by a human at 9bac45308463de551778e6a4f3b8adab0550b7aa.
+- Absorbing commit: 5cba47f08635f5019e07aa26fb4726b9c0177e3e
+- Not verified at closure: none beyond the `## Not tested` entries, both cleared with recorded evidence.
+
 ## References
 
 Repository state reviewed at commit:
