@@ -356,6 +356,8 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "[`../plan-execute/references/handoff.md`](../plan-execute/references/handoff.md)",
     "require `headRefOid` to equal the feature branch's tip",
     "A CI fix made here is a step 5 fix",
+    "A Blocked result keeps `### Result` pending",
+    "With no open pull request for the branch, open the draft",
     "`roborepo delivery fetch <remote>`",
     "not at its cap. Otherwise leave it a draft",
     "never the base branch or any other protected branch",

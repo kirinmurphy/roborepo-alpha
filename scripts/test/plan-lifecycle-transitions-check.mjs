@@ -573,6 +573,11 @@ try {
     assert.equal(ahead.ok, false, "a local commit the remote does not have fails");
     assert.match(ahead.fix, /push the branch/);
 
+    git(root, "update-ref", "-d", "refs/remotes/origin/feat/pushed");
+    const pruned = tipCheck("upstream tracking ref pruned");
+    assert.equal(pruned.ok, false, "a configured upstream with no local tracking ref fails");
+    assert.match(pruned.observed, /refs\/remotes\/origin\/feat\/pushed is missing locally/);
+
     git(root, "remote", "remove", "origin");
     const local = tipCheck("no remote");
     assert.equal(local.ok, true, "a repository with no remote has nothing to push to");

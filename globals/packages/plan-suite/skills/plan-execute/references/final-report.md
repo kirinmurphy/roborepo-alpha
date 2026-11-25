@@ -124,7 +124,7 @@ Implementation result
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)
 - Base: merged <base> at <commit> | already up to date | not merged (<why>); compared with a fresh fetch | the last fetched copy (fetch failed) | a local branch
-- Pull request: <URL>, draft | ready (<why still draft>); mergeable | conflicts | unknown; CI passed | failed | blocked | base failure | none (<why>) at <head commit>
+- Pull request: <URL>, draft (<why>) | ready; mergeable | conflicts | unknown; CI passed | failed | blocked | base failure | running (the watch outlasted the session) | none (<why>) at <head commit>
 - Details: Decision Log, findings, and Not tested entries are in the plan document; ask here for any detail
 - Server: <URL> running from the worktree | isolated state at <URL> (<why>) | none (<why>)
 ```

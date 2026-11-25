@@ -168,7 +168,8 @@ function branchTipPushed(primary, branch, tip) {
   // `refs/heads/<branch>@{upstream}` does not resolve, and a short name could match a tag instead.
   const upstreamRef = git(primary, ["for-each-ref", "--format=%(upstream)", `refs/heads/${branch}`]).stdout;
   const upstream = upstreamRef ? git(primary, ["rev-parse", "--verify", "--quiet", upstreamRef]) : { ok: false };
-  if (!upstream.ok) return { ok: false, observed: `${branch} has no upstream` };
+  if (!upstreamRef) return { ok: false, observed: `${branch} has no upstream` };
+  if (!upstream.ok) return { ok: false, observed: `upstream ${upstreamRef} is missing locally` };
   return upstream.stdout === tip
     ? { ok: true, observed: `${tip} matches its upstream` }
     : { ok: false, observed: `local ${tip} differs from upstream ${upstream.stdout}` };

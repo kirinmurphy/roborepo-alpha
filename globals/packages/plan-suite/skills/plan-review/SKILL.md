@@ -251,9 +251,11 @@ the updated plan in the worktree.
 First confirm the pull request shows the work and CI has a result there: run
 `roborepo delivery fetch <remote>`, read `gh pr view <branch> --json url,isDraft,headRefOid,statusCheckRollup`,
 and require `headRefOid` to equal the feature branch's tip; push first when it does not (see Push
-the feature branch). Require CI green at that commit by the shared reference's Watch CI table, or
-name the exception (a base failure, or no checks reported). A CI fix made here is a step 5 fix:
-commit and push it, run another Validator pass over it, then confirm again.
+the feature branch). With no open pull request for the branch, open the draft as the shared
+reference's Push step 3 describes, then read it. Require CI green at that commit by the shared
+reference's Watch CI table, or name the exception (a base failure, or no checks reported). A CI fix
+made here is a step 5 fix: commit and push it, run another Validator pass over it, then confirm
+again. A Blocked result keeps `### Result` pending, presented as the outstanding blocker.
 
 Then resolve the feature branch's tip as a full commit id: that is the implementation the human is
 asked to approve. Record `### Result` with `Status: complete`, that full reviewed implementation
@@ -326,7 +328,7 @@ human's explicit answer, quoting it: `— Confirmed by the user <date>: "<what t
    Report actionable failures and the assessed tips; a pass does not authorize a merge.
 4. Mark the pull request ready with `roborepo delivery pr-ready` when it is still a draft and all of
    these hold: merge readiness passed, CI is green at the reviewed commit, and step 5's Validator
-   loop ended on a pass with no **fix** findings, not at its cap. Otherwise leave it a draft and
+   loop ended on a pass with no `blocking` or `actionable` `fix` findings, not at its cap. Otherwise leave it a draft and
    name the condition that failed. Approval is recorded on the plans branch, so this step pushes
    nothing to the feature branch and starts no CI run.
 5. Tell the user to merge the plan's pull request themselves, then run `/plan-close`. A pull
