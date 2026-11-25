@@ -164,7 +164,10 @@ test.describe("Agent GitHub account", () => {
         return route.fulfill({ contentType: "application/json", body: JSON.stringify(answer) });
       }
       reads.push({ kind: "account", fresh: url.searchParams.get("fresh") === "1" });
-      return route.fulfill({ contentType: "application/json", body: JSON.stringify(accountNext()) });
+      const answer = accountNext();
+      // `null` stands for a failed read.
+      if (answer === null) return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "read failed" }) });
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify(answer) });
     });
     await page.route(/\/api\/repositories\/[^/]+\/agent-identity(\/setup|\/invite)?(\?.*)?$/, async (route) => {
       const url = new URL(route.request().url());
@@ -650,6 +653,21 @@ test.describe("Agent GitHub account", () => {
     await nextPoll();
     await expect(card(page)).toBeVisible();
     expect(reads.filter((read) => read.kind === "repo")).toEqual([]);
+  });
+
+  test("a failed first account read is retried on Home's next poll", async ({ page }) => {
+    await page.clock.install();
+    let current = null;
+    const { reads } = await stub(page, { accountNext: () => current });
+    await openHome(page);
+    await expect(offer(page)).toBeHidden();
+    current = ACCOUNTS["package-off"].report;
+    const before = reads.filter((read) => read.kind === "account").length;
+    await expect(async () => {
+      await page.clock.fastForward(10_000);
+      expect(reads.filter((read) => read.kind === "account").length).toBeGreaterThan(before);
+    }).toPass({ intervals: [200] });
+    await expect(offer(page).getByRole("button", { name: "Turn on" })).toBeVisible();
   });
 
   test("coming back to the window re-reads an open card", async ({ page }) => {

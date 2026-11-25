@@ -227,9 +227,9 @@ export function renderAgentIdentityOffer(mount, repositories) {
 
 // Called on each of Home's polls: re-reads the account so a change made outside the page (the
 // package turned on or off in a terminal, the setup finishing) shows within one poll. A changed
-// account re-reads the repos too (`showAccount`).
+// account re-reads the repos too (`showAccount`). A first read that failed is retried here too.
 export function pollAgentIdentity() {
-  if (githubRepositories.length === 0 || !account) return;
+  if (githubRepositories.length === 0) return;
   loadAccount({ reread: true }).catch(() => {});
 }
 
