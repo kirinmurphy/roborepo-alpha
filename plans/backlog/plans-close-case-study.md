@@ -52,7 +52,7 @@ without weakening the sandbox or validation.
 | Piece | Today |
 | --- | --- |
 | `/plan-close` (`globals/packages/plan-suite/skills/plan-close/SKILL.md`) | Eleven steps. Step 8 commits completion; step 9 stops the worktree's servers; step 10 removes the worktree; step 11 names dependent follow-up plans. Paired Skills lists three `requires` rows and no `recommends` row. |
-| Skill availability | `globals/system/rules/shared/05-skill-loading.md`: load a paired skill when its condition matches and the session lists it; when the session does not list it, continue and name it once in the final report. Each plan-suite skill repeats this for `recommends` rows under its Paired Skills table. |
+| Skill availability | `globals/system/rules/shared/05-skill-loading.md`: load a paired skill when its condition matches and the session lists it; when the session does not list it, continue and name it once in the final report. Each plan-suite skill with a Paired Skills table repeats this for `recommends` rows under its Paired Skills table. |
 | User-level roborepo state | Files under `~/.roborepo/<area>/` (for example `~/.roborepo/plan-suite/settings.json`, now ignored by Plans). No case-study settings exist. |
 | Per-repo plan config | `plans/plans-config.json` on the `repo-plans` branch. It is pushed and shared with everyone who clones the repo, so a personal home path does not belong in it. |
 | Repo name | `roborepo plans validate --json` reports `repository.name` (here `roborepo`). |
