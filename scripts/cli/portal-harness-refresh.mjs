@@ -13,6 +13,7 @@ import { refreshHarnessState } from "../harnesses/service.mjs";
 import { repoRoot } from "./roots.mjs";
 
 let inFlight = null;
+let applying = null;
 
 // Two open portal tabs can both start setup. They share one run rather than racing two installs.
 export function refreshHarnessesAndApply(options = {}) {
@@ -20,7 +21,7 @@ export function refreshHarnessesAndApply(options = {}) {
   return inFlight;
 }
 
-async function runRefreshAndApply({ apply = applyConfig } = {}) {
+async function runRefreshAndApply({ apply = applyHarnessConfig } = {}) {
   const before = enabledProviderIds(readHarnessState());
   const result = refreshHarnessState();
   const newlyEnabled = [...enabledProviderIds(result.state)].filter((id) => !before.has(id));
@@ -50,7 +51,14 @@ function disableUntilSetUp(ids) {
   return state;
 }
 
-function applyConfig() {
+// Runs `roborepo config apply`. Callers that overlap (a harness check and the agent bot's "Update
+// now") share one run rather than racing two installs over the same files.
+export function applyHarnessConfig() {
+  applying ??= runConfigApply().finally(() => { applying = null; });
+  return applying;
+}
+
+function runConfigApply() {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [path.join(repoRoot, "scripts", "cli", "main.mjs"), "config", "apply"], {
       cwd: repoRoot,

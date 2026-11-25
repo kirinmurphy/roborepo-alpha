@@ -95,6 +95,22 @@ export const repositoriesRoutes = defineRoutes([
   },
   {
     method: "POST",
+    path: "/api/agent-identity/update",
+    handler: (req, res, { handlers }) => {
+      readJsonBody(req, (body, err) => {
+        if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
+        if (body && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)) {
+          return send(res, 400, "application/json", JSON.stringify({ error: "expected an empty body" }));
+        }
+        Promise.resolve()
+          .then(() => handlers.applyAgentGitRouting())
+          .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (error) => sendError(res, error));
+      });
+      return true;
+    },
+  },
+  {
+    method: "POST",
     path: "/api/agent-identity/dismiss-offer",
     handler: (req, res, { handlers }) => {
       readJsonBody(req, (body, err) => {

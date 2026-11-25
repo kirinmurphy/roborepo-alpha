@@ -179,7 +179,10 @@ Settings for later.
 **While it is on but the bot cannot sign in** (no bot, an expired or unreadable token, or another
 problem), the same spot shows a red warning that agents can't push or open pull requests, with only
 **Fix it**, which opens the bot card. It has no **No thanks**; it goes when the bot works again, or
-when you turn the switch off in Settings.
+when you turn the switch off in Settings. When the one problem is that agents' git pushes still go
+out as you, it has **Update now** instead: that runs `roborepo config apply` (what `roborepo update`
+does to your agent settings) and then says that agent sessions already open keep pushing as you until
+restarted.
 
 **Once it is on**, the offer is gone and each GitHub repo's card header has an **agent bot** badge,
 right-aligned before the icons for the repo's own pages. The dot's color covers both the bot account and that repo:
@@ -198,7 +201,7 @@ opens the repo's card: one numbered list in setup order, and a line saying which
 2. **Token**: scopes and expiry.
 3. **Agents use the bot**: the Settings switch, and whether your live Claude Code and Codex settings
    include the bot's Git settings. Without them `gh` uses the bot but `git push` still goes out as
-   you; this stays open, with "Run roborepo update", until they do.
+   you; this stays open, with **Update now** at the bottom of the card, until they do.
 4. **Invited to this repo**: with write, not admin, access.
 5. **Branch rules**: approval required to merge.
 
@@ -220,11 +223,12 @@ The routes. `:id` is the repo's canonical id, percent-encoded:
 | --- | --- |
 | `GET /api/agent-identity` | The bot account: state, login, whether the package is on, the token's expiry and scopes, each finding's id, severity, message, and fix, whether **Turn on** is offered, whether the setup offer was declined, and the github.com steps. Never a token. `?fresh=1` skips the five-minute cache |
 | `POST /api/agent-identity/enable` | Turns the package on when a fresh read shows that is the only step left; otherwise returns `not_ready`. It takes no body |
+| `POST /api/agent-identity/update` | **Update now**: when a fresh read shows agents' git pushes still go out as you, runs `roborepo config apply` (the install step behind `roborepo update`) and returns `applied` with the account read after; otherwise `not_needed`. It takes no body |
 | `POST /api/agent-identity/dismiss-offer` | Records **No thanks** to the setup offer, in RoboRepo's state folder. It takes no body |
 | `GET /api/repositories/:id/agent-identity` | One repo: its state and findings, whether you administer it, the message for its owner when you do not, and whether the one-click setup works here. `account: "waiting"` while the bot account cannot be used; `{ "applies": false }` for a repo not on github.com. `?fresh=1` skips the cache |
 | `POST /api/repositories/:id/agent-identity/setup` | Opens the setup in a terminal and returns `launched`, or the reason it could not. It takes no body: the command and folder are the server's choice |
 
-Like every portal write, the two POST routes require the portal's origin and token.
+Like every portal write, the POST routes require the portal's origin and token.
 
 ### Ignore repository
 

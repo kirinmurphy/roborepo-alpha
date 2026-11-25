@@ -61,7 +61,8 @@
          it for good, after saying where to turn it on later. -->
     <!-- agent-identity.js: the banner above the repo list. While the package is off it offers the
          setup (info, with a lasting No thanks); while it is on but the bot cannot sign in, it warns
-         that agents cannot use GitHub (alert, Fix it only) until the bot works again. -->
+         that agents cannot use GitHub (alert, Fix it only) until the bot works again. When the one
+         problem is that agents' git pushes still go out as the user, Update now applies the fix. -->
     <template id="tpl-agent-identity-offer">
       <portal-notice variant="info" icon="github" class="agent-identity-offer">
         <div class="agent-identity-offer-body" data-slot="offer">
@@ -70,7 +71,9 @@
             <button type="button" data-btn="secondary" data-slot="enable" hidden>Turn on</button>
             <button type="button" data-btn="secondary" data-slot="setup">Set it up</button>
             <button type="button" data-btn="secondary" data-slot="fix" hidden>Fix it</button>
+            <button type="button" data-btn="secondary" data-slot="update" hidden>Update now</button>
             <button type="button" data-btn="text" data-slot="dismiss">No thanks</button>
+            <button type="button" data-btn="text" data-slot="done" hidden>OK</button>
           </div>
           <p class="worktree-dialog-help" data-slot="note" hidden></p>
         </div>
@@ -304,6 +307,7 @@
       <div class="modal-actions">
         <button type="button" data-btn="secondary" data-slot="recheck">Check again</button>
         <button type="button" data-btn="cta" data-slot="enable" hidden>Turn on</button>
+        <button type="button" data-btn="cta" data-slot="update" hidden>Update now</button>
         <button type="button" data-btn="cta" data-slot="open-setup" hidden>Open setup</button>
       </div>
     </dialog>

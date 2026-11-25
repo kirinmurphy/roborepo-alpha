@@ -152,15 +152,16 @@ test.describe("Agent GitHub account", () => {
   // Answers the account route with `accountNext()`, each repo route with `repoNext(name)` (or
   // "waiting" while the account cannot be used), the setup route with `launch`, the enable route
   // with `enable()`, and "No thanks" with `{ offerDismissed: true }`. Records each read and post.
-  async function stub(page, { accountNext, repoNext = (name) => REPOS[name].report(name), ready = () => true, launch = { launched: true }, enable = null }) {
+  async function stub(page, { accountNext, repoNext = (name) => REPOS[name].report(name), ready = () => true, launch = { launched: true }, enable = null, update = null }) {
     const reads = [];
     const posts = [];
-    await page.route(/\/api\/agent-identity(\/enable|\/dismiss-offer)?(\?.*)?$/, async (route) => {
+    await page.route(/\/api\/agent-identity(\/enable|\/dismiss-offer|\/update)?(\?.*)?$/, async (route) => {
       const url = new URL(route.request().url());
       if (route.request().method() === "POST") {
-        const kind = url.pathname.endsWith("/dismiss-offer") ? "dismiss" : "enable";
+        const kind = url.pathname.split("/").pop() === "dismiss-offer" ? "dismiss" : url.pathname.split("/").pop();
         posts.push({ kind, body: route.request().postData() });
-        return route.fulfill({ contentType: "application/json", body: JSON.stringify(kind === "enable" ? enable() : { offerDismissed: true }) });
+        const answer = kind === "enable" ? enable() : kind === "update" ? update() : { offerDismissed: true };
+        return route.fulfill({ contentType: "application/json", body: JSON.stringify(answer) });
       }
       reads.push({ kind: "account", fresh: url.searchParams.get("fresh") === "1" });
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(accountNext()) });
@@ -247,11 +248,14 @@ test.describe("Agent GitHub account", () => {
       // A bot that cannot sign in turns the banner into a warning with only Fix it; otherwise none.
       if (entry.badge === "problem") {
         await expect(offer(page), key).toHaveClass(/notice-alert/);
-        // What is wrong, then its fix, and nothing else.
+        // What is wrong, then its fix, and nothing else. Pushes going out as the user get Update now,
+        // which is the fix, in place of Fix it.
         const shown = entry.report.findings.find((item) => item.severity === "problem");
-        const expected = entry.report.state === "not-set-up" ? "cannot push or open pull requests" : `${shown.message} ${shown.fix}`;
-        await expect(offer(page).locator("[data-slot=message]"), key).toHaveText(entry.report.state === "not-set-up" ? /cannot push or open pull requests/ : expected);
-        await expect(offer(page).getByRole("button", { name: "Fix it" }), key).toBeVisible();
+        const updatable = key === "git-not-routed";
+        const expected = entry.report.state === "not-set-up" ? /cannot push or open pull requests/ : updatable ? shown.message : `${shown.message} ${shown.fix}`;
+        await expect(offer(page).locator("[data-slot=message]"), key).toHaveText(expected);
+        await expect(offer(page).getByRole("button", { name: updatable ? "Update now" : "Fix it" }), key).toBeVisible();
+        await expect(offer(page).getByRole("button", { name: updatable ? "Fix it" : "Update now" }), key).toBeHidden();
         for (const name of ["Set it up", "Turn on", "No thanks"]) await expect(offer(page).getByRole("button", { name }), key).toBeHidden();
       } else {
         await expect(offer(page), key).toBeHidden();
@@ -269,15 +273,16 @@ test.describe("Agent GitHub account", () => {
     await expect(card(page)).toContainText("Bot account (all repos)");
     await page.keyboard.press("Escape");
 
-    // Pushes that still go out as the user leave "Agents use the bot" open, with the fix.
+    // Pushes that still go out as the user leave "Agents use the bot" open, with Update now.
     current = ACCOUNTS["git-not-routed"];
     await openHome(page);
-    await offer(page).getByRole("button", { name: "Fix it" }).click();
+    await badge(page, "identity-ready").click();
     const useItem = card(page).locator("[data-slot=steps] > li").filter({ hasText: "Agents use the bot" });
     await expect(useItem).toHaveAttribute("data-done", "false");
     await expect(useItem).toContainText("Agents' git pushes still go out as you.");
-    await expect(useItem).toContainText("Run roborepo update, then start new agent sessions.");
+    await expect(useItem).toContainText("Update now fixes this; then start new agent sessions.");
     await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 3.");
+    await expect(card(page).getByRole("button", { name: "Update now" })).toBeVisible();
     await shot(page, "card-git-not-routed");
     await page.keyboard.press("Escape");
 
@@ -410,6 +415,45 @@ test.describe("Agent GitHub account", () => {
     await expect(offer(page)).toBeHidden();
     await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
     expect(posts).toEqual([{ kind: "enable", body: "{}" }]);
+  });
+
+  test("Update now posts no body; the banner says what it means for open sessions, and the card's item 3 is checked", async ({ page }) => {
+    let routed = false;
+    const { posts } = await stub(page, {
+      accountNext: () => (routed ? ACCOUNTS.healthy.report : ACCOUNTS["git-not-routed"].report),
+      update: () => { routed = true; return { applied: true, account: ACCOUNTS.healthy.report }; },
+    });
+    await openHome(page);
+    await offer(page).getByRole("button", { name: "Update now" }).click();
+    await expect(offer(page)).not.toHaveClass(/notice-alert/);
+    await expect(offer(page).locator("[data-slot=message]")).toHaveText("Updated. New agent sessions push as the bot; ones already open still push as you until restarted.");
+    await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
+    expect(posts).toEqual([{ kind: "update", body: "{}" }]);
+    await shot(page, "banner-updated");
+    await offer(page).getByRole("button", { name: "OK" }).click();
+    await expect(offer(page)).toBeHidden();
+
+    // From the card: the footer button, then every item checked.
+    routed = false;
+    await openHome(page);
+    await badge(page, "identity-ready").click();
+    await card(page).getByRole("button", { name: "Update now" }).click();
+    await expect(card(page).locator("[data-slot=steps] > li").nth(2)).toHaveAttribute("data-done", "true");
+    expect(await doneOf(card(page).locator("[data-slot=steps] > li"))).toEqual([true, true, true, true, true]);
+    await expect(card(page).getByRole("button", { name: "Update now" })).toBeHidden();
+    expect(posts.map((post) => post.kind)).toEqual(["update", "update"]);
+  });
+
+  test("a failed Update now keeps the warning and says why", async ({ page }) => {
+    await stub(page, {
+      accountNext: () => ACCOUNTS["git-not-routed"].report,
+      update: () => ({ applied: false, reason: "apply_failed", message: "The update did not finish: exit 1", account: ACCOUNTS["git-not-routed"].report }),
+    });
+    await openHome(page);
+    await offer(page).getByRole("button", { name: "Update now" }).click();
+    await expect(offer(page)).toHaveClass(/notice-alert/);
+    await expect(offer(page).locator("[data-slot=note]")).toHaveText("The update did not finish: exit 1");
+    await expect(offer(page).getByRole("button", { name: "Update now" })).toBeEnabled();
   });
 
   test("Open setup posts no body, and coming back re-reads the account and only that repo", async ({ page }) => {

@@ -233,11 +233,18 @@ function buildOffer(mount) {
   const slot = (name) => node.querySelector(`[data-slot="${name}"]`);
   let declined = false;
   let note = null;
+  let updated = null;
   mount.replaceChildren(node);
 
   slot("setup").addEventListener("click", () => openAccountCard());
   slot("fix").addEventListener("click", () => openAccountCard());
   slot("enable").addEventListener("click", () => void turnOn(slot("enable"), (message) => { note = message; render(account?.report); }));
+  slot("update").addEventListener("click", () => void updateConfig(slot("update"), (message, applied) => {
+    if (applied) updated = message;
+    else note = message;
+    render(account?.report);
+  }));
+  slot("done").addEventListener("click", () => { updated = null; mount.hidden = true; });
   slot("dismiss").addEventListener("click", async () => {
     slot("dismiss").disabled = true;
     try {
@@ -257,8 +264,13 @@ function buildOffer(mount) {
     if (!report) return;
     const view = describeAccount(report);
     const broken = report.packageEnabled && view.level === "problem";
+    // Agents' pushes still going out as the user is fixed by applying RoboRepo's config, which the
+    // portal can run itself.
+    const updatable = broken && view.findingId === "git-not-routed";
     node.setAttribute("variant", broken ? "alert" : "info");
-    slot("fix").hidden = !broken;
+    slot("fix").hidden = !broken || updatable;
+    slot("update").hidden = !updatable;
+    slot("done").hidden = true;
     if (broken) {
       mount.hidden = false;
       slot("offer").hidden = false;
@@ -266,9 +278,21 @@ function buildOffer(mount) {
       slot("enable").hidden = true;
       slot("setup").hidden = true;
       slot("dismiss").hidden = true;
-      slot("note").hidden = true;
+      // A failed Update now says why under the message.
+      slot("note").hidden = !note;
+      slot("note").textContent = note || "";
       // What is wrong, then what to do. With no bot at all the account's sentence already says it.
-      fill(node, { message: report.state === "not-set-up" ? view.message : [view.message, view.fix].filter(Boolean).join(" ") });
+      fill(node, { message: report.state === "not-set-up" || updatable ? view.message : [view.message, view.fix].filter(Boolean).join(" ") });
+      return;
+    }
+    // Just updated from here: say what that means for sessions already open, until OK.
+    if (report.packageEnabled && updated) {
+      mount.hidden = false;
+      slot("offer").hidden = false;
+      slot("declined").hidden = true;
+      for (const name of ["enable", "setup", "dismiss", "note"]) slot(name).hidden = true;
+      slot("done").hidden = false;
+      fill(node, { message: updated });
       return;
     }
     slot("dismiss").hidden = false;
@@ -367,6 +391,25 @@ async function turnOn(button, onNote) {
   }
 }
 
+// Applies RoboRepo's config so agents' Git uses the bot. Takes a few seconds: the button says so.
+async function updateConfig(button, onNote) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = "Updating…";
+  try {
+    const result = await portalPostJson(`${ACCOUNT_URL}/update`, {});
+    if (result.account) showAccount(result.account);
+    onNote(result.applied
+      ? "Updated. New agent sessions push as the bot; ones already open still push as you until restarted."
+      : result.message || null, Boolean(result.applied));
+  } catch (error) {
+    onNote(error.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+}
+
 async function openSetup(button, repositoryId) {
   button.disabled = true;
   watchingAccount = true;
@@ -426,6 +469,7 @@ function buildCard() {
   portalWireBackdropClose(dialog, () => dialog.close());
   slot("recheck").addEventListener("click", () => refresh({ fresh: true }));
   slot("enable").addEventListener("click", () => void turnOn(slot("enable"), (message) => { if (target) target.note = message; render(); }));
+  slot("update").addEventListener("click", () => void updateConfig(slot("update"), (message) => { if (target) target.note = message; render(); }));
   slot("open-setup").addEventListener("click", async () => {
     const opening = target;
     const repositoryId = opening.kind === "repo" ? opening.repositoryId : firstGithubRepository();
@@ -498,6 +542,7 @@ function buildCard() {
     const setupRepo = target.kind === "repo" ? target.repositoryId : firstGithubRepository();
     const launchable = offersSetup && Boolean(setupRepo) && (target.kind === "repo" ? repoReport.setupLaunch?.supported : accountReport.setupLaunch?.supported);
     slot("enable").hidden = !(applies && accountView.enable);
+    slot("update").hidden = !(applies && gitGap(accountReport));
     slot("open-setup").hidden = !launchable;
     const showCommand = offersSetup && (!launchable || target.copyFallback);
     slot("command-row").hidden = !showCommand;
@@ -522,7 +567,7 @@ function buildCard() {
       target = { ...next, copyFallback: false, note: null, hadOpenItems: false, closeTimer: null };
       fill(dialog, { subject: next.kind === "account" ? "Bot account (all repos)" : next.name, state: "checking", message: "Reading the bot's status from GitHub…" });
       slot("state").dataset.level = "muted";
-      for (const name of ["steps", "bot-browser", "owner", "command-row", "launch-note", "open-setup", "enable"]) slot(name).hidden = true;
+      for (const name of ["steps", "bot-browser", "owner", "command-row", "launch-note", "open-setup", "enable", "update"]) slot(name).hidden = true;
       showError(null);
       if (!dialog.open) dialog.showModal();
       await refresh({ fresh: false });
@@ -563,6 +608,8 @@ function stepItem(step, index) {
 
 const dateText = (iso) => new Date(iso).toLocaleDateString();
 
+const gitGap = (accountReport) => (accountReport.packageEnabled && (accountReport.findings || []).find((entry) => entry.id === "git-not-routed")) || null;
+
 // The card's list, in setup order: the bot account, its token, agents using it, then (for one repo)
 // the bot's invitation there and the branch rules. A repo item waits, unchecked and without an
 // action, while the account is not usable.
@@ -593,12 +640,12 @@ export function cardSteps(accountReport, repoReport = null) {
   }
 
   // On, but agents' Git does not include the bot's settings: gh uses the bot, pushes do not.
-  const gitGap = accountReport.packageEnabled && findings.find((entry) => entry.id === "git-not-routed");
+  const gap = gitGap(accountReport);
   const useStep = {
     label: "Agents use the bot",
-    done: Boolean(accountReport.packageEnabled) && !gitGap,
-    note: gitGap ? gitGap.message : accountReport.packageEnabled ? "on" : "off; agents act as you",
-    ...(gitGap ? { action: gitGap.fix }
+    done: Boolean(accountReport.packageEnabled) && !gap,
+    note: gap ? gap.message : accountReport.packageEnabled ? "on" : "off; agents act as you",
+    ...(gap ? { action: "Update now fixes this; then start new agent sessions." }
       : accountReport.packageEnabled || accountReport.enableOffered ? {} : { action: "The setup turns this on when it finishes." }),
   };
   const steps = [accountStep, tokenStep, useStep];

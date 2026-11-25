@@ -14,6 +14,7 @@ import { packageIsOnlyStep } from "../../modules/forge/agent-identity.mjs";
 import { setupGuide } from "../../modules/forge/agent-identity-guide.mjs";
 import { loadRegistry } from "../../modules/repositories/registry.mjs";
 import { turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
+import { applyHarnessConfig } from "./portal-harness-refresh.mjs";
 import { readCurrentAccountIdentity, readCurrentRepoAgentAccess } from "./github-identity.mjs";
 import { STATE_ROOT } from "./paths.mjs";
 import { selectPrimaryCheckout } from "./repository-agent-config.mjs";
@@ -118,6 +119,21 @@ export async function turnOnAgentIdentity({
   const after = await readAccount({ fresh: true, now, read });
   if (!result.ok) return { enabled: false, reason: "enable_failed", message: result.message, account: portalAccount(after, { platform }) };
   return { enabled: true, account: portalAccount(after, { platform }) };
+}
+
+// "Update now" for agents whose git pushes still go out as the user: applies RoboRepo's config (the
+// install step `roborepo update` runs), which writes the bot's Git settings into Claude Code's and
+// Codex's settings. Runs only while a fresh read still shows that gap; the page sends nothing else.
+export async function applyAgentGitRouting({
+  platform = process.platform, now = Date.now, read = readCurrentAccountIdentity, apply = applyHarnessConfig,
+} = {}) {
+  const before = await readAccount({ fresh: true, now, read });
+  if (!before.problems.some((entry) => entry.id === "git-not-routed")) return { applied: false, reason: "not_needed", account: portalAccount(before, { platform }) };
+  const result = await apply();
+  repoCache.clear();
+  const after = await readAccount({ fresh: true, now, read });
+  if (!result.ok) return { applied: false, reason: "apply_failed", message: `The update did not finish: ${result.error}`, account: portalAccount(after, { platform }) };
+  return { applied: true, account: portalAccount(after, { platform }) };
 }
 
 // Opens `roborepo github setup` in a new terminal, in the repo's primary checkout, after the user

@@ -15,7 +15,7 @@ import {
   defaultRegistry, registerLocalRoot, registerLocalRootPath, rootId, upsertRepository, writeRegistry,
 } from "../../modules/repositories/index.mjs";
 import {
-  clearAgentIdentityCache, dismissAgentIdentityOffer, launchAgentIdentitySetup, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity,
+  applyAgentGitRouting, clearAgentIdentityCache, dismissAgentIdentityOffer, launchAgentIdentitySetup, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity,
 } from "../cli/repository-agent-identity.mjs";
 import { launchInTerminal } from "../cli/terminal-launch.mjs";
 import { shellQuote } from "../harnesses/shell-quote.mjs";
@@ -43,6 +43,7 @@ try {
 
   await statusReadIsCachedAndCarriesNoToken(checkout);
   await packageTurnsOnOnlyAsTheLastStep();
+  await updateRunsOnlyForTheGitGap();
   await setupLaunchIsTheServersChoice(checkout);
   terminalLaunchStartsInTheGivenFolder(checkout);
   await offerDismissalIsRemembered();
@@ -169,6 +170,26 @@ async function packageTurnsOnOnlyAsTheLastStep() {
   clearAgentIdentityCache();
 }
 
+// "Update now" applies the config only while a fresh read still shows agents' pushes going out as
+// the user, and answers with the account read after.
+async function updateRunsOnlyForTheGitGap() {
+  clearAgentIdentityCache();
+  const gap = readyAccount({ state: "problem", problems: [{ id: "git-not-routed", severity: "problem", message: "Agents' git pushes still go out as you.", fix: "x" }] });
+  let routed = false;
+  let runs = 0;
+  const read = () => Promise.resolve(routed ? readyAccount() : gap);
+  const apply = () => { runs += 1; routed = true; return Promise.resolve({ ok: true }); };
+  const result = await applyAgentGitRouting({ read, apply });
+  assert.deepEqual([result.applied, runs, result.account.state], [true, 1, "healthy"]);
+
+  const skipped = await applyAgentGitRouting({ read: () => Promise.resolve(readyAccount()), apply });
+  assert.deepEqual([skipped.applied, skipped.reason, runs], [false, "not_needed", 1], "nothing to fix runs nothing");
+
+  const failed = await applyAgentGitRouting({ read: () => Promise.resolve(gap), apply: () => Promise.resolve({ ok: false, error: "exit 1" }) });
+  assert.deepEqual([failed.applied, failed.reason, failed.message], [false, "apply_failed", "The update did not finish: exit 1"]);
+  clearAgentIdentityCache();
+}
+
 async function setupLaunchIsTheServersChoice(checkout) {
   const launches = [];
   const launch = (request, options) => { launches.push({ request, options }); return { ok: true }; };
@@ -248,6 +269,7 @@ async function routesPassFreshAndRefuseABody() {
     loadAgentIdentityAccount: (params) => { calls.push(["account", params]); return Promise.resolve({ state: "healthy" }); },
     turnOnAgentIdentity: () => { calls.push(["enable"]); return Promise.resolve({ enabled: true }); },
     dismissAgentIdentityOffer: () => { calls.push(["dismiss"]); return { offerDismissed: true }; },
+    applyAgentGitRouting: () => { calls.push(["update"]); return Promise.resolve({ applied: true }); },
   };
   const id = encodeURIComponent(GITHUB);
   const get = await request("GET", `/api/repositories/${id}/agent-identity`, "fresh=1", handlers);
@@ -279,7 +301,12 @@ async function routesPassFreshAndRefuseABody() {
   assert.deepEqual(calls, [], "a body is refused before anything is saved");
   const dismissed = await request("POST", "/api/agent-identity/dismiss-offer", "", handlers, "");
   assert.deepEqual(JSON.parse(dismissed.body), { offerDismissed: true });
-  assert.deepEqual(calls, [["dismiss"]]);
+  assert.deepEqual(calls.splice(0), [["dismiss"]]);
+  assert.equal((await request("POST", "/api/agent-identity/update", "", handlers, JSON.stringify({ args: ["--on-conflict", "overwrite"] }))).status, 400);
+  assert.deepEqual(calls, [], "a body is refused before anything is applied");
+  const updated = await request("POST", "/api/agent-identity/update", "", handlers, "");
+  assert.deepEqual(JSON.parse(updated.body), { applied: true });
+  assert.deepEqual(calls, [["update"]]);
 }
 
 // The real reads in a child process, because the state folder and package state are read when the
