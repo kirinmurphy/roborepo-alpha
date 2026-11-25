@@ -67,7 +67,7 @@ const ACCOUNTS = {
     ready: true, badge: "problem", label: "needs attention",
     report: account({
       state: "problem",
-      findings: [finding("git-not-routed", "problem", "Agents' git pushes still go out as you: Claude Code settings do not include the bot's Git settings yet.", "Run roborepo update in your own terminal, then start new agent sessions.")],
+      findings: [finding("git-not-routed", "problem", "Agents' git pushes still go out as you.", "Run roborepo update, then start new agent sessions.")],
     }),
   },
   // Turned on from the Agents page before any bot exists: agents cannot use GitHub at all.
@@ -247,10 +247,10 @@ test.describe("Agent GitHub account", () => {
       // A bot that cannot sign in turns the banner into a warning with only Fix it; otherwise none.
       if (entry.badge === "problem") {
         await expect(offer(page), key).toHaveClass(/notice-alert/);
-        const expected = entry.report.state === "not-set-up" ? "cannot push or open pull requests"
-          : key === "git-not-routed" ? "Agents' git pushes still go out as you"
-            : "Agents can't push or open pull requests right now: robo-bot needs attention.";
-        await expect(offer(page), key).toContainText(expected);
+        // What is wrong, then its fix, and nothing else.
+        const shown = entry.report.findings.find((item) => item.severity === "problem");
+        const expected = entry.report.state === "not-set-up" ? "cannot push or open pull requests" : `${shown.message} ${shown.fix}`;
+        await expect(offer(page).locator("[data-slot=message]"), key).toHaveText(entry.report.state === "not-set-up" ? /cannot push or open pull requests/ : expected);
         await expect(offer(page).getByRole("button", { name: "Fix it" }), key).toBeVisible();
         for (const name of ["Set it up", "Turn on", "No thanks"]) await expect(offer(page).getByRole("button", { name }), key).toBeHidden();
       } else {
@@ -275,9 +275,20 @@ test.describe("Agent GitHub account", () => {
     await offer(page).getByRole("button", { name: "Fix it" }).click();
     const useItem = card(page).locator("[data-slot=steps] > li").filter({ hasText: "Agents use the bot" });
     await expect(useItem).toHaveAttribute("data-done", "false");
-    await expect(useItem).toContainText("git pushes still go out as you");
-    await expect(useItem).toContainText("Run roborepo update in your own terminal");
+    await expect(useItem).toContainText("Agents' git pushes still go out as you.");
+    await expect(useItem).toContainText("Run roborepo update, then start new agent sessions.");
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 3.");
     await shot(page, "card-git-not-routed");
+    await page.keyboard.press("Escape");
+
+    // Every item checked but the account still reports something no item covers: the line above the
+    // list says what and how to fix it, not a green sentence under the label.
+    const caStale = finding("ca-bundle-stale", "warn", "The certificate bundle copy Codex's sandbox uses for Git is missing or out of date.", "Run roborepo github setup to refresh it.");
+    current = { ...ACCOUNTS.healthy, report: account({ findings: [caStale] }) };
+    await openHome(page);
+    await badge(page, "identity-ready").click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText(`${caStale.message} ${caStale.fix}`);
+    expect(await doneOf(card(page).locator("[data-slot=steps] > li"))).toEqual([true, true, true, true, true]);
     await page.keyboard.press("Escape");
 
     current = ACCOUNTS.healthy;

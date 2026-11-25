@@ -267,13 +267,8 @@ function buildOffer(mount) {
       slot("setup").hidden = true;
       slot("dismiss").hidden = true;
       slot("note").hidden = true;
-      // With no bot at all the account's sentence already says agents cannot push; pushes that go
-      // out as the user are not "can't push", so that finding speaks for itself.
-      fill(node, {
-        message: report.state === "not-set-up" || view.findingId === "git-not-routed"
-          ? view.message
-          : `Agents can't push or open pull requests right now: ${report.botLogin || report.savedLogin || "the bot account"} needs attention. ${view.message}`,
-      });
+      // What is wrong, then what to do. With no bot at all the account's sentence already says it.
+      fill(node, { message: report.state === "not-set-up" ? view.message : [view.message, view.fix].filter(Boolean).join(" ") });
       return;
     }
     slot("dismiss").hidden = false;
@@ -540,6 +535,11 @@ function summary(accountReport, view, steps) {
   const first = steps.findIndex((step) => !step.done && !step.waiting);
   const bot = accountReport.botLogin || accountReport.savedLogin || "the bot";
   if (view.label === "not checked") return "GitHub did not answer. Check again in a moment.";
+  // Every item checked but the account still reports something (a finding no item covers): say it
+  // and its fix, rather than a green sentence under a red label.
+  if (first === -1 && (view.level === "problem" || view.level === "warn") && accountReport.packageEnabled) {
+    return [view.message, view.fix].filter(Boolean).join(" ");
+  }
   if (first === -1) return accountReport.packageEnabled ? `Agents act on GitHub as ${bot}.` : `${bot} is ready; agents still act as you.`;
   return view.level === "warn" && accountReport.packageEnabled ? `Agents can work, but item ${first + 1} needs you soon.` : `Start at item ${first + 1}.`;
 }

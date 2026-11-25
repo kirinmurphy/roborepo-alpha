@@ -189,8 +189,8 @@ function withPackageState(problems, packageEnabled, gitGaps = []) {
     if (gitGaps.length === 0) return problems;
     return [...problems, problem(
       "git-not-routed",
-      `Agents' git pushes still go out as you: ${gitGaps.join(" and ")} settings do not include the bot's Git settings yet.`,
-      "Run roborepo update in your own terminal, then start new agent sessions.",
+      "Agents' git pushes still go out as you.",
+      "Run roborepo update, then start new agent sessions.",
     )];
   }
   const blocked = problems.some((entry) => entry.severity !== "warn" || entry.id === "ca-bundle-stale");

@@ -181,8 +181,8 @@ problem), the same spot shows a red warning that agents can't push or open pull 
 **Fix it**, which opens the bot card. It has no **No thanks**; it goes when the bot works again, or
 when you turn the switch off in Settings.
 
-**Once it is on**, the offer is gone and each GitHub repo's title has an **agent bot** badge beside
-its GitHub link. The dot's color covers both the bot account and that repo:
+**Once it is on**, the offer is gone and each GitHub repo's card header has an **agent bot** badge,
+right-aligned before the icons for the repo's own pages. The dot's color covers both the bot account and that repo:
 
 | Dot | Means |
 | --- | --- |
