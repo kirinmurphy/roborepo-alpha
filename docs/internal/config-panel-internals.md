@@ -290,9 +290,10 @@ printout, and onboarding label those rows "Claude only".
 | Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm", "~/.roborepo/scratch"]`, `network.allowLocalBinding: false` |
 
 `excludedCommands` names individual `roborepo` subcommands rather than the whole CLI: the plans
-store, delivery, linked worktrees, the browser's dev server, and the commands that write harness
-config. Commands that launch other programs (`agent-run`, `run`) stay sandboxed, so a pre-approved
-wrapper cannot carry a test suite or script out of the sandbox. `sandbox-settings.mjs` gives the
+store, delivery, linked worktrees, the web portal, telemetry commands that write capture state,
+and the commands that write harness config. Commands that launch other programs (`agent-run`, `run`,
+`browser`) stay sandboxed, so a wrapper cannot carry a test suite, scenario or script out of the
+sandbox. `sandbox-settings.mjs` gives the
 reason for each entry.
 
 Writable temp folders and denied credentials are not repeated: Claude merges the `Edit` allow and

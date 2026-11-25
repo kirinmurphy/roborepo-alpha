@@ -20,11 +20,13 @@
 //     its ask rule (`claude -p` honors it), so switch-branches would not prompt there. Run
 //     outside, they prompt. A chained call (`make x && git switch y`) does not match, stays
 //     sandboxed, and in the desktop app may skip the prompt.
-//   - roborepo: only the subcommands below. Everything else (`agent-run`, `run`, `runtime`,
-//     `telemetry`, `scratch`, the rest of `git`) works inside the sandbox and stays there. That
-//     matters most for `agent-run` and `run`: they launch other programs, and an exclusion would
-//     hand those programs full access, without a prompt for the pre-approved `agent-run`.
-//     `./bin/roborepo` is the same CLI run from a development checkout.
+//   - roborepo: only the subcommands below. Everything else (`agent-run`, `run`, `browser`,
+//     `runtime`, read-only `telemetry`, `scratch`, the rest of `git`) stays in the sandbox.
+//     `agent-run`, `run` and `browser run` launch other programs (a test suite, a scenario, a
+//     `--serve` command), and an exclusion would hand those programs full access — without a
+//     prompt for the pre-approved `agent-run`. When one needs more than the sandbox allows, the
+//     retry outside it goes through the permission check. `./bin/roborepo` is the same CLI run
+//     from a development checkout.
 
 // roborepo subcommands that run outside the sandbox, each with the reason it cannot run inside.
 // Matching is by prefix, so `plans` covers every plans subcommand.
@@ -35,8 +37,18 @@ const ROBOREPO_UNSANDBOXED_SUBCOMMANDS = Object.freeze([
   "delivery",
   // Adds and removes linked worktrees, whose records under .git/worktrees the sandbox keeps read-only.
   "git worktrees",
-  // `run --serve` starts the app under test on a local port, and allowLocalBinding stays off.
-  "browser",
+  // Starts roborepo's own portal on a local port (allowLocalBinding stays off), and stops it again,
+  // which signals a process the sandboxed command did not start.
+  "web",
+  "web-stop",
+  // Write capture state under ~/.roborepo, or capture hooks into harness config. Read-only
+  // telemetry (status, report, oracle) stays sandboxed.
+  "telemetry install",
+  "telemetry control",
+  "telemetry disable",
+  "telemetry purge",
+  "telemetry backup",
+  "telemetry mark",
   // These write harness config under ~/.claude and ~/.codex, which the sandbox refuses. A sandboxed
   // run could stop halfway through an update. Each keeps its ask rule outside the sandbox.
   "update",

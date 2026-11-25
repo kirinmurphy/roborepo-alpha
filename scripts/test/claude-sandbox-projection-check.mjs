@@ -67,10 +67,10 @@ for (const verb of ["checkout", "switch"]) {
 // other programs stay inside, or they would carry those programs out of it.
 for (const cli of ["roborepo", "./bin/roborepo"]) {
   assert.ok(!defaults.excludedCommands.includes(`${cli} *`), `${cli} is not excluded wholesale`);
-  for (const sub of ["plans", "delivery", "git worktrees", "update"]) {
+  for (const sub of ["plans", "delivery", "git worktrees", "update", "web", "telemetry mark"]) {
     assert.ok(defaults.excludedCommands.includes(`${cli} ${sub} *`), `${cli} ${sub} runs outside the sandbox`);
   }
-  for (const sub of ["agent-run", "run", "runtime", "telemetry", "scratch", "git", "package"]) {
+  for (const sub of ["agent-run", "run", "browser", "runtime", "telemetry", "telemetry status", "scratch", "git", "package"]) {
     assert.ok(!defaults.excludedCommands.includes(`${cli} ${sub} *`), `${cli} ${sub} stays sandboxed`);
   }
 }
