@@ -1,6 +1,6 @@
 ---
 name: plan-execute
-description: Use when starting, resuming, or fixing the implementation of a prepared repository plan. Accepts a plan in ready, active, or review. From ready it will create or safely reuse an isolated worktree and commit the start transition; in active it resumes in the recorded worktree; in review it fixes only the findings review sent back. It implements every in-scope unblocked objective without milestone check-ins, logs autonomous decisions, queues blocked questions for the end, then runs a validation loop in which a fresh-context validator checks the work and the agent fixes what it finds until a pass is clean or the eight-pass cap is reached, and moves the plan to review once that loop has ended and the completion preflight passes. Safe to rerun across sessions. Do not use for preparing a backlog plan (plan-promote), the human review or approval (plan-review), post-merge closure (plan-close), archiving (plan-archive), or implementation without an existing plan.
+description: Use when starting, resuming, or fixing the implementation of a prepared repository plan. Accepts a plan in ready, active, or review. From ready it will create or safely reuse an isolated worktree and commit the start transition; in active it resumes in the recorded worktree; in review it fixes only the findings review sent back. It implements every in-scope unblocked objective without milestone check-ins, logs autonomous decisions, queues blocked questions for the end, then runs a validation loop in which a fresh-context validator checks the work and the agent fixes what it finds until a pass is clean or the eight-pass cap is reached, and moves the plan to review once that loop has ended, the completion preflight passes, and CI on the pull request is not blocked. Safe to rerun across sessions. Do not use for preparing a backlog plan (plan-promote), the human review or approval (plan-review), post-merge closure (plan-close), archiving (plan-archive), or implementation without an existing plan.
 ---
 
 # Plan Execute
@@ -455,8 +455,8 @@ A run is complete when:
   the pull request, and watched CI to a result at the head commit, which the final report gives with
   the pull request's draft or ready state; or the final report says which handoff step did not run
   and why;
-- the plan was moved to `review/` if and only if the Validation Loop ended and the completion
-  preflight passed.
+- the plan was moved to `review/` if and only if the Validation Loop ended, the completion
+  preflight passed, and the handoff's CI watch did not end Blocked.
 
 Completion does not authorize:
 

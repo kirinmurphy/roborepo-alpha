@@ -20,13 +20,14 @@ feature-branch commit and whose branch already matches its remote has nothing to
    branch or any other protected branch. Lifecycle commits are already on the plans branch.
 2. From the worktree, run `git push -u <remote> <branch>`, where `<remote>` is the branch's upstream
    remote, or the repository's only remote when none is set. Never force-push.
-3. **Open the draft at the first push.** Read the branch's open pull request with
+3. **Open the draft after the first successful push.** Read the branch's open pull request with
    `gh pr view <branch> --json number,url,isDraft,baseRefName`. When none exists, open one as a
    draft: `gh pr create --draft --base <base> --head <branch> --title "<plan title>" --body-file <file>`,
    with a body written as Hand off step 6 describes. Never use `--fill`. A resumed run reuses the
    existing pull request, draft or not, and opens no second one.
 4. With no remote, or when the push is refused (a permission prompt declined, a hook, a rejected
-   non-fast-forward), do not retry, rebase, or work around it. The plan's lifecycle stands; report
+   non-fast-forward), do not retry, rebase, or work around it, and open no pull request. The plan's
+   lifecycle stands; report
    the exact command under Needs you and whether the session's permissions or the remote refused it.
 
 ## Hand off
@@ -97,6 +98,10 @@ the commit just pushed. A result for an older commit is not the result: watch ag
 | The same check still failing after 3 fix commits for it | Blocked | Stop, record a blocker in Open Questions, report it | Stays draft |
 | A failure that also occurs on base | Not green | Record it under `### Verification` as a base failure, continue, name it as an exception | Stays draft |
 | No checks reported 2 minutes after the push | Not green | Run the canonical completion gate locally once, continue, name the exception | Stays draft |
+
+`gh pr checks --watch` returns at once when no checks are reported yet. Wait the 2 minutes with the
+harness's background wait (in Claude Code, a Monitor until-loop that reruns `gh pr checks` until a
+check appears or the time passes), never a foreground sleep or repeated polling reads, then judge.
 
 "Continue" means the caller's next step. Only `/plan-execute`'s Implementation Completion submits
 after it, and a Blocked result there keeps the plan in `active/`. Review Findings and `/plan-review`

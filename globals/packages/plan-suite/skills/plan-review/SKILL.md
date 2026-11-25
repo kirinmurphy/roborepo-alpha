@@ -329,8 +329,8 @@ human's explicit answer, quoting it: `— Confirmed by the user <date>: "<what t
    loop ended on a pass with no **fix** findings, not at its cap. Otherwise leave it a draft and
    name the condition that failed. Approval is recorded on the plans branch, so this step pushes
    nothing to the feature branch and starts no CI run.
-   Tell the user to merge the pull request `/plan-execute` opened (or to open one, when none
-   exists) themselves, then run `/plan-close`. If the base
+5. Tell the user to merge the plan's pull request themselves, then run `/plan-close`. A pull
+   request left a draft names why; GitHub merges it only once it is marked ready. If the base
    branch moves before that merge, the user reruns `/plan-review`; `/plan-close` never
    synchronizes, and it refuses a stale approval.
 
