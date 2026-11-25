@@ -16,7 +16,8 @@ When a user has the case-study skill turned on, `/plan-close` ends by writing a 
 the closed plan's main design decision. It saves the case study into a folder the user set up
 once, then reports where it went. A new `roborepo case-study` command stores that folder per user,
 with an optional per-repo override. Before writing, the session asks once for access to that
-folder, so every write and edit after that is covered for the rest of the session. The step never
+folder, aiming for every later write and edit there to need no approval; which harness grant
+achieves that is still to be confirmed (see Open questions). The step never
 blocks or undoes a close, and it never commits in the destination repo.
 
 ## Context
