@@ -1,6 +1,6 @@
 ---
 id: 62hoz5a9
-next_action: Ready to build; run /plan-execute on this plan to add the package routes, then the Agents page tabs, dialogs, and Sources section.
+next_action: Implementation is complete and validated; run /plan-review on this plan to review the Agents page's package tabs, dialogs, and Sources section and approve it.
 blocked_by: []
 depends_on: ["jdsobwn"]
 related: ["user-managed-packages-and-add-workflows", "4qzo8h0s", "package-cli-test-guide", "f5exs0bd"]
@@ -215,7 +215,8 @@ for GitHub packages, and **Remove** when the row is `removable`.
 
 | Row state | Card shows |
 | --- | --- |
-| `installed: false` | **Install**, no toggle |
+| `installed: false`, from a GitHub source | **Install**, no toggle |
+| `installed: false`, from a folder | The on/off switch; turning it on installs it, as `package enable` does |
 | `installed`, not `active` | The existing on/off toggle, off |
 | `updateAvailable` | **Update** beside the commit |
 | `sourceChanged` | "Its source now points at a different repo"; no **Update** |
@@ -264,21 +265,21 @@ usable.
 
 ## Implementation Plan
 
-- [ ] Add the child-process runner for Git-running service calls, with the CLI's callbacks and the
+- [x] Add the child-process runner for Git-running service calls, with the CLI's callbacks and the
       write actor passed through.
-- [ ] Add `scripts/cli/portal-routes-packages.mjs` with the routes and status mapping above, and
+- [x] Add `scripts/cli/portal-routes-packages.mjs` with the routes and status mapping above, and
       add `packagesRoutes` to `API_ROUTE_TABLES` in `scripts/cli/portal-server.mjs`.
-- [ ] Add `scripts/test/portal-package-routes-check.mjs` and wire it into
-      `scripts/test/test-cli.sh` beside the other package checks.
-- [ ] Add the package and source fetch calls to `portal/config/api.js`, and load `/api/packages`
+- [x] Add `scripts/test/portal-package-routes-check.mjs` and wire it into
+      `scripts/test/check-groups.json` (the `ci` group) beside the other package checks.
+- [x] Add the package and source fetch calls to `portal/config/api.js`, and load `/api/packages`
       beside `/api/config` in the All repos scope.
-- [ ] Add the System / Custom / Third Party tab bar, badges, and commit display to the Agents page.
-- [ ] Add Install, Update, and Remove to cards, with the install and update dialogs.
-- [ ] Show the `sourceChanged`, `available: false`, unresolved, and shadowed states on cards.
-- [ ] Add the Sources section with expand, refresh, on/off, and remove.
-- [ ] Add the add-a-source dialog.
-- [ ] Add `scripts/test/portal-ui/package-sources.spec.mjs` with the parity scenario below.
-- [ ] Update the docs of record listed under Documentation impact.
+- [x] Add the System / Custom / Third Party tab bar, badges, and commit display to the Agents page.
+- [x] Add Install, Update, and Remove to cards, with the install and update dialogs.
+- [x] Show the `sourceChanged`, `available: false`, unresolved, and shadowed states on cards.
+- [x] Add the Sources section with expand, refresh, on/off, and remove.
+- [x] Add the add-a-source dialog.
+- [x] Add `scripts/test/portal-ui/package-sources.spec.mjs` with the parity scenario below.
+- [x] Update the docs of record listed under Documentation impact.
 
 ## Validation
 
@@ -298,17 +299,17 @@ alternates which surface performs each step.
 
 ### Acceptance criteria
 
-- [ ] Every row of the Current behavior table except the trusted catalog has a portal control that
+- [x] Every row of the Current behavior table except the trusted catalog has a portal control that
       performs it.
-- [ ] Each card state in the Card states table renders from `packageView()` data.
-- [ ] Install and update in the portal refuse a changed plan or moved revision and show the new one.
-- [ ] Updating an active package in the portal re-applies it, as `roborepo package update` does.
-- [ ] Removing a Custom package leaves its folder untouched; removing a GitHub package deletes its
+- [x] Each card state in the Card states table renders from `packageView()` data.
+- [x] Install and update in the portal refuse a changed plan or moved revision and show the new one.
+- [x] Updating an active package in the portal re-applies it, as `roborepo package update` does.
+- [x] Removing a Custom package leaves its folder untouched; removing a GitHub package deletes its
       copy.
-- [ ] Package actions do not appear when the page is scoped to one repo.
-- [ ] While a GitHub add or refresh runs, other portal pages still answer.
-- [ ] The interleaved CLI and portal scenario passes.
-- [ ] A refusal in the portal shows the same message the CLI prints for the same case.
+- [x] Package actions do not appear when the page is scoped to one repo.
+- [x] While a GitHub add or refresh runs, other portal pages still answer.
+- [x] The interleaved CLI and portal scenario passes.
+- [x] A refusal in the portal shows the same message the CLI prints for the same case.
 
 ## Risks
 
@@ -319,6 +320,67 @@ alternates which surface performs each step.
 | A portal action and a CLI command run at once | Lock and store writes take the package lock. A refresh replaces a source's listing only after it validates, so a racing refresh leaves one complete listing |
 | The page shows stale state after a CLI change | The page reloads after each action and on focus; the parity spec covers a CLI change seen in the portal |
 | The Agents page grows crowded | Tabs split the list; sources sit in their own section below |
+
+## Decision Log
+
+- **Folder packages keep their on/off switch; only a GitHub package not yet installed shows Install.**
+  The Card states table said `installed: false` → Install, no toggle. The service counts a folder
+  package as installed only once it is recorded or on, so taking the table literally removed the
+  switch every off folder and workspace package has on main, and added a step the CLI never asks
+  for (`package enable` installs a folder package). Alternatives: follow the table and document the
+  extra step. Chosen because it keeps existing behavior and matches the CLI. The table row is
+  amended to say so.
+- **The routes check is wired through `scripts/test/check-groups.json`, not `test-cli.sh`.** Node
+  `*-check.mjs` suites run through `run-checks.mjs`, and CI runs the `ci` group; `test-cli.sh` no
+  longer lists them. Alternative: a line in `test-cli.sh`, which `orphan-test-check` would not
+  count as running.
+- **The unverified-source warning comes from the service.** `UNVERIFIED_SOURCE_WARNING` and a
+  `warning` field on `addSource`, `previewInstall`, and a plan-changed refusal, so the CLI and the
+  page print one wording. Alternative: a copy of the text in the page, which could drift.
+- **The write-log actor pattern admits `%` and `.`.** `DELETE /api/packages/installed/team%2Ftool`
+  otherwise logged as plain `roborepo`. Only path characters under `/api/` are admitted; a query
+  string never reaches the actor.
+- **A folder path is resolved in the route, and the child runs in the server's directory,** so a
+  relative path means the same thing in both processes.
+- **Unresolved cards offer Remove.** The table named only the "Can't be found" text; the service
+  removes such a record, and without Remove the card is a dead end. A record whose source is gone
+  shows on both Custom and Third Party, since only its source says which tab it belongs to.
+- **Source rows are named by id,** as `package source list` names them; a local repo's display
+  name is its whole path, which the location line already shows. Long source badges on cards are
+  middle-truncated with the full name on hover.
+- **The parity spec runs the CLI on the hermetic server's own state** through `PORTAL_UI_CLI_ENV`,
+  which `run.mjs` now sets. The hermetic machine has no harness installed, so the spec asserts
+  install state through `roborepo package list --json`; the routes check asserts the harness files
+  a re-apply writes.
+- **The selected tab is remembered per browser** (`localStorage`, wrapped so a blocked store only
+  forgets it).
+- **An update re-asks only when the installed commit moved; a moved source binds to the shown
+  commit,** as the CLI's confirmation does (the Screens text said "if either moved"). When the pin
+  moved, the service now reads the source's newest revision instead of the stale shown target, so
+  the re-ask is a move forward and the listing is never rewound. Alternatives: re-run the
+  unconfirmed update in the page (leaves the rewind), or label a backward move as a rollback.
+  Chosen because it fixes the cause once, for the CLI too.
+- **A name clash no longer empties the Agents page.** A collision stops the catalog, and so the
+  config snapshot, from loading (on main the page drew nothing). The page now shows the error and
+  still draws the tabs (Needs Attention with Install per candidate) and Sources, so the clash is
+  settled where it was made. Installed cards are held back in that state, since they have no
+  categories or switches to draw with.
+- **The child process has a 15-minute ceiling and stops with the server,** so a hung operation
+  cannot hold a request or outlive the portal.
+- **A typed `~/` folder path means the home folder,** as in the CLI's shell.
+
+## Not tested
+
+- [ ] The tabs, cards, dialogs, and Sources section read well in the light theme and at phone
+      width. Seen in dark theme at 1280 px wide only. Needs a person: judging look and layout is a
+      human judgment.
+- [x] Adding a public GitHub repo, installing from it, checking for an update, and removing both
+      run through the portal routes against the network. — Verified by agent 2026-11-25 at
+      1e848a18: POST `/api/packages/sources` with `https://github.com/anthropics/skills` on an
+      isolated state root → 200 in 2.8 s, 19 packages; preview, install (200, copy at e4bb5d96),
+      unconfirmed update (200, up to date), DELETE package (copy deleted) and DELETE source → 200.
+      A repo with no packages (`octocat/Hello-World`) → 400 `invalid` with the service's message,
+      while `GET /api/packages/sources` answered in 4 ms.
 
 ## Open Questions
 
@@ -332,3 +394,26 @@ None.
 | `docs/internal/config-panel-internals.md` | How the Agents page loads package and source data |
 | `docs/internal/portal-architecture.md` | The `/api/packages` routes, their module, and the child-process runner |
 | `docs/internal/package-sources.md` | The portal as a second client of the service, beside the CLI |
+
+## Review
+
+### Findings
+- [x] Folder packages lost their on/off switch and showed Install, unlike the CLI — fixed (dd46c920); recorded in the Decision Log
+- [x] A cancelled install preview or update check reopened the dialog, or replaced another action's contents — fixed (dd46c920)
+- [x] No test rendered the sourceChanged, unavailable, unresolved, and shadowed card states — fixed (dd46c920)
+- [x] Turning a package on or off did not re-read the package view — fixed (dd46c920)
+- [x] Returning from a repo scope to All repos drew stale or missing tabs until the next poll — fixed (41461e35)
+- [x] The browser spec skipped the portal's GitHub add, Refresh, keep-installed removal, and removing an enabled folder package — fixed (41461e35)
+- [x] Remove under Needs Attention always described a folder removal, even for a GitHub copy — fixed (cd599470)
+- [x] The update re-ask after a moved revision had no browser test — fixed (2fbdf40a)
+- [x] An update re-asked after the pin moved offered a move back to the stale target and rewound the source's listing — fixed in the service (b69fd480); recorded in the Decision Log
+- [x] Collisions were not shown, and adding a clashing source emptied the Agents page — fixed (b69fd480)
+- [x] Expanded source package lists were not re-read after an action — fixed (b69fd480)
+- [x] Without a config snapshot, installed packages were listed under Available to Install — fixed (56820e0b)
+- [x] The user doc said a moved source brings the Update dialog back — fixed (56820e0b)
+
+### Verification
+- Validation: clean on pass 7 at 56820e0b (fresh-context subagent each pass)
+- `npm run test:portal-ui` → 283 passed at b69fd480; `-- package-sources.spec.mjs portal-ui.spec.mjs` → 107 passed at 56820e0b
+- `node scripts/test/portal-package-routes-check.mjs` → pass at 56820e0b
+- package-update-check, package-source-git-check, package-lifecycle-check → pass at b69fd480; package-source-registry-check, write-log-check, orphan-test-check, portal-surface-layers-check, portal-pages-check, harness-portal-api-check, portal-server-code-signature-check → pass at dd46c920 or 1e848a18; docs-reference-check → pass at 56820e0b
