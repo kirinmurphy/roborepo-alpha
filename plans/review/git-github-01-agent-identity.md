@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Review at b4fde55d is done apart from the owner's checks. The owner pushes local main, runs roborepo github setup in their own terminal, settles the open Not tested entries, then resumes /plan-review for approval
+next_action: Review at b4fde55d is done apart from the owner's checks. The owner runs roborepo github setup in their own terminal, settles the open Not tested entries, then resumes /plan-review for approval
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["rtkmc8kf", "f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -686,10 +686,10 @@ reads status and opens the terminal.
 - Review Validator pass 3 at e8583b4c (docs only): clean
 - `npm run check` at b4fde55d, outside the Claude sandbox, from an agent shell with the identity's gh variables set: 428 tests passed, 103/103 suites passed. b4fde55d itself (test orchestration only) was validated by this gate run, not by another Validator pass
 - Inside the Claude sandbox the gate fails 13 suites on worktree creation and local port binding (`Operation not permitted`); environmental, all pass outside it
-- No CI result yet for b4fde55d: the branch is not pushed (see Result)
+- Branch pushed at b4fde55d on 2026-11-25 after the owner published `main` 97605225; CI result pending
 
 ### Result
-- Status: pending — 9 person-only `## Not tested` entries open; branch push held until local `main` 97605225 is published
+- Status: pending — 9 person-only `## Not tested` entries open
 - Reviewed implementation commit: b4fde55d20cc54e5643e60b1aedb23336f2ad5a4
 - Base commit: 976052259a3e93d27047c52259eda32a0799082b
 
