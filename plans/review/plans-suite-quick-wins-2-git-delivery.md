@@ -1,6 +1,6 @@
 ---
 id: i5mnkm7z
-next_action: Review rerun at 93bf5323 after review fixes; waiting for CI and a final Validator pass, then the user's approval.
+next_action: Review complete at b49e0d71; waiting on the user's approval of b49e0d71.
 blocked_by: []
 depends_on: ["vzgsx5vz"]
 related: ["f0jwe76j", "w7vls1yk", "d9ywaa8d", "developer-runtime-remote-branch-status", "pvgx8oh7", "kqgr1d65", "0jped168"]
@@ -148,6 +148,7 @@ confirm the result is for the head commit:
 | A failure that also occurs on base | Not green | Record it under `- [x] Merge-readiness docs listed only two failure states and omitted a missing tracking ref and a local-branch upstream — fixed in review (93bf5323)
 - [x] The plan's Merge readiness state table had no row for a local-branch upstream or a missing tracking ref — fixed in review (plan record)
 - [x] handoff.md's Attempts rule named "timeout error" as retryable, then said a `timed_out` run is not retried — fixed in review (93bf5323)
+- [x] The internals doc said a local upstream proves nothing was pushed, where it only cannot show a push — fixed in review (b49e0d71)
 
 ### Verification` as a base failure, continue, name it as an exception | Stays draft |
 | No checks reported 2 minutes after the push | Not green | Run the canonical completion gate locally once, continue, name the exception | Stays draft |
@@ -306,6 +307,8 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - [x] `/plan-review` step 6 did not say a Blocked CI result keeps `### Result` pending — fixed (d050d7a7)
 
 ### Verification
+- Review 2026-11-25: Validator pass over 93bf5323 → 1 actionable `fix` finding (internals doc said a local upstream proves nothing was pushed) and 1 note, fixed in b49e0d71; Validator pass over b49e0d71 → no actionable findings, one cosmetic note (a long line) left as is
+- Review 2026-11-25: CI on pull request 87 at b49e0d71, which equals the local tip: `check (ubuntu-latest)`, `check (macos-latest)`, `windows-installer` passed; `plan-suite-skills-check` → ok and `doctor.sh --quiet` → passed (98 checks) at b49e0d71
 - Review 2026-11-25: main 051d2449 merged in at a2aa8191 (sandbox settings only; no overlap with this plan's files); `plan-lifecycle-transitions-check` and `plan-suite-skills-check` → ok at a2aa8191
 - Review 2026-11-25: Validator pass (fresh-context subagent) over 8c34801d..a2aa8191 → 3 actionable `fix` findings and 1 note, all fixed in 93bf5323; `plan-suite-skills-check` → ok and `doctor.sh --quiet` → passed (98 checks) at 93bf5323
 - Review 2026-11-24: `roborepo plans sync-base --base main` → up-to-date (main 5cba47f0 already merged)
@@ -323,9 +326,9 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - `bash scripts/doctor.sh --quiet` → doctor passed (98 checks) at 3546603d
 
 ### Result
-- Status: pending
-- Reviewed implementation commit: 8c34801d88d211c7f9f656ce6adf3d9cfc72f1a2
-- Base commit: 5cba47f08635f5019e07aa26fb4726b9c0177e3e
+- Status: complete
+- Reviewed implementation commit: b49e0d7125fdc91c2b44802636aa8c61f5e01665
+- Base commit: 051d2449f55cd64f01e5ada732521319eff625b1
 
 ### Approval
 - Decision: approved
