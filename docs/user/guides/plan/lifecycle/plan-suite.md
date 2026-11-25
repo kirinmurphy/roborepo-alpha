@@ -246,8 +246,9 @@ back, it hands the branch off without asking: it merges the base branch, freshly
 feature branch with `roborepo plans sync-base`, resolves conflicts within the plan's scope and
 reruns the checks the merge touched, pushes, and updates the pull request with a written
 description. It then waits for CI on that commit in the background. A failing check it can fix is
-fixed and pushed again, up to three times per check; a check still failing after that keeps the
-plan in `active/` with the failure recorded as a blocker. A failure the base branch has too, or a
+fixed and pushed again, up to three times per check; a check still failing after that keeps a
+finished plan in `active/` instead of moving it to review, with the failure recorded as a blocker.
+When fixing review findings, the plan stays in `review/` and the blocker is reported. A failure the base branch has too, or a
 repository with no CI checks, is named in the report and never counted as passing. The pull request
 leaves draft only when CI passed at its head commit and the validator ended clean rather than at
 its pass limit. The report gives the pull request link, whether it is a draft or ready, whether it

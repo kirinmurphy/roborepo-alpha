@@ -110,8 +110,9 @@ never run a lifecycle transition at this point.
   allowed per run for a failure that looks like infrastructure (a runner, network, or timeout error,
   not a test assertion), and it does not count as an attempt.
 - **Never passing.** A base failure or no checks is not green, however the rest looks.
-- **No revalidation.** A CI fix does not rerun the Validation Loop; the final report lists it, and
-  `/plan-review`'s Validator covers it.
+- **No revalidation in `/plan-execute`.** A CI fix there does not rerun the Validation Loop; the
+  final report lists it, and `/plan-review`'s Validator covers it. A CI fix made during `/plan-review`
+  is one of its step 5 fixes and gets a Validator pass there.
 
 `gh pr checks --required` is not used: a repository may require no checks, and then it reports
 nothing to wait for.

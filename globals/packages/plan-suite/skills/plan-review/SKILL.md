@@ -248,15 +248,17 @@ the updated plan in the worktree.
 
 ### 6. Present the review and ask for approval
 
-Resolve the feature branch's current tip as a full commit id: that is the implementation the human
-is asked to approve. Record `### Result` with `Status: complete`, that full reviewed implementation
-commit, and the full base commit synchronized in step 2. Commit this evidence before asking the
-human. Then confirm what the human will approve is what the pull request shows: run
+First confirm the pull request shows the work and CI has a result there: run
 `roborepo delivery fetch <remote>`, read `gh pr view <branch> --json url,isDraft,headRefOid,statusCheckRollup`,
-and require `headRefOid` to equal the reviewed commit; push first when it does not (see Push the
-feature branch). Require CI green at that commit by the shared reference's Watch CI table, or name
-the exception (a base failure, or no checks reported). Link the pull request in the packet, with
-its CI result at the reviewed commit. Plan-only
+and require `headRefOid` to equal the feature branch's tip; push first when it does not (see Push
+the feature branch). Require CI green at that commit by the shared reference's Watch CI table, or
+name the exception (a base failure, or no checks reported). A CI fix made here is a step 5 fix:
+commit and push it, run another Validator pass over it, then confirm again.
+
+Then resolve the feature branch's tip as a full commit id: that is the implementation the human is
+asked to approve. Record `### Result` with `Status: complete`, that full reviewed implementation
+commit, and the full base commit synchronized in step 2. Commit this evidence before asking the
+human. Link the pull request in the packet, with its CI result at the reviewed commit. Plan-only
 evidence commits do not change the reviewed implementation. If findings or
 required manual checks remain, keep Result pending and present those outstanding decisions instead
 of asking for approval. Say plainly that approval was not requested, and list each open finding and
@@ -320,7 +322,7 @@ human's explicit answer, quoting it: `— Confirmed by the user <date>: "<what t
 3. Before landing, run `roborepo plans merge-readiness <plan> --json` after recording approval.
    Require a clean worktree and committed fresh Result/Approval against the current reviewed base.
    It also refuses a branch tip that differs from its upstream, so a fix that was never pushed
-   cannot be approved as if the pull request showed it.
+   cannot pass readiness as if the pull request showed it.
    Report actionable failures and the assessed tips; a pass does not authorize a merge.
 4. Mark the pull request ready with `roborepo delivery pr-ready` when it is still a draft and all of
    these hold: merge readiness passed, CI is green at the reviewed commit, and step 5's Validator
@@ -360,8 +362,8 @@ On agreement:
 
 ### Push the feature branch
 
-Every review run that commits to the feature branch (the base merge, fixes, or review evidence)
-pushes it as each commit lands, so the work never lives only on this machine and CI runs on what the
+Every review run that commits to the feature branch (the base merge or fixes) pushes it as each
+commit lands, so the work never lives only on this machine and CI runs on what the
 human is asked to approve. Push, open the draft, watch CI, and mark ready exactly as the shared
 reference [`../plan-execute/references/handoff.md`](../plan-execute/references/handoff.md) describes in its Push, Watch CI, and Mark ready sections; its Hand off section is
 `/plan-execute`'s, since this skill synchronizes the base in step 2. The review lifecycle stands
