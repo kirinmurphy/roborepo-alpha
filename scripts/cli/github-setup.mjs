@@ -141,7 +141,8 @@ async function guidedSetup({ input, io, cwd }) {
   }
 
   // 6. Branch protection.
-  const protectTarget = { repositoryId, cwd };
+  // As you, even from a terminal whose GH_CONFIG_DIR names another sign-in, like every other user step.
+  const protectTarget = { repositoryId, cwd, env: user.env };
   const before = await readProtection(protectTarget);
   if (before.state === "protected" && !before.policies.some((policy) => policy.status === "skipped")) {
     done("Branch protection");
@@ -168,6 +169,14 @@ async function guidedSetup({ input, io, cwd }) {
   if (blocking.length > 0) {
     io.error("The bot is not ready, so agents keep acting as you:");
     for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
+    if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
+    return 1;
+  }
+  // Rules that apply but whose bypass list could not be read may let the bot merge unreviewed work,
+  // so the package stays off until someone who can see them confirms them.
+  if (report.state === "unverified") {
+    io.error("The branch rules could not be verified, so the package stays off and agents keep acting as you.");
+    for (const entry of report.problems.filter((item) => item.severity === "unverified")) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
   }

@@ -93,6 +93,7 @@ try {
   assert.match(result.stdout, /In the browser where robo-bot is signed in, open https:\/\/github\.com\/settings\/tokens\/new/);
   assert.match(result.stdout, /cannot read the keychain, so the token is stored in .*hosts\.yml/);
   const state = gh.readState();
+  const managedRulesets = structuredClone(state.rulesets);
   assert.deepEqual(state.collaborators, [{ login: BOT, permission: "push" }]);
   assert.deepEqual(state.invitations, []);
   assert.equal(state.rulesets.length, 3, "protection was applied");
@@ -293,6 +294,29 @@ try {
   assert.match(result.stderr, /Invite robo-bot to example\/project as a collaborator with Write access/);
   assert.ok(!packageOn(), "the package stays off");
   console.log("✓ A repo you cannot invite to finishes the bot's steps, leaves the package off, and prints a message for the owner.");
+
+  // Rules that apply in a repo you do not administer cannot be verified: setup leaves the package
+  // off and prints the owner's message rather than calling the protection right.
+  fresh({ admin: false, collaborators: [{ login: BOT, permission: "push" }], rulesets: structuredClone(managedRulesets) });
+  result = await setup(`${BOT}\n${TOKEN}\nn\n`);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /The branch rules could not be verified, so the package stays off/);
+  assert.match(result.stderr, /Message for the repo's owner:/);
+  assert.doesNotMatch(result.stdout, /all look right|Agents now act/);
+  assert.ok(!packageOn(), "the package stays off");
+  console.log("✓ Unverifiable branch rules leave the package off and print the owner's message.");
+
+  // A GH_CONFIG_DIR in your terminal naming another sign-in does not reach the protection steps.
+  fresh();
+  process.env.GH_CONFIG_DIR = path.join(root, "someone-elses-gh");
+  try {
+    result = await setup(`${BOT}\n${TOKEN}\ny\n`);
+  } finally {
+    delete process.env.GH_CONFIG_DIR;
+  }
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Branch protection is now protected/);
+  console.log("✓ Branch protection is read and applied as you, whatever GH_CONFIG_DIR says.");
 
   // A failing final check leaves the package off.
   fresh({ invitePermission: "admin" });
