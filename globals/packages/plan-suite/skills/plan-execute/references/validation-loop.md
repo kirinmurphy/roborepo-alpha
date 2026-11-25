@@ -20,9 +20,10 @@ target worktree, on the session's own model; never pass `isolation: "worktree"`.
 
 - the plan's path in the worktree;
 - the base branch, so it reads the full diff with `git diff <base>...HEAD`;
-- the gate evidence: the repository's CI result for the branch's head commit, from its forge when
-  available; otherwise the affected checks' commands and output. Do not run the full local gate to
-  produce it;
+- the gate evidence: the affected checks' commands and output, plus the latest finished CI result
+  for the branch when one exists, naming the commit it ran on. A pass never waits for CI, because a
+  run takes 15–22 minutes and the loop can run eight passes; the handoff watches CI once the loop
+  has ended. Do not run the full local gate to produce it;
 - the paired skills this run loaded;
 - the instruction to load `implementation-review` and report in its format, with the plan's
   acceptance criteria and `## Documentation impact` as the requirements.
@@ -40,8 +41,8 @@ disk, and record in the plan that the Validator ran in-session.
    `roborepo plans save`, and each `base` result under `### Verification`. A `note` is shown in the
    pass's report and not recorded. `Outside this scope` items stay out of the plan and go to the
    user in the final report.
-3. **Fix.** Fix every `fix` finding, rerun the checks it affects, commit, and check the finding off
-   with its commit: `- [x] Missing retry test — fixed (<short commit>)`. Never ask the user whether
+3. **Fix.** Fix every `fix` finding, rerun the checks it affects, commit, push, and check the finding
+   off with its commit: `- [x] Missing retry test — fixed (<short commit>)`. Never ask the user whether
    to fix a `fix` finding, however many passes have run. An `escalate` finding stays unchecked and
    gets an Open Questions entry under the Decision Policy.
 4. **Repeat.** The next pass validates the revised work, not the previous report. A fix can

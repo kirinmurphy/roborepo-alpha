@@ -109,7 +109,9 @@ resume, or `/plan-review`.
 Include the push row only when the feature-branch push failed or was skipped; say whether the
 session's permissions, a hook, or the remote refused it. Include a merge row only when the handoff's
 base merge refused or left a conflict outside the plan's scope, and a pull request row only when
-opening or updating it did not run.
+opening or updating it did not run. A pull request left in draft names the Mark ready condition it
+failed, and CI fixes committed after the last Validator pass are listed, since only `/plan-review`'s
+Validator covers them.
 
 ## Record
 
@@ -122,7 +124,7 @@ Implementation result
 - Branch: <branch> (worktree <runtime path>)
 - Pushed: <branch> to <remote> | not pushed (<why>)
 - Base: merged <base> at <commit> | already up to date | not merged (<why>); compared with a fresh fetch | the last fetched copy (fetch failed) | a local branch
-- Pull request: <URL>, mergeable | conflicts | unknown; CI passed | failed | running | none (<why>)
+- Pull request: <URL>, draft (<why>) | ready; mergeable | conflicts | unknown; CI passed | failed | blocked | base failure | running (the watch outlasted the session) | none (<why>) at <head commit>
 - Details: Decision Log, findings, and Not tested entries are in the plan document; ask here for any detail
 - Server: <URL> running from the worktree | isolated state at <URL> (<why>) | none (<why>)
 ```

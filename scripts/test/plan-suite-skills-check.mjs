@@ -69,7 +69,8 @@ const SKILLS = {
     boundaryPhrases: [
       "fix a finding that chooses between real alternatives, changes requirements, or changes a contract",
       "infer, assume, or record approval without the human's explicit answer",
-      "merge the feature branch into the base branch, push anything but the plan's feature branch, open or merge pull requests",
+      "merge the feature branch into the base branch, push anything but the plan's feature branch, or merge pull requests",
+      "Opening this plan's pull request as a draft and marking it ready through `roborepo delivery pr-ready` are allowed",
       "move a plan back to `ready/`",
     ],
   },
@@ -212,7 +213,7 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "[references/handoff.md](references/handoff.md)",
   ]);
   includesAll("plan-execute handoff", handoff, [
-    "After the submit transition, and after Review Findings commits its fixes",
+    "After a passing completion preflight, before the submit transition, and after Review Findings commits its fixes",
     "`roborepo plans sync-base --base <base> --json`",
     "authorizes this merge of the base into the plan's own feature branch",
     "Merging the feature branch into the base stays forbidden",
@@ -225,11 +226,30 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
     "run the checks for the files it touched",
     "`roborepo delivery pr-body <file>`",
     "Never merge it, enable auto-merge, or approve it",
-    "whether it merges cleanly, and CI's result so far",
+    "whether it is a draft or ready, whether it merges cleanly, and the result the watch reached",
   ]);
-  const ordered = ["1. **Merge the base in.**", "4. **Recheck what the merge changed.**", "5. **Push**", "6. **Open or update the pull request**", "7. **Report its state:**"].map((step) => handoff.indexOf(step));
-  assert.ok(ordered.every((at, i) => at > 0 && (i === 0 || at > ordered[i - 1])), "plan-execute: merge, recheck, push, then the pull request and its state");
-  assert.ok(completion.includes("Then hand off the feature branch"), "plan-execute: submit hands the branch off");
+  const ordered = ["1. **Merge the base in.**", "4. **Recheck what the merge changed.**", "5. **Push**", "6. **Open or update the pull request**", "7. **Watch CI**", "8. **Report its state:**"].map((step) => handoff.indexOf(step));
+  assert.ok(ordered.every((at, i) => at > 0 && (i === 0 || at > ordered[i - 1])), "plan-execute: merge, recheck, push, the pull request, the CI watch, then its state");
+  assert.ok(!handoff.includes("CI's result so far"), "plan-execute: the handoff waits for CI instead of reporting it as running");
+  // The pull request exists from the first push, and leaves draft only once it has earned it.
+  includesAll("handoff draft, CI watch, and mark ready", handoffReference, [
+    "`gh pr create --draft --base <base> --head <branch>",
+    "Never use `--fill`",
+    "run `gh pr checks <number> --watch` in the background",
+    "The same check still failing after 3 fix commits for it",
+    "At most 3 fix commits per failing check",
+    "A base failure or no checks is not green",
+    "| No checks reported 2 minutes after the push | Not green |",
+    "Run `roborepo delivery pr-ready` only when all of these hold",
+    "the Validator ended clean",
+    "CI is green at the head commit",
+  ]);
+  assert.ok(!handoff.includes("`roborepo delivery pr-ready` when the open pull request is a draft"), "plan-execute: a draft is no longer readied regardless of CI");
+  // A finished plan merges base and waits for CI before submit; an unfinished one never waits.
+  const handOffAt = completion.indexOf("**Complete:** hand off the feature branch first");
+  const submitAt = completion.indexOf("**Then submit:** run `roborepo plans submit <plan> --json`");
+  assert.ok(handOffAt > 0 && submitAt > handOffAt, "plan-execute: the handoff and CI watch run before submit");
+  assert.ok(completion.includes("An unfinished plan never waits on CI"), "plan-execute: an incomplete plan only pushes");
   assert.ok(skill.slice(order[5]).includes("Hand off the feature branch (see Push and hand off the feature branch)"), "plan-execute: review-findings fixes hand the branch off");
   assert.ok(skill.slice(order[5]).includes("then run the Validation Loop over the result"), "plan-execute: fixes made in review mode are validated too");
   includesAll("plan-execute review findings", skill.slice(order[5]), [
@@ -328,9 +348,18 @@ for (const [id, { boundaryPhrases, worktreeRootPhrases = [] }] of Object.entries
 {
   const review = readSkill("plan-review");
   assertNoBaseInputLoophole("plan-review", review);
-  includesAll("plan-review push", review, [
+  // The push rules live once, in the reference both skills follow.
+  const sharedHandoff = normalize(readPackageFile("plan-suite/skills/plan-execute/references/handoff.md"));
+  includesAll("plan-review push", `${review}\n${sharedHandoff}`, [
     "Every review run that commits to the feature branch",
-    "then push the feature branch (see Push the feature branch)",
+    "push it as it lands (see Push the feature branch)",
+    "[`../plan-execute/references/handoff.md`](../plan-execute/references/handoff.md)",
+    "require `headRefOid` to equal the feature branch's tip",
+    "A CI fix made here is a step 5 fix",
+    "A Blocked result keeps `### Result` pending",
+    "With no open pull request for the branch, open the draft",
+    "`roborepo delivery fetch <remote>`",
+    "not at its cap. Otherwise leave it a draft",
     "never the base branch or any other protected branch",
     "Never force-push",
   ]);
