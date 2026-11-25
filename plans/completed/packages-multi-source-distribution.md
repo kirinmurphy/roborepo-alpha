@@ -1,6 +1,6 @@
 ---
 id: jdsobwn
-next_action: Approved; merge pull request #84 (kirinmurphy/roborepo-alpha), then run /plan-close on this plan.
+next_action:
 blocked_by: []
 depends_on: ["bysyzl1e"]
 related: ["user-managed-packages-and-add-workflows", "f5exs0bd", "o9zwxuav", "74h2tlim"]
