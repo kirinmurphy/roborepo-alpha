@@ -164,6 +164,8 @@ export const codexProvider = defineHarnessProvider({
       render: (content) => normalizeRootConfigContent("codex", content),
     },
     configEdit: tomlConfigEdit,
+    // Agent shells read config.toml's [shell_environment_policy.set] table.
+    agentShell: { envValue: (text, name) => tomlConfigEdit.get(text, ["shell_environment_policy", "set", name]).value },
     projectInventory: codexProjectInventory,
     permissions: {
       workspaceRoots: ({ cwd } = {}) => loadPermissionWorkspaceRootsForCwd(cwd),

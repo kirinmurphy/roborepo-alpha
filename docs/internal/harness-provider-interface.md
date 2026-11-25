@@ -152,7 +152,7 @@ Each capability maps to a required adapter group and method set, defined in
 | `session-launch` | `session` | `launch` |
 | `session-resume` | `session` | `resume` |
 
-### Optional groups: project inventory
+### Optional groups: project inventory and agent shell
 
 Some adapter groups belong to no capability. `OPTIONAL_ADAPTER_GROUPS` in `contract.mjs` lists
 them; a provider may omit one, and one it supplies must have every method.
@@ -160,6 +160,12 @@ them; a provider may omit one, and one it supplies must have every method.
 | Group | Methods | Used by |
 | --- | --- | --- |
 | `projectInventory` | `classify(relPath, { symlink })`, `describe(entry, text)`, optional `startupEntries(entries)` | The Agents repo inspector |
+| `agentShell` | `envValue(rootConfigText, name)` | The bot account's "Agents use the bot" check, which loops over enabled providers with this group to find live configs missing the bot's Git settings |
+
+`agentShell.envValue` reads one variable from the environment the harness gives its agents' shell
+commands, in the harness's own config layout (Claude: `env`; Codex:
+`[shell_environment_policy.set]`), and returns undefined when it is not set. A harness whose agent
+shells get no RoboRepo-rendered environment (Gemini) omits the group and is not checked.
 
 `classify` names a native project file from its relative path alone (area, kind, label, loading
 hint, and whether it is text or structured); `describe` extracts display metadata from text the

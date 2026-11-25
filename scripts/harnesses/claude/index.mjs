@@ -110,6 +110,8 @@ export const claudeProvider = defineHarnessProvider({
       render: (content) => normalizeRootConfigContent("claude", content),
     },
     configEdit: jsonConfigEdit,
+    // Agent shells read settings.json's `env`.
+    agentShell: { envValue: (text, name) => jsonConfigEdit.get(text, ["env", name]).value },
     projectInventory: claudeProjectInventory,
     mcp: {
       ...stubGroups.mcp,
