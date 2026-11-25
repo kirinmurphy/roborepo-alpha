@@ -1178,6 +1178,9 @@ Keep the source configuration and lock schemas in one technical reference and li
 - [x] `/plan-review` pass 2, blocking fix: after 411939f4, `package remove` refused a package still on whose own files were missing, leaving it unremovable once its source was gone — fixed in review (170c682f)
 - [x] `/plan-review` pass 2, actionable fix: the `package remove` row in `docs/user/reference/roborepo-cli.md` did not describe removing an unresolved package — fixed in review (170c682f)
 - [x] `/plan-review` pass 3, actionable fix: removing an enabled package whose copy was deleted skipped its cached pinned revision and left its hooks and skills, with a warning that pointed at a doctor check that does not exist — fixed in review (342a9f55)
+- [x] `/plan-review` pass 4, actionable fix: the `readPinnedRevision` comment said a pinned revision could be fetched over the network; it is read from the local cache only — fixed in review (e98b9185)
+- [x] `/plan-review` pass 5, blocking fix: removing an enabled folder package whose source was disabled left its hooks and warned its files were missing, because only catalog candidates were searched — fixed in review (9bac4530)
+- [x] `/plan-review` pass 5, note fixed: the no-files warning and CLI reference omitted hook scripts and services — fixed in review (9bac4530)
 
 ### Verification
 - Validation pass 1 at aba9cc6f (fresh-context subagent): 1 blocking, 4 actionable fix findings, all fixed.
