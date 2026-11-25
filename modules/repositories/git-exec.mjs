@@ -169,9 +169,10 @@ function renderedAgentGitConfigPair(key, value) {
 // `include.path` whose value is exactly the package's gitconfig path (as rendered, or expanded under
 // the state root). Every other pair is dropped and the kept ones are renumbered under a rebuilt
 // GIT_CONFIG_COUNT, so a pair an agent added (`core.sshCommand`, `credential.helper`) never reaches
-// these calls. GIT_CONFIG, GIT_CONFIG_PARAMETERS and every other repository variable are still
-// removed, the wrapper's own `-c core.hooksPath=/dev/null` is a command-line setting that outranks
-// env pairs, and callers opt in per call, never by default.
+// these calls. GIT_CONFIG_PARAMETERS keeps only the sandbox's proxy settings (see
+// sandboxProxySetting); GIT_CONFIG and every other repository variable are still removed. The
+// wrapper's own `-c core.hooksPath=/dev/null` is a command-line setting that outranks env pairs, and
+// callers opt in per call, never by default.
 function gitEnvironment({ keepAgentGitConfig = false } = {}) {
   const inherited = { ...process.env };
   const env = { ...inherited, ...HARDENING_ENV };
@@ -191,9 +192,60 @@ function gitEnvironment({ keepAgentGitConfig = false } = {}) {
       kept += 1;
     }
     if (kept > 0) env.GIT_CONFIG_COUNT = String(kept);
+    const proxySettings = parseConfigParameters(inherited.GIT_CONFIG_PARAMETERS).filter(([key, value]) => sandboxProxySetting(key, value));
+    if (proxySettings.length > 0) env.GIT_CONFIG_PARAMETERS = proxySettings.map(([key, value]) => sqQuote(`${key}=${value}`)).join(" ");
   }
   return env;
 }
+
+// A sandboxed agent shell reaches the network only through the sandbox's proxy, and the sandbox
+// tells Git how to talk to that proxy in GIT_CONFIG_PARAMETERS: `http.proxyAuthMethod`, and an
+// empty `credential.<proxy url>.helper` so no helper is asked for the proxy's credentials. Without
+// them a fetch fails with "Proxy CONNECT aborted". These are the only entries kept: proxy settings,
+// and a helper reset, which can remove a credential helper but never add one.
+function sandboxProxySetting(key, value) {
+  const name = key.toLowerCase();
+  if (/^http\.(.+\.)?proxy[a-z]*$/.test(name)) return true;
+  return /^credential\..+\.helper$/.test(name) && value === "";
+}
+
+// GIT_CONFIG_PARAMETERS as Git writes it: shell single-quoted entries separated by spaces, each
+// either 'key=value' or 'key'='value', with a quote inside written as '\''. Anything malformed
+// yields no entries, so nothing is kept.
+function parseConfigParameters(text) {
+  if (typeof text !== "string" || !text.trim()) return [];
+  const words = [];
+  let i = 0;
+  const readQuoted = () => {
+    let out = "";
+    for (;;) {
+      if (text[i] !== "'") return null;
+      const end = text.indexOf("'", i + 1);
+      if (end === -1) return null;
+      out += text.slice(i + 1, end);
+      i = end + 1;
+      if (text.startsWith("\\'", i)) { out += "'"; i += 2; continue; }
+      return out;
+    }
+  };
+  while (i < text.length) {
+    if (text[i] === " ") { i += 1; continue; }
+    const first = readQuoted();
+    if (first === null) return [];
+    if (text[i] === "=") {
+      i += 1;
+      const value = text[i] === "'" ? readQuoted() : "";
+      if (value === null) return [];
+      words.push([first, value]);
+      continue;
+    }
+    const eq = first.indexOf("=");
+    words.push(eq === -1 ? [first, ""] : [first.slice(0, eq), first.slice(eq + 1)]);
+  }
+  return words;
+}
+
+const sqQuote = (text) => `'${text.replace(/'/g, "'\\''")}'`;
 
 function execOptions(cwd, timeoutMs, { binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER, keepAgentGitConfig = false } = {}) {
   const env = gitEnvironment({ keepAgentGitConfig });

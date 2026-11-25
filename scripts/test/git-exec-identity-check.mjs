@@ -78,9 +78,28 @@ try {
   setPairs([["include.path", path.join(stateRoot, AGENT_GITCONFIG)]]);
   assert.equal((await get("roborepo.included", keep)).stdout.trim(), "1", "the expanded state-root path is accepted");
 
-  // GIT_CONFIG_PARAMETERS stays stripped even with the option.
+  // GIT_CONFIG_PARAMETERS stays stripped even with the option, except the settings a sandbox sets
+  // so Git can use its proxy (as the Claude sandbox does), in either quoting form Git writes.
   process.env.GIT_CONFIG_PARAMETERS = "'roborepo.params'='1'";
   assert.equal((await get("roborepo.params", keep)).ok, false);
+  process.env.GIT_CONFIG_PARAMETERS = [
+    "'http.proxyAuthMethod=basic'",
+    "'credential.http://127.0.0.1:52569.helper='",
+    "'roborepo.params=1'",
+    "'credential.helper=store'",
+    "'http.https://example.com.proxy'='http://it'\\''s'",
+  ].join(" ");
+  assert.equal((await get("http.proxyAuthMethod")).ok, false, "the default strips the sandbox's proxy settings too");
+  assert.equal((await get("http.proxyAuthMethod", keep)).stdout.trim(), "basic", "the sandbox's proxy auth method is kept");
+  assert.equal(getSync("http.proxyAuthMethod", keep).stdout.trim(), "basic");
+  assert.equal((await get("http.https://example.com.proxy", keep)).stdout.trim(), "http://it's", "a URL-scoped proxy with a quote survives");
+  const helpers = (await runGitProcess(repo, ["config", "--get-regexp", "^credential\\."], keep)).stdout;
+  assert.match(helpers, /^credential\.http:\/\/127\.0\.0\.1:52569\.helper ?$/m, "the empty helper reset for the proxy is kept");
+  assert.doesNotMatch(helpers, /store/, "a credential helper is never added");
+  assert.equal((await get("roborepo.params", keep)).ok, false, "any other parameter is dropped");
+  process.env.GIT_CONFIG_PARAMETERS = "'http.proxyAuthMethod=basic' 'unterminated";
+  assert.equal((await get("http.proxyAuthMethod", keep)).ok, false, "a malformed value keeps nothing");
+  delete process.env.GIT_CONFIG_PARAMETERS;
 
   console.log("git-exec identity check passed");
 } finally {
