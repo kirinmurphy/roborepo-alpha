@@ -145,12 +145,7 @@ confirm the result is for the head commit:
 | At least one check, all passed | Green | Continue | May leave draft |
 | A failure that does not occur on base | Red | Read `gh run view <id> --log-failed`, fix, commit, push, watch again | Stays draft |
 | The same check still failing after 3 fix commits for it | Blocked | Stop, record a blocker in Open Questions, report it | Stays draft |
-| A failure that also occurs on base | Not green | Record it under `- [x] Merge-readiness docs listed only two failure states and omitted a missing tracking ref and a local-branch upstream — fixed in review (93bf5323)
-- [x] The plan's Merge readiness state table had no row for a local-branch upstream or a missing tracking ref — fixed in review (plan record)
-- [x] handoff.md's Attempts rule named "timeout error" as retryable, then said a `timed_out` run is not retried — fixed in review (93bf5323)
-- [x] The internals doc said a local upstream proves nothing was pushed, where it only cannot show a push — fixed in review (b49e0d71)
-
-### Verification` as a base failure, continue, name it as an exception | Stays draft |
+| A failure that also occurs on base | Not green | Record it under `### Verification` as a base failure, continue, name it as an exception | Stays draft |
 | No checks reported 2 minutes after the push | Not green | Run the canonical completion gate locally once, continue, name the exception | Stays draft |
 
 "Continue" means the caller's next step. Only `/plan-execute`'s Implementation Completion submits
@@ -305,6 +300,10 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - [x] The handoff opened the draft pull request before handling a refused push — fixed (5f7a76d1)
 - [x] `/plan-review` step 6 had no path for a branch with no open pull request — fixed (d050d7a7)
 - [x] `/plan-review` step 6 did not say a Blocked CI result keeps `### Result` pending — fixed (d050d7a7)
+- [x] Merge-readiness docs listed only two failure states and omitted a missing tracking ref and a local-branch upstream — fixed in review (93bf5323)
+- [x] The plan's Merge readiness state table had no row for a local-branch upstream or a missing tracking ref — fixed in review (plan record)
+- [x] handoff.md's Attempts rule named "timeout error" as retryable, then said a `timed_out` run is not retried — fixed in review (93bf5323)
+- [x] The internals doc said a local upstream proves nothing was pushed, where it only cannot show a push — fixed in review (b49e0d71)
 
 ### Verification
 - Review 2026-11-25: Validator pass over 93bf5323 → 1 actionable `fix` finding (internals doc said a local upstream proves nothing was pushed) and 1 note, fixed in b49e0d71; Validator pass over b49e0d71 → no actionable findings, one cosmetic note (a long line) left as is
@@ -334,6 +333,38 @@ through `gh pr view`, not by this check, so `roborepo plans` keeps making no net
 - Decision: approved
 - Reviewed implementation commit: b49e0d7125fdc91c2b44802636aa8c61f5e01665
 - Confirmed by: human
+
+## Completion
+
+Merged to `main` as pull request 87. `/plan-execute` now opens a draft pull request at the first
+push, waits for CI at the head commit in the background, fixes a failing check up to three times
+before recording a blocker, and marks the pull request ready only when CI is green and the Validator
+ended clean. `/plan-review` pushes each fix as it lands and confirms the pull request shows the
+reviewed commit before asking for approval. `roborepo plans merge-readiness` refuses a branch whose
+tip does not equal its remote-tracking upstream. The real end-to-end run stays deferred to the first
+plan run after this merge, as confirmed by the user under Not tested.
+
+## Verification
+
+- CI run on `main` at bfa57f1b (the merge of pull request 87): `check (ubuntu-latest)`,
+  `check (macos-latest)`, `windows-installer` → success
+- `node scripts/test/plan-lifecycle-transitions-check.mjs` → ok on `main` at bfa57f1b (includes the
+  "branch tip is pushed" merge-readiness cases)
+- `node scripts/test/plan-suite-skills-check.mjs` → ok on `main` at bfa57f1b
+- `roborepo plans validate i5mnkm7z` → no findings
+- Docs of record checked against the landed code: `docs/user/guides/plan/lifecycle/plan-suite.md`
+  (draft at first push, CI watch, ready only when green, review push steps),
+  `docs/user/reference/roborepo-cli.md` (merge-readiness row), `docs/user/reference/plans-portal.md`
+  and `docs/internal/plans-portal-internals.md` (pushed-tip requirement and its failure states)
+- Code checked against the plan: `branchTipPushed` in `modules/plan-suite/review-gates.mjs` matches
+  the Merge readiness state table; `plan-execute/references/handoff.md` has the draft, CI watch
+  table, 3-attempt limit, no-checks-is-not-green rule, and the `pr-ready` condition
+- Plan record repaired at close: four review findings had been saved inside the CI watch table's
+  base-failure row; the row is restored and the findings moved under `### Findings`
+- Approved commit: b49e0d7125fdc91c2b44802636aa8c61f5e01665 (`roborepo plans approval` → fresh)
+- Absorbing commit: bfa57f1ba8c7a4ee0ccb76cc0d8916cb29fbe503
+- Not verified: the end-to-end plan run under Not tested, deferred by the user to the first real
+  run after this merge
 
 ## Decision Log
 
