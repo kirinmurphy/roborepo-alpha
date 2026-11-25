@@ -92,6 +92,19 @@ one response.
 | `POST /api/config/skills` | `{ id, enabled }` | link/unlink a skill |
 | `POST /api/config/permissions` | `{ behaviorId, bucket }` or `{ tokens, bucket }` | set a named behavior or arbitrary command to `deny`, `ask`, `allow`, or `default` |
 
+### Package source data
+
+In the All repos scope the page loads `GET /api/packages` (`packageView()`, the same data
+`roborepo package list --json` prints) and `GET /api/packages/sources` (`listSources()`) beside
+`/api/config`, on every poll, after every package, source, or switch action, and when the window regains
+focus. The config snapshot still drives categories and switches; `portal/config/app.js` matches
+each Custom and Third Party item to its view row by `sourceId/id` and passes the row as
+`item.packageState`, which `config-item.js` renders as the badge, pinned commit, state notes, and
+Install / Update / Remove. View rows with no snapshot item (a GitHub package not installed yet) go in
+an Available to Install section; `unresolved` and `shadowed` entries go in Needs Attention on their
+source's tab, as do collisions, each with Install for one candidate. If the view cannot be read the page lists packages untabbed, as before. If `/api/config` fails (a collision stops the catalog, and so the snapshot, from loading), the page shows the error and still renders the tabs and Sources from the view, so the clash can be resolved there. Expanded source package lists are re-read with every reload. The routes
+are described in [package-sources.md](package-sources.md#the-portal).
+
 ### Repo inspector endpoints
 
 The scoped Agents view (`?repo=<urlKey>`) reads two GET routes in

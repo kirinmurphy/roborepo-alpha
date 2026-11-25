@@ -15,6 +15,7 @@ the root ownership rules are in
 - The managed store
 - Git sources
 - The package service and CLI
+- The portal
 - Doctor
 - Migration from bare-ID state
 - Code map
@@ -216,7 +217,7 @@ data and throw `PackageServiceError` with a `code`:
 | `listSources`, `sourceInfo`, `addSource`, `removeSource`, `setSourceEnabled`, `refreshSources`, `trustedCatalog` | Source management. Disabling or removing a folder source is refused while another source's package requires one of its packages |
 | `listAvailablePackages`, `resolvePackageReference` | Every (source, package) pair; one pick per the reference rules |
 | `previewInstall`, `installPackage` | Contents summary of the package and every package the install brings, then the install. `previewInstall` returns the `plan` (each package and revision); `installPackage` takes it as `expectedPlan` and refuses when the fresh plan differs. Installing a package already installed from the same source never moves its pin, plans from the installed copy, and reports a newer revision for `update` |
-| `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed against the shown starting revision (`expectedFrom`); re-apply an active package with its required packages, removing components the new revision dropped. A failed re-apply restores the old record and copy. A missing copy at an unchanged pin is restored. Refused when the source now points at a different repository than the installed copy came from |
+| `updatePackage` | Show the file change to the newest revision; move the pin only when confirmed against the shown starting revision (`expectedFrom`). When the pin moved since, the shown target is ignored: the source is read at its newest revision (never rewound to the stale target) and the refusal carries the change from the current pin to it; re-apply an active package with its required packages, removing components the new revision dropped. A failed re-apply restores the old record and copy. A missing copy at an unchanged pin is restored. Refused when the source now points at a different repository than the installed copy came from |
 | `removePackage` | The lock record names the source to remove. Refuse System; refuse a copied package another package requires; disable an active package first, unless a local override is the active one; delete the record and any copy |
 | `packageView` | Rows with `tab`, `sourceId`, `sourceBadge`, `trust`, `collection`, `available`, `installed`, `active`, `revision`, `latestRevision`, `updateAvailable`, `removable` |
 
@@ -228,6 +229,41 @@ of the lock here too.
 
 The Config page's package items (`scripts/cli/config.mjs`) carry the same `tab`, `sourceId`,
 `sourceBadge`, `trust`, and `collection` fields, read from the composed catalog.
+
+`addSource` returns `warning`: `UNVERIFIED_SOURCE_WARNING` for an unverified source, else null.
+`previewInstall`, and a plan-changed refusal's details, return `warning` naming the unverified
+packages followed by the same advice. The CLI prints the add warning and the portal shows both, so
+they share one wording.
+
+## The portal
+
+The Agents page is the service's second client, beside the CLI. `scripts/cli/portal-routes-packages.mjs`
+maps each route to the one service call the CLI makes for the same command, with the CLI's
+callbacks (`reapplyPackage` for update; `disablePackage` and `retireStrandedPackage` for remove):
+
+| Route | Service call | Runs in |
+| --- | --- | --- |
+| `GET /api/packages` | `packageView()` | server |
+| `GET /api/packages/sources`, `GET /api/packages/sources/:id` | `listSources()`, `sourceInfo(id)` | server |
+| `POST /api/packages/sources` `{ location, id? }` | `addSource()` | child for a git URL, server for a folder (`isFolderLocation`) |
+| `POST /api/packages/sources/:id/refresh` | `refreshSources(id)` | child |
+| `POST /api/packages/sources/:id/enabled` `{ enabled }` | `setSourceEnabled()` | server |
+| `DELETE /api/packages/sources/:id?keepInstalled=1` | `removeSource()` | server |
+| `GET /api/packages/install-preview?ref=` | `previewInstall()` | server |
+| `POST /api/packages/install` `{ ref, expectedPlan }` | `installPackage(ref, { confirmed: true, expectedPlan })` | server |
+| `POST /api/packages/update` `{ ref }` or `{ ref, confirmed: true, expectedRevision, expectedFrom }` | `updatePackage()`; unconfirmed, it refuses with `details.change`. A confirmation must name both revisions: the portal has no unreviewed `--yes` | child |
+| `DELETE /api/packages/installed/:ref` | `removePackage()` | server |
+
+A success answers `{ ok: true, result }`. A refusal answers `{ ok: false, error: { code, message,
+details } }` with the service's own message: `usage` and `invalid` are 400; `ambiguous`,
+`confirmationRequired`, and `refused` are 409; `unavailable` is 503; anything else is 500. `:ref` is
+URL-encoded (`team%2Ftool`) so a qualified name stays one path segment.
+
+Git runs synchronously, so the routes that run it use `scripts/cli/package-service-runner.mjs` (stopped after 15 minutes, and with the server when it exits): it
+runs the operation in a child Node process, prints the result or the refusal as one JSON line, and
+the route rebuilds the `PackageServiceError` so `details.change` and `details.planChanged` reach
+the page. The child gets `ROBOREPO_WRITE_ACTOR` from the request, so its writes are logged as
+`portal POST /api/packages/...`.
 
 ## Doctor
 
@@ -266,5 +302,7 @@ supported install still has bare-ID state.
 | `package-state.mjs` | Selection and applied records, with their `sources` maps |
 | `package-service.mjs` | The domain operations the CLI and portal call |
 | `package-source-command.mjs` | `package install`, `update`, `remove`, and `package source *` |
+| `portal-routes-packages.mjs` | The `/api/packages` routes: the portal's client of the service |
+| `package-service-runner.mjs` | Runs a service call that runs Git in a child process, for the portal |
 | `package-provenance-doctor.mjs` | Doctor findings |
 | `package-provenance-migration.mjs` | The one-time bare-ID migration |

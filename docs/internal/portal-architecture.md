@@ -157,7 +157,8 @@ it:
 | --- | --- |
 | `portalConfig()` | Reads `window.PORTAL_MANIFEST`; throws `"portal manifest missing"` if absent. |
 | `portalGetJson(path)` | `fetch` + `.json()`; throws with the server's `error`/`message` on a non-OK response. |
-| `portalPostJson(path, body)` | Same, but POST with `Content-Type: application/json` and `X-Cli-Portal-Token` attached from `portalConfig().token`. Also throws if the response body has `ok: false`. |
+| `portalPostJson(path, body)` | Same, but POST with `Content-Type: application/json` and `X-Cli-Portal-Token` attached from `portalConfig().token`. Also throws if the response body has `ok: false`. A structured error's `code` and `details` are kept on the thrown error (`portalGetJson` keeps them too). |
+| `portalSendJson(method, path, body?)` | `portalPostJson` for any mutating method (`DELETE`, `PATCH`, `PUT`). |
 | `portalCopyText(text, onCopied?)` | Wraps `navigator.clipboard.writeText`; swallows clipboard-blocked errors; calls `onCopied()` on success. |
 | `portalSetUpdatedAt(date?, { cadenceMs }?)` | Marks a successful update for the `#portal-updated` freshness indicator. With the page's poll cadence it ages on its own: active (a dot) within 2× the cadence, `Waiting` past 2×, `Not connected` past 10×. Pages that never poll omit the cadence and stay active. `date` only appears in the tooltip. |
 | `portalHideLoading()` | Hides the shared full-page loading overlay (`#page-loading`, injected by `theme.js`). Call once after a page's first data fetch resolves — success or handled error — never again after that. |
@@ -257,6 +258,7 @@ hand-maintained. Each domain's table:
 | File | Export | Routes |
 | --- | --- | --- |
 | `portal-routes-config.mjs` | `configRoutes` | `/api/config`, `/api/config/source`, `/api/config/packages`, `/api/config/skills`, `/api/config/permissions` |
+| `portal-routes-packages.mjs` | `packagesRoutes` | `/api/packages`, `/api/packages/sources` (GET/POST), `/api/packages/sources/:id` (GET/DELETE), `/api/packages/sources/:id/refresh` (POST), `/api/packages/sources/:id/enabled` (POST), `/api/packages/install-preview`, `/api/packages/install` (POST), `/api/packages/update` (POST), `/api/packages/installed/:ref` (DELETE) — the package service's portal client. Calls that run Git go through `package-service-runner.mjs`, a child Node process, so the server keeps answering; see `docs/internal/package-sources.md` |
 | `portal-routes-settings.mjs` | `settingsRoutes` | `/api/settings` — path-free derived repository, harness, and telemetry setup state |
 | `portal-routes-plans.mjs` | `plansRoutes` | `/api/plans`, `/api/plans/document`, `/api/plans/prompt`, `/api/plans/order`, `/api/plans/namespace-pin`, `/api/plans/archive`, `/api/plans/refresh` |
 | `portal-routes-developer-runtime.mjs` | `developerRuntimeRoutes` | `/api/developer-runtime`, `/api/developer-runtime/refresh`, `/api/developer-runtime/history`, `/api/developer-runtime/metadata`, `/api/developer-runtime/links`, `/api/developer-runtime/association`, `/api/developer-runtime/project`, `/api/developer-runtime/alias`, `/api/developer-runtime/compose-project`, `/api/developer-runtime/repository-visibility`, `/api/developer-runtime/repository-pinned` |

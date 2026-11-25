@@ -97,6 +97,127 @@
         <button type="button" data-btn="danger" id="disable-dependents-confirm">Disable All Packages</button>
       </div>
     </dialog>
+    <!-- One dialog for every package-source confirmation: an install preview, an update's change,
+         a removal. The body is built per action; the confirm button runs the action and shows its
+         progress, and a refusal shows the package service's own message in the error line. -->
+    <dialog id="package-action-modal" class="portal-dialog" aria-labelledby="package-action-title" data-dialog-size="md">
+      <div class="modal-head">
+        <div class="modal-head-main">
+          <span class="modal-title" id="package-action-title"></span>
+          <portal-close-button id="package-action-close"></portal-close-button>
+        </div>
+      </div>
+      <div class="modal-body package-action-body">
+        <div id="package-action-content"></div>
+        <p class="package-action-error" id="package-action-error" role="alert" hidden></p>
+      </div>
+      <div class="modal-footer package-action-footer">
+        <button type="button" data-btn="secondary" id="package-action-cancel">Cancel</button>
+        <button type="button" data-btn="cta" id="package-action-confirm"></button>
+      </div>
+    </dialog>
+    <!-- Add a source: a GitHub URL or a folder path, and an optional id. Submitting closes the
+         dialog; the Sources section shows the add in progress, so the page stays usable while a
+         GitHub repo is fetched. -->
+    <dialog id="add-source-modal" class="portal-dialog" aria-labelledby="add-source-title" data-dialog-size="md">
+      <form method="dialog" id="add-source-form">
+        <div class="modal-head">
+          <div class="modal-head-main">
+            <span class="modal-title" id="add-source-title">Add a Source</span>
+            <portal-close-button id="add-source-close"></portal-close-button>
+          </div>
+        </div>
+        <div class="modal-body add-source-body">
+          <label class="add-source-field">
+            <span>GitHub URL or folder path</span>
+            <input type="text" id="add-source-location" name="location" required autocomplete="off" spellcheck="false" placeholder="https://github.com/owner/repo or /path/to/packages" />
+          </label>
+          <label class="add-source-field">
+            <span>Id (optional)</span>
+            <input type="text" id="add-source-id" name="id" autocomplete="off" spellcheck="false" placeholder="derived from the repo or folder name" />
+          </label>
+          <p class="add-source-note">Adding a GitHub repo fetches and lists it first, which can take several minutes.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" data-btn="secondary" id="add-source-cancel">Cancel</button>
+          <button type="submit" data-btn="cta" id="add-source-submit">Add Source</button>
+        </div>
+      </form>
+    </dialog>
+    <!-- System / Custom / Third Party: where a package comes from, with the service's counts. -->
+    <template id="tpl-package-tabs">
+      <div class="package-tabs" role="tablist" aria-label="Package tabs"></div>
+    </template>
+    <template id="tpl-package-tab">
+      <button type="button" role="tab" class="package-tab">
+        <span data-slot="label"></span>
+        <span class="package-tab-count" data-slot="count"></span>
+      </button>
+    </template>
+    <template id="tpl-package-action">
+      <button type="button" data-btn="secondary" class="package-action"></button>
+    </template>
+    <!-- What an install would bring, one entry per package (dependencies first, the package last). -->
+    <template id="tpl-package-preview">
+      <div class="package-preview">
+        <p class="package-preview-notice" data-slot="notice" hidden></p>
+        <p class="package-preview-warning" data-slot="warning" hidden></p>
+        <div data-slot="entries"></div>
+      </div>
+    </template>
+    <template id="tpl-package-preview-entry">
+      <section class="package-preview-entry">
+        <h3 class="package-preview-name" data-slot="name"></h3>
+        <p class="package-preview-meta" data-slot="meta"></p>
+        <dl class="package-preview-contents" data-slot="contents"></dl>
+      </section>
+    </template>
+    <template id="tpl-package-contents-row">
+      <div class="package-preview-row">
+        <dt data-slot="label"></dt>
+        <dd data-slot="items"></dd>
+      </div>
+    </template>
+    <!-- Package sources: every source with its type, tab, trust, location, and counts. -->
+    <template id="tpl-sources-section">
+      <section class="panel wide sources-panel">
+        <div class="panel-head">
+          <h2>Sources</h2>
+          <button type="button" data-btn="secondary" class="sources-add" data-slot="add">Add a Source</button>
+        </div>
+        <p class="panel-desc">Where packages come from. Custom packages come from folders, Third Party packages from GitHub repos.</p>
+        <p class="sources-status" data-slot="status" role="status" hidden></p>
+        <div class="sources-list" data-slot="list"></div>
+      </section>
+    </template>
+    <template id="tpl-source-row">
+      <div class="source-row">
+        <div class="source-main">
+          <div class="source-title">
+            <span class="source-name" data-slot="name"></span>
+            <span class="badge badge-info" data-slot="tab"></span>
+            <span class="badge badge-info" data-slot="trust"></span>
+            <span class="badge badge-warn" data-slot="disabled" hidden>Off</span>
+          </div>
+          <div class="source-location" data-slot="location"></div>
+          <div class="source-counts" data-slot="counts"></div>
+          <div class="item-status error" data-slot="error"></div>
+          <div class="item-status" data-slot="status"></div>
+          <button type="button" data-btn="text" class="source-expand" data-slot="expand" aria-expanded="false">Show packages</button>
+          <ul class="source-packages" data-slot="packages" hidden></ul>
+        </div>
+        <div class="source-actions" data-slot="actions"></div>
+      </div>
+    </template>
+    <template id="tpl-source-remove">
+      <div class="source-remove">
+        <p data-slot="lead"></p>
+        <label class="source-keep" data-slot="keep" hidden>
+          <input type="checkbox" data-slot="keep-input" />
+          <span>Keep its installed packages, usable without a source</span>
+        </label>
+      </div>
+    </template>
     <template id="tpl-required-reference">
       <button type="button" data-btn="text" class="modal-requires-item"></button>
     </template>
@@ -446,12 +567,15 @@
             </a>
             <span data-slot="badges"></span>
             <span data-slot="dependencies"></span>
+            <span class="item-revision" data-slot="revision" hidden></span>
           </div>
           <div class="item-desc" data-slot="description"></div>
           <div class="item-note" data-slot="note"></div>
+          <div class="item-note package-state-note" data-slot="package-note" hidden></div>
           <div class="item-hint" data-slot="hint"></div>
           <div class="item-status" data-slot="status"></div>
         </div>
+        <span class="package-actions" data-slot="package-actions" hidden></span>
         <span data-slot="toggle"></span>
       </div>
     </template>

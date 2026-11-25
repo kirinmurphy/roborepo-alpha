@@ -12,7 +12,13 @@ import { portalSetUpdatedAt, portalHideLoading } from "/portal/shared/api.js";
 import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
-import { createConfigModal, createDisableDependentsDialog, createRecommendationsDialog } from "./panels.js";
+import {
+  createAddSourceDialog,
+  createConfigModal,
+  createDisableDependentsDialog,
+  createPackageActionDialog,
+  createRecommendationsDialog,
+} from "./panels.js";
 import { snapshotChanged, inspectChipSpecs, contentsEntryChipSpec, setBulkInFlight, isBulkInFlight } from "./state.js";
 import { clearRepositoryScope, currentRepositoryScope } from "/portal/shared/repository-scope.js";
 import { onRepositoryScopeResolved, repositoryScopeUnavailableNotice } from "/portal/shared/repository-scope-selector.js";
@@ -21,6 +27,8 @@ import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js"
 const modal = createConfigModal();
 const recommendationsDialog = createRecommendationsDialog();
 const disableDependentsDialog = createDisableDependentsDialog();
+const packageActionDialog = createPackageActionDialog();
+const addSourceDialog = createAddSourceDialog();
 // Packages whose on/off control lives on another page. Settings owns token telemetry, so a second
 // toggle here would only duplicate it; the terminal `roborepo config` view still lists it.
 const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry"]);
@@ -93,7 +101,12 @@ async function handleToggle(item, enabled, { offer = true } = {}) {
     if (enabled || err.code !== "INCLUDED_IN_SELECTED") throw err;
     data = await disableWithDependents(item, err.details?.includedBy || []);
   }
-  if (data.config) applySnapshot(data.config); // re-render from the authoritative post-mutation snapshot
+  // Re-render from the authoritative post-mutation snapshot. Turning a package on or off can change
+  // its installed and active state too, so the package view is re-read with it.
+  if (data.config) {
+    await loadPackageState();
+    applySnapshot(data.config);
+  }
   void offerHookReview(data.hookHarnesses);
   if (offer && enabled && data.recommendations?.length) await offerRecommendations(item, data.recommendations);
 }
@@ -152,7 +165,10 @@ async function handleBulkToggle(section, items, enabled) {
       items.map((item) => item.id),
       enabled,
     );
-    if (data.config) applySnapshot(data.config);
+    if (data.config) {
+      await loadPackageState();
+      applySnapshot(data.config);
+    }
     // One read and at most one offer for the whole batch, not one per package.
     void offerHookReview(data.hookHarnesses);
   } catch (err) {
@@ -183,6 +199,7 @@ function renderStandardSection(section, contextCost) {
     onToggle: handleToggle,
     onBulkToggle: handleBulkToggle,
     onDependency: openDependency,
+    onPackageAction: handlePackageAction,
     contextCost,
   });
 }
@@ -275,6 +292,11 @@ function render(snap) {
     }
     return;
   }
+  if (!snap) {
+    // No snapshot: the server's message, then whatever the package view can still offer.
+    if (configError) main.replaceChildren(tmpl.configUnavailable(configError.message), ...(packageData ? renderPackageTabs([], null, { withoutSnapshot: true }) : []));
+    return;
+  }
   const view = withoutPackagesControlledElsewhere(snap.behaviorView || []);
   // Package-category sections (everything the packages intro describes) vs the non-package
   // sections that follow. The intro sits between the harness file grid and the first package
@@ -287,7 +309,7 @@ function render(snap) {
       tmpl.configFiles(snap, { onInspectClick: openSourceModal }),
       tmpl.packagesIntro(),
     ].filter(Boolean),
-    ...packageSections.map((section) => renderSection(section, snap.contextCost)).filter(Boolean),
+    ...renderPackageTabs(packageSections, snap.contextCost),
     ...otherSections.map((section) => renderSection(section, snap.contextCost)).filter(Boolean),
     // Last panel on the page: app-level lifecycle, well below the day-to-day controls.
     tmpl.maintenancePanel({
@@ -295,6 +317,347 @@ function render(snap) {
       onExecute: api.executeUninstall,
     }),
   );
+}
+
+// --------------------------------------------------------------------------- package sources
+//
+// Package rows split into System, Custom, and Third Party tabs, from the package service's view
+// (/api/packages, what `roborepo package list --json` prints). The config snapshot still drives the
+// categories and switches; the view adds each Custom and Third Party card's source, commit, and
+// Install, Update, and Remove. Sources sit in their own section below the tabs. Only the All repos
+// scope shows any of this: sources and installs are machine-wide.
+
+const TAB_STORAGE_KEY = "roborepo.agents.packageTab";
+let packageData = null; // packageView()
+let sourcesData = null; // listSources()
+let packageLoadError = null;
+let activeTab = readStoredTab();
+const sourcesState = { pending: [], status: null, expanded: new Map(), busy: new Set() };
+
+function readStoredTab() {
+  try {
+    return localStorage.getItem(TAB_STORAGE_KEY) || "system";
+  } catch {
+    return "system";
+  }
+}
+
+function selectTab(tab, { focus = false } = {}) {
+  activeTab = tab;
+  try {
+    localStorage.setItem(TAB_STORAGE_KEY, tab);
+  } catch {
+    // The tab is only remembered when storage is available.
+  }
+  render(lastSnapshot);
+  if (focus) document.getElementById(`package-tab-${tab}`)?.focus();
+}
+
+const rowKey = (sourceId, id) => `${sourceId}/${id}`;
+
+// Every source's tab, so an unresolved or shadowed record lands on the tab of the source it names.
+function sourceTabOf(sourceId) {
+  return sourcesData?.find((source) => source.id === sourceId)?.tab || null;
+}
+
+function renderPackageTabs(packageSections, contextCost, { withoutSnapshot = false } = {}) {
+  if (!packageData) {
+    // Without the package view the page still shows every package, untabbed, as before.
+    const sections = packageSections.map((section) => renderSection(section, contextCost)).filter(Boolean);
+    return packageLoadError ? [tmpl.packageLoadFailed(packageLoadError.message), ...sections] : sections;
+  }
+  // The service's counts, less the packages this page leaves to another page, so a count matches
+  // the cards under it.
+  const tabs = packageData.tabs.map((tab) => ({
+    ...tab,
+    count: tab.count - packageData.packages.filter((row) => row.tab === tab.id && PACKAGES_CONTROLLED_ELSEWHERE.has(row.id)).length,
+  }));
+  if (!tabs.some((tab) => tab.id === activeTab)) activeTab = tabs[0]?.id || "system";
+  const rows = new Map(packageData.packages.map((row) => [rowKey(row.sourceId, row.id), row]));
+  const shown = new Set();
+  const sections = packageSections
+    .map((section) => {
+      const items = section.items
+        .filter((item) => (item.tab || "system") === activeTab)
+        .map((item) => {
+          const state = rows.get(rowKey(item.sourceId, item.id));
+          if (state) shown.add(rowKey(state.sourceId, state.id));
+          return activeTab === "system" || !state ? item : { ...item, packageState: state };
+        });
+      return { ...section, items };
+    })
+    .filter((section) => section.items.length > 0);
+  const extra = [activeTab === "system" ? null : availableSection(shown, { withoutSnapshot }), attentionSection()].filter(Boolean);
+  const panel = document.createElement("div");
+  panel.className = "package-tab-panel";
+  panel.id = "package-tab-panel";
+  panel.setAttribute("role", "tabpanel");
+  panel.setAttribute("aria-labelledby", `package-tab-${activeTab}`);
+  const rendered = [...extra, ...sections].map((section) => renderSection(section, contextCost)).filter(Boolean);
+  // Without the snapshot, installed packages have no categories or switches to show them with, so
+  // the tab says they are held back rather than calling itself empty.
+  const fallback = withoutSnapshot ? tmpl.packagesHeldBack() : tmpl.emptyPackageTab(tabs.find((tab) => tab.id === activeTab)?.label);
+  panel.replaceChildren(...rendered, ...(rendered.length && !withoutSnapshot ? [] : [fallback]));
+  return [
+    tmpl.packageTabs(tabs, activeTab, selectTab),
+    panel,
+    sourcesData ? tmpl.sourcesSection(sourcesData, sourcesState, sourceCallbacks) : null,
+  ].filter(Boolean);
+}
+
+// Packages a source offers that the config snapshot has no row for: not installed from a GitHub
+// source yet, so their only control is Install. Without a snapshot no row has a match, so only
+// packages that are really not installed are listed.
+function availableSection(shown, { withoutSnapshot = false } = {}) {
+  const items = packageData.packages
+    .filter((row) => row.tab === activeTab && !shown.has(rowKey(row.sourceId, row.id)) && !PACKAGES_CONTROLLED_ELSEWHERE.has(row.id))
+    .filter((row) => !withoutSnapshot || (!row.installed && row.sourceType === "git"))
+    .map((row) => ({ id: row.id, label: row.label, description: row.description, sourceId: row.sourceId, active: row.active, toggle: null, packageState: row }));
+  if (items.length === 0) return null;
+  return { categoryId: "available", category: "Available to Install", items };
+}
+
+// Packages the catalog cannot use as they are: unresolved records (with the service's reason),
+// shadowed packages (another source's package with the same id is in use), and collisions (two
+// sources offer one id and nothing chose between them, so neither loads until one is installed).
+// Each shows on the tab of the source it names; a record whose source is gone shows on both Custom
+// and Third Party, since only its source says which tab it belongs to.
+function attentionSection() {
+  const onThisTab = (sourceId) => {
+    const tab = sourceTabOf(sourceId);
+    return tab ? tab === activeTab : activeTab !== "system";
+  };
+  const unresolved = (packageData.unresolved || [])
+    .filter((entry) => onThisTab(entry.sourceId))
+    .map((entry) => ({
+      id: entry.id,
+      label: rowKey(entry.sourceId, entry.id),
+      active: false,
+      toggle: null,
+      packageNote: `Can't be found: ${entry.reason}`,
+      packageActions: ["remove"],
+      removeRef: rowKey(entry.sourceId, entry.id),
+      // What removal deletes depends on the source type; null when the source is gone.
+      removeSourceType: sourcesData?.find((source) => source.id === entry.sourceId)?.type ?? null,
+    }));
+  const shadowed = (packageData.shadowed || []).flatMap((entry) => entry.hidden
+    .filter((name) => onThisTab(name.split("/")[0]))
+    .map((name) => ({ id: entry.id, label: name, active: false, toggle: null, packageNote: `Hidden by ${entry.chosen}` })));
+  const collisions = (packageData.collisions || []).flatMap((entry) => entry.candidates
+    .filter((name) => onThisTab(name.split("/")[0]))
+    .map((name) => ({
+      id: entry.id,
+      label: name,
+      active: false,
+      toggle: null,
+      packageNote: `Shares its id with ${entry.candidates.filter((other) => other !== name).join(", ")}; install the one you want`,
+      packageActions: ["install"],
+      installRef: name,
+    })));
+  const items = [...unresolved, ...shadowed, ...collisions];
+  if (items.length === 0) return null;
+  return { categoryId: "attention", category: "Needs Attention", items };
+}
+
+function handlePackageAction(kind, item) {
+  if (kind === "install") return installFlow(item);
+  if (kind === "update") return updateFlow(item);
+  if (kind === "remove") return removeFlow(item);
+}
+
+// The install preview is bound to the plan it showed: a source refreshed in between refuses with
+// the new plan, which replaces the dialog's contents and asks again, as the CLI re-prompts.
+async function installFlow(item) {
+  const ref = item.installRef || item.packageState.qualifiedName;
+  const title = `Install ${item.label}`;
+  const flow = packageActionDialog.open({ title, body: tmpl.loadingText("Reading what it would install…"), confirmLabel: "Install", loading: true });
+  let preview;
+  try {
+    preview = await api.fetchInstallPreview(ref);
+  } catch (err) {
+    return flow.fail(err.message);
+  }
+  const confirm = async () => {
+    try {
+      await api.installPackage(ref, preview.plan);
+    } catch (err) {
+      if (!err.details?.planChanged) throw err;
+      preview = { ...preview, packages: err.details.preview, plan: err.details.plan, warning: err.details.warning ?? null };
+      return { body: tmpl.installPreviewBody(preview, { notice: err.message }) };
+    }
+    await reloadAll();
+    return true;
+  };
+  flow.show({ title, body: tmpl.installPreviewBody(preview), confirmLabel: "Install", onConfirm: confirm });
+  return flow.closed;
+}
+
+// The unconfirmed update returns the change to show (a GitHub fetch, so it can take a while);
+// confirming sends that change's `to` and `from`. If either moved, the refusal carries the current
+// change, which replaces the dialog's contents and asks again.
+async function updateFlow(item) {
+  const ref = item.packageState.qualifiedName;
+  const title = `Update ${item.label}`;
+  const flow = packageActionDialog.open({ title, body: tmpl.loadingText("Fetching its source for the new revision…"), confirmLabel: "Update", loading: true });
+  let change;
+  try {
+    const result = await api.updatePackage(ref);
+    // Nothing to confirm: up to date, a restored copy, or a folder package used in place.
+    flow.show({ title, body: tmpl.updateResultText(result), confirmLabel: "Done", onConfirm: async () => true });
+    await reloadAll();
+    return flow.closed;
+  } catch (err) {
+    if (err.code !== "confirmationRequired" || !err.details?.change) return flow.fail(err.message);
+    change = err.details.change;
+  }
+  const confirm = async () => {
+    try {
+      await api.updatePackage(ref, change);
+    } catch (err) {
+      if (err.code !== "confirmationRequired" || !err.details?.change) throw err;
+      change = err.details.change;
+      return { body: tmpl.updateChangeBody(change, { notice: err.message }) };
+    }
+    await reloadAll();
+    return true;
+  };
+  flow.show({ title, body: tmpl.updateChangeBody(change), confirmLabel: "Update", onConfirm: confirm });
+  return flow.closed;
+}
+
+function removeFlow(item) {
+  const ref = item.removeRef || item.packageState.qualifiedName;
+  return packageActionDialog.open({
+    title: `Remove ${item.label}`,
+    body: tmpl.removePackageBody(item.packageState?.sourceType ?? item.removeSourceType ?? null),
+    confirmLabel: "Remove",
+    danger: true,
+    onConfirm: async () => {
+      await api.removePackage(ref);
+      await reloadAll();
+      return true;
+    },
+  }).closed;
+}
+
+const sourceCallbacks = {
+  // The dialog closes on submit and the add shows as a pending row, so the page stays usable while
+  // a GitHub repo is fetched.
+  async onAdd() {
+    const request = await addSourceDialog.ask();
+    if (!request) return;
+    const entry = { location: request.location };
+    sourcesState.pending.push(entry);
+    sourcesState.status = null;
+    render(lastSnapshot);
+    try {
+      const result = await api.addPackageSource(request.location, request.id);
+      const count = result.packages.length;
+      // As `package source add` prints: a new name clash needs a choice before either package loads.
+      const clashes = (result.collisions || []).map((collision) => `${collision.candidates.join(" and ")} share a name; install the one you want under Needs Attention.`);
+      sourcesState.status = { text: [`Added ${result.source.id}: ${count} package${count === 1 ? "" : "s"} available.`, result.warning, ...clashes].filter(Boolean).join(" ") };
+    } catch (err) {
+      sourcesState.status = { text: err.message, error: true };
+    } finally {
+      sourcesState.pending = sourcesState.pending.filter((pending) => pending !== entry);
+    }
+    await reloadAll();
+  },
+  async onRefresh(source, button) {
+    sourcesState.busy.add(source.id);
+    tmpl.busy(button);
+    try {
+      const [result] = await api.refreshPackageSource(source.id);
+      sourcesState.status = { text: result.changed ? `${source.id} is now at ${result.revision.slice(0, 12)}.` : `${source.id} is up to date.` };
+    } catch (err) {
+      sourcesState.status = { text: err.message, error: true };
+    } finally {
+      sourcesState.busy.delete(source.id);
+    }
+    await reloadAll();
+  },
+  async onToggle(source, enabled) {
+    await api.setPackageSourceEnabled(source.id, enabled);
+    await reloadAll();
+  },
+  onRemove(source) {
+    const { node, keepInstalled } = tmpl.removeSourceBody(source);
+    return packageActionDialog.open({
+      title: `Remove ${source.id}`,
+      body: node,
+      confirmLabel: "Remove Source",
+      danger: true,
+      onConfirm: async () => {
+        await api.removePackageSource(source.id, { keepInstalled: keepInstalled() });
+        sourcesState.expanded.delete(source.id);
+        await reloadAll();
+        return true;
+      },
+    }).closed;
+  },
+  async onExpand(source) {
+    if (sourcesState.expanded.has(source.id)) {
+      sourcesState.expanded.delete(source.id);
+      return render(lastSnapshot);
+    }
+    sourcesState.expanded.set(source.id, "loading");
+    render(lastSnapshot);
+    try {
+      sourcesState.expanded.set(source.id, (await api.fetchSourceInfo(source.id)).packages);
+    } catch (err) {
+      sourcesState.expanded.set(source.id, err);
+    }
+    if (sourcesState.expanded.has(source.id)) render(lastSnapshot);
+  },
+};
+
+// Only the newest read lands: a poll that started before an action and answers after the action's
+// own reload must not put the older view back.
+let packageReadSeq = 0;
+
+async function loadPackageState() {
+  if (currentRepositoryScope()) return;
+  const seq = ++packageReadSeq;
+  try {
+    const [view, sources] = await Promise.all([api.fetchPackages(), api.fetchSources()]);
+    if (seq !== packageReadSeq) return;
+    [packageData, sourcesData] = [view, sources];
+    packageLoadError = null;
+  } catch (err) {
+    if (seq === packageReadSeq) packageLoadError = err;
+  }
+}
+
+// After any package or source action: the snapshot, the package view, and the sources, together.
+// The action already happened, so a failed re-read is logged and left to the next poll rather than
+// reported as the action failing.
+async function reloadAll() {
+  try {
+    const [snap] = await Promise.all([fetchConfigOrNull(), loadPackageState()]);
+    await rereadExpandedSources();
+    last = null;
+    applySnapshot(snap);
+  } catch (err) {
+    showError(err);
+  }
+}
+
+// An expanded source's package list is re-read with everything else, so it never disagrees with
+// the counts above it; a source that is gone is collapsed.
+async function rereadExpandedSources() {
+  const ids = [...sourcesState.expanded.keys()];
+  await Promise.all(ids.map(async (id) => {
+    if (!sourcesData?.some((source) => source.id === id)) {
+      sourcesState.expanded.delete(id);
+      return;
+    }
+    try {
+      const packages = (await api.fetchSourceInfo(id)).packages;
+      if (sourcesState.expanded.has(id)) sourcesState.expanded.set(id, packages);
+    } catch (err) {
+      if (sourcesState.expanded.has(id)) sourcesState.expanded.set(id, err);
+    }
+  }));
 }
 
 // --------------------------------------------------------------------------- poll
@@ -318,6 +681,12 @@ onRepositoryScopeResolved((resolution) => {
     void loadRepositoryInventory(resolution.scope);
     return;
   }
+  // Back to All repos from a repo scope: the package view was not read while scoped, so read it
+  // now rather than drawing stale or missing tabs until the next poll.
+  if (!resolution.scope && previous) {
+    void reloadAll();
+    return;
+  }
   if (lastSnapshot) render(lastSnapshot);
   else renderScoped();
 });
@@ -330,8 +699,16 @@ onRepositoriesChanged(() => {
   return loadRepositoryInventory(scope, { keepShown: true });
 });
 function applySnapshot(snap) {
+  if (snap === STALE) return;
   lastSnapshot = snap;
-  const changed = snapshotChanged(last, snap);
+  // The package view and sources render beside the snapshot, so a change in either redraws too.
+  const changed = snapshotChanged(last, {
+    snap,
+    configError: configError?.message || null,
+    packageData,
+    sourcesData,
+    packageLoadError: packageLoadError?.message || null,
+  });
   if (changed) {
     last = changed;
     render(snap);
@@ -343,9 +720,31 @@ function showError(err) {
   console.error(err);
 }
 
+// The config snapshot, or null when the server cannot build it. A name clash between two sources
+// stops the package catalog from loading until one of them is installed, and the snapshot with it;
+// the page then still draws the package tabs and Sources, which is where the clash is resolved.
+let configError = null;
+// A read that a newer one overtook resolves to STALE, and its caller applies nothing: a poll that
+// started before an action must not put an older snapshot back over the action's own reload.
+const STALE = Symbol("stale config read");
+let configReadSeq = 0;
+async function fetchConfigOrNull() {
+  const seq = ++configReadSeq;
+  try {
+    const snap = await api.fetchConfig();
+    if (seq !== configReadSeq) return STALE;
+    configError = null;
+    return snap;
+  } catch (err) {
+    if (seq !== configReadSeq) return STALE;
+    configError = err;
+    return null;
+  }
+}
+
 async function load() {
   try {
-    const [snap, setup] = await Promise.all([api.fetchConfig(), api.fetchSetupState()]);
+    const [snap, setup] = await Promise.all([fetchConfigOrNull(), api.fetchSetupState(), loadPackageState()]);
     lastSetup = setup;
     applySnapshot(snap);
   } catch (e) {
@@ -358,7 +757,7 @@ async function load() {
 // The banner runs the harness check itself; this only re-reads what it changed. The page's own
 // poll already re-reads setup state, so the banner does not watch it separately.
 async function reloadSetup() {
-  const [snap, setup] = await Promise.all([api.fetchConfig(), api.fetchSetupState()]);
+  const [snap, setup] = await Promise.all([fetchConfigOrNull(), api.fetchSetupState()]);
   lastSetup = setup;
   applySnapshot(snap);
 }
@@ -367,5 +766,7 @@ const POLL_INTERVAL_MS = 10000;
 
 load();
 setInterval(load, POLL_INTERVAL_MS);
+// A package change made from the CLI shows as soon as the page is looked at again.
+window.addEventListener("focus", () => void load());
 // Theme toggle + nav live in the shared /portal/shared/theme.js. The config page has no
 // canvas to redraw, so it needs no "portal:themechange" listener.

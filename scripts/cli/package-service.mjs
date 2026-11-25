@@ -64,6 +64,9 @@ export class PackageServiceError extends Error {
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/;
 
+// What the CLI prints and the portal shows before anything from an unverified source installs.
+export const UNVERIFIED_SOURCE_WARNING = "This repository is not in RoboRepo's trusted catalog. Review each package's contents before installing it.";
+
 // ---------------------------------------------------------------------------------------------
 // Sources
 
@@ -112,6 +115,13 @@ function requireSource(sourceId, sources = readSourceConfig().sources) {
   return record;
 }
 
+// Whether `source add` treats a location as a local folder rather than a git URL. The portal asks
+// too, since only a git add runs Git.
+export function isFolderLocation(location) {
+  const text = String(location || "").trim();
+  return Boolean(text) && !/^(https?:|file:|github\.com\/)/.test(text) && fs.existsSync(text);
+}
+
 // Add a git repository or a local folder as a source. A git source is fetched and listed before
 // its record is written, so an unreachable repo or a repo without packages leaves no state.
 export function addSource({ location, id = null }) {
@@ -119,8 +129,7 @@ export function addSource({ location, id = null }) {
   if (!text) throw new PackageServiceError("usage: roborepo package source add <github-url|folder> [--id <id>]", { code: "usage" });
   const sources = readSourceConfig().sources;
   if (id !== null && !SLUG_RE.test(id)) throw new PackageServiceError(`invalid package source id: ${id}`, { code: "usage" });
-  const looksLikeFolder = !/^(https?:|file:|github\.com\/)/.test(text) && fs.existsSync(text);
-  if (looksLikeFolder) return addPathSource(text, id, sources);
+  if (isFolderLocation(text)) return addPathSource(text, id, sources);
   let normalized;
   try {
     normalized = normalizeGitUrl(text);
@@ -144,7 +153,13 @@ export function addSource({ location, id = null }) {
   };
   const { catalog } = runRefresh(record, { revision: trusted?.commit || null });
   writeSourceConfig([...sources, record]);
-  return { source: sourceSummary(record, []), packages: catalog.packages.map((item) => item.packageId), trusted: Boolean(trusted), collisions: [] };
+  return {
+    source: sourceSummary(record, []),
+    packages: catalog.packages.map((item) => item.packageId),
+    trusted: Boolean(trusted),
+    warning: record.trust === "unverified" ? UNVERIFIED_SOURCE_WARNING : null,
+    collisions: [],
+  };
 }
 
 function addPathSource(folder, id, sources) {
@@ -162,7 +177,7 @@ function addPathSource(folder, id, sources) {
   // List it once so a folder with an invalid package is refused before it is recorded.
   candidatesFromLiveSource(record);
   writeSourceConfig([...sources, record]);
-  return { source: sourceSummary(record, []), packages: availableFromSource(record).map((pkg) => pkg.id), trusted: false, collisions: newCollisions() };
+  return { source: sourceSummary(record, []), packages: availableFromSource(record).map((pkg) => pkg.id), trusted: false, warning: null, collisions: newCollisions() };
 }
 
 // A source id that installed packages still name belongs to those packages' repository. Reusing
@@ -391,6 +406,7 @@ export function previewInstall(reference) {
     tab: root.tab,
     revision: root.revision || null,
     needsConfirmation: plan.some((entry) => entry.trust === "unverified"),
+    warning: unverifiedWarning(plan),
     contents: root.contents || contentsSummary(root.sourceRoot),
     packages: plan.map((entry) => previewOf(entry)),
     plan: planDigest(plan),
@@ -448,8 +464,16 @@ function samePlan(digest, expected) {
 function planChangedError(name, plan) {
   return new PackageServiceError(
     `what installing ${name} would bring changed since it was shown; review it and confirm again`,
-    { code: "confirmationRequired", details: { planChanged: true, preview: plan.map((entry) => previewOf(entry)), plan: planDigest(plan) } },
+    { code: "confirmationRequired", details: { planChanged: true, preview: plan.map((entry) => previewOf(entry)), plan: planDigest(plan), warning: unverifiedWarning(plan) } },
   );
+}
+
+// What an install preview says before installing anything from an unverified source: which
+// packages, then the same advice `source add` prints.
+function unverifiedWarning(plan) {
+  const names = plan.filter((entry) => entry.trust === "unverified").map((entry) => entry.qualifiedName);
+  if (names.length === 0) return null;
+  return `${names.join(", ")} ${names.length === 1 ? "comes" : "come"} from an unverified source. ${UNVERIFIED_SOURCE_WARNING}`;
 }
 
 // The package and every package it requires that is not already resolvable. A requirement is
@@ -674,10 +698,15 @@ export async function updatePackage(reference, { confirmed = false, expectedRevi
   if (current.url && record.url !== current.url) {
     throw new PackageServiceError(`${qualifiedName(current.sourceId, packageId)} was installed from ${current.url}, but source ${record.id} now points at ${record.url}; remove the package and install it again to switch repositories`, { code: "refused" });
   }
-  if (expectedRevision && record.trust === "trusted" && expectedRevision !== trustedEntryFor(record.url)?.commit) {
-    throw new PackageServiceError(`${record.id} is trusted only at its reviewed commit; ${expectedRevision.slice(0, 12)} is not it`, { code: "refused" });
+  // The pin moved since the change was shown, so that change, and its target, are stale. The
+  // source is read at its newest revision instead of the shown one: pinning the refresh to an older
+  // shown target would rewind the source's listing and offer a move backwards as the new change.
+  const pinMoved = Boolean(expectedFrom && expectedFrom !== current.resolved);
+  const target = pinMoved ? null : expectedRevision;
+  if (target && record.trust === "trusted" && target !== trustedEntryFor(record.url)?.commit) {
+    throw new PackageServiceError(`${record.id} is trusted only at its reviewed commit; ${target.slice(0, 12)} is not it`, { code: "refused" });
   }
-  const refreshed = runRefresh(record, expectedRevision ? { revision: expectedRevision } : {});
+  const refreshed = runRefresh(record, target ? { revision: target } : {});
   const latest = refreshed.catalog.revision;
   const name = qualifiedName(current.sourceId, packageId);
   const adapter = createSourceAdapter(record);

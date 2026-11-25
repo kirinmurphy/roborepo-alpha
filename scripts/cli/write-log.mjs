@@ -31,7 +31,8 @@ export function currentWriteActor() {
 // Resolve only manifest-owned command words. Positional arguments, flags, URLs, and headers can
 // contain credentials, so redacting a guessed list of secret names is not sufficient.
 export function sanitizeWriteActor(actor) {
-  if (/^portal (POST|PATCH|PUT|DELETE) \/api\/[\w/-]+$/.test(actor)) return actor;
+  // `%` admits an encoded path segment such as a package reference (`team%2Ftool`).
+  if (/^portal (POST|PATCH|PUT|DELETE) \/api\/[\w/%.-]+$/.test(actor)) return actor;
   if (!String(actor).startsWith("roborepo ")) return "roborepo";
   try {
     if (!commandPaths) {

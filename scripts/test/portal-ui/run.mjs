@@ -79,25 +79,26 @@ fakeGh?.setState(fakeGitHubState({ failure: "unreachable" }));
 const isolation = hostHarnessIsolationEnv(tmp);
 const fakeGhEnv = fakeGh ? { ...fakeGh.env, PATH: `${fakeGh.dir}${path.delimiter}${isolation.PATH}` } : {};
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
+// What the server sees of this machine. A spec that also drives the CLI (package-sources.spec.mjs)
+// runs it with the same values, through PORTAL_UI_CLI_ENV, so both act on one state root.
+const machineEnv = {
+  ...isolation,
+  HOME: tmp,
+  // Plan saves commit to the plans store from this server. The temp HOME has no Git identity, and
+  // on a CI runner Git cannot derive one from the hostname, so every save would fail there.
+  GIT_AUTHOR_NAME: "Portal UI",
+  GIT_AUTHOR_EMAIL: "portal-ui@example.invalid",
+  GIT_COMMITTER_NAME: "Portal UI",
+  GIT_COMMITTER_EMAIL: "portal-ui@example.invalid",
+  ROBOREPO_STATE_ROOT: stateDir,
+  ...fakeGhEnv,
+};
 const server = spawn(
   process.execPath,
   [cli, "web", "--no-open", "--port", "0", "--allow-zero-port"],
   {
     cwd: repoRoot,
-    env: {
-      ...process.env,
-      ...isolation,
-      HOME: tmp,
-      // Plan saves commit to the plans store from this server. The temp HOME has no Git identity, and
-      // on a CI runner Git cannot derive one from the hostname, so every save would fail there.
-      GIT_AUTHOR_NAME: "Portal UI",
-      GIT_AUTHOR_EMAIL: "portal-ui@example.invalid",
-      GIT_COMMITTER_NAME: "Portal UI",
-      GIT_COMMITTER_EMAIL: "portal-ui@example.invalid",
-      ROBOREPO_STATE_ROOT: stateDir,
-      PORTAL_READY_FILE: readyFile,
-      ...fakeGhEnv,
-    },
+    env: { ...process.env, ...machineEnv, PORTAL_READY_FILE: readyFile },
     stdio: ["ignore", "inherit", "inherit"],
   },
 );
@@ -155,7 +156,7 @@ async function main() {
     [pwCli, "test", "--config", config, ...process.argv.slice(2)],
     {
       cwd: repoRoot,
-      env: { ...process.env, PORTAL_BASE_URL: baseURL, ...(fakeGh?.env ?? {}) },
+      env: { ...process.env, PORTAL_BASE_URL: baseURL, PORTAL_UI_CLI_ENV: JSON.stringify(machineEnv), ...(fakeGh?.env ?? {}) },
       stdio: "inherit",
     },
   );

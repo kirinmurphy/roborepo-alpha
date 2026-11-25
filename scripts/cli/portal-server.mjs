@@ -8,6 +8,7 @@ import { runWithWriteActor } from "./write-log.mjs";
 import { send } from "./portal-routes-http.mjs";
 import { dispatchRoutes, matchSegments, validateRouteTables } from "./portal-router.mjs";
 import { configRoutes } from "./portal-routes-config.mjs";
+import { packagesRoutes } from "./portal-routes-packages.mjs";
 import { maintenanceRoutes } from "./portal-routes-maintenance.mjs";
 import { plansRoutes } from "./portal-routes-plans.mjs";
 import { developerRuntimeRoutes } from "./portal-routes-developer-runtime.mjs";
@@ -22,6 +23,7 @@ import { handleMetadataAsset } from "./portal-routes-metadata.mjs";
 // this array instead of hand-maintained, since nothing routes outside it.
 const API_ROUTE_TABLES = [
   configRoutes,
+  packagesRoutes,
   maintenanceRoutes,
   plansRoutes,
   developerRuntimeRoutes,

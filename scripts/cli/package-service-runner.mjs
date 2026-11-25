@@ -1,0 +1,124 @@
+// Runs one package-service operation in a child Node process, for the portal. Git runs
+// synchronously in the service (package-source-git.mjs), and one add, refresh, or update can spend
+// minutes in remote Git calls; inside the portal server that would stop every page from answering.
+// The child does the same call the CLI does, with the CLI's callbacks, and reports the result or
+// the refusal as JSON, which the parent turns back into a PackageServiceError so its code and
+// details reach the page unchanged.
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
+import { PackageServiceError } from "./package-service.mjs";
+import { isMainModule } from "./roots.mjs";
+import { currentWriteActor } from "./write-log.mjs";
+
+const RUNNER_PATH = fileURLToPath(import.meta.url);
+// The one line of stdout that carries the outcome. The operation's own console.log output goes to
+// stderr, but a process it starts can still write to stdout, so the result line is matched on its
+// own line and written after a newline of its own.
+const RESULT_PREFIX = "roborepo-package-service-result:";
+
+// Operations a child may run, each the call the CLI makes for the same command.
+const OPERATIONS = {
+  addSource: async (service, [options]) => service.addSource(options),
+  refreshSources: async (service, [sourceId]) => service.refreshSources(sourceId),
+  updatePackage: async (service, [reference, options = {}]) => {
+    const { reapplyPackage } = await import("./packages.mjs");
+    return service.updatePackage(reference, { ...options, reapply: reapplyPackage });
+  },
+};
+
+export const CHILD_OPERATIONS = Object.keys(OPERATIONS);
+
+// One operation makes at most three remote Git calls of up to 120 seconds each, plus a re-apply.
+// Past this ceiling the child is stopped and the request fails, rather than hanging the page.
+export const CHILD_TIMEOUT_MS = 15 * 60 * 1000;
+
+// Children still running when the server exits are stopped with it, so none is left orphaned.
+const running = new Set();
+let exitHookInstalled = false;
+function stopRunningOnExit() {
+  if (exitHookInstalled) return;
+  exitHookInstalled = true;
+  process.on("exit", () => {
+    for (const child of running) child.kill("SIGTERM");
+  });
+}
+
+// Resolves with the operation's result; rejects with a PackageServiceError for a refusal, or an
+// Error when the child fails some other way. Writes the child makes are logged as `actor`, which
+// defaults to the write actor of the request this runs under.
+export function runPackageServiceInChild(operation, args = [], { actor = currentWriteActor(), env = process.env, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
+  if (!OPERATIONS[operation]) return Promise.reject(new Error(`unknown package service operation: ${operation}`));
+  stopRunningOnExit();
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [RUNNER_PATH], {
+      // The caller's directory, so a relative path means the same here as in the server.
+      cwd: process.cwd(),
+      env: { ...env, ROBOREPO_WRITE_ACTOR: actor },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    running.add(child);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, timeoutMs);
+    timer.unref();
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr = (stderr + chunk).slice(-8000); });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      running.delete(child);
+      if (timedOut) {
+        reject(new Error(`${operation} did not finish within ${Math.round(timeoutMs / 60000)} minutes and was stopped`));
+        return;
+      }
+      const line = stdout.split("\n").find((entry) => entry.startsWith(RESULT_PREFIX));
+      if (!line) {
+        reject(new Error(stderr.trim() || `package service child exited ${code} without a result`));
+        return;
+      }
+      let outcome;
+      try {
+        outcome = JSON.parse(line.slice(RESULT_PREFIX.length));
+      } catch (err) {
+        reject(new Error(`package service child sent an unreadable result: ${err.message}`));
+        return;
+      }
+      if (outcome.error) {
+        const { message, code: errorCode, details } = outcome.error;
+        reject(outcome.error.service ? new PackageServiceError(message, { code: errorCode, details }) : new Error(message));
+        return;
+      }
+      resolve(outcome.result);
+    });
+    // A child that exits before reading its input is reported by the close handler (no result
+    // line); the broken pipe itself must not become an unhandled error in the server.
+    child.stdin.on("error", () => {});
+    child.stdin.end(JSON.stringify({ operation, args }));
+  });
+}
+
+async function runChild() {
+  // Progress the lifecycle prints while re-applying is not the result; keep stdout for the result.
+  console.log = console.error;
+  const input = await new Promise((resolve) => {
+    let raw = "";
+    process.stdin.on("data", (chunk) => { raw += chunk; });
+    process.stdin.on("end", () => resolve(raw));
+  });
+  let outcome;
+  try {
+    const { operation, args } = JSON.parse(input);
+    const service = await import("./package-service.mjs");
+    outcome = { result: await OPERATIONS[operation](service, args) };
+  } catch (err) {
+    const service = err?.name === "PackageServiceError";
+    outcome = { error: { service, message: err?.message || String(err), code: service ? err.code : null, details: service ? err.details ?? null : null } };
+  }
+  process.stdout.write(`\n${RESULT_PREFIX}${JSON.stringify(outcome)}\n`);
+}
+
+if (isMainModule(import.meta.url)) await runChild();

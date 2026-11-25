@@ -6,7 +6,7 @@
 // as properties right after creation. Builds itself from the tpl-config-item template, owns
 // conditional listener wiring (inspect-click, toggle-swap) internally, embeds <config-toggle> in
 // its toggle slot when the item is mutable.
-import { portalTpl as tpl, portalFillSlots as fill } from "/portal/shared/api.js";
+import { portalTpl as tpl, portalFillSlots as fill, portalMiddleEllipsis } from "/portal/shared/api.js";
 import { applyTokenChip, packageDependencies } from "../templates.js";
 import { contextCostChipSpecs } from "../state.js";
 
@@ -42,6 +42,61 @@ function rowCostChip(spec) {
   applyTokenChip(chip, spec);
   return chip;
 }
+
+// A Custom or Third Party card's source state, from the package service's view (item.packageState,
+// one `packageView()` row): its source badge, pinned commit, what its source no longer offers, and
+// the Install, Update, and Remove actions. `item.packageNote` is a state the row cannot carry (an
+// unresolved or shadowed package). Returns whether the on/off switch shows: every package but a
+// GitHub one not installed yet.
+const STATE_NOTES = {
+  sourceChanged: "Its source now points at a different repo",
+  unavailable: "No longer offered by its source",
+};
+
+function renderPackageState(row, item, { onPackageAction }) {
+  const state = item.packageState;
+  const noteEl = row.querySelector('[data-slot="package-note"]');
+  const actionsEl = row.querySelector('[data-slot="package-actions"]');
+  const revisionEl = row.querySelector('[data-slot="revision"]');
+  const notes = [
+    item.packageNote,
+    state?.sourceChanged ? STATE_NOTES.sourceChanged : null,
+    state && state.available === false ? STATE_NOTES.unavailable : null,
+  ].filter(Boolean);
+  noteEl.textContent = notes.join(". ");
+  noteEl.hidden = notes.length === 0;
+  // A GitHub badge is owner/repo; a local repo's is its whole path, so long names keep both ends.
+  if (state?.sourceBadge) {
+    row.querySelector('[data-slot="badges"]').prepend(badge({ text: portalMiddleEllipsis(state.sourceBadge, 40), status: "inactive", title: `Source: ${state.sourceBadge}` }));
+  }
+  if (!state && !item.packageActions?.length) return true;
+  if (state?.sourceType === "git" && state.revision) {
+    revisionEl.textContent = `@ ${state.revision.slice(0, 12)}`;
+    revisionEl.title = state.revision;
+    revisionEl.hidden = false;
+  }
+  // Only a GitHub package needs an install before it can be turned on. A folder package is used in
+  // place, and its switch installs it, as `roborepo package enable` does.
+  const needsInstall = state?.sourceType === "git" && !state.installed;
+  const kinds = item.packageActions || [
+    ...(needsInstall ? ["install"] : []),
+    ...(state.updateAvailable && !state.sourceChanged ? ["update"] : []),
+    ...(state.removable ? ["remove"] : []),
+  ];
+  actionsEl.replaceChildren(...kinds.map((kind) => {
+    const button = tpl("tpl-package-action");
+    button.textContent = ACTION_LABELS[kind];
+    button.dataset.action = kind;
+    if (kind === "install") button.dataset.btn = "cta";
+    button.setAttribute("aria-label", `${ACTION_LABELS[kind]} ${item.label}`);
+    button.addEventListener("click", () => onPackageAction?.(kind, item, button));
+    return button;
+  }));
+  actionsEl.hidden = kinds.length === 0;
+  return !needsInstall;
+}
+
+const ACTION_LABELS = { install: "Install", update: "Update", remove: "Remove" };
 
 class ConfigItemElement extends HTMLElement {
   connectedCallback() {
@@ -121,7 +176,8 @@ class ConfigItemElement extends HTMLElement {
 
     const statusEl = row.querySelector('[data-slot="status"]');
     const toggleSlot = row.querySelector('[data-slot="toggle"]');
-    if (item.toggle) {
+    const showToggle = renderPackageState(row, item, this._actions);
+    if (item.toggle && showToggle) {
       const toggle = document.createElement("config-toggle");
       toggle.item = item;
       toggle.onToggle = onToggle;

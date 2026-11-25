@@ -84,7 +84,7 @@ export function packageSourceCommand(args = []) {
         console.log(`added package source ${result.source.id} (${result.source.trust}): ${result.packages.length} package(s) available`);
         for (const id of result.packages) console.log(`  ${result.source.id}/${id}`);
         for (const collision of result.collisions || []) console.log(`warn: ${collision.candidates.join(" and ")} share a name; choose one with \`roborepo package install <source>/${collision.id}\``);
-        if (result.source.trust === "unverified") console.log("This repository is not in RoboRepo's trusted catalog. Review each package's contents before installing it.");
+        if (result.warning) console.log(result.warning);
         if (result.packages.length) console.log(`next: roborepo package install ${result.source.id}/${result.packages[0]}`);
         return;
       }
@@ -159,6 +159,8 @@ export function packageInstallCommand(rest = []) {
       }
       let confirmed = flags.has("yes");
       if (preview.needsConfirmation && !confirmed && interactive(flags)) {
+        // The same warning the portal's install dialog shows.
+        if (preview.warning) console.log(preview.warning);
         const unverified = preview.packages.filter((item) => item.trust === "unverified").map((item) => item.qualifiedName);
         confirmed = await confirm(`Install ${unverified.join(", ")} from an unverified source?`);
         if (!confirmed) {

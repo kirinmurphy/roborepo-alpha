@@ -98,9 +98,71 @@ three tabs instead of one list. The tab follows the package's source:
 
 Each item has `tab`, `sourceId`, `trust`, and `sourceBadge` (null for System; the source name for
 the rest, with ` · Trusted` for a repo from the trusted catalog), plus `collection` when a source
-groups several skills. Categories and collections still apply inside each tab. The tab split and
-the add-from-GitHub screen are rendered by a later change; today the fields are in the view data
-and in `roborepo package list --json`. Commands: [Package sources and installing](roborepo-cli.md#package-sources-and-installing).
+groups several skills. Categories and collections still apply inside each tab. Commands:
+[Package sources and installing](roborepo-cli.md#package-sources-and-installing).
+
+### Managing sources and installs on the Agents page
+
+In the All repos view, the packages under Available Agent Tools sit in three tabs, **System**,
+**Custom**, and **Third Party**, each with its count. Scoped to one repo, the page shows that
+repo's files instead, with no tabs or sources: sources and installs are machine-wide.
+
+Everything here calls the same package service the CLI calls, so the page and
+`roborepo package ...` show the same state and refuse the same things, with the same message. The
+page reloads after every action and whenever its window regains focus, so a change made from the
+CLI shows without a restart.
+
+The usual path:
+
+1. In **Sources**, select **Add a Source** and enter a GitHub URL or a folder path (and an id if
+   you want one). Use a full path or one starting with `~/`. A GitHub repo is fetched and listed first, which can take several minutes; the
+   source shows as "Adding…" and the rest of the page stays usable.
+2. For a GitHub package, on the Third Party tab, select **Install** on its card, read the preview,
+   and confirm. A folder package (Custom) needs no install: it is used in place.
+3. Turn the package on with its switch.
+4. Later, select **Update** when it appears, read the change, and confirm; or select **Remove**.
+
+What a Custom or Third Party card shows:
+
+| Package state | Card shows |
+| --- | --- |
+| A GitHub package not installed | **Install**, no switch, under Available to Install |
+| A folder package, or an installed GitHub package | The on/off switch; turning a folder package on installs it, as `roborepo package enable` does |
+| A newer commit is listed | **Update** beside the pinned commit (`@ <commit>`) |
+| Its source now points at another repo | "Its source now points at a different repo", and no **Update** |
+| Its source no longer offers it | "No longer offered by its source"; the installed copy keeps working |
+| Installed but can't be found | Under Needs Attention: "Can't be found", the reason, and **Remove** |
+| Another source's package with the same id is in use | Under Needs Attention: "Hidden by `<source>/<id>`" |
+| Two sources offer the same id and none is installed | Under Needs Attention, one card per source: "Shares its id with …", and **Install** to choose that one |
+
+Every card also shows its source badge (with `· Trusted` for a trusted repo).
+
+A name clash stops RoboRepo's package catalog from loading until one of the packages is installed,
+so the rest of the Agents page cannot be shown either. The page then says why and still shows the
+tabs and Sources, so the clash can be settled there.
+
+**Install** shows every package the install brings, dependencies included: the source, the commit,
+and the contents by kind. For an unverified source it names the packages that come from it and
+gives the advice `roborepo package source add` prints. Confirming installs
+exactly what was shown. If the source was refreshed in between, the install is refused and the
+dialog shows the new preview to confirm again.
+
+**Update** fetches the source and shows the change: the current and new commit, the files added,
+removed, and changed, and the contents. Confirming moves to exactly that commit, even if the source
+has a newer one by then. If the installed commit moved meanwhile (another update from the CLI, say),
+confirming is refused and the dialog shows the current change, from what is installed now to the
+source's newest commit, to confirm again. An
+active package is re-applied to the harnesses, as `roborepo package update` does.
+
+**Remove** turns the package off first if it is on. A Third Party package's installed copy is
+deleted; a Custom package's folder is never touched.
+
+**Sources** lists every source with its tab, trust, location, and how many packages it offers and
+has installed; **Show packages** lists what it offers. GitHub sources have **Refresh**. Every source
+but the built-in library has an on/off switch, and every source but the built-in library and the
+workspace (`local`) has **Remove**. Removing a GitHub source with installed packages can keep
+them installed without a source; a folder source's packages must be removed first. The trusted
+catalog listing stays CLI-only (`roborepo package source trusted`).
 
 ### Package composition
 
