@@ -10,6 +10,9 @@ import { listPlanTitles } from "../../modules/plan-suite/index.mjs";
 import { hasStagePrefix, leadingPlanCommand, namedPlans, sessionTitle, titleFromPrompt } from "../../modules/plan-suite/session-title.mjs";
 import { getHarnessProvider, hasHarnessProvider } from "../harnesses/registry.mjs";
 
+// The command that creates plans, so the one whose prompt can name a plan that does not exist yet.
+const PLAN_WRITE = "plan-write";
+
 export function plansSessionTitleCommand(args, { input = readStdin(), cwd = process.cwd(), write = (text) => process.stdout.write(text) } = {}) {
   try {
     const output = sessionTitleHookOutput({ harness: harnessArg(args), input, cwd });
@@ -51,8 +54,6 @@ function titleForCommand({ command, rest }, cwd) {
   // must not become the title.
   return command === PLAN_WRITE ? sessionTitle(command, rest) : null;
 }
-
-const PLAN_WRITE = "plan-write";
 
 function harnessArg(args) {
   const index = args.indexOf("--harness");

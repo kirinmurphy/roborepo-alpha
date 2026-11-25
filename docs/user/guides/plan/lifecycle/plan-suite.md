@@ -101,7 +101,7 @@ How the title gets set depends on the harness:
 
 | Harness | What sets it |
 | --- | --- |
-| Claude Code CLI | A hook sets the stage title whenever a prompt opens with a plan command or carries a `Session title:` line. The title follows the session to its next plan command |
+| Claude Code CLI | A hook sets the stage title when a prompt opens with a plan command for a plan it can find, or carries a `Session title:` line. `/plan-write` for a new plan takes the words after the command instead; any other command with an unknown plan sets no title. The title follows the session to its next plan command |
 | Claude desktop app | The agent renames the session itself; whether the hook also works there is not yet confirmed |
 | Codex | The agent prints a `/rename <title>` line for you to paste when a plan command starts |
 | Gemini | Not yet supported |
