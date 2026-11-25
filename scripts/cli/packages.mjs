@@ -733,12 +733,14 @@ export async function reapplyPackage(pkgId, { previous = null } = {}) {
 // Take out what an installed package registered while it was on, when it has since dropped out of
 // the catalog (a package it requires became unresolved). `disable` cannot reach it, since it only
 // knows catalog packages, and once its install record goes nothing else names its components.
-// `pkg` is the package read from its own copy or folder.
+// `pkg` is the package read from its own files. With no files left (`components` empty), only the
+// cleanup that needs none runs: rules re-render and orphaned skill and command projections go.
 export async function retireStrandedPackage(pkg) {
   assertHarnessWriteAllowed();
   console.log(`disabling: ${pkg.label} (no longer resolvable)`);
   await removePackageComponents(pkg);
   forgetPackageIds([pkg.id]);
+  renderHomeRules();
   cleanupPackageProjections();
 }
 

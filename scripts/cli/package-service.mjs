@@ -39,7 +39,7 @@ import {
   refreshGitSource,
   trustedEntryFor,
 } from "./package-source-git.mjs";
-import { effectiveEnabledIds, forgetPackageIds, readAppliedPackageIds, readEnabledPackagesRegistry, selectedRootIds } from "./package-state.mjs";
+import { effectiveEnabledIds, readAppliedPackageIds, readEnabledPackagesRegistry, selectedRootIds } from "./package-state.mjs";
 import { hasReplaceOverride, readWorkspaceOverrides } from "./workspace-resources.mjs";
 
 // Exit codes for non-interactive callers. 2 matches the CLI's existing usage/refusal code.
@@ -503,21 +503,28 @@ function keptInstall(pkg, lock, candidates = []) {
   // confirms, and the requirements walked all come from that revision's files, not the listing's.
   const source = findSource(pkg.sourceId);
   if (!source) return pkg;
+  const pinned = readPinnedRevision(recorded, source, pkg.collection);
+  if (!pinned) throw missingPinnedCopyError(pkg, recorded);
+  return { ...pinned, contents: contentsSummary(pinned.sourceRoot) };
+}
+
+// A copied package as it was at its recorded revision, read from the source's revision cache (or
+// fetched by that exact commit), for when its installed copy is gone. Null when it cannot be had.
+function readPinnedRevision(recorded, source, collection = null) {
   let folder;
   try {
     folder = createSourceAdapter(source).materialize(pinnedResolution(recorded, source));
   } catch {
-    throw missingPinnedCopyError(pkg, recorded);
+    return null;
   }
-  const pinned = normalizePackageEntry({
+  return normalizePackageEntry({
     sourceId: source.id,
-    packageId: pkg.id,
+    packageId: recorded.packageId,
     root: folder,
     file: path.join(folder, "package.config.json"),
-    collection: pkg.collection,
+    collection,
     revision: recorded.resolved,
   }, source);
-  return { ...pinned, contents: contentsSummary(folder) };
 }
 
 function missingPinnedCopyError(pkg, recorded) {
@@ -837,18 +844,22 @@ export async function removePackage(reference, { disable = null, retire = null }
   const stranded = !pkg && (readEnabledPackagesRegistry().packages.includes(packageId) || readAppliedPackageIds().includes(packageId));
   let warning = null;
   if (stranded) {
+    // Its files: the copy or folder, else (copy deleted) its pinned revision from the source's cache.
+    const source = record.kind === "materialized" ? findSource(record.sourceId) : null;
     const own = (composed.candidates || []).find((candidate) => candidate.id === packageId && candidate.sourceId === record.sourceId
-      && (record.kind !== "materialized" || candidate.revision === record.resolved));
+      && (record.kind !== "materialized" || candidate.revision === record.resolved))
+      || (source ? readPinnedRevision(record, source) : null);
+    if (!retire) throw new PackageServiceError(`${packageId} is active; disable it first`, { code: "refused" });
     if (own) {
-      if (!retire) throw new PackageServiceError(`${packageId} is active; disable it first`, { code: "refused" });
       await retire(own);
-      disabled = true;
     } else {
-      // Its files are gone, so nothing says what it registered. Refusing would leave a package no
-      // command can clear (its source may be gone too); remove it and say what may remain.
-      forgetPackageIds([packageId], composed.packages);
-      warning = `the files of ${packageId} are missing, so anything it registered in your harnesses could not be removed; run \`roborepo doctor\` to check for leftovers`;
+      // Nothing says what it registered. Refusing would leave a package no command can clear (its
+      // source may be gone too), so the cleanup that needs no files runs and the user is told
+      // what may remain.
+      await retire({ id: packageId, label: packageId, components: [] });
+      warning = `the files of ${packageId} are missing, so hooks, MCP servers, or config changes it added to your harnesses could not be removed; check them by hand`;
     }
+    disabled = true;
   }
   const removed = removeInstalled(packageId);
   return { qualifiedName: qualifiedName(record.sourceId, packageId), removed: removed.removed, deletedCopy: removed.deletedCopy, disabled, ...(warning ? { warning } : {}) };

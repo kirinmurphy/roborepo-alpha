@@ -332,6 +332,31 @@ try {
   assert.match(removedMissing.output, /could not be removed/, "and the user is told what may remain");
   assert.ok(!lock()["strand-base"], "its record goes");
   assert.ok(!appliedIds().includes("strand-base"), "it is no longer recorded as applied");
+
+  // An enabled package whose own copy was deleted is turned off from its pinned revision in the
+  // source's cache, hooks included; --json output stays clean.
+  const goneRepo = makeRepo("gone", {
+    "packages/gone-tool/package.config.json": manifest("gone-tool", {
+      resources: [
+        { type: "rules", harness: "claude", source: "rules.md" },
+        { type: "hooks", harness: "claude", source: "hooks.json" },
+      ],
+    }),
+    "packages/gone-tool/rules.md": "## Upd gone tool\n",
+    "packages/gone-tool/hooks.json": JSON.stringify({ SessionStart: [{ matcher: "", hooks: [{ type: "command", command: "echo upd-gone-hook" }] }] }),
+  });
+  ok("package", "source", "add", goneRepo.url, "--id", "gone");
+  ok("package", "install", "gone/gone-tool", "--yes");
+  ok("package", "enable", "gone-tool");
+  assert.match(JSON.stringify(claudeSettings().hooks || {}), /upd-gone-hook/, "the hook is applied");
+  fs.rmSync(lock()["gone-tool"].installedPath, { recursive: true, force: true });
+  const removedGone = cli("package", "remove", "gone-tool", "--json");
+  assert.equal(removedGone.status, 0, removedGone.output);
+  const goneResult = JSON.parse(removedGone.stdout);
+  assert.equal(goneResult.removed, true);
+  assert.equal(goneResult.warning, undefined, "the cached revision supplied its files");
+  assert.doesNotMatch(JSON.stringify(claudeSettings().hooks || {}), /upd-gone-hook/, "its hook is removed");
+  assert.doesNotMatch(liveClaudeRules(roots.home), /Upd gone tool/, "its rules are removed");
 } finally {
   roots.restore();
   roots.cleanup();
