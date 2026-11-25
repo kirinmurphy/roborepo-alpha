@@ -209,6 +209,12 @@ try {
   expectLine(1, /token is in the keychain, which agent sandboxes cannot read/);
   start({ failure: "unreachable" });
   expectLine(0, /^GitHub agent identity check skipped \(GitHub could not be reached\)$/);
+  // A certificate the sandbox could not verify is named as such, never as a bad token.
+  start({ failure: "tls" });
+  const tlsReport = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
+  assert.equal(tlsReport.state, "unavailable");
+  assert.match(tlsReport.reason, /could not verify GitHub's certificate\. That is not a token problem.*outside the sandbox/);
+  assert.ok(!tlsReport.problems.some((item) => /token/i.test(item.message)), "no token finding from a TLS failure");
 
   // A token close to expiry is advice: the status stays healthy and exits 0, doctor hints.
   // The warning starts two weeks out: 13 days left is a note, 15 is not.

@@ -38,6 +38,8 @@ export class GitHubError extends Error {
   }
 }
 
+export const TLS_FAILURE = "gh could not verify GitHub's certificate. That is not a token problem: a sandbox that blocks the system's certificate check causes it, so run the command outside the sandbox";
+
 // `gh api` exits non-zero on an HTTP error, with GitHub's JSON error body on stdout and
 // "gh: <message> (HTTP <status>)" on stderr.
 function describeGhFailure(error) {
@@ -50,6 +52,12 @@ function describeGhFailure(error) {
       message = JSON.parse(error.stdout).message || message;
     } catch {}
     return new GitHubError("http", message, { status: Number(http[1]) });
+  }
+  // Checked before the sign-in patterns: a certificate that could not be verified says nothing
+  // about the token, and `gh auth status` reports the token invalid after one. A sandbox that
+  // blocks the system's certificate check (macOS trustd) is the usual cause.
+  if (/x509:|tls: failed to verify|certificate signed by unknown authority|OSStatus -26276/i.test(stderr)) {
+    return new GitHubError("unavailable", TLS_FAILURE);
   }
   if (/gh auth login|not logged in|authentication/i.test(stderr)) {
     return new GitHubError("unavailable", "the GitHub CLI is not signed in (run: gh auth login)");

@@ -3,7 +3,7 @@
 // active rulesets, and appends every request to a log. Put `dir` first on PATH to use it.
 //
 // State file fields (see `fakeGitHubState` for defaults):
-//   failure   null | "not-signed-in" | "unreachable" | "hang" | "rulesets-refused"
+//   failure   null | "not-signed-in" | "unreachable" | "tls" | "hang" | "rulesets-refused"
 //             | "actions-off" (runs endpoint answers 404) | "runs-error" (runs endpoint answers 502)
 //             | "classic-refused" (classic protection answers 403 with the upgrade message)
 //             | "classic-rate-limited" (classic protection answers 403 for a rate limit)
@@ -93,6 +93,8 @@ fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ ...argvLog, method, 
 
 if (state.failure === "not-signed-in") fail(4, "To get started with GitHub CLI, please run:  gh auth login");
 if (state.failure === "unreachable") fail(1, "error connecting to api.github.com");
+// What gh prints in a macOS sandbox that blocks the system's certificate check (trustd).
+if (state.failure === "tls") fail(1, 'Get "https://api.github.com/user": tls: failed to verify certificate: x509: OSStatus -26276');
 // Never answers; the caller's timeout ends it.
 if (state.failure === "hang") setTimeout(() => {}, 60_000);
 else respond();
