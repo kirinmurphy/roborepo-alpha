@@ -5,7 +5,7 @@ blocked_by: []
 depends_on: []
 related: ["plan-session-launching-milestone-1", "96r9wbj0", "0ubk9sug"]
 reviewed_commit: bfa57f1ba8c7a4ee0ccb76cc0d8916cb29fbe503
-worktree:
+worktree: session-stage-titles
 ---
 # Session Titles Show the Workflow Stage
 
