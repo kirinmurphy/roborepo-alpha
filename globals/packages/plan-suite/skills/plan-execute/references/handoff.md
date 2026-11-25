@@ -113,7 +113,8 @@ never run a lifecycle transition at this point.
 - **Attempts.** At most 3 fix commits per failing check, counted per run, so a rerun of the skill
   starts fresh because a person chose to try again. One `roborepo delivery retry-ci <run-id>` is
   allowed per run for a failure that looks like infrastructure (a runner, network, or timeout error,
-  not a test assertion), and it does not count as an attempt.
+  not a test assertion), and it does not count as an attempt. It reruns only a run whose conclusion
+  is `failure`; a run that ended `timed_out` or `cancelled` is reported, not retried.
 - **Never passing.** A base failure or no checks is not green, however the rest looks.
 - **No revalidation in `/plan-execute`.** A CI fix there does not rerun the Validation Loop; the
   final report lists it, and `/plan-review`'s Validator covers it. A CI fix made during `/plan-review`
