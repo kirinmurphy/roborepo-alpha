@@ -52,12 +52,12 @@ without weakening the sandbox or validation.
 | Piece | Today |
 | --- | --- |
 | `/plan-close` (`globals/packages/plan-suite/skills/plan-close/SKILL.md`) | Eleven steps. Step 8 commits completion; step 9 stops the worktree's servers; step 10 removes the worktree; step 11 names dependent follow-up plans. Paired Skills lists three `requires` rows and no `recommends` row. |
-| Skill availability | `globals/system/rules/shared/05-skill-loading.md`: load a `recommends` skill only when the session lists it; a listed-but-missing one is "named once in the final report". |
+| Skill availability | `globals/system/rules/shared/05-skill-loading.md`: load a paired skill when its condition matches and the session lists it; when the session does not list it, continue and name it once in the final report. Each plan-suite skill repeats this for `recommends` rows under its Paired Skills table. |
 | User-level roborepo state | Files under `~/.roborepo/<area>/` (for example `~/.roborepo/plan-suite/settings.json`, now ignored by Plans). No case-study settings exist. |
 | Per-repo plan config | `plans/plans-config.json` on the `repo-plans` branch. It is pushed and shared with everyone who clones the repo, so a personal home path does not belong in it. |
 | Repo name | `roborepo plans validate --json` reports `repository.name` (here `roborepo`). |
 | Sandbox | `scripts/harnesses/claude/sandbox-settings.mjs` lets Bash write only to the working folder and `CLAUDE_SANDBOX_WRITABLE_PATHS` (`~/.npm`, `~/.roborepo/scratch`). Commands that must write elsewhere are listed in `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` and allowed by rules in `manifests/inventory/agent-permissions.json`, the way `roborepo plans save` reaches the plans store. |
-| CLI commands | One JSON file per command under `manifests/platform/cli/command-definitions/`, pointing at a module export. |
+| CLI commands | One `<name>.command.json` per command under `manifests/platform/cli/command-definitions/<group>/`, pointing at a module export; a group with subcommands also has a `kind: "namespace"` file (as `delivery/` does). |
 
 ## Proposed design
 
@@ -84,7 +84,7 @@ flowchart TD
 
 | Decision | Choice |
 | --- | --- |
-| Where the step runs | New step 12, after the follow-up handoff. The close is already committed and the worktree removed; the helper reads the landed code from the primary checkout on the base branch and the plan from `completed/`. |
+| Where the step runs | New step 12, after the follow-up handoff. The close is already committed and the worktree removed. The helper reads the landed code at the absorbing commit that step 8 recorded in `## Verification` (`git show <commit>:<path>`), so it works whichever branch the primary checkout is on, and reads the plan with `roborepo plans show`. |
 | Failure | Never blocks, never undoes the close. Any failure is one line in the final report with the reason. |
 | "Skill turned on" | A `recommends` row for `case-study` in plan-close's Paired Skills. A session that does not list the skill skips the step **without** the usual "named once" line, so users who never turned it on see nothing. The row states this exception, and `05-skill-loading.md` gains one sentence allowing a row to mark itself silent. |
 | Setting scope | Per user, in `~/.roborepo/case-study/settings.json`: a default `destination` with a `{repo}` placeholder, plus `repos.<repositoryId>` overrides for `destination` and `anonymize`. |
@@ -139,13 +139,13 @@ roborepo case-study save <plan id> <draft.md> [--json]                 copy into
 | --- | --- |
 | `modules/case-study/` | Settings read and write, destination resolution, filename, save, ledger |
 | `scripts/cli/case-study.mjs` | Argument parsing and output only, calling the module |
-| `manifests/platform/cli/command-definitions/` | Three command definitions (`config`, `where`, `save`) |
+| `manifests/platform/cli/command-definitions/case-study/` | A namespace definition and three command definitions (`config`, `where`, `save`) |
 | `globals/packages/plan-suite/skills/plan-close/SKILL.md` | Step 12, the `recommends` row, the opt-out field |
 | `globals/packages/case-study-pack/skills/case-study/SKILL.md` | A short "Called from `/plan-close`" section: topic from the plan, anonymization from settings, save through the command, no questions |
 
 ## Implementation plan
 
-- [ ] Add `modules/case-study/` with settings, resolve, save and ledger, and `scripts/cli/case-study.mjs` with the three command definitions.
+- [ ] Add `modules/case-study/` with settings, resolve, save and ledger, and `scripts/cli/case-study.mjs`, and the `case-study/` namespace and three command definitions.
 - [ ] Add `case-study` to `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` and the allow rules for `save` and `where` in `manifests/inventory/agent-permissions.json`; confirm the Codex route matches how `roborepo plans save` runs there.
 - [ ] Add step 12 and the silent `recommends` row to plan-close `SKILL.md`; add the silent-row sentence to `globals/system/rules/shared/05-skill-loading.md`.
 - [ ] Teach the plan validator and `roborepo plans save` to accept `case_study: skip` (check whether unknown frontmatter is kept today), and document it in plan-write's `references/plan-schema.md`.
@@ -187,7 +187,7 @@ Also:
 | Risk | Mitigation |
 | --- | --- |
 | Closes get longer and use more tokens for users who turned the skill on | Fresh-context helper; plans without a real design decision are skipped |
-| An anonymized article still leaks a name | The skill's existing anonymization rules and any destination blacklist check still apply |
+| An anonymized article still leaks a name | The skill's anonymization rules apply, including a blacklist file or check the destination project enforces; the file is never committed, so the owner reads it before publishing |
 | Other plans edit plan-close at the same time | `kqgr1d65` changes only step 9's command (and says so), `d9ywaa8d` rewords step 6, `iz3vuxyi` edits the retry fallback, `0jped168` adds `/plan-close` eval scenarios whose fixture sessions are expected not to list `case-study` (unverified). None touch the new step; rebase on whichever lands first. |
 
 ## Decision Log
