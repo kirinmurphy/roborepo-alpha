@@ -38,7 +38,8 @@ export class GitHubError extends Error {
   }
 }
 
-export const TLS_FAILURE = "gh could not verify GitHub's certificate. That is not a token problem: a sandbox that blocks the system's certificate check causes it, so run the command outside the sandbox";
+// Nothing here can tell whether the command ran in a sandbox, so the advice names both causes.
+export const TLS_FAILURE = "gh could not verify GitHub's certificate. That is not a token problem. If the command ran in a sandbox that blocks the system's certificate check, run it outside the sandbox; otherwise check this machine's certificate trust settings";
 
 // `gh api` exits non-zero on an HTTP error, with GitHub's JSON error body on stdout and
 // "gh: <message> (HTTP <status>)" on stderr.
@@ -161,12 +162,14 @@ export const githubClient = {
   // An account's numeric id, which its noreply email address starts with.
   accountId: async (context, login) => (await api(context, `users/${encodeURIComponent(login)}`)).id,
 
-  async isCollaborator(context, repo, login) {
+  // An account's effective access to a repo: "admin", "write", "read", or "none" (GitHub's
+  // `permission` field, where Maintain reads as write and Triage as read). A Read collaborator is a
+  // collaborator that still cannot push.
+  async collaboratorPermission(context, repo, login) {
     try {
-      await api(context, `${repoPath(repo)}/collaborators/${encodeURIComponent(login)}`);
-      return true;
+      return (await api(context, `${repoPath(repo)}/collaborators/${encodeURIComponent(login)}/permission`)).permission || "none";
     } catch (error) {
-      if (error instanceof GitHubError && error.status === 404) return false;
+      if (error instanceof GitHubError && error.status === 404) return "none";
       throw error;
     }
   },
@@ -174,7 +177,8 @@ export const githubClient = {
   // Invitations still waiting on a repo (as its admin), and those waiting for the signed-in account.
   repoInvitations: (context, repo) => allPages(context, `${repoPath(repo)}/invitations`),
   userInvitations: (context) => allPages(context, "user/repository_invitations"),
-  inviteCollaborator: (context, repo, login) => api(context, `${repoPath(repo)}/collaborators/${encodeURIComponent(login)}`, { method: "PUT" }),
+  // Invites a new collaborator with Write access, or raises an existing one to Write.
+  inviteCollaborator: (context, repo, login) => api(context, `${repoPath(repo)}/collaborators/${encodeURIComponent(login)}`, { method: "PUT", body: { permission: "push" } }),
   acceptInvitation: (context, id) => api(context, `user/repository_invitations/${id}`, { method: "PATCH" }),
 
   async login(context) {

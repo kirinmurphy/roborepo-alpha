@@ -9,6 +9,7 @@
 //             | "classic-rate-limited" (classic protection answers 403 for a rate limit)
 //             | "user-unauthorized" (calls as the user, without GH_CONFIG_DIR, answer 401)
 //             | "repo-forbidden" (reading the repo itself answers 403)
+//             | "bot-repo-forbidden" (reading the repo as the bot answers 403; as the user it works)
 //   An exported GH_TOKEN or GITHUB_TOKEN names the calling account, ahead of any stored login, as gh does.
 //   login, admin, defaultBranch
 //   refuseCreate  a ruleset name whose create answers 422, to fail an apply partway
@@ -17,10 +18,12 @@
 //   tokens    { [token]: { login, scopes: [..] | null, expires: "2027-01-01 00:00:00 UTC" | null, expired } }
 //             the accounts a bot's `gh auth login --with-token` can sign in as, keyed by token
 //   users     logins that exist on GitHub (default: the signed-in user and every token's login)
-//   collaborators [{ login, permission: "push" | "admin" }]; invitations [{ id, invitee, repo }]
+//   collaborators [{ login, permission: "pull" | "push" | "admin" }] ("pull" is Read: no push);
+//             a PUT for an existing collaborator sets its permission; invitations [{ id, invitee, repo }]
 //   invitePermission  what accepting an invitation grants (default "push"); refuseInvite answers 403
 //   Identity: a call with GH_CONFIG_DIR set is the account whose token is in that directory's
-//   hosts.yml (or `.fake-token`, for a keychain login); without it, the `login` user. The hosts.yml
+//   hosts.yml (or `.fake-token`, for a keychain login); without it, the `login` user. Either way a
+//   token for the `login` account is the user, not a bot. The hosts.yml
 //   that `auth login --insecure-storage` writes is the only place the fake stores a token.
 // List endpoints page by `per_page` and `page` as GitHub does; each log entry records the
 // `--hostname` the call named.
@@ -147,12 +150,18 @@ if (accept && method === "PATCH") {
   process.exit(0);
 }
 if (route === "") {
-  if (state.failure === "repo-forbidden") httpError(403, "Resource not accessible by personal access token");
+  if (state.failure === "repo-forbidden" || (state.failure === "bot-repo-forbidden" && identity.bot)) httpError(403, "Resource not accessible by personal access token");
   const permission = identity.bot ? permissionOf(identity.login) : null;
   const permissions = identity.bot
     ? { admin: permission === "admin", push: permission === "admin" || permission === "push", pull: true }
     : { admin: callerAdmin, push: true, pull: true };
   reply({ default_branch: state.defaultBranch, permissions });
+}
+// GitHub's legacy \`permission\` field: Write for push, Read for pull, "none" for anyone else.
+const permissionLevel = route.match(/^collaborators\\/([^/]+)\\/permission$/);
+if (permissionLevel && method === "GET") {
+  const stored = permissionOf(decodeURIComponent(permissionLevel[1]));
+  reply({ permission: { admin: "admin", push: "write", pull: "read" }[stored] || "none" });
 }
 const collaborator = route.match(/^collaborators\\/([^/]+)$/);
 if (collaborator) {
@@ -163,7 +172,11 @@ if (collaborator) {
   }
   if (method === "PUT") {
     if (!callerAdmin || state.refuseInvite) httpError(403, "Must have admin rights to Repository.");
-    if (permissionOf(login)) process.exit(0);
+    const existing = (state.collaborators || []).find((entry) => known(entry.login) === known(login));
+    if (existing) {
+      if (body && body.permission) { existing.permission = body.permission; save(); }
+      process.exit(0);
+    }
     state.invitations = [...(state.invitations || []), { id: state.nextId, invitee: login, repo: repoName }];
     state.nextId += 1;
     save();
@@ -295,18 +308,19 @@ function tokenOf(dir) {
   const token = envToken() || (dir ? savedToken(dir) : null);
   return token ? (state.tokens || {})[token] || null : null;
 }
+function sameAccount(a, b) { return (a || "").toLowerCase() === (b || "").toLowerCase(); }
 function resolveIdentity() {
   if (envToken()) {
     const info = tokenOf(null);
     if (!info || info.expired) httpError(401, "Bad credentials");
-    return { login: info.login, bot: info.login !== state.login };
+    return { login: info.login, bot: !sameAccount(info.login, state.login) };
   }
   if (!configDir && state.failure === "user-unauthorized") httpError(401, "Bad credentials");
   if (!configDir) return { login: state.login, bot: false };
   if (!fs.existsSync(hostsPath)) fail(4, "To get started with GitHub CLI, please run:  gh auth login");
   const info = tokenOf(configDir);
   if (!info || info.expired) httpError(401, "Bad credentials");
-  return { login: info.login, bot: true };
+  return { login: info.login, bot: !sameAccount(info.login, state.login) };
 }
 function authCommand() {
   fs.appendFileSync(process.env.FAKE_GH_LOG, JSON.stringify({ ...argvLog, method: null, endpoint: null }) + "\\n");

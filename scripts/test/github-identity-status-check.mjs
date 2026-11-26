@@ -49,6 +49,7 @@ try {
   assert.equal(protectRun.status, 0, protectRun.stdout + protectRun.stderr);
   const managed = gh.readState().rulesets;
 
+  const agentGitconfig = path.join(env.HOME, ".roborepo", "package-runtime", "github-agent-identity", "gitconfig");
   const start = ({ token = {}, hosts = "token", enabled = true, ca = "current", ...overrides } = {}) => {
     fs.rmSync(stateRoot, { recursive: true, force: true });
     fs.mkdirSync(ghDir, { recursive: true });
@@ -64,6 +65,11 @@ try {
     if (ca === "config-other") fs.writeFileSync(path.join(stateRoot, "github-agent", "gitconfig.local"), "[http]\n\tsslCAInfo = /elsewhere.crt\n");
     if (ca === "stale") fs.writeFileSync(path.join(stateRoot, "github-agent", "ca-bundle.crt"), "an older bundle\n");
     if (enabled) fs.writeFileSync(path.join(stateRoot, "enabled-packages.json"), JSON.stringify({ schemaVersion: 2, packages: ["github-agent-identity"], disabled: [] }));
+    // The Git settings file an enabled package installs; a case below writes its own content.
+    if (enabled && !fs.existsSync(agentGitconfig)) {
+      fs.mkdirSync(path.dirname(agentGitconfig), { recursive: true });
+      fs.writeFileSync(agentGitconfig, "# fixture\n");
+    }
     gh.setState(fakeGitHubState({
       rulesets: structuredClone(managed),
       tokens: { [TOKEN]: { login: BOT, scopes: ["repo", "read:org"], expires: FAR_EXPIRY, expired: false, ...token } },
@@ -86,6 +92,11 @@ try {
 
   start();
   expectLine(0, /^GitHub agent identity: agents act as robo-bot on example\/project$/);
+  // The package selected, with the Git settings file it installs gone: Git skips the include, so
+  // agents' pushes go out as you, and status says so instead of calling it healthy.
+  fs.rmSync(agentGitconfig);
+  expectLine(1, /problem for example\/project: Agents' git pushes still go out as you, because the Git settings file .* is missing\. — run roborepo github setup/);
+  start();
   // With the bot otherwise ready, turning the package on is the whole fix; with anything else
   // wrong, the setup fixes it and turns the package on at the end.
   start({ enabled: false });
@@ -152,6 +163,13 @@ try {
   partial = jsonReport();
   assert.equal(partial.state, "unavailable", "a failed read with nothing else wrong is not healthy");
   assert.match(partial.reason, /Resource not accessible/);
+  // The bot's own access read failing beside rules found unverified is still a check that did not
+  // run, not merely unverified rules.
+  start({ admin: false, failure: "bot-repo-forbidden" });
+  partial = jsonReport();
+  assert.equal(partial.state, "unavailable", "a failed bot access read is not hidden behind unverified rules");
+  assert.ok(partial.problems.some((item) => item.id === "protection-unverified"), "the unverified rules stay reported");
+  assert.ok(partial.problems.some((item) => item.id === "check-incomplete" && /Resource not accessible/.test(item.message)), "the failed read is reported");
   console.log("✓ Status ignores exported tokens, flags any extra scope or a fine-grained token, and reports checks it could not run.");
   start({ rulesets: [] });
   expectLine(1, /Branch protection for this repo is missing.* — run roborepo protect in this repo/);
@@ -222,6 +240,11 @@ try {
   start({ admin: false, collaborators: [], invitations: [{ id: 7, invitee: BOT, repo: "example/project" }] });
   assert.deepEqual(invite("git:github.com/example/project"), { ok: true });
   assert.ok(gh.readState().collaborators.some((entry) => entry.login === BOT), "the bot accepted the pending invitation");
+  // A Read collaborator cannot push: the invite step raises it to Write rather than calling it done.
+  start({ collaborators: [{ login: BOT, permission: "pull" }] });
+  assert.equal(jsonReport().problems.find((entry) => entry.id === "not-collaborator")?.message, "robo-bot cannot push to example/project.");
+  assert.deepEqual(invite("git:github.com/example/project"), { ok: true });
+  assert.deepEqual(gh.readState().collaborators, [{ login: BOT, permission: "push" }], "the bot now has Write access");
   start();
 
   // The portal's account cache key changes when the token is replaced for the same bot, and never
@@ -232,8 +255,13 @@ try {
     assert.equal(run.status, 0, run.stderr);
     return run.stdout.trim();
   };
+  const hostsFile = path.join(ghDir, "hosts.yml");
   const before = facts();
-  fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    oauth_token: ${TOKEN}-renewed\n    user: ${BOT}\n`);
+  // A renewed token of the same length, written at another time: only the timestamp tells them apart.
+  const renewed = TOKEN.slice(0, -1) + (TOKEN.endsWith("9") ? "8" : "9");
+  const { mtime } = fs.statSync(hostsFile);
+  fs.writeFileSync(hostsFile, `github.com:\n    oauth_token: ${renewed}\n    user: ${BOT}\n`);
+  fs.utimesSync(hostsFile, mtime, new Date(mtime.getTime() + 60_000));
   const after = facts();
   assert.notEqual(after, before, "a replaced token changes the local facts");
   assert.ok(!before.includes(TOKEN) && !after.includes(TOKEN), "the facts never hold the token");
@@ -250,6 +278,19 @@ try {
   });
   assert.notEqual(botCreate.status, 0, "a bot with Write access cannot create a ruleset");
   assert.match(botCreate.stderr, /HTTP 403/);
+  // Authority follows the account, not where its token is stored: your own token in a config
+  // directory is still you, with your admin rights, as it is when exported.
+  const userDir = path.join(root, "user-gh");
+  fs.mkdirSync(userDir, { recursive: true });
+  fs.writeFileSync(path.join(userDir, "hosts.yml"), "github.com:\n    oauth_token: ghp_userinconfigdir00\n    user: octo-admin\n");
+  const withUserDir = gh.readState();
+  withUserDir.tokens.ghp_userinconfigdir00 = { login: "octo-admin", scopes: ["repo"], expires: FAR_EXPIRY, expired: false };
+  gh.setState(withUserDir);
+  for (const extra of [{ GH_CONFIG_DIR: userDir }, { GH_TOKEN: "ghp_userinconfigdir00" }]) {
+    const userRead = spawnSync("gh", ["api", "repos/example/project"], { cwd: checkout, env: { ...env, ...extra }, encoding: "utf8" });
+    assert.equal(userRead.status, 0, userRead.stderr);
+    assert.equal(JSON.parse(userRead.stdout).permissions.admin, true, `${Object.keys(extra)[0]}: your own token keeps your admin rights`);
+  }
   console.log("✓ A repo you do not administer reads as unverified or names the owner, with a message for them.");
 
   start({ hosts: "keychain" });
@@ -260,7 +301,7 @@ try {
   start({ failure: "tls" });
   const tlsReport = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
   assert.equal(tlsReport.state, "unavailable");
-  assert.match(tlsReport.reason, /could not verify GitHub's certificate\. That is not a token problem.*outside the sandbox/);
+  assert.match(tlsReport.reason, /could not verify GitHub's certificate\. That is not a token problem\. If the command ran in a sandbox .*outside the sandbox; otherwise check this machine's certificate trust settings/);
   assert.ok(!tlsReport.problems.some((item) => /token/i.test(item.message)), "no token finding from a TLS failure");
 
   // A token close to expiry is advice: the status stays healthy and exits 0, doctor hints.
@@ -321,8 +362,6 @@ try {
   // refusing the bot.
   start();
   const uninvited = clone("uninvited", "git@github.com:example/project.git");
-  const agentGitconfig = path.join(env.HOME, ".roborepo", "package-runtime", "github-agent-identity", "gitconfig");
-  fs.mkdirSync(path.dirname(agentGitconfig), { recursive: true });
   fs.writeFileSync(agentGitconfig, `[url "${path.join(root, "nowhere.git")}"]\n\tinsteadOf = git@github.com:example/project.git\n`);
   const asBot = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: "~/.roborepo/package-runtime/github-agent-identity/gitconfig" };
   const init = () => spawnSync(process.execPath, [path.join(repoRoot, "scripts/cli/main.mjs"), "plans", "init", "--json"], { cwd: uninvited, env: { ...env, ...asBot }, encoding: "utf8" });

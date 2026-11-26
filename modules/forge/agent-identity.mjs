@@ -84,7 +84,13 @@ export function writeAgentAuthor({ stateDir, login, id }) {
 export const agentNoreplyEmail = ({ login, id }) => `${id}+${login}@users.noreply.github.com`;
 const agentAuthorGitconfig = ({ login, id }) => `# Agents' commits are authored by the bot account.\n[user]\n\tname = ${login}\n\temail = ${agentNoreplyEmail({ login, id })}\n`;
 
-const caGitconfig = (copy) => `# Codex's sandbox denies *.pem files, so Git reads a copy of the system CA bundle.\n[http "https://github.com/"]\n\tsslCAInfo = ${copy}\n`;
+const caGitconfig = (copy) => `# Codex's sandbox denies *.pem files, so Git reads a copy of the system CA bundle.\n[http "https://github.com/"]\n\tsslCAInfo = ${gitConfigString(copy)}\n`;
+
+// A path holding `#`, `;`, a quote, a backslash, or edge spaces goes in double quotes, so Git does
+// not cut it short as a comment. Any other path stays bare, so an existing install's file is unchanged.
+const gitConfigString = (value) => (/[#;"\\]|^\s|\s$/.test(value)
+  ? `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`
+  : value);
 
 // Stale when the copy differs from the system bundle, or when the Git config that points Git at the
 // copy is missing or says something else: a setup stopped between the two writes leaves a matching
@@ -144,8 +150,9 @@ export const ENABLE_COMMAND = `roborepo package enable ${AGENT_IDENTITY_PACKAGE_
 // the package is on. `state` is `not-set-up`, `healthy`, `problem`, or `unavailable`. `botLogin` is
 // the login GitHub confirms for the token; `savedLogin` is the one hosts.yml names, which survives
 // an expired token. `packageEnabled` is passed in by the caller, which knows the package state, and
-// so is `gitGaps`: the harnesses whose agents' Git does not yet include the bot's settings.
-export async function readAccountIdentity({ cwd = process.cwd(), stateDir, timeoutMs, packageEnabled = false, gitGaps = [] }) {
+// so is `gitGaps`: the harnesses whose agents' Git does not yet include the bot's settings, and
+// `gitconfigMissing`: the package is on but the Git settings file those harnesses include is gone.
+export async function readAccountIdentity({ cwd = process.cwd(), stateDir, timeoutMs, packageEnabled = false, gitGaps = [], gitconfigMissing = false }) {
   const hosts = readAgentHosts(stateDir);
   const result = {
     state: "not-set-up", botLogin: null, savedLogin: hosts.user, userLogin: null, signedIn: hosts.loggedIn, packageEnabled,
@@ -173,7 +180,7 @@ export async function readAccountIdentity({ cwd = process.cwd(), stateDir, timeo
     } catch (error) {
       if (error instanceof GitHubError && error.status === 401) {
         problems.push(problem("expired", "GitHub rejected the bot's token (it expired or was revoked).", SETUP_FIX));
-        return finish(result, withPackageState(problems, packageEnabled, gitGaps));
+        return finish(result, withPackageState(problems, packageEnabled, gitGaps, gitconfigMissing));
       }
       throw error;
     }
@@ -192,11 +199,11 @@ export async function readAccountIdentity({ cwd = process.cwd(), stateDir, timeo
     if (!(error instanceof GitHubError)) throw error;
     // A problem already found stays reported: a later read failing does not make it go away.
     if (problems.some((entry) => entry.severity === "problem")) {
-      return finish(result, [...withPackageState(problems, packageEnabled, gitGaps), incomplete(error)]);
+      return finish(result, [...withPackageState(problems, packageEnabled, gitGaps, gitconfigMissing), incomplete(error)]);
     }
-    return { ...result, problems: withPackageState(problems, packageEnabled, gitGaps), state: "unavailable", reason: error.message };
+    return { ...result, problems: withPackageState(problems, packageEnabled, gitGaps, gitconfigMissing), state: "unavailable", reason: error.message };
   }
-  return finish(result, withPackageState(problems, packageEnabled, gitGaps));
+  return finish(result, withPackageState(problems, packageEnabled, gitGaps, gitconfigMissing));
 }
 
 // The package-off finding goes last, after what the bot account itself lacks, and names the
@@ -205,8 +212,16 @@ export async function readAccountIdentity({ cwd = process.cwd(), stateDir, timeo
 //
 // With the package on, the Git gap goes last instead: a broken token matters more than pushes that
 // still go out as the user, and is the finding shown first.
-function withPackageState(problems, packageEnabled, gitGaps = []) {
+function withPackageState(problems, packageEnabled, gitGaps = [], gitconfigMissing = false) {
   if (packageEnabled) {
+    if (gitconfigMissing) {
+      // Git skips an include whose file is missing, so the harness settings alone prove nothing.
+      return [...problems, problem(
+        "git-config-missing",
+        "Agents' git pushes still go out as you, because the Git settings file the github-agent-identity package installs is missing.",
+        "Run roborepo github setup in your own terminal; it installs the package again.",
+      )];
+    }
     if (gitGaps.length === 0) return problems;
     return [...problems, problem(
       "git-not-routed",
@@ -270,7 +285,7 @@ export async function readRepoAgentAccess({ repositoryId, cwd = process.cwd(), s
 
 // Both reads for one repo, as `roborepo github status` and doctor report them: the account's
 // findings, then the repo's. The repo is read only when the bot's token works.
-export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), stateDir, timeoutMs, packageEnabled = false, gitGaps = [] }) {
+export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), stateDir, timeoutMs, packageEnabled = false, gitGaps = [], gitconfigMissing = false }) {
   const target = forgeTargetForRepositoryId(repositoryId);
   const base = { repository: null, ownerMessage: null, userAdmin: null };
   if (!target || target.host !== "github.com") {
@@ -280,7 +295,7 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
     };
   }
   base.repository = target.repo;
-  const account = await readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled, gitGaps });
+  const account = await readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled, gitGaps, gitconfigMissing });
   const merged = { ...account, ...base };
   if (account.state === "not-set-up" || !account.botLogin) return merged;
   // Your own sign-in failing to read is already an unchecked finding; GitHub not answering at all
@@ -289,11 +304,14 @@ export async function readAgentIdentity({ repositoryId, cwd = process.cwd(), sta
   const repo = await readRepoAgentAccess({ repositoryId, cwd, stateDir, timeoutMs, botLogin: account.botLogin });
   const problems = [...account.problems, ...repo.problems];
   const combined = { ...merged, userAdmin: repo.userAdmin, ownerMessage: repo.ownerMessage };
-  // A repo read that stopped early (it may still carry what it found first, such as unread
-  // protection) keeps a known problem a problem and says some checks could not run.
+  // A repo read that stopped early (it may still carry what it found first, such as unverified
+  // protection) keeps a known problem a problem and says some checks could not run: the failed read
+  // is an unchecked finding, so rules found unverified never stand in for it.
   if (repo.state === "unavailable" && repo.reason) {
-    if (problems.some((entry) => entry.severity === "problem")) return finish(combined, [...problems, incomplete({ message: repo.reason })]);
-    if (repo.problems.length === 0) return { ...combined, problems, state: "unavailable", reason: repo.reason };
+    if (repo.problems.length === 0 && !problems.some((entry) => entry.severity === "problem")) {
+      return { ...combined, problems, state: "unavailable", reason: repo.reason };
+    }
+    return finish(combined, [...problems, incomplete({ message: repo.reason })]);
   }
   return finish(combined, problems);
 }

@@ -1,10 +1,12 @@
 // `roborepo github status`: reads whether agents act on GitHub as a safe bot account. The guided
 // setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient } from "../../modules/forge/github.mjs";
 import { agentHostsFile, botGhEnv, readAccountIdentity, readAgentHosts, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
-import { agentGitRoutingGaps, agentIdentityPackageEnabled, includesAgentGitConfig } from "./agent-identity-package.mjs";
+import { AGENT_GITCONFIG_INCLUDE, agentGitRoutingGaps, agentIdentityPackageEnabled, includesAgentGitConfig } from "./agent-identity-package.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
 import { isMainModule } from "./roots.mjs";
 import { stateDir } from "./state-paths.mjs";
@@ -16,8 +18,15 @@ const DOCTOR_TIMEOUT_MS = 8000;
 // `repositoryId` skips reading `cwd`'s origin when the caller already knows the repo (the portal).
 export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs, repositoryId: known = null } = {}) {
   const repositoryId = known ?? await currentRepositoryId(cwd);
-  return readAgentIdentity({ repositoryId, cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled(), gitGaps: agentGitRoutingGaps() });
+  const packageEnabled = agentIdentityPackageEnabled();
+  return readAgentIdentity({
+    repositoryId, cwd, stateDir, timeoutMs, packageEnabled, gitGaps: agentGitRoutingGaps(), gitconfigMissing: packageEnabled && agentGitconfigMissing(),
+  });
 }
+
+// Whether the Git settings file agents' Git includes is gone. Git resolves the include's `~` from
+// HOME and skips a missing file without a word, so agents' pushes would go out as you.
+const agentGitconfigMissing = () => !fs.existsSync(path.join(os.homedir(), AGENT_GITCONFIG_INCLUDE.replace(/^~\//, "")));
 
 // With agents acting as the bot, Git answers "Repository not found" for a repo the bot was never
 // invited to, the same as for a wrong address. When this shell's Git goes out as the bot and the repo
@@ -56,7 +65,10 @@ export async function inviteBotToRepo({ repositoryId, cwd = process.cwd(), timeo
   };
   try {
     if (await acceptPending()) return { ok: true };
-    if (!(await githubClient.isCollaborator(user, repo, botLogin))) {
+    const permission = await githubClient.collaboratorPermission(user, repo, botLogin);
+    // A Read collaborator cannot push either; the same request raises it to Write.
+    if (permission === "read") await githubClient.inviteCollaborator(user, repo, botLogin);
+    else if (permission !== "write" && permission !== "admin") {
       const invited = (await githubClient.repoInvitations(user, repo)).some((invitation) => invitation.invitee?.login?.toLowerCase() === botLogin.toLowerCase());
       if (!invited) await githubClient.inviteCollaborator(user, repo, botLogin);
       await acceptPending();
@@ -69,17 +81,22 @@ export async function inviteBotToRepo({ repositoryId, cwd = process.cwd(), timeo
 }
 
 // What this machine alone says about the bot account, read in a few milliseconds with no GitHub
-// call: whether the package is on, which harnesses' agents still push as you, and what gh's hosts
+// call: whether the package is on, which harnesses' agents still push as you, whether the Git
+// settings file those harnesses include is in place, and what gh's hosts
 // file names (signed in, token in the file, the saved login; never the token itself). The portal
 // re-reads these on every request and reuses its GitHub reads only while they are unchanged.
 // `credentials` is when and how large hosts.yml was last written: a token replaced for the same
 // bot changes it, so a cached "expired" is not served for the new token. It is never the token.
-export const readLocalAccountFacts = () => ({
-  packageEnabled: agentIdentityPackageEnabled(),
-  gitGaps: agentGitRoutingGaps(),
-  hosts: readAgentHosts(stateDir),
-  credentials: credentialRevision(),
-});
+export const readLocalAccountFacts = () => {
+  const packageEnabled = agentIdentityPackageEnabled();
+  return {
+    packageEnabled,
+    gitGaps: agentGitRoutingGaps(),
+    gitconfigMissing: packageEnabled && agentGitconfigMissing(),
+    hosts: readAgentHosts(stateDir),
+    credentials: credentialRevision(),
+  };
+};
 
 function credentialRevision() {
   try {
@@ -93,7 +110,7 @@ function credentialRevision() {
 // The bot account alone, and one repo for a known bot: the two halves the portal shows apart.
 // `local` lets the portal pass the facts it already read, so the report matches what it cached on.
 export const readCurrentAccountIdentity = ({ cwd = process.cwd(), timeoutMs, local = readLocalAccountFacts() } = {}) =>
-  readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled: local.packageEnabled, gitGaps: local.gitGaps });
+  readAccountIdentity({ cwd, stateDir, timeoutMs, packageEnabled: local.packageEnabled, gitGaps: local.gitGaps, gitconfigMissing: local.gitconfigMissing });
 export const readCurrentRepoAgentAccess = ({ repositoryId, cwd = process.cwd(), timeoutMs, botLogin }) =>
   readRepoAgentAccess({ repositoryId, cwd, stateDir, timeoutMs, botLogin });
 
