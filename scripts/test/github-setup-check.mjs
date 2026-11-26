@@ -106,6 +106,16 @@ try {
   const localConfig = fs.readFileSync(path.join(stateRoot, "github-agent", "gitconfig.local"), "utf8");
   assert.equal(localConfig.split("\n").filter((line) => !line.startsWith("#")).join("\n"), `[http "https://github.com/"]\n\tsslCAInfo = ${caCopy}\n`);
 
+  // With the package's gitconfig included the way the harness settings include it, agents' commits
+  // are authored by the bot at its noreply address.
+  assert.match(result.stdout, /✓ commit author: agents' commits are now authored by robo-bot <4242\+robo-bot@users\.noreply\.github\.com>/);
+  const agentGit = (key) => spawnSync("git", ["-C", checkout, "config", "--get", key], {
+    encoding: "utf8",
+    env: { ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: path.join(stateRoot, "package-runtime", "github-agent-identity", "gitconfig") },
+  }).stdout.trim();
+  assert.equal(agentGit("user.name"), BOT);
+  assert.equal(agentGit("user.email"), "4242+robo-bot@users.noreply.github.com");
+
   const calls = gh.calls();
   const invite = calls.find((call) => call.method === "PUT" && /collaborators\/robo-bot$/.test(call.endpoint));
   assert.ok(invite && invite.configDir === null, "the invitation is sent as the user");

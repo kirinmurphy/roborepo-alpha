@@ -25,6 +25,7 @@ export const agentGhConfigDir = (stateDir) => path.join(stateDir, "github-agent"
 export const botGhEnv = (stateDir, dir = agentGhConfigDir(stateDir)) => ({ GH_CONFIG_DIR: dir, GH_TOKEN: null, GITHUB_TOKEN: null });
 export const agentCaBundleFile = (stateDir) => path.join(stateDir, "github-agent", "ca-bundle.crt");
 export const agentCaGitconfigFile = (stateDir) => path.join(stateDir, "github-agent", "gitconfig.local");
+export const agentAuthorGitconfigFile = (stateDir) => path.join(stateDir, "github-agent", "gitconfig.author");
 
 // Where the system's CA bundle usually lives. ROBOREPO_SYSTEM_CA_BUNDLE replaces the list with one
 // path, so tests can point at a fixture instead of the machine's real bundle.
@@ -72,6 +73,16 @@ export function refreshCaBundle({ stateDir }) {
   const changedConfig = writeIfChanged(local, caGitconfig(copy), 0o644);
   return { copied: true, changed: changedCopy || changedConfig };
 }
+
+// Agents' commits name the bot as their author, at the noreply address GitHub links to its account,
+// so a commit shows who made it as plainly as the push does. The package's gitconfig includes this
+// file; Git ignores the include until setup writes it. Returns whether the file changed.
+export function writeAgentAuthor({ stateDir, login, id }) {
+  return writeIfChanged(agentAuthorGitconfigFile(stateDir), agentAuthorGitconfig({ login, id }), 0o644);
+}
+
+export const agentNoreplyEmail = ({ login, id }) => `${id}+${login}@users.noreply.github.com`;
+const agentAuthorGitconfig = ({ login, id }) => `# Agents' commits are authored by the bot account.\n[user]\n\tname = ${login}\n\temail = ${agentNoreplyEmail({ login, id })}\n`;
 
 const caGitconfig = (copy) => `# Codex's sandbox denies *.pem files, so Git reads a copy of the system CA bundle.\n[http "https://github.com/"]\n\tsslCAInfo = ${copy}\n`;
 

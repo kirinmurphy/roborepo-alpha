@@ -77,6 +77,9 @@ The setup walks you through each step and skips the ones already done:
 6. Check everything, then switch agents to the bot (the `github-agent-identity` package). A failed
    check does not switch them; if they already use the bot, they still do.
 
+Agents' commits are authored by the bot, at its GitHub noreply address (`<id>+<login>@users.noreply.github.com`).
+A bot set up before this was added gets it the next time you run `roborepo github setup`.
+
 In the portal, **Agent GitHub Account** in Settings is the on/off switch. While it is off, Home
 offers the setup once (**No thanks** hides the offer for good). While it is on but the bot cannot
 sign in, Home shows a red warning with **Fix it** until the bot works again (or **Update now**, when
@@ -129,7 +132,7 @@ session the Claude desktop app starts, a variable the app's own launch environme
 precedence over Claude's settings, so do not set either token in that environment.
 
 Turning the package off stops agents using the bot but leaves its files behind: the plaintext token
-in `~/.roborepo/github-agent/gh/hosts.yml`, plus `ca-bundle.crt` and `gitconfig.local` next to it.
+in `~/.roborepo/github-agent/gh/hosts.yml`, plus `ca-bundle.crt`, `gitconfig.local`, and `gitconfig.author` next to it.
 To remove the token, run `GH_CONFIG_DIR="$HOME/.roborepo/github-agent/gh" gh auth logout --hostname github.com`
 (gh needs an absolute path) and revoke the token on GitHub. Delete the `github-agent` folder to
 remove the rest. Uninstalling RoboRepo deletes the `github-agent` folder, token included, but does

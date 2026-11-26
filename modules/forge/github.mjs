@@ -158,6 +158,9 @@ export const githubClient = {
     }
   },
 
+  // An account's numeric id, which its noreply email address starts with.
+  accountId: async (context, login) => (await api(context, `users/${encodeURIComponent(login)}`)).id,
+
   async isCollaborator(context, repo, login) {
     try {
       await api(context, `${repoPath(repo)}/collaborators/${encodeURIComponent(login)}`);

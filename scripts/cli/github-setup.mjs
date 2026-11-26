@@ -9,7 +9,7 @@ import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/ind
 import { githubClient, runGh } from "../../modules/forge/github.mjs";
 import {
   agentGhConfigDir, agentHostsFile, botGhEnv, readAgentHosts, readAgentIdentity,
-  refreshCaBundle, tokenProblems,
+  agentNoreplyEmail, refreshCaBundle, tokenProblems, writeAgentAuthor,
 } from "../../modules/forge/agent-identity.mjs";
 import { GITHUB_PAGES, TOKEN_NOTE, TOKEN_SCOPES, expiryAdvice, scopesText } from "../../modules/forge/agent-identity-guide.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
@@ -161,6 +161,11 @@ async function guidedSetup({ input, io, cwd }) {
   // 7. The certificate bundle copy Codex's sandbox reads (it denies *.pem), refreshed before the check.
   const ca = refreshCaBundle({ stateDir });
   if (ca.copied) io.log(ca.changed ? "✓ certificate bundle: copied for Codex's sandbox" : "✓ certificate bundle: already current");
+
+  // The bot as the author of agents' commits.
+  const botId = await githubClient.accountId(user, botLogin);
+  const authorChanged = writeAgentAuthor({ stateDir, login: botLogin, id: botId });
+  io.log(`✓ commit author: ${authorChanged ? "agents' commits are now authored by" : "already"} ${botLogin} <${agentNoreplyEmail({ login: botLogin, id: botId })}>`);
 
   // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });

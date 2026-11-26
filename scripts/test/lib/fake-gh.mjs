@@ -131,7 +131,7 @@ if (userPage) {
   const logins = state.users || [state.login, ...Object.values(state.tokens || {}).map((entry) => entry.login)];
   const canonical = logins.find((login) => known(login) === known(userPage[1]));
   if (!canonical) httpError(404, "Not Found");
-  reply({ login: canonical });
+  reply({ login: canonical, id: (state.userIds || {})[canonical] ?? 4242 });
 }
 const invitationsFor = () => (state.invitations || []).filter((entry) => known(entry.invitee) === known(identity.login));
 if (pathname === "user/repository_invitations" && method === "GET") {
