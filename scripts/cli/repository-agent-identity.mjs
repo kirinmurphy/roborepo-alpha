@@ -38,6 +38,10 @@ const neutralFolder = () => (fs.existsSync(os.homedir()) ? os.homedir() : os.tmp
 const repoCache = new Map();
 let accountCache = null; // { at, key, report }
 let accountPending = null; // { key, promise }
+// Each read that starts counts up, and only the latest read started may write its cache: a fresh read
+// can start while an older one is pending, and the older one finishing last must not replace it.
+let accountReadCount = 0;
+const repoReadCounts = new Map();
 
 // The bot account, shared by every repo. Concurrent callers (Home reads every repo card at once)
 // share one read. A cached or pending read is reused only while the local facts it was made with
@@ -47,8 +51,9 @@ async function readAccount({ fresh, now, read, readLocal = readLocalAccountFacts
   const key = JSON.stringify(local);
   if (!fresh && accountCache?.key === key && now() - accountCache.at < CACHE_MS) return accountCache.report;
   if (!fresh && accountPending?.key === key) return accountPending.promise;
+  const started = ++accountReadCount;
   const promise = read({ cwd: neutralFolder(), timeoutMs: PORTAL_TIMEOUT_MS, local }).then((report) => {
-    accountCache = { at: now(), key, report };
+    if (started === accountReadCount) accountCache = { at: now(), key, report };
     return report;
   }).finally(() => { if (accountPending?.promise === promise) accountPending = null; });
   accountPending = { key, promise };
@@ -90,9 +95,11 @@ export async function loadRepositoryAgentIdentity({
   let report;
   if (!fresh && cached && now() - cached.at < CACHE_MS && cached.botLogin === account.botLogin) report = cached.report;
   else {
+    const started = (repoReadCounts.get(repositoryId) ?? 0) + 1;
+    repoReadCounts.set(repositoryId, started);
     // The checkout only matters to the gh calls as a working folder; the repo itself is named.
     report = await read({ repositoryId, cwd: checkout.ok ? checkout.path : neutralFolder(), timeoutMs: PORTAL_TIMEOUT_MS, botLogin: account.botLogin });
-    repoCache.set(repositoryId, { at: now(), report, botLogin: account.botLogin });
+    if (repoReadCounts.get(repositoryId) === started) repoCache.set(repositoryId, { at: now(), report, botLogin: account.botLogin });
   }
   return {
     repositoryId,

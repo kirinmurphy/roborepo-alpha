@@ -44,6 +44,7 @@ try {
 
   await statusReadIsCachedAndCarriesNoToken(checkout);
   await localChangeDropsTheCachedAccount();
+  await anOlderReadFinishingLastKeepsTheFreshReport();
   await packageTurnsOnOnlyAsTheLastStep();
   await updateRunsOnlyForTheGitGap();
   await setupLaunchIsTheServersChoice(checkout);
@@ -179,6 +180,43 @@ async function localChangeDropsTheCachedAccount() {
     read: (options) => Promise.resolve({ state: "healthy", repository: "example/project", botLogin: options.botLogin, userAdmin: true, problems: [] }),
   });
   assert.equal(reads.length, 5, "a repo read also notices the local change");
+  clearAgentIdentityCache();
+}
+
+// A fresh read can start while an older read is still pending (Home's poll, then the return from
+// setup). The older one finishing last must not put its stale report in the cache.
+async function anOlderReadFinishingLastKeepsTheFreshReport() {
+  clearAgentIdentityCache();
+  const local = { packageEnabled: true, gitGaps: [], hosts: { loggedIn: true, hasToken: true, user: "robo-bot" } };
+  const later = () => { let resolve; const promise = new Promise((done) => { resolve = done; }); return { promise, resolve }; };
+  const accountReads = [];
+  const readAccountReport = () => { const read = later(); accountReads.push(read); return read.promise; };
+  const load = (options) => loadAgentIdentityAccount({ now: () => 1_000, read: readAccountReport, readLocal: () => local, ...options });
+
+  const older = load();
+  const fresh = load({ fresh: true });
+  accountReads[1].resolve(readyAccount({ state: "healthy" }));
+  await fresh;
+  accountReads[0].resolve(readyAccount({ state: "problem", problems: [{ id: "expired", severity: "problem", message: "x", fix: "x" }] }));
+  await older;
+  assert.equal((await load()).state, "healthy", "the account cache keeps the fresh report");
+  assert.equal(accountReads.length, 2, "and serves it without another read");
+
+  const repoReads = [];
+  const read = () => { const pending = later(); repoReads.push(pending); return pending.promise; };
+  const ready = () => Promise.resolve(readyAccount());
+  const loadRepo = (options) => loadRepositoryAgentIdentity({ repositoryId: GITHUB, stateRoot, now: () => 1_000, readAccountReport: ready, readLocal: () => local, read, ...options });
+  const repoReport = (state) => ({ state, repository: "example/project", botLogin: "robo-bot", userAdmin: true, problems: [] });
+  const olderRepo = loadRepo({ fresh: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  const freshRepo = loadRepo({ fresh: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  repoReads[1].resolve(repoReport("healthy"));
+  await freshRepo;
+  repoReads[0].resolve(repoReport("problem"));
+  await olderRepo;
+  assert.equal((await loadRepo()).state, "healthy", "a repo's cache keeps its fresh report");
+  assert.equal(repoReads.length, 2);
   clearAgentIdentityCache();
 }
 
