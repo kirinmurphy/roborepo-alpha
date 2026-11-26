@@ -209,14 +209,32 @@ hook shares the session's environment, but a Codex hook does not see a variable 
 shell profile. The identity package empties `GH_TOKEN` and `GITHUB_TOKEN` in agent shells (see the list
 below); keep the enterprise tokens and `GH_HOST` out of Codex's shells yourself. A command that assigns, exports, or unsets
 `GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or
-`GH_HOST` anywhere in it (`=` or `+=`), or runs `gh` through `env`, keeps `gh api` denied. So does a
-`gh api` call whose command names a merge: a `pulls/<n>/merge`, `merges`, or `merge-upstream` path,
-or a `mergePullRequest`, `enablePullRequestAutoMerge`, `enqueuePullRequest`, or `mergeBranch`
-mutation, written literally in an argument, a heredoc, or a variable set in the same command. A name
-the shell builds (`${M}PullRequest`, `$(printf merge)PullRequest`) or a query read from a file is not
-seen. The check reads the whole command, so a merge name anywhere in it, even in an unrelated `grep`,
-keeps a `gh api` in the same command denied. The bot's write role would let it merge an approved pull request, but agents
-never merge a pull request (`merge-pull-requests`): you merge it on GitHub.
+`GH_HOST` anywhere in it (`=` or `+=`), or runs `gh` through `env`, keeps `gh api` denied.
+
+The merge check reads only the operation a `gh api` call runs: its REST endpoint and, for `graphql`,
+its `query` fields. An endpoint path to `pulls/<n>/merge`, `merges`, or `merge-upstream`, or a query
+naming `mergePullRequest`, `enablePullRequestAutoMerge`, `enqueuePullRequest`, or `mergeBranch`,
+keeps the call denied. The data a call sends (a comment `body` that mentions a merge) and the rest of
+the command (an unrelated `grep merge`) do not count. Because only a literal operation can be
+checked, the call also stays denied when the shell fills it in: an endpoint such as `"$EP"`, a query
+with a `$` or backtick outside single quotes (`-f query="$Q"`, `query="mutation { $M }"`,
+`query="$(cat q.graphql)"`), a `graphql` call with no `query` field, or a query read from a file or
+stdin (`-F query=@file`, `--input`). GraphQL variables are fine in a single-quoted query
+(`-f query='mutation($id: ID!) { … }'`); the hook checks the quoting of that argument itself. The bot's
+write role would let it merge an approved pull request, but agents never merge a pull request
+(`merge-pull-requests`): you merge it on GitHub.
+
+Under Codex, the hook also checks that Codex hands its shells the bot's `gh`. When the hook has no
+`GH_CONFIG_DIR` of its own, the user config (`~/.codex/config.toml`, or `$CODEX_HOME/config.toml`)
+must set `GH_CONFIG_DIR` to the bot's folder and empty `GH_TOKEN` and `GITHUB_TOKEN` in its
+`[shell_environment_policy.set]` table, as the identity package writes it. Every layer Codex can put
+above that file must keep those values: each project `.codex/config.toml` from the session folder up
+to `/`, every `<CODEX_HOME>/*.config.toml` profile, `[profiles.*]` tables, and
+`/etc/codex/managed_config.toml`. A layer that names one of the identity variables with another
+value, uses `include_only`, or cannot be read keeps `gh api` denied, as does a codex home folder that
+exists but cannot be listed. Codex `-c` overrides on its command line never reach a hook, so a session
+started with `-c shell_environment_policy…` can still give its shells another `gh`; the hook cannot
+check that.
 
 The workflow an agent should follow:
 

@@ -430,6 +430,9 @@ for (const [command, expected] of cases) {
       "gh api -X PUT \"$EP\"",
       "gh api graphql -f query=\"mutation { $M }\"",
       "gh api graphql -f query=\"$(cat q.graphql)\"",
+      // Only the query's own argument says whether its `$` is single-quoted, not other text that matches.
+      "gh api graphql -f query=\"$M\"; echo query='$M'",
+      "echo \"'query=$M'\"; gh api graphql -f query=\"$M\"",
       "gh api graphql -f id=x",
       "gh api -iX PUT repos/O/R/pulls/12/merge",
       // An Authorization header replaces the bot's token, in every spelling gh accepts.
@@ -487,6 +490,11 @@ for (const [command, expected] of cases) {
       ["profile table sets GH_TOKEN", userConfig, `${userText}\n[profiles.p.shell_environment_policy.set]\nGH_TOKEN = "x"\n`, "deny"],
       ["project keeps the bot's values", projectConfig, setTable(`GH_CONFIG_DIR = "${agentDir}"\nGH_TOKEN = ""`), "defer"],
       ["project changes other settings", projectConfig, `model = "y"\ndeveloper_instructions = """\nGH_TOKEN = "x"\n"""\n${setTable('PATH_EXTRA = "/x"')}`, "defer"],
+      // A triple quote in a comment or inside a single-line string opens no multi-line string.
+      ["project hides GH_TOKEN after a commented triple quote", projectConfig, `model = "x" # """\n${setTable('GH_TOKEN = "x"')}`, "deny"],
+      ["project hides GH_TOKEN after a quoted triple quote", projectConfig, `model = '"""'\n${setTable('GH_TOKEN = "x"')}`, "deny"],
+      ["project leaves a multi-line string open", projectConfig, `developer_instructions = '''\n${setTable('GH_TOKEN = "x"')}`, "deny"],
+      ["project names GH_TOKEN only in a comment", projectConfig, `model = "x" # GH_TOKEN stays the bot's\n`, "defer"],
     ]) {
       write(file, text);
       try {
@@ -504,6 +512,13 @@ for (const [command, expected] of cases) {
       if (process.getuid?.() !== 0) assert.equal(codexDecides(codexUnset), "deny", "Codex with an unreadable project config");
     } finally {
       fs.rmSync(path.dirname(projectConfig), { recursive: true, force: true });
+    }
+    // A codex home that exists but cannot be listed may hold a profile that changes gh.
+    fs.chmodSync(codexHome, 0o100);
+    try {
+      if (process.getuid?.() !== 0) assert.equal(codexDecides(codexUnset), "deny", "Codex with an unlistable profile folder");
+    } finally {
+      fs.chmodSync(codexHome, 0o755);
     }
     assert.equal(codexDecides(codexUnset), "defer", "Codex without override layers");
   }

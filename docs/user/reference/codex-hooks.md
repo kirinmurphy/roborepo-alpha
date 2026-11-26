@@ -151,7 +151,15 @@ keep their usual buckets and `gh api` is denied. `~/.codex/rules/roborepo.rules`
 the identity's state whenever permissions render, and the permission hook applies the same buckets
 when the package's Git config file `~/.roborepo/package-runtime/github-agent-identity/gitconfig`
 exists. The protected-branch hook lifts its `gh api` denial under the
-[same conditions as for Claude](claude-hooks.md#opening-pull-requests-with-gh).
+[conditions described for Claude](claude-hooks.md#opening-pull-requests-with-gh), with two
+differences for Codex. Its hooks start without the shells' variables, so an unset `GH_CONFIG_DIR` in
+the hook is accepted. In exchange, every Codex config layer must keep the bot: the user config sets
+the bot's `GH_CONFIG_DIR` and empty `GH_TOKEN` and `GITHUB_TOKEN`, and no project
+`.codex/config.toml` up to `/`, `<CODEX_HOME>/*.config.toml` profile, `[profiles.*]` table, or
+`/etc/codex/managed_config.toml` changes them or sets `include_only`. A layer the hook cannot read
+keeps `gh api` denied. A `-c` override on Codex's command line is not visible to hooks and is not
+checked. Only the call's endpoint and GraphQL `query` are checked for a merge, and one the shell
+fills in (`"$EP"`, a double-quoted `$` query) stays denied.
 
 Human versus automatic review is a separate [Codex setting](https://learn.chatgpt.com/docs/sandboxing).
 With `approvals_reviewer = "user"`, native approval requests go to the person; with `auto_review`,

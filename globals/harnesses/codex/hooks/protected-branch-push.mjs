@@ -110,7 +110,10 @@ function agentIdentityActive() {
 // GH_IDENTITY_VARIABLES to anything else. The package's gitconfig alone is not enough: an enable that
 // could not set GH_CONFIG_DIR (one the user set themselves) still installs it, and gh in those shells
 // acts as the user. The user config is the one beside this hook's folder (~/.codex/hooks ->
-// ~/.codex), or CODEX_HOME's. Anything unreadable reads as no.
+// ~/.codex), or CODEX_HOME's. Anything unreadable reads as no: a layer file or the profile folder
+// that exists but cannot be read, or a layer the line reader cannot follow. `-c` overrides on Codex's
+// own command line never reach a hook, so a session started with `-c shell_environment_policy...`
+// can still give its shells another gh; that is a known limit of this check.
 function codexShellsActAsBot(botDir, { userConfigRequired }) {
   const codexHome = process.env.CODEX_HOME || path.dirname(hookDir)
   const userFile = path.join(codexHome, 'config.toml')
@@ -120,9 +123,11 @@ function codexShellsActAsBot(botDir, { userConfigRequired }) {
     const dir = user.set.get('GH_CONFIG_DIR')
     if (!dir || path.resolve(dir) !== path.resolve(botDir) || user.set.get('GH_TOKEN') !== '' || user.set.get('GITHUB_TOKEN') !== '') return false
   }
-  return codexOverrideLayers(codexHome, userFile).every((file) => {
-    if (!fs.existsSync(file)) return true
-    return readCodexLayer(file, botDir)?.keepsBot === true
+  const layers = codexOverrideLayers(codexHome, userFile)
+  if (!layers) return false
+  return layers.every((file) => {
+    const layer = readCodexLayer(file, botDir)
+    return layer === null || layer.keepsBot
   })
 }
 
@@ -133,14 +138,17 @@ function codexShellsActAsBot(botDir, { userConfigRequired }) {
 //   active is not known here, so every one must keep the bot. Profiles written as [profiles.<name>]
 //   tables inside a config file are checked by readCodexLayer.
 // - the managed config an administrator installs.
-// `-c` overrides on Codex's own command line cannot be seen.
+// `-c` overrides on Codex's own command line cannot be seen. null when the codex home exists but
+// cannot be listed, since a profile in it could not be checked.
 const CODEX_MANAGED_CONFIG = '/etc/codex/managed_config.toml'
 let sessionFolders = []
 function codexOverrideLayers(codexHome, userFile) {
   const files = new Set([CODEX_MANAGED_CONFIG])
   try {
     for (const name of fs.readdirSync(codexHome)) if (name.endsWith('.config.toml')) files.add(path.join(codexHome, name))
-  } catch {}
+  } catch (error) {
+    if (!isMissing(error)) return null
+  }
   for (const start of sessionFolders) {
     for (let dir = path.resolve(start); ; dir = path.dirname(dir)) {
       files.add(path.join(dir, '.codex', 'config.toml'))
@@ -166,28 +174,31 @@ function realFile(file) {
 //   entry holding the bot's value: the bot's dir for GH_CONFIG_DIR, empty for the rest;
 // - a backslash there in a key, or in a shell_environment_policy or profile line, since an escape can
 //   spell one of those names;
-// - include_only, which can drop GH_CONFIG_DIR after it is set.
-// Lines inside multi-line strings are text, not settings. null when the file cannot be read.
+// - include_only, which can drop GH_CONFIG_DIR after it is set;
+// - a line the reader cannot follow: a string left open at the end of its line, or one left open at
+//   the end of the file.
+// Comments are dropped first, outside strings only, so `# """` opens nothing. Lines inside multi-line
+// strings are text, not settings. null when the file does not exist; one that exists but cannot be
+// read keeps nothing.
 const IDENTITY_NAME = new RegExp(`(?<![A-Za-z0-9_])(?:${GH_IDENTITY_VARIABLES.join('|')})(?![A-Za-z0-9_])`)
 const SET_TABLE = 'shell_environment_policy.set'
 function readCodexLayer(file, botDir) {
   let text
   try {
     text = fs.readFileSync(file, 'utf8')
-  } catch {
-    return null
+  } catch (error) {
+    return isMissing(error) ? null : { set: new Map(), keepsBot: false }
   }
   const set = new Map()
   let keepsBot = true
   let table = ''
   let multiline = null
-  for (const line of text.split(/\r?\n/)) {
-    if (multiline) {
-      if (line.split(multiline).length % 2 === 0) multiline = null
-      continue
-    }
-    if (/^\s*(?:#.*)?$/.test(line)) continue
-    for (const delimiter of ['"""', "'''"]) if (line.split(delimiter).length % 2 === 0) multiline = delimiter
+  for (const raw of text.split(/\r?\n/)) {
+    const scanned = tomlLineCode(raw, multiline)
+    multiline = scanned.multiline
+    if (scanned.unreadable) keepsBot = false
+    const line = scanned.code
+    if (/^\s*$/.test(line)) continue
     const header = /^\s*\[\[?([^\]]*)\]\]?\s*(?:#.*)?$/.exec(line)
     if (header) {
       if (header[1].includes('\\')) keepsBot = false
@@ -209,7 +220,63 @@ function readCodexLayer(file, botDir) {
     if (IDENTITY_NAME.test(line) || /\binclude_only\b/.test(line) || key.includes('\\')
       || (line.includes('\\') && (table !== '' || /shell_environment_policy|profiles/.test(line)))) keepsBot = false
   }
+  if (multiline) keepsBot = false
   return { set, keepsBot }
+}
+
+// One TOML line with its comment removed, read from the `multiline` string state the line before
+// left (null, or the open """ or ''' delimiter). Strings are kept as written; a line that starts
+// inside a multi-line string keeps only what follows its closing delimiter. `unreadable` marks a
+// single-line string still open at the end of the line, which TOML does not allow.
+function tomlLineCode(line, multiline) {
+  let start = 0
+  let i = 0
+  if (multiline) {
+    const close = closingDelimiter(line, 0, multiline)
+    if (close === -1) return { code: '', multiline, unreadable: false }
+    i = start = close
+    multiline = null
+  }
+  while (i < line.length) {
+    const ch = line[i]
+    if (ch === '#') break
+    if (ch === '"' || ch === "'") {
+      const triple = ch.repeat(3)
+      if (line.startsWith(triple, i)) {
+        const close = closingDelimiter(line, i + 3, triple)
+        if (close === -1) return { code: line.slice(start), multiline: triple, unreadable: false }
+        i = close
+        continue
+      }
+      let j = i + 1
+      while (j < line.length && line[j] !== ch) j += ch === '"' && line[j] === '\\' ? 2 : 1
+      if (j >= line.length) return { code: line.slice(start), multiline: null, unreadable: true }
+      i = j + 1
+      continue
+    }
+    i += 1
+  }
+  return { code: line.slice(start, i), multiline: null, unreadable: false }
+}
+// Where the multi-line string `delimiter` closes in `line`, searching from `from`: the index after its
+// closing quotes (TOML lets up to two more quotes end the string's text), or -1 when it stays open.
+// A basic string's backslash escapes the next character.
+function closingDelimiter(line, from, delimiter) {
+  for (let i = from; i < line.length; i += 1) {
+    if (delimiter === '"""' && line[i] === '\\') {
+      i += 1
+      continue
+    }
+    if (line.startsWith(delimiter, i)) {
+      let end = i + 3
+      while (end < line.length && end < i + 5 && line[end] === delimiter[0]) end += 1
+      return end
+    }
+  }
+  return -1
+}
+function isMissing(error) {
+  return error?.code === 'ENOENT' || error?.code === 'ENOTDIR'
 }
 
 // Whether any command in `text`, nested ones included, could make gh act as someone other than the
@@ -261,23 +328,33 @@ function ansiCEscape(text, i) {
 // `parens`, an unquoted `(` or `)` is a word of its own, so `(true; git push origin main)` reads
 // `main` and not `main)`.
 // Expansion is not performed; a word that still holds $ or a backtick is reported so the caller can
-// decline to classify it.
+// decline to classify it. Each word list carries `expands`: per word, whether a $ or backtick in it
+// sits outside single quotes (`'$x'` and `$'\x24x'` stay as written; `"$x"` and `$x` expand).
 function splitCommands(text, { parens = false } = {}) {
   const commands = []
   let words = []
+  let expands = []
   let word = null
+  let expanding = false
   let quote = null
   const endWord = () => {
-    if (word !== null) words.push(word)
+    if (word !== null) {
+      words.push(word)
+      expands.push(expanding)
+    }
     word = null
+    expanding = false
   }
   const endCommand = () => {
     endWord()
-    if (words.length) commands.push(words)
+    if (words.length) commands.push(Object.assign(words, { expands }))
     words = []
+    expands = []
   }
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i]
+    const opensQuote = quote === null && ch === '$' && (text[i + 1] === "'" || text[i + 1] === '"')
+    if ((ch === '$' || ch === '`') && quote !== "'" && quote !== "$'" && !opensQuote) expanding = true
     if (quote === "'") {
       if (ch === "'") quote = null
       else word += ch
@@ -316,6 +393,7 @@ function splitCommands(text, { parens = false } = {}) {
     } else if (parens && (ch === '(' || ch === ')')) {
       endWord()
       words.push(ch)
+      expands.push(false)
     } else {
       word = (word ?? '') + ch
     }
@@ -646,9 +724,10 @@ const GH_API_SHORT_VALUES = 'XHfFqtp'
 // Why the `gh api` call in `args` cannot keep the agent lift because of what it does, or null. It
 // merges, or the operation cannot be read from the command `text`: an endpoint the shell fills in
 // (`$EP`), or a GraphQL query that is missing or that the shell could change. A query may use GraphQL
-// variables (`$id`) only when it is written in single quotes, where the shell leaves `$` alone.
-function apiOperationRefusal(args, text) {
-  const { endpoint, queries } = apiOperation(args)
+// variables (`$id`) only when that argument's own `$` signs are inside single quotes, where the shell
+// leaves them alone; `expands` says, per argument, whether one is not (see splitCommands).
+function apiOperationRefusal(args, expands) {
+  const { endpoint, queries } = apiOperation(args, expands)
   const unread = 'the hook cannot read which API operation this `gh api` call runs, so it cannot rule out a merge. Write the endpoint and any GraphQL query literally, or run it yourself.'
   const merges = '`gh api` merges here, and agents never merge. Run it yourself.'
   if (!endpoint || /[$`]/.test(endpoint)) return unread
@@ -656,15 +735,16 @@ function apiOperationRefusal(args, text) {
   if (!/(?:^|\/)graphql$/.test(endpoint.split('?')[0])) return null
   if (!queries.length) return unread
   for (const query of queries) {
-    if (GRAPHQL_MERGES.test(query)) return merges
-    const literal = !query.includes("'") && (text.includes(`query='${query}'`) || text.includes(`'query=${query}'`))
-    if (/[$`]/.test(query) && !literal) return unread
+    if (GRAPHQL_MERGES.test(query.text)) return merges
+    if (query.expands) return unread
   }
   return null
 }
 
-// The endpoint and the `query` field values of a `gh api` call, from the gh arguments.
-function apiOperation(args) {
+// The endpoint and the `query` field values of a `gh api` call, from the gh arguments, each query
+// with whether the shell expands anything in the argument it came from. An argument with no `expands`
+// entry counts as expanding.
+function apiOperation(args, expands) {
   let i = 0
   while (i < args.length && args[i] !== 'api') i += GH_VALUE_OPTIONS.has(args[i]) ? 2 : 1
   let endpoint = null
@@ -673,12 +753,14 @@ function apiOperation(args) {
   for (i += 1; i < args.length; i += 1) {
     const arg = args[i]
     let field = null
+    let fieldAt = i
     if (optionsEnded || !arg.startsWith('-') || arg === '-') {
       endpoint ??= arg
     } else if (arg === '--') {
       optionsEnded = true
     } else if (arg === '-f' || arg === '-F' || arg === '--raw-field' || arg === '--field') {
-      field = args[++i] ?? ''
+      fieldAt = ++i
+      field = args[i] ?? ''
     } else if (/^--(?:raw-)?field=/.test(arg)) {
       field = arg.slice(arg.indexOf('=') + 1)
     } else if (GH_API_VALUE_OPTIONS.has(arg)) {
@@ -687,11 +769,11 @@ function apiOperation(args) {
       // A short cluster: flags up to the first option that takes a value, which takes the rest.
       const at = [...arg.slice(1)].findIndex((letter) => GH_API_SHORT_VALUES.includes(letter))
       if (at !== -1) {
-        const value = arg.slice(at + 2) || (args[++i] ?? '')
+        const value = arg.slice(at + 2) || (args[(fieldAt = ++i)] ?? '')
         if ('fF'.includes(arg[at + 1])) field = value
       }
     }
-    if (field?.startsWith('query=')) queries.push(field.slice('query='.length))
+    if (field?.startsWith('query=')) queries.push({ text: field.slice('query='.length), expands: expands[fieldAt] ?? true })
   }
   return { endpoint, queries }
 }
@@ -731,7 +813,8 @@ function apiLiftRefusal(args) {
 }
 
 // gh with its options removed, matched against the host's denied list.
-function classifyGh(args, text) {
+// `expands` holds, per argument, whether the shell expands anything in it (see splitCommands).
+function classifyGh(args, expands) {
   const words = []
   for (let i = 0; i < args.length; i += 1) {
     if (GH_VALUE_OPTIONS.has(args[i])) i += 1
@@ -741,7 +824,7 @@ function classifyGh(args, text) {
   const denied = deniedList.find((prefix) => prefix.every((word, k) => words[k] === word))
   if (!denied) return null
   if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive()) {
-    const refusal = apiLiftRefusal(args) ?? apiOperationRefusal(args, text)
+    const refusal = apiLiftRefusal(args) ?? apiOperationRefusal(args, expands)
     if (!refusal) return null
     return { decision: 'deny', reason: `roborepo: ${refusal}` }
   }
@@ -1383,7 +1466,7 @@ function classifyCommand(text, startCwd) {
     // gh behind a wrapper (`env gh api`, `command gh api`) is still gh.
     const ghAt = programIndex(words)
     if (path.basename(words[ghAt] ?? '') === 'gh') {
-      result = stricter(result, classifyGh(words.slice(ghAt + 1), text))
+      result = stricter(result, classifyGh(words.slice(ghAt + 1), words.expands.slice(ghAt + 1)))
       continue
     }
     if (SHELLS.has(program)) {
