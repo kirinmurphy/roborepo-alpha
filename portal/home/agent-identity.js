@@ -71,13 +71,16 @@ function showAccount(report) {
   // Home's poll mostly gets the same answer back; leave the page, and an open card, as they are.
   if (before && JSON.stringify(before) === JSON.stringify(report)) return;
   // Each repo's read depends on the account on the server, so a changed account means new reads.
-  const changed = before && (before.state !== report.state || before.botLogin !== report.botLogin || before.packageEnabled !== report.packageEnabled);
+  // The bot is compared by `botOf`, as the cache is: with its token rejected GitHub names no bot,
+  // and only the saved login tells one bot from another.
+  const botChanged = before && botOf(before) !== botOf(report);
+  const changed = before && (botChanged || before.state !== report.state || before.botLogin !== report.botLogin || before.packageEnabled !== report.packageEnabled);
   if (changed) {
     // Reads still in flight were asked under the old account: none of them may land now, and the
     // rereads below start afresh rather than joining one.
     pending.clear();
     // Another bot's verdicts say nothing about this one: show none until this bot's reads answer.
-    if (botOf(before) !== botOf(report)) reports.clear();
+    if (botChanged) reports.clear();
   }
   for (const repositoryId of badges.keys()) {
     if (report.packageEnabled && (changed || !reports.has(repositoryId))) load(repositoryId, { reread: true }).catch(() => {});

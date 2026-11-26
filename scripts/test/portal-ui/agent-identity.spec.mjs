@@ -150,7 +150,7 @@ test.describe("Agent GitHub account", () => {
   test.afterEach(async ({ page }) => removeRepositorySources(page));
 
   // Answers the account route with `accountNext()`, each repo route with `repoNext(name)` (or
-  // "waiting" while the account cannot be used), the setup route with `launch`, the enable route
+  // "waiting" while the account cannot be used; `null` stands for a failed read), the setup route with `launch`, the enable route
   // with `enable()`, and "No thanks" with `{ offerDismissed: true }`. Records each read and post.
   async function stub(page, { accountNext, repoNext = (name) => REPOS[name].report(name), ready = () => true, launch = { launched: true }, enable = null, update = null, invite = null }) {
     const reads = [];
@@ -183,6 +183,7 @@ test.describe("Agent GitHub account", () => {
       reads.push({ kind: "repo", name, fresh });
       const body = !REPOS[name] ? { applies: false }
         : ready() ? await repoNext(name, { fresh }) : { applies: true, account: "waiting", state: null, findings: [], setupLaunch: { supported: true } };
+      if (body === null) return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "read failed" }) });
       return route.fulfill({ contentType: "application/json", body: JSON.stringify({ repositoryId, ...body }) });
     });
     return { reads, posts };
@@ -788,6 +789,26 @@ test.describe("Agent GitHub account", () => {
     release();
     await expect(badge(page, "identity-ready")).toHaveAttribute("title", "Agent bot: not invited");
     expect(reads.filter((read) => read.kind === "repo" && read.name === "identity-ready").length).toBeGreaterThan(1);
+  });
+
+  test("a changed saved bot whose token is also rejected shows none of the old bot's repo verdicts when its repo read fails", async ({ page }) => {
+    await page.clock.install();
+    // Both tokens are rejected, so GitHub names neither bot: only the saved login tells them apart.
+    const rejected = (savedLogin) => account({ ...ACCOUNTS["token-expired"].report, savedLogin });
+    const before = rejected(BOT);
+    const after = rejected("other-bot");
+    let current = before;
+    const { reads } = await stub(page, {
+      accountNext: () => current,
+      repoNext: (name) => (current === after ? null : REPOS[name].report(name)),
+    });
+    await openHome(page);
+    await expect(badge(page, "identity-ready")).toHaveAttribute("title", "Agent bot: token expired");
+    current = after;
+    reads.length = 0;
+    await pollUntil(page, () => reads.some((read) => read.kind === "account"));
+    await expect(badge(page, "identity-ready")).toBeHidden();
+    expect(reads.some((read) => read.kind === "repo" && read.name === "identity-ready")).toBe(true);
   });
 
   test("a changed account reads each repo again rather than waiting on a read asked under the old one", async ({ page }) => {
