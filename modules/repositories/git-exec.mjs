@@ -161,7 +161,8 @@ function renderedAgentGitConfigPair(key, value) {
   return key === "include.path" && agentGitConfigPaths().has(value);
 }
 
-// `keepAgentGitConfig` exists for RoboRepo's own network calls (fetch and push). An agent's shell
+// `keepAgentGitConfig` exists for RoboRepo's own network calls (fetch and push), and for its commits,
+// which the same settings author as the bot. An agent's shell
 // carries the settings that make Git reach GitHub as the agent's identity (credential helper, HTTPS
 // routing) through an `include.path` pair among its GIT_CONFIG_COUNT / GIT_CONFIG_KEY_n /
 // GIT_CONFIG_VALUE_n variables. Stripping it would send those calls out as the user, or over SSH where

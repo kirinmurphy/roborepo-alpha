@@ -206,7 +206,8 @@ async function createRemoteBranch({ run, primary, worktreeRoot, repoName }) {
       if (!added.ok) throw initFailure("The plans scaffold could not be written.", "Run `git status` in the repo, resolve what it shows, then try again.", added);
     }
     const tree = await run(["write-tree"], { plumbing });
-    const commit = await run(["commit-tree", tree.stdout.trim(), "-m", "Create plans branch"]);
+    // Commits keep the agent's Git settings, so one made from an agent shell carries the bot as author.
+    const commit = await run(["commit-tree", tree.stdout.trim(), "-m", "Create plans branch"], { keepAgentGitConfig: true });
     if (!commit.ok) throw initFailure("The plans scaffold could not be committed.", "Set your Git user.name and user.email, then run `roborepo plans init` again.", commit);
     const pushed = await run(["push", "origin", `${commit.stdout.trim()}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
     if (!pushed.ok) {
@@ -505,7 +506,8 @@ async function commitFiles(store, planned, paths) {
     await required(store, ["add", "-A", "--", ...paths]);
     // An operation that recomputes identical content, such as pinning a pinned namespace, has nothing to commit.
     if ((await storeGit(store, ["diff", "--cached", "--quiet", "--", ...paths])).ok) return null;
-    await required(store, ["commit", "--quiet", "--only", "-m", planned.message, "--", ...paths]);
+    // keepAgentGitConfig: a save from an agent shell is authored by the bot that pushes it.
+    await required(store, ["commit", "--quiet", "--only", "-m", planned.message, "--", ...paths], { keepAgentGitConfig: true });
   } catch (err) {
     await storeGit(store, ["reset", "--quiet", "--", ...paths]);
     restore();
