@@ -78,6 +78,13 @@ try {
   setPairs([["include.path", path.join(stateRoot, AGENT_GITCONFIG)]]);
   assert.equal((await get("roborepo.included", keep)).stdout.trim(), "1", "the expanded state-root path is accepted");
 
+  // An inherited count far past the pairs that exist must not stall the call before Git starts.
+  process.env.GIT_CONFIG_COUNT = "999999999999";
+  const started = Date.now();
+  assert.equal((await get("roborepo.included", keep)).stdout.trim(), "1", "an oversized count still keeps the pair");
+  assert.ok(Date.now() - started < 5000, "an oversized count is bounded by the pairs that exist");
+  setPairs([["include.path", path.join(stateRoot, AGENT_GITCONFIG)]]);
+
   // GIT_CONFIG_PARAMETERS stays stripped even with the option, except the settings a sandbox sets
   // so Git can use its proxy (as the Claude sandbox does), in either quoting form Git writes.
   process.env.GIT_CONFIG_PARAMETERS = "'roborepo.params'='1'";
@@ -97,6 +104,18 @@ try {
   assert.match(helpers, /^credential\.http:\/\/127\.0\.0\.1:52569\.helper ?$/m, "the empty helper reset for the proxy is kept");
   assert.doesNotMatch(helpers, /store/, "a credential helper is never added");
   assert.equal((await get("roborepo.params", keep)).ok, false, "any other parameter is dropped");
+  // Git writes `!` as '\!' in the parameters it passes to child processes; read them from Git itself.
+  const gitWritten = runGitProcessSync(repo, [
+    "-c", "alias.params=!printenv GIT_CONFIG_PARAMETERS",
+    "-c", "http.https://p.example.proxy=http://u!p@proxy",
+    "params",
+  ]).stdout.trim();
+  assert.match(gitWritten, /\\!/, "Git escapes the exclamation mark");
+  process.env.GIT_CONFIG_PARAMETERS = gitWritten;
+  assert.equal((await get("http.https://p.example.proxy", keep)).stdout.trim(), "http://u!p@proxy", "a proxy with `!` survives");
+  // A URL-scoped key whose subsection contains `=` keeps its whole name.
+  process.env.GIT_CONFIG_PARAMETERS = "'http.https://a=b@p.example.proxy'='http://proxy'";
+  assert.equal((await get("http.https://a=b@p.example.proxy", keep)).stdout.trim(), "http://proxy", "a key with `=` stays whole");
   process.env.GIT_CONFIG_PARAMETERS = "'http.proxyAuthMethod=basic' 'unterminated";
   assert.equal((await get("http.proxyAuthMethod", keep)).ok, false, "a malformed value keeps nothing");
   delete process.env.GIT_CONFIG_PARAMETERS;

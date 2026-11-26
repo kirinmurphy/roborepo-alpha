@@ -182,9 +182,19 @@ function gitEnvironment({ keepAgentGitConfig = false } = {}) {
     if (/^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name)) delete env[name];
   }
   if (keepAgentGitConfig) {
+    // Walk the indexed pairs that exist rather than counting up to GIT_CONFIG_COUNT, which is
+    // inherited and could be large enough to stall the call before Git starts.
     const count = Number.parseInt(inherited.GIT_CONFIG_COUNT ?? "", 10);
+    const indices = Number.isInteger(count)
+      ? Object.keys(inherited)
+        .map((name) => /^GIT_CONFIG_KEY_(0|[1-9]\d*)$/.exec(name)?.[1])
+        .filter((index) => index !== undefined)
+        .map(Number)
+        .filter((index) => index < count)
+        .sort((a, b) => a - b)
+      : [];
     let kept = 0;
-    for (let i = 0; Number.isInteger(count) && i < count; i += 1) {
+    for (const i of indices) {
       const key = inherited[`GIT_CONFIG_KEY_${i}`];
       const value = inherited[`GIT_CONFIG_VALUE_${i}`];
       if (typeof key !== "string" || typeof value !== "string" || !renderedAgentGitConfigPair(key, value)) continue;
@@ -194,7 +204,8 @@ function gitEnvironment({ keepAgentGitConfig = false } = {}) {
     }
     if (kept > 0) env.GIT_CONFIG_COUNT = String(kept);
     const proxySettings = parseConfigParameters(inherited.GIT_CONFIG_PARAMETERS).filter(([key, value]) => sandboxProxySetting(key, value));
-    if (proxySettings.length > 0) env.GIT_CONFIG_PARAMETERS = proxySettings.map(([key, value]) => sqQuote(`${key}=${value}`)).join(" ");
+    // The 'key'='value' form keeps a key containing `=` (a URL-scoped proxy) whole.
+    if (proxySettings.length > 0) env.GIT_CONFIG_PARAMETERS = proxySettings.map(([key, value]) => `${sqQuote(key)}=${sqQuote(value)}`).join(" ");
   }
   return env;
 }
@@ -211,8 +222,8 @@ function sandboxProxySetting(key, value) {
 }
 
 // GIT_CONFIG_PARAMETERS as Git writes it: shell single-quoted entries separated by spaces, each
-// either 'key=value' or 'key'='value', with a quote inside written as '\''. Anything malformed
-// yields no entries, so nothing is kept.
+// either 'key=value' or 'key'='value', with a quote inside written as '\'' and an exclamation
+// mark as '\!'. Anything malformed yields no entries, so nothing is kept.
 function parseConfigParameters(text) {
   if (typeof text !== "string" || !text.trim()) return [];
   const words = [];
@@ -225,7 +236,7 @@ function parseConfigParameters(text) {
       if (end === -1) return null;
       out += text.slice(i + 1, end);
       i = end + 1;
-      if (text.startsWith("\\'", i)) { out += "'"; i += 2; continue; }
+      if (text[i] === "\\" && (text[i + 1] === "'" || text[i + 1] === "!")) { out += text[i + 1]; i += 2; continue; }
       return out;
     }
   };
