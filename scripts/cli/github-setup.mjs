@@ -170,11 +170,15 @@ async function guidedSetup({ input, io, cwd }) {
   // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });
   const blocking = report.problems.filter((entry) => entry.severity === "problem");
+  // A failed check never turns the package off, so a bot already in use stays in use.
+  const alreadyOn = await agentIdentityPackageInstalled();
   for (const entry of report.problems.filter((item) => item.severity === "warn" || item.severity === "unverified")) io.log(`Note: ${entry.message}`);
   // Setup confirms nothing it could not check: an unread account or branch protection stops here.
   if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. Setup does not turn the package on until every check runs.`);
   if (blocking.length > 0) {
-    io.error("The bot is not ready, so agents keep acting as you:");
+    io.error(alreadyOn
+      ? "The bot is not ready. The package was already on and stays on, so agents still act as the bot and may fail on GitHub until this is fixed:"
+      : "The bot is not ready, so agents keep acting as you:");
     for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
@@ -182,7 +186,9 @@ async function guidedSetup({ input, io, cwd }) {
   // Rules that apply but whose bypass list could not be read may let the bot merge unreviewed work,
   // so the package stays off until someone who can see them confirms them.
   if (report.state === "unverified") {
-    io.error("The branch rules could not be verified, so the package stays off and agents keep acting as you.");
+    io.error(alreadyOn
+      ? "The branch rules could not be verified. The package was already on and stays on, so agents still act as the bot; confirm the rules, or turn the bot off in Settings."
+      : "The branch rules could not be verified, so the package stays off and agents keep acting as you.");
     for (const entry of report.problems.filter((item) => item.severity === "unverified")) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;

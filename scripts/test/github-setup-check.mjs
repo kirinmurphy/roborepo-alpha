@@ -335,7 +335,18 @@ try {
   assert.match(result.stderr, /Message for the repo's owner:/);
   assert.doesNotMatch(result.stdout, /all look right|Agents now act/);
   assert.ok(!packageOn(), "the package stays off");
-  console.log("✓ Unverifiable branch rules leave the package off and print the owner's message.");
+  // With the package already on, the same refusal says it stays on rather than claiming agents act as you.
+  fresh({ collaborators: [{ login: BOT, permission: "push" }], rulesets: structuredClone(managedRulesets) });
+  result = await setup(`${BOT}\n${TOKEN}\nn\n`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.ok(packageOn(), "the first run turns the package on");
+  gh.setState({ ...gh.readState(), admin: false });
+  result = await setup("");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /The branch rules could not be verified\. The package was already on and stays on, so agents still act as the bot/);
+  assert.doesNotMatch(result.stderr, /agents keep acting as you/);
+  assert.ok(packageOn(), "the package stays on");
+  console.log("✓ Unverifiable branch rules leave the package off, or say it stays on when it was on, and print the owner's message.");
 
   // A GH_CONFIG_DIR in your terminal naming another sign-in does not reach the protection steps.
   fresh();
