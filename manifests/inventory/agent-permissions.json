@@ -977,7 +977,7 @@
       "paths": [
         "/tmp",
         "/private/tmp",
-        "/private/var/folders"
+        "/private/var/folders/*/*/T"
       ],
       "harnesses": [
         "claude",
@@ -985,7 +985,7 @@
       ],
       "cleanup": {
         "by": "os",
-        "description": "The operating system: macOS removes stale files daily (tmp_cleaner for /tmp, dirhelper for /private/var/folders); Linux distributions clear /tmp at boot or through tmpfiles rules. Claude's session scratchpad and its sandbox's TMPDIR live under /private/tmp."
+        "description": "The operating system: macOS removes stale files daily (tmp_cleaner for /tmp, dirhelper for the per-user temp folders /private/var/folders/<xx>/<id>/T, files older than 3 days); Linux distributions clear /tmp at boot or through tmpfiles rules. Only T is listed: its siblings C (caches), 0, and X are not temporary and dirhelper does not age them out. Claude's session scratchpad and its sandbox's TMPDIR live under /private/tmp. A `*` stands for exactly one folder name."
       }
     },
     {

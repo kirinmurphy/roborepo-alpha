@@ -446,7 +446,7 @@ temporary files. Each entry names what cleans it up:
 
 | Location | For | Cleaned up by |
 | --- | --- | --- |
-| `/tmp`, `/private/tmp`, `/private/var/folders` (includes Claude's session scratchpad and sandbox `TMPDIR`) | Claude, Codex | The operating system |
+| `/tmp`, `/private/tmp` (includes Claude's session scratchpad and sandbox `TMPDIR`), and the macOS per-user temp folders `/private/var/folders/<xx>/<id>/T` | Claude, Codex | The operating system. The cache folders beside `T` are not listed: macOS does not age them out |
 | `~/.roborepo/scratch` | Claude, Codex | `roborepo scratch`: folders unchanged for 14 days, or past 500 MB |
 | `~/Library/Application Support/Claude/side-session-notes` (the Claude app's hand-over notes between side sessions) | Claude | A Claude session-start hook: folders unchanged for 14 days, or past 500 MB |
 

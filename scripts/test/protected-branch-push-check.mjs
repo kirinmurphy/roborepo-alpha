@@ -796,7 +796,8 @@ assert.equal(unsandboxedDecision(`rm ${path.join(scratch, "x")}`, onFeature), "d
   const fakeHome = path.join(path.parse(tmp).root, "roborepo-delete-guard-no-such-dir", "fake home");
   const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifests/inventory/agent-permissions.json"), "utf8"));
   const folders = manifest.temporaryLocations.flatMap((location) => location.paths)
-    .map((folder) => (folder.startsWith("~/") ? path.join(fakeHome, folder.slice(2)) : folder));
+    .map((folder) => (folder.startsWith("~/") ? path.join(fakeHome, folder.slice(2)) : folder))
+    .map((folder) => folder.replaceAll("*", "roborepo-probe"));
   const fromManifest = (command) => {
     const env = { ...gitEnv, HOME: fakeHome, TMPDIR: scratch };
     delete env.ROBOREPO_TEMP_ROOTS;
@@ -814,6 +815,7 @@ assert.equal(unsandboxedDecision(`rm ${path.join(scratch, "x")}`, onFeature), "d
     "ask",
     "a delete beside the notes folder still asks",
   );
+  assert.equal(fromManifest("rm -rf /private/var/folders/zz/roborepo-probe/C/cache"), "ask", "a per-user cache folder is not temp");
 }
 
 // Agents never merge into a protected branch: merge, pull, rebase, and cherry-pick are denied in a

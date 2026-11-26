@@ -136,6 +136,16 @@ const harnessHomes = [
 
 const contains = (dir, target) => target === dir || target.startsWith(dir + path.sep)
 
+// Containment for a temporary location, where `*` stands for exactly one folder name: macOS keeps a
+// temp folder per user at /private/var/folders/<xx>/<id>/T, beside cache folders that are not
+// temporary, so the list names T through two wildcards.
+function inLocation(pattern, target) {
+  const want = pattern.split(path.sep)
+  const have = target.split(path.sep)
+  if (have.length < want.length) return false
+  return want.every((part, i) => (part === '*' ? have[i] !== '' : part === have[i]))
+}
+
 // Containment is a string comparison, so both sides have to describe a path the same way. They do
 // not by default: on macOS `os.tmpdir()` yields `/var/folders/...` while git records the resolved
 // `/private/var/folders/...` in its worktree pointer files, and `/var` is a symlink to `/private/var`.
@@ -289,7 +299,7 @@ if (inZone) {
 // own repository root is never treated as temporary. The target is already resolved, so a link
 // inside a temporary location is judged by where it points.
 const insideCheckout = repositoryRoot(path.dirname(target))
-if (!insideCheckout && temporaryLocations.some(dir => contains(realpath(dir), target))) {
+if (!insideCheckout && temporaryLocations.some(dir => inLocation(realpath(dir), target))) {
   const [gate, scope] = isRead ? ['read-files', 'read-scope'] : ['write-files', 'write-scope']
   if (bucketOf(gate) !== 'allow' || bucketOf(scope) !== 'allow') noop()
   process.stdout.write(

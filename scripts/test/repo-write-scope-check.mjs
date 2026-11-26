@@ -133,13 +133,16 @@ try {
     .map((folder) => (folder.startsWith("~/") ? path.join(fakeHome, folder.slice(2)) : folder));
   assert.ok(claudeLocations.includes(path.join(fakeHome, "Library/Application Support/Claude/side-session-notes")));
   assert.ok(claudeLocations.includes(path.join(fakeHome, ".roborepo/scratch")));
-  for (const folder of claudeLocations) {
+  for (const pattern of claudeLocations) {
+    const folder = pattern.replaceAll("*", "roborepo-probe");
     for (const tool of ["Write", "Edit", "Read"]) {
       assert.equal(decide(repoA, path.join(folder, "s", "x.md"), homeEnv, tool), "allow", `${tool} in ${folder} should be allowed`);
     }
   }
   const appSupport = path.join(fakeHome, "Library", "Application Support", "Claude");
   for (const [name, target] of [
+    ["a macOS per-user cache folder", "/private/var/folders/zz/roborepo-probe/C/x.md"],
+    ["the per-user folder itself", "/private/var/folders/zz/roborepo-probe/x.md"],
     ["a sibling folder of the notes folder", path.join(appSupport, "other", "x.md")],
     ["a folder sharing only the notes folder's name prefix", path.join(appSupport, "side-session-notes-x", "x.md")],
     ["the app's support folder itself", path.join(appSupport, "config.json")],

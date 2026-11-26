@@ -32,7 +32,9 @@ for (const location of locations) {
   assert.ok(location.harnesses?.every((h) => ["claude", "codex"].includes(h)), `${location.id} names known harnesses`);
   for (const folder of location.paths) {
     assert.ok(folder.startsWith("/") || folder.startsWith("~/"), `${folder} is absolute or ~/-anchored`);
-    assert.ok(!folder.endsWith("/") && !folder.includes("*"), `${folder} is a plain folder, not a glob`);
+    // `*` may stand for one whole folder name (the macOS per-user temp folders); no other glob.
+    assert.ok(!folder.endsWith("/") && folder.split("/").every((part) => part === "*" || !/[*?[\]{}]/.test(part)), `${folder} is a folder, with * only as a whole name`);
+    assert.ok(!folder.endsWith("/*"), `${folder} ends in a real folder name, not a wildcard`);
   }
   const { cleanup } = location;
   if (cleanup?.by === "os") {
@@ -48,6 +50,11 @@ for (const location of locations) {
     assert.deepEqual(expanded, [store.target], `${location.id} and retention store ${store.id} name the same folder`);
   }
 }
+
+// --- System temp is the per-user T folders only, not the cache folders beside them. ---
+const systemTemp = locations.find((location) => location.id === "system-temp").paths;
+assert.ok(systemTemp.includes("/private/var/folders/*/*/T"), "macOS per-user temp folders are listed");
+assert.ok(!systemTemp.includes("/private/var/folders"), "the whole /private/var/folders tree (caches included) is not");
 
 // --- Claude: the read and write scopes, the rendered rules, and the shell sandbox. ---
 const claudeGlobs = temporaryLocationGlobs(manifest, "claude");

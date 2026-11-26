@@ -135,7 +135,7 @@ which on `main` is the one you most want intact. The same hook adds that check:
 
 | Delete target | Result |
 | --- | --- |
-| A temp folder (`/tmp`, `/private/tmp`, `/var/folders`, `$TMPDIR`) | Runs, no prompt |
+| A temporary location (`/tmp`, `/private/tmp`, the macOS per-user temp folders `/var/folders/<xx>/<id>/T`, `~/.roborepo/scratch`, the Claude app's side-session notes) or `$TMPDIR` | Runs, no prompt |
 | A checkout or worktree on a feature branch | Runs, no prompt |
 | A checkout with a protected branch checked out, including its `.git` folder | Asks (Codex: denied) |
 | A folder holding such a checkout up to two levels down | Asks (Codex: denied) |

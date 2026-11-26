@@ -577,8 +577,14 @@ function physicalPath(raw, keepLast = false) {
 const branchChanges = new Map()
 const UNKNOWN_BRANCH = '(a branch this hook cannot read)'
 
+// `*` in a temp root stands for exactly one folder name: macOS keeps a temp folder per user at
+// /private/var/folders/<xx>/<id>/T, beside cache folders that are not temporary.
 function inTemp(target) {
-  return TEMP_ROOTS.some((root) => target === root || target.startsWith(`${root}/`))
+  const have = target.split('/')
+  return TEMP_ROOTS.some((root) => {
+    const want = root.split('/')
+    return have.length >= want.length && want.every((part, i) => (part === '*' ? have[i] !== '' : part === have[i]))
+  })
 }
 
 // The checkout holding `dir` when it has a protected branch checked out, else null.
