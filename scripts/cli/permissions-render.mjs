@@ -114,12 +114,23 @@ export function writeCodexRulesFile(codexHome, { manifest = loadPermissionManife
   return true;
 }
 
+// Whether `dir` reaches into the checkout through a link: its own, or one on a folder above it (a
+// Codex home linked into the checkout). A folder not made yet resolves through the nearest one that
+// exists, since writing would create it there.
 function linksIntoCheckout(dir) {
   try {
-    if (!fs.lstatSync(dir).isSymbolicLink()) return false;
-    const real = fs.realpathSync(dir);
-    const root = fs.realpathSync(repoRoot);
-    return real === root || real.startsWith(`${root}${path.sep}`);
+    const lexical = path.resolve(dir);
+    const roots = [path.resolve(repoRoot), fs.realpathSync(repoRoot)];
+    const inside = (candidate) => roots.some((root) => candidate === root || candidate.startsWith(`${root}${path.sep}`));
+    let existing = lexical;
+    const rest = [];
+    while (!fs.existsSync(existing)) {
+      const parent = path.dirname(existing);
+      if (parent === existing) return false;
+      rest.unshift(path.basename(existing));
+      existing = parent;
+    }
+    return inside(path.join(fs.realpathSync(existing), ...rest)) && !inside(lexical);
   } catch {
     return false;
   }

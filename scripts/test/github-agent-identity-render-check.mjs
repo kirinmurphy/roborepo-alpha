@@ -111,6 +111,18 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
     assert.equal(writeCodexRulesFile(linkedHome, { manifest, agentIdentity: true }), false);
     assert.equal(fs.readFileSync(path.join(checkoutRules, "roborepo.rules"), "utf8"), shipped, "a rules folder linked into the checkout is left alone");
 
+    // A Codex home linked into the checkout is never written through either, whether the rules
+    // folder below it exists or would be made.
+    const checkoutCodex = path.join(repoRoot, "generated", "codex");
+    fs.symlinkSync(checkoutCodex, path.join(tmp, "linked-home"));
+    assert.equal(writeCodexRulesFile(path.join(tmp, "linked-home"), { manifest, agentIdentity: true }), false);
+    assert.equal(fs.readFileSync(path.join(checkoutRules, "roborepo.rules"), "utf8"), shipped, "a rules folder below a linked home is left alone");
+    const noRules = path.join(repoRoot, "generated");
+    assert.ok(!fs.existsSync(path.join(noRules, "rules")));
+    fs.symlinkSync(noRules, path.join(tmp, "linked-bare-home"));
+    assert.equal(writeCodexRulesFile(path.join(tmp, "linked-bare-home"), { manifest, agentIdentity: true }), false);
+    assert.ok(!fs.existsSync(path.join(noRules, "rules")), "no rules folder is made inside the checkout");
+
     // A rules folder linked anywhere else (a dotfiles folder) gets the file, like a real folder.
     const dotfilesHome = path.join(tmp, "dotfiles-home");
     const dotfilesRules = path.join(tmp, "dotfiles", "codex-rules");
@@ -119,6 +131,12 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
     fs.symlinkSync(dotfilesRules, path.join(dotfilesHome, "rules"));
     assert.equal(writeCodexRulesFile(dotfilesHome, { manifest, agentIdentity: true }), true);
     assert.equal(fs.readFileSync(path.join(dotfilesRules, "roborepo.rules"), "utf8"), rulesOn, "a rules folder linked outside the checkout is written through");
+    // So does a home linked to a dotfiles folder, with its rules folder made there.
+    const dotfilesCodex = path.join(tmp, "dotfiles", "codex");
+    fs.mkdirSync(dotfilesCodex);
+    fs.symlinkSync(dotfilesCodex, path.join(tmp, "dotfiles-linked-home"));
+    assert.equal(writeCodexRulesFile(path.join(tmp, "dotfiles-linked-home"), { manifest, agentIdentity: true }), true);
+    assert.equal(fs.readFileSync(path.join(dotfilesCodex, "rules", "roborepo.rules"), "utf8"), rulesOn);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
