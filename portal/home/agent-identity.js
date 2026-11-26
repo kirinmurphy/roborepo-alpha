@@ -219,13 +219,15 @@ export function renderAgentIdentityOffer(mount, repositories) {
   if (!mount) return;
   githubRepositories = repositories.filter(supportsAgentIdentity);
   for (const repository of githubRepositories) names.set(repository.repositoryId, repository.displayName || repository.repositoryId);
+  // Settings' setup link opens the account card even with no GitHub repo listed; the card then shows
+  // the command to run, as there is no repo folder to open the setup in.
+  openCardFromLink();
   if (githubRepositories.length === 0) {
     mount.hidden = true;
     return;
   }
   offer ??= buildOffer(mount);
   if (account) offer.render(account.report);
-  openCardFromLink();
   // A failed read just leaves the banner out; the badges and Settings say the account is unread.
   loadAccount().catch(() => { mount.hidden = true; });
 }

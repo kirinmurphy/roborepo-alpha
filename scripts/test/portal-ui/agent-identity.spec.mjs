@@ -763,6 +763,23 @@ test.describe("Agent GitHub account", () => {
     await expect(steps.first()).toHaveAttribute("data-current", "true");
   });
 
+  test("Settings' setup link opens the account card even with no GitHub repo listed", async ({ page }) => {
+    // Home lists only repos that are not on GitHub.
+    await page.route(/\/api\/home(\?.*)?$/, async (route) => {
+      const overview = await (await route.fetch()).json();
+      overview.repositories = overview.repositories.filter((repository) => !String(repository.repositoryId).startsWith("git:github.com/"));
+      return route.fulfill({ json: overview });
+    });
+    await stub(page, { accountNext: () => ACCOUNTS["not-set-up"].report, ready: () => false });
+    await page.goto("/?agent-identity=setup");
+    await expect(card(page).locator("[data-slot=subject]")).toHaveText("Bot account (all repos)");
+    // No repo folder to open the setup in, so the command is shown to run instead.
+    await expect(card(page).locator("[data-slot=command-row]")).toBeVisible();
+    await expect(card(page).locator("[data-slot=command]")).toContainText("roborepo github setup");
+    await expect(offer(page)).toBeHidden();
+    await expect(page).toHaveURL(/\/$/);
+  });
+
   test("a repo the server turns down shows no badge", async ({ page }) => {
     await stub(page, { accountNext: () => ACCOUNTS.healthy.report, repoNext: () => ({ applies: false }) });
     await openHome(page);
