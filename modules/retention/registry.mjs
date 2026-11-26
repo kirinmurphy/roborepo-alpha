@@ -8,12 +8,14 @@
 // modules/developer-runtime/history.mjs and settingsPathFor in its settings.mjs. That is what makes the
 // whole registry testable against a temp directory with no environment juggling.
 
+import os from "node:os";
 import path from "node:path";
 
 export const LOG_SHAPE = "log";
 export const FILE_SET_SHAPE = "file-set";
 export const FOLDER_SET_SHAPE = "folder-set";
 export const SCRATCH_STORE_ID = "scratch";
+export const SIDE_SESSION_NOTES_STORE_ID = "side-session-notes";
 
 const MB = 1024 * 1024;
 
@@ -23,7 +25,9 @@ const MB = 1024 * 1024;
 // A null dimension means that dimension does not apply — not "unlimited by oversight". Every entry
 // must have at least one non-null bound; assertBounded enforces it and the test asserts it, which
 // is what stops a future store from being registered without one.
-export function retentionStores(stateRoot) {
+// `home` locates the one store that is not under the state root: the Claude desktop app's
+// side-session notes. It defaults to the account's home, like the rest of roborepo's paths.
+export function retentionStores(stateRoot, { home = os.homedir() } = {}) {
   return [
     {
       id: "worktree-removal-log", label: "Worktree removals", shape: LOG_SHAPE,
@@ -134,7 +138,25 @@ export function retentionStores(stateRoot) {
       policy: { maxAgeDays: 14, maxBytes: 500 * MB, floorBytes: 0, keepFraction: null },
       description: "Temporary folders agents share between sessions.",
     },
+    {
+      id: SIDE_SESSION_NOTES_STORE_ID,
+      label: "Claude side-session notes",
+      shape: FOLDER_SET_SHAPE,
+      target: sideSessionNotesRoot(home),
+      // One folder per group of Claude desktop sessions, where the app tells side sessions to leave
+      // findings for each other. The app never removes them, so roborepo does: pruned when a Claude
+      // session starts. Notes only matter while their sessions are working; 14 days unchanged
+      // matches the scratch store, and the byte cap is the same backstop.
+      policy: { maxAgeDays: 14, maxBytes: 500 * MB, floorBytes: 0, keepFraction: null },
+      description: "Hand-over notes the Claude desktop app's side sessions leave for each other.",
+    },
   ];
+}
+
+// The Claude desktop app's shared notes folder. Listed in the manifest's temporaryLocations too;
+// scripts/test/temporary-locations-check.mjs asserts the two agree.
+export function sideSessionNotesRoot(home = os.homedir()) {
+  return path.join(home, "Library", "Application Support", "Claude", "side-session-notes");
 }
 
 // The scratch folder's location, shared by the registry entry and the scratch command.
@@ -148,8 +170,8 @@ export function isBrowserEvidenceFile(name) {
   return /\.(png|webm|zip)$/.test(name);
 }
 
-export function findRetentionStore(stateRoot, id) {
-  return retentionStores(stateRoot).find((store) => store.id === id) ?? null;
+export function findRetentionStore(stateRoot, id, options = {}) {
+  return retentionStores(stateRoot, options).find((store) => store.id === id) ?? null;
 }
 
 // Overlay a live user preference onto a store's declared default.

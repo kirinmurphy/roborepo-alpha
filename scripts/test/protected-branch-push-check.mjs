@@ -788,6 +788,33 @@ const unsandboxedDecision = (command, cwd) => {
 assert.equal(unsandboxedDecision(`rm ${path.join(onFeature, "a.txt")}`, onFeature), "ask", "an unsandboxed delete asks");
 assert.equal(unsandboxedDecision(`rm ${path.join(scratch, "x")}`, onFeature), "defer", "an unsandboxed temp delete does not");
 
+// Without ROBOREPO_TEMP_ROOTS the temp folders are the manifest's temporaryLocations, so an
+// unsandboxed delete in any of them does not ask, and one beside them still does. The home is a
+// path that does not exist; the hook judges operands without touching them.
+{
+  const fakeHome = path.join(path.parse(tmp).root, "roborepo-delete-guard-no-such-dir", "fake home");
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifests/inventory/agent-permissions.json"), "utf8"));
+  const folders = manifest.temporaryLocations.flatMap((location) => location.paths)
+    .map((folder) => (folder.startsWith("~/") ? path.join(fakeHome, folder.slice(2)) : folder));
+  const fromManifest = (command) => {
+    const env = { ...gitEnv, HOME: fakeHome, TMPDIR: scratch };
+    delete env.ROBOREPO_TEMP_ROOTS;
+    const out = spawnSync(process.execPath, [hook], {
+      input: JSON.stringify({ cwd: onFeature, tool_name: "Bash", tool_input: { command, dangerouslyDisableSandbox: true } }),
+      encoding: "utf8", env,
+    }).stdout;
+    return out ? JSON.parse(out).hookSpecificOutput.permissionDecision : "defer";
+  };
+  for (const folder of folders) {
+    assert.equal(fromManifest(`rm -rf "${path.join(folder, "old-session")}"`), "defer", `a delete in ${folder} does not ask`);
+  }
+  assert.equal(
+    fromManifest(`rm -rf "${path.join(fakeHome, "Library/Application Support/Claude/other")}"`),
+    "ask",
+    "a delete beside the notes folder still asks",
+  );
+}
+
 // Agents never merge into a protected branch: merge, pull, rebase, and cherry-pick are denied in a
 // checkout that has one checked out, wherever the command runs from. A fast-forward-only update
 // from the branch's own upstream, and stopping one in progress, are not.

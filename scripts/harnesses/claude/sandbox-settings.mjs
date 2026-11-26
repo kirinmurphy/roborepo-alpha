@@ -85,9 +85,18 @@ export const CLAUDE_SANDBOX_EXCLUDED_COMMANDS = Object.freeze([
 // Writable for every checkout, so they belong in user-level settings. Paths that depend on the
 // current checkout must not be rendered here: ~/.claude/settings.json applies to every session.
 //   - ~/.npm: npm's cache; `npm install` and `npx` fail without it.
-//   - ~/.roborepo/scratch: agents' temporary folders from `roborepo scratch <name>`. Listed here
-//     rather than in write-scope, whose shared allow rules may not name a home folder.
-export const CLAUDE_SANDBOX_WRITABLE_PATHS = Object.freeze(["~/.npm", "~/.roborepo/scratch"]);
+// The temporary locations under the home folder (manifest temporaryLocations) are added by
+// claudeSandboxSettings. Claude merges `Edit` allow rules into the writable paths, but its docs do
+// not say that covers `~/` rules, so they are listed here as well.
+export const CLAUDE_SANDBOX_WRITABLE_PATHS = Object.freeze(["~/.npm"]);
+
+// The `~/` temporary locations the write scope covers, as folders. Absolute ones (/tmp) reach the
+// sandbox through the scope's Edit rules, which Claude documents merging.
+function homeTemporaryLocations(behaviors) {
+  const scope = behaviors.find((b) => b.id === "write-scope");
+  if (scope?.bucket !== "allow") return [];
+  return (scope.paths ?? []).filter((glob) => glob.startsWith("~/")).map((glob) => glob.replace(/\/\*\*$/, ""));
+}
 
 // Returns the `sandbox` object, or null when the manifest states no shell-sandbox intent (the
 // caller then leaves the key as it found it).
@@ -100,7 +109,7 @@ export function claudeSandboxSettings(behaviors) {
     enabled: true,
     autoAllowBashIfSandboxed: shell.bucket === "allow",
     excludedCommands: [...CLAUDE_SANDBOX_EXCLUDED_COMMANDS],
-    filesystem: { allowWrite: [...CLAUDE_SANDBOX_WRITABLE_PATHS] },
+    filesystem: { allowWrite: [...CLAUDE_SANDBOX_WRITABLE_PATHS, ...homeTemporaryLocations(behaviors)] },
     // Local binding stays off: whether it is narrower than the wildcard listeners the Codex
     // profile rejects is unverified. strictAllowlist stays unset so unlisted hosts prompt.
     network: { allowLocalBinding: false },

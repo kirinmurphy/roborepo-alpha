@@ -84,9 +84,8 @@ const cases = [
   // for every path in such a clone, including a write into the sibling clone beside it.
   ["repository living under a scratch path", repoA, path.join(repoA, "index.js"), "allow"],
   ["sibling clone under a scratch path", repoA, path.join(repoB, "x.js"), "ask"],
-  // True scratch space, outside any checkout: correct to write whichever repository is in use, and
-  // the static rules already allow it, so the hook defers instead of prompting on top of an allow.
-  ["scratch file outside any repository", repoA, path.join(os.tmpdir(), "roborepo-scratch-probe.log"), "defer"],
+  // A temporary location outside any checkout: correct to write whichever repository is in use.
+  ["temp file outside any repository", repoA, path.join(os.tmpdir(), "roborepo-scratch-probe.log"), "allow"],
   // No repository to be inside of: the hook has no basis for an opinion and must not invent one.
   ["session not in any repository", os.homedir(), path.join(os.homedir(), "notes.md"), "defer"],
 ];
@@ -120,22 +119,26 @@ try {
     assert.equal(actual, expected, `${name}: expected ${expected}, got ${actual}`);
   }
 
-  // The desktop app's shared side-session notes folder is allowed for Read, Write and Edit from any
-  // checkout; the rest of the app's support directory still prompts. The fake HOME sits outside the
-  // temp dir, or the scratch exemption would defer the "still asks" cases before the boundary saw
-  // them; the hook resolves a path that does not exist lexically, so nothing is created there. The
-  // space in "Application Support" is part of what is exercised.
+  // Every temporaryLocations entry is allowed for Read, Write and Edit from any checkout; a sibling
+  // of one still prompts. The fake HOME sits outside the temp dir, or the system-temp entry would
+  // allow the "still asks" cases for the wrong reason; the hook resolves a path that does not exist
+  // lexically, so nothing is created there. The space in "Application Support" is exercised.
   const fakeHome = path.join(path.parse(tmp).root, "roborepo-write-scope-no-such-dir", "fake home");
   assert.ok(!fs.existsSync(fakeHome), "the fake home must not exist on this machine");
-  const appSupport = path.join(fakeHome, "Library", "Application Support", "Claude");
   const homeEnv = { HOME: fakeHome };
-  for (const tool of ["Write", "Edit", "Read"]) {
-    assert.equal(
-      decide(repoA, path.join(appSupport, "side-session-notes", "local_abc", "findings.md"), homeEnv, tool),
-      "allow",
-      `${tool} inside the side-session notes folder should be allowed`,
-    );
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifests/inventory/agent-permissions.json"), "utf8"));
+  const claudeLocations = manifest.temporaryLocations
+    .filter((location) => location.harnesses.includes("claude"))
+    .flatMap((location) => location.paths)
+    .map((folder) => (folder.startsWith("~/") ? path.join(fakeHome, folder.slice(2)) : folder));
+  assert.ok(claudeLocations.includes(path.join(fakeHome, "Library/Application Support/Claude/side-session-notes")));
+  assert.ok(claudeLocations.includes(path.join(fakeHome, ".roborepo/scratch")));
+  for (const folder of claudeLocations) {
+    for (const tool of ["Write", "Edit", "Read"]) {
+      assert.equal(decide(repoA, path.join(folder, "s", "x.md"), homeEnv, tool), "allow", `${tool} in ${folder} should be allowed`);
+    }
   }
+  const appSupport = path.join(fakeHome, "Library", "Application Support", "Claude");
   for (const [name, target] of [
     ["a sibling folder of the notes folder", path.join(appSupport, "other", "x.md")],
     ["a folder sharing only the notes folder's name prefix", path.join(appSupport, "side-session-notes-x", "x.md")],
@@ -144,18 +147,28 @@ try {
     assert.equal(decide(repoA, target, homeEnv), "ask", `${name} must still ask`);
   }
 
-  // A symlink inside the notes folder is judged by where it points. This one needs real files, so
-  // it lives under the temp dir, where the escaped target is scratch and defers rather than asks;
-  // what matters is that the notes allowance does not follow it out.
+  // The allow follows the tool's gate and scope: switching either off hands the call back to the
+  // static rules instead of approving it here.
+  const gateState = path.join(tmp, "gate-state");
+  fs.mkdirSync(gateState, { recursive: true });
+  const notesFile = path.join(appSupport, "side-session-notes", "s", "x.md");
+  for (const [id, tool] of [["write-files", "Write"], ["write-scope", "Edit"], ["read-files", "Read"], ["read-scope", "Read"]]) {
+    fs.writeFileSync(path.join(gateState, "command-overrides.json"), JSON.stringify({ behaviors: { [id]: "ask" } }));
+    assert.equal(decide(repoA, notesFile, { ...homeEnv, ROBOREPO_STATE_ROOT: gateState }, tool), "defer", `${id} set to ask must stop the allow`);
+  }
+
+  // A link inside a temporary location is judged by where it points. Links need real files, which
+  // here can only live under the temp dir, so the link points at another checkout: that is never a
+  // temporary location, even under /tmp.
   const realHome = path.join(tmp, "real home");
   const realNotes = path.join(realHome, "Library", "Application Support", "Claude", "side-session-notes");
   fs.mkdirSync(realNotes, { recursive: true });
-  fs.symlinkSync(path.join(realHome, "Library"), path.join(realNotes, "escape"));
-  assert.equal(decide(repoA, path.join(realNotes, "local_abc", "x.md"), { HOME: realHome }), "allow");
-  assert.notEqual(
+  fs.symlinkSync(repoB, path.join(realNotes, "escape"));
+  assert.equal(decide(repoA, path.join(realNotes, "s", "x.md"), { HOME: realHome }), "allow");
+  assert.equal(
     decide(repoA, path.join(realNotes, "escape", "x.md"), { HOME: realHome }),
-    "allow",
-    "a symlink out of the notes folder must not carry the allowance with it",
+    "ask",
+    "a link out of a temporary location into another checkout must not carry the allowance",
   );
 
   // An absent tool_name must fall back to the narrower WRITE zone. Widening on missing input would

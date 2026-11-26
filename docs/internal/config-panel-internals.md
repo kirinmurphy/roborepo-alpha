@@ -77,8 +77,8 @@ for `permissions.writablePaths({ cwd })`, where the Codex provider
 (`scripts/harnesses/codex/plans-store-grants.mjs`) lists the exact Git paths a plans commit writes. Codex profiles require
 concrete `workspace_roots`, so the Codex provider materializes the path instead of using a glob for
 every repository under `~/.worktrees`. Separately from that per-repository output, every Codex render
-adds `CODEX_SANDBOX_WRITABLE_PATHS` (`scripts/harnesses/codex/index.mjs`): the agent scratch folder,
-`~/.roborepo/scratch/**`.
+adds `codexSandboxWritablePaths` (`scripts/harnesses/codex/index.mjs`): the manifest's
+`temporaryLocations` for Codex under the home folder, today `~/.roborepo/scratch/**`.
 
 ## Web endpoints
 
@@ -287,7 +287,7 @@ printout, and onboarding label those rows "Claude only".
 | `read-secrets` deny | `filesystem.allowRead` = `readableExceptions` |
 | Each `network-hosts` behavior, allow / ask / deny | its `hosts` joined to `network.allowedDomains` / nothing / `network.deniedDomains` |
 | Defaults | `reach-allowed-hosts` allow; `reach-claude-log-upload` deny, so a `claude` command run from a sandboxed shell does not prompt for the program's Datadog log address |
-| Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm", "~/.roborepo/scratch"]`, `network.allowLocalBinding: false` |
+| Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm"]` plus the home-folder `temporaryLocations`, `network.allowLocalBinding: false` |
 
 `excludedCommands` names individual `roborepo` subcommands rather than the whole CLI: the plans
 store, delivery, linked worktrees, the web portal, telemetry commands that write capture state,

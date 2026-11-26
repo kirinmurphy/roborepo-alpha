@@ -32,7 +32,7 @@ import { fileURLToPath } from 'node:url'
 // settings file's own directory, not to any checkout. So the boundary has to be decided at
 // tool-call time.
 //
-// The static rules remain the coarse layer: they allow the scratch directories that are correct
+// The static rules remain the coarse layer: they allow the temporary locations that are correct
 // regardless of which repository is in use. This hook narrows the repository half of that scope
 // from "some fixed tree" to "the checkout the agent is actually in".
 //
@@ -76,7 +76,8 @@ function readJson(p, fallback) {
   }
 }
 
-function outsideRepoBucket() {
+// The manifest and the personal overrides layered on it, or null when no manifest can be found.
+function loadPlatform() {
   const stateDir =
     process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
   const candidates = []
@@ -89,44 +90,49 @@ function outsideRepoBucket() {
 
   for (const root of candidates) {
     const manifest = readJson(path.join(root, 'manifests', 'inventory', 'agent-permissions.json'), null)
-    const behavior = manifest?.behaviors?.find(b => b.id === 'repo-write-boundary')
-    if (!behavior) continue
+    if (!manifest?.behaviors?.some(b => b.id === 'repo-write-boundary')) continue
     const overrides = readJson(path.join(stateDir, 'command-overrides.json'), {})
-    return overrides?.behaviors?.['repo-write-boundary'] || behavior.bucket
+    return { manifest, overrides }
   }
   // Manifest unreadable: the platform has not stated an intent this hook can act on, so it does
   // not invent one — the static rules decide, exactly as if this hook were not installed.
   return null
 }
 
+const platform = loadPlatform()
+
+function bucketOf(id) {
+  const behavior = platform?.manifest.behaviors.find(b => b.id === id)
+  if (!behavior) return null
+  return platform.overrides?.behaviors?.[id] || behavior.bucket
+}
+
 const toolInput = input.tool_input || {}
 const filePath = toolInput.file_path || ''
 if (!filePath) noop()
 
-// Locations that are correct to write regardless of which repository is in use: agent scratch
-// space, and the managed harness homes (write-guard.mjs already annotates those writes;
-// prompting for them as well would be noise on top of a reminder).
 const home = os.homedir()
-const alwaysAllowed = [
+const expandHome = (p) => (p === '~' ? home : p.startsWith('~/') ? path.join(home, p.slice(2)) : p)
+
+// The manifest's temporaryLocations: the one list of folders agents use for temporary files, each
+// with a cleanup, so reading and writing there never needs a prompt. TMPDIR joins it because it is
+// a system temp folder whose path differs per process (Claude's sandbox points it under /tmp).
+const temporaryLocations = [
   os.tmpdir(),
-  '/tmp',
-  '/private/tmp',
-  '/private/var/folders',
+  ...(platform?.manifest.temporaryLocations ?? [])
+    .filter(location => (location.harnesses ?? []).includes('claude'))
+    .flatMap(location => location.paths ?? [])
+    .map(expandHome),
+]
+
+// The managed harness homes: correct to write whichever repository is in use, and write-guard.mjs
+// already annotates those writes, so prompting for them as well would be noise on top of a
+// reminder. The hook defers there rather than allowing.
+const harnessHomes = [
   path.join(home, '.claude'),
   path.join(home, '.codex'),
   path.join(home, '.roborepo'),
 ]
-
-// The Claude desktop app's shared notes folder: the app tells every side session to leave findings
-// for its sibling sessions under `<session-id>/` here, and to read theirs. Writing and reading it is
-// part of how those sessions are asked to work, so prompting for it only trains approval reflex.
-//
-// It is allowed explicitly rather than deferred like scratch space, because no static rule covers
-// it: the allow scopes must not name a home directory (permission-rule-home-path-check), and the
-// app adds only some sessions' folders as working directories, so a deferred read of a sibling's
-// notes would still prompt. Only this one folder is allowed — the rest of the app's support
-// directory still gets the boundary's bucket. Deny rules (read-secrets) still out-rank this allow.
-const sessionNotesDir = path.join(home, 'Library', 'Application Support', 'Claude', 'side-session-notes')
 
 const contains = (dir, target) => target === dir || target.startsWith(dir + path.sep)
 
@@ -245,9 +251,9 @@ const target = realpath(path.resolve(filePath))
 // cwd is the session's working directory, which may be a subdirectory of the checkout.
 const root = repositoryRoot(input.cwd || process.cwd())
 
-// The repository check comes FIRST, before the scratch allowlist. A checkout can live under a
-// scratch path — cloning into /tmp to test something is normal — and when it does, the repository
-// boundary is still the boundary that matters. Testing scratch first would hand back "allowed" for
+// The repository check comes FIRST, before the temporary locations. A checkout can live under a
+// temporary path — cloning into /tmp to test something is normal — and when it does, the repository
+// boundary is still the boundary that matters. Testing those first would hand back "allowed" for
 // every path in that clone, including writes into a sibling clone beside it.
 // Reads see the whole repository family; writes see only the checkout in use. `tool_name` is absent
 // on malformed input, in which case the narrower write zone applies — the safe default.
@@ -271,36 +277,39 @@ if (inZone) {
   process.exit(0)
 }
 
-// The target is already resolved, so a symlink inside the notes folder that points elsewhere is
-// judged by where it lands, not by where it sits.
-if (contains(realpath(sessionNotesDir), target) && !repositoryRoot(path.dirname(target))) {
+// Outside the current repository. A temporary location is allowed outright rather than left to the
+// static rules: the scopes render it, but whether Claude matches a `~/` rule whose path holds a
+// space ("Application Support") is undocumented, and this hook already knows the answer. It allows
+// only while the tool's gate and scope (write-files/write-scope, read-files/read-scope) are on, so
+// switching either off still takes effect, and a deny rule (read-secrets) out-ranks a hook's allow.
+//
+// "In a temporary location" means a loose file there, though, not another checkout that happens to
+// live under it. A clone inside /tmp is still a repository, and writing into it from a different
+// repository is exactly the cross-repository write this hook exists to catch — so a target with its
+// own repository root is never treated as temporary. The target is already resolved, so a link
+// inside a temporary location is judged by where it points.
+const insideCheckout = repositoryRoot(path.dirname(target))
+if (!insideCheckout && temporaryLocations.some(dir => contains(realpath(dir), target))) {
+  const [gate, scope] = isRead ? ['read-files', 'read-scope'] : ['write-files', 'write-scope']
+  if (bucketOf(gate) !== 'allow' || bucketOf(scope) !== 'allow') noop()
   process.stdout.write(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'allow',
-        permissionDecisionReason: "Inside the Claude app's shared side-session notes folder.",
+        permissionDecisionReason: 'Inside a temporary location (manifest temporaryLocations).',
       },
     }),
   )
   process.exit(0)
 }
-
-// Outside the current repository. Scratch space is exempt — those paths are correct to write
-// whichever repository is in use, and the static rules already allow them, so prompting on top of
-// an existing allow would be noise.
-//
-// "In scratch" means a loose file there, though, not another checkout that happens to live under
-// it. A clone inside /tmp is still a repository, and writing into it from a different repository
-// is exactly the cross-repository write this hook exists to catch — so a target with its own
-// repository root is never treated as scratch.
-if (alwaysAllowed.some(dir => contains(dir, target)) && !repositoryRoot(path.dirname(target))) noop()
+if (!insideCheckout && harnessHomes.some(dir => contains(realpath(dir), target))) noop()
 
 // Not in a repository at all — there is no boundary to be outside of, so leave the decision to
 // the static rules rather than inventing one.
 if (!root) noop()
 
-const bucket = outsideRepoBucket()
+const bucket = bucketOf('repo-write-boundary')
 // "allow" means the platform has switched the boundary off; say nothing and let the static rules
 // apply, rather than emitting an allow that would out-rank them.
 if (!bucket || bucket === 'allow') noop()

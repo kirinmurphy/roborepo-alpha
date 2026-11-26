@@ -28,33 +28,25 @@
     {
       "id": "read-scope",
       "label": "Read scope",
-      "description": "Where files may be read without prompting: agent scratch directories, which are correct to read whichever repository is in use. Reads inside the current repository are covered by the repository boundary; paths outside both prompt.",
+      "description": "Where files may be read without prompting: the temporary locations listed under temporaryLocations, which are correct to read whichever repository is in use. Reads inside the current repository are covered by the repository boundary; paths outside both prompt.",
       "kind": "tools-scoped",
       "tools": [
         "Read"
       ],
-      "paths": [
-        "/tmp/**",
-        "/private/tmp/**",
-        "/private/var/folders/**"
-      ],
+      "pathsFrom": "temporaryLocations",
       "bucket": "allow",
       "category": "files"
     },
     {
       "id": "write-scope",
       "label": "Write scope",
-      "description": "Where files may be written without prompting regardless of which repository is in use: the temp dirs agent scratch work lands in. Writes inside the current repository are decided by the repository boundary, not by this list, so no personal directory layout belongs here.",
+      "description": "Where files may be written without prompting regardless of which repository is in use: the temporary locations listed under temporaryLocations. Writes inside the current repository are decided by the repository boundary, not by this list, so no personal directory layout belongs here.",
       "kind": "tools-scoped",
       "tools": [
         "Write",
         "Edit"
       ],
-      "paths": [
-        "/tmp/**",
-        "/private/tmp/**",
-        "/private/var/folders/**"
-      ],
+      "pathsFrom": "temporaryLocations",
       "bucket": "allow",
       "category": "files"
     },
@@ -976,6 +968,54 @@
       "label": "Configuration",
       "order": 7,
       "description": "Changes how the agent itself is configured."
+    }
+  ],
+  "temporaryLocations": [
+    {
+      "id": "system-temp",
+      "label": "System temp folders",
+      "paths": [
+        "/tmp",
+        "/private/tmp",
+        "/private/var/folders"
+      ],
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "cleanup": {
+        "by": "os",
+        "description": "The operating system: macOS removes stale files daily (tmp_cleaner for /tmp, dirhelper for /private/var/folders); Linux distributions clear /tmp at boot or through tmpfiles rules. Claude's session scratchpad and its sandbox's TMPDIR live under /private/tmp."
+      }
+    },
+    {
+      "id": "roborepo-scratch",
+      "label": "Agent scratch",
+      "paths": [
+        "~/.roborepo/scratch"
+      ],
+      "harnesses": [
+        "claude",
+        "codex"
+      ],
+      "cleanup": {
+        "by": "retention-store",
+        "store": "scratch"
+      }
+    },
+    {
+      "id": "claude-side-session-notes",
+      "label": "Claude side-session notes",
+      "paths": [
+        "~/Library/Application Support/Claude/side-session-notes"
+      ],
+      "harnesses": [
+        "claude"
+      ],
+      "cleanup": {
+        "by": "retention-store",
+        "store": "side-session-notes"
+      }
     }
   ],
   "commandCategories": {

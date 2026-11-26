@@ -23,8 +23,26 @@ const end = PERMISSION_BLOCK_END;
 export function resolveBehaviors(manifest, overrides = {}) {
   return (manifest.behaviors ?? []).map((b) => ({
     ...b,
+    ...(b.pathsFrom === "temporaryLocations" ? { paths: temporaryLocationGlobs(manifest, "claude") } : {}),
     bucket: overrides[b.id] ?? b.bucket,
   }));
+}
+
+// The folders agents may use for temporary files: manifest.temporaryLocations, the one list that the
+// read/write scopes, both shell sandboxes, the boundary hook, and the delete guard all read. Every
+// entry names its cleanup, so nothing an agent writes there without a prompt is kept forever.
+// Paths are folders, `~/`-anchored or absolute; `harness` keeps the entries that harness can reach.
+export function temporaryLocationPaths(manifest, harness = null) {
+  return (manifest.temporaryLocations ?? [])
+    .filter((location) => !harness || (location.harnesses ?? []).includes(harness))
+    .flatMap((location) => location.paths ?? []);
+}
+
+// The same folders as path-scoped rule globs. Claude is the only harness that renders path-scoped
+// tool rules (Gemini's Policy Engine matches tool names only), so the read/write scopes use its
+// entries.
+export function temporaryLocationGlobs(manifest, harness = null) {
+  return temporaryLocationPaths(manifest, harness).map((folder) => `${folder}/**`);
 }
 
 // Arbitrary (non-named) commands: manifest.commands.allow are the repo-tracked defaults (always

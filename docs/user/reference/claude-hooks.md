@@ -9,11 +9,12 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 
 | Event | Hook | What it does | Installed by |
 | --- | --- | --- | --- |
+| SessionStart | Side-session notes cleanup | Removes folders in the Claude app's side-session notes folder that are unchanged for 14 days. Recent folders, and anything a link points to outside the folder, are kept | always |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | always |
 | PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes; denies merges into a checkout on a protected branch and asks before a delete there (see below) | always |
 | PreToolUse `Bash` | Output minimizer | Trims noisy build, lint, and typecheck output; denies `--watch`, `--verbose`, and `--debug`; auto-allows a short list of safe read-only commands, alone or piped into read-only filters such as `head` or `wc`, never with anything chained or redirected | always |
 | PreToolUse `Bash` | Dense command log | Records commands of three or more lines to `<stateRoot>/capture/claude/dense-bash.jsonl` so you can find ones worth scripting. Never blocks | `capture-dense-bash` |
-| PreToolUse `Read`, `Write`, `Edit` | Repository scope | Reads across the repository and its worktrees are quiet; writes outside the checkout in use prompt. See [Config Control Panel](config-control-panel.md#changing-path-scopes) | always |
+| PreToolUse `Read`, `Write`, `Edit` | Repository scope | Reads across the repository and its worktrees are quiet, and so is any access in a temporary location; writes anywhere else outside the checkout in use prompt. See [Config Control Panel](config-control-panel.md#changing-path-scopes) | always |
 | PreToolUse `Write`, `Edit` | Write guard | When Claude edits under `~/.claude` or `~/.codex`, adds a reminder about which files RoboRepo manages. `settings.local.json` is exempt | always |
 | PostToolUse `Read` | Skill reference observer | Tells Claude which skill reference files it just read, for the skills-loaded line | `skill-visibility` |
 | SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |

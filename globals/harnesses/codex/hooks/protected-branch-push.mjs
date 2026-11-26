@@ -487,14 +487,45 @@ function classifyGh(args) {
 }
 
 const DELETE_PROGRAMS = new Set(['rm', 'rmdir', 'unlink'])
-// Temp folders, where deletes never ask. TMPDIR covers a sandbox's per-session temp folder.
+// Temp folders, where deletes never ask: the manifest's temporaryLocations, the one list agents'
+// temporary files go to, each with a cleanup. TMPDIR covers a sandbox's per-session temp folder.
 // ROBOREPO_TEMP_ROOTS (comma-separated) replaces the list.
 const TEMP_ROOTS = [...new Set((process.env.ROBOREPO_TEMP_ROOTS
   ? process.env.ROBOREPO_TEMP_ROOTS.split(',')
-  : ['/tmp', '/private/tmp', '/var/folders', '/private/var/folders', os.tmpdir(), process.env.TMPDIR])
+  : [...manifestTemporaryLocations(), os.tmpdir(), process.env.TMPDIR])
   .map((root) => (root ?? '').trim().replace(/\/+$/, ''))
   .filter(Boolean)
   .flatMap((root) => [root, realDirectory(root)]))]
+
+// Every folder in temporaryLocations, whichever harness it is for: a folder is temporary or not
+// regardless of who deletes in it. The manifest is found the way the repository-boundary hook finds
+// it: an explicit REPO_ROOT, the app root the CLI records at install, the development installer's
+// install state, then this file's own location walked back to the repository root. When none is
+// readable the list is empty, so deletes outside TMPDIR are judged like any other path.
+function manifestTemporaryLocations() {
+  const readJson = (file) => {
+    try {
+      return JSON.parse(fs.readFileSync(file, 'utf8'))
+    } catch {
+      return null
+    }
+  }
+  const home = os.homedir()
+  const stateDir = process.env.ROBOREPO_STATE_ROOT || path.join(home, '.roborepo')
+  const candidates = [
+    process.env.REPO_ROOT,
+    readJson(path.join(stateDir, 'app-root.json'))?.appRoot,
+    readJson(path.join(stateDir, 'install-state.json'))?.repo,
+    path.resolve(hookDir, '../../../..'),
+  ].filter((root) => typeof root === 'string' && root)
+  for (const root of candidates) {
+    const locations = readJson(path.join(root, 'manifests', 'inventory', 'agent-permissions.json'))?.temporaryLocations
+    if (!Array.isArray(locations)) continue
+    return locations.flatMap((location) => location.paths ?? [])
+      .map((folder) => (folder.startsWith('~/') ? path.join(home, folder.slice(2)) : folder))
+  }
+  return []
+}
 // Shell words that start a command without being its program.
 const SHELL_KEYWORDS = new Set(['if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{', '}', 'time', 'exec', 'command', 'builtin', 'nohup', 'nice', 'sudo', 'env'])
 // Options of each wrapper that take the next word as their value; `command -p` takes none.

@@ -368,7 +368,7 @@ on it; `merge-pull-requests` does not, since `gh` runs outside it either way:
 
 | Inside the sandbox | Bound |
 | --- | --- |
-| Writes | The session's checkout, the temp folders in `write-scope`, the npm cache (`~/.npm`), and the agent scratch folder (`~/.roborepo/scratch`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
+| Writes | The session's checkout, the temporary locations ([Changing path scopes](#changing-path-scopes)), and the npm cache (`~/.npm`). In a linked worktree, Claude also allows the shared `.git` directory so `git commit` works |
 | Reads | Everything except `read-secrets`, minus the certificate bundles above |
 | Network | Hosts in `reach-allowed-hosts` connect; the address in `reach-claude-log-upload` is refused; any other host prompts |
 
@@ -415,7 +415,7 @@ times:
 
 | Question | Resolved | Mechanism |
 | --- | --- | --- |
-| Which fixed directories are quiet? | Render time | Path allowlist in the manifest |
+| Which fixed directories are quiet? | Render time | `temporaryLocations` in the manifest |
 | Is this path in the current repository? | **Tool-call time** | `repo-scope` behavior, per provider |
 
 For Claude, the repository zone is **wider for reads than for writes**, deliberately:
@@ -431,7 +431,8 @@ whole repository family. Writing across checkouts is rare and is how one session
 in-flight work, so writes stay inside the checkout in use and prompt anywhere else.
 
 Codex enforces only the write half of this table. Every Codex profile that can write also gets
-the agent scratch folder, `~/.roborepo/scratch`. If a repository's `plans/plans-config.json` sets
+the temporary locations for Codex under the home folder (today `~/.roborepo/scratch`); its
+workspace profile already covers system temp. If a repository's `plans/plans-config.json` sets
 `"worktreeRoot": "~/.worktrees"`, Codex also gets write access to that repository's worktree folder,
 `~/.worktrees/<worktreeRepoName>` — not to all of `~/.worktrees` — and to the exact paths in the
 repository's Git directory that a plans commit writes: its objects, the plans worktree's
@@ -440,7 +441,18 @@ branches. A repository using Git's reftable ref format isn't covered by those pa
 save plans there. These are filled in when `roborepo config apply` or `roborepo update` runs from inside the repository, or when you change
 a permission.
 
-Changes to the fixed path allowlist take effect after the next render (`roborepo update`, or a
+The fixed directories are the manifest's `temporaryLocations`, the one list of places agents keep
+temporary files. Each entry names what cleans it up:
+
+| Location | For | Cleaned up by |
+| --- | --- | --- |
+| `/tmp`, `/private/tmp`, `/private/var/folders` (includes Claude's session scratchpad and sandbox `TMPDIR`) | Claude, Codex | The operating system |
+| `~/.roborepo/scratch` | Claude, Codex | `roborepo scratch`: folders unchanged for 14 days, or past 500 MB |
+| `~/Library/Application Support/Claude/side-session-notes` (the Claude app's hand-over notes between side sessions) | Claude | A Claude session-start hook: folders unchanged for 14 days |
+
+Reading, writing, editing, and deleting in them never prompts, while `read-files`/`write-files` and
+`read-scope`/`write-scope` stay `allow`. The `read-secrets` denylist still applies inside them.
+Changes to the list take effect after the next render (`roborepo update`, or a
 permission change in the panel); the repository boundary is checked on every tool call, so it needs
 no render.
 

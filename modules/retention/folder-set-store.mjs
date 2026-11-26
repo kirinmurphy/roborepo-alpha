@@ -174,6 +174,16 @@ export function removeFolderSetEntries({ dirPath, paths, measured = [], fsApi = 
   return { removed, refused };
 }
 
+// Measure a folder set and remove what its policy no longer keeps, sparing the paths in `keep`
+// (a folder about to be handed out). The write path of a folder-set store: `roborepo scratch`
+// calls it for the scratch store, and the Claude session-start hook for the side-session notes.
+export function pruneFolderSet({ dirPath, policy, keep = [], now = new Date(), fsApi = fs }) {
+  const verdict = measureFolderSet({ dirPath, policy, now, fsApi });
+  const paths = verdict.files.filter((entryPath) => !keep.includes(entryPath));
+  if (paths.length === 0) return { removed: [], refused: [] };
+  return removeFolderSetEntries({ dirPath, paths, measured: verdict.entries, fsApi });
+}
+
 // Newest mtime and total file bytes under one entry, without following links.
 function measureTree(entryPath, fsApi) {
   let stat;
