@@ -49,15 +49,16 @@ export function launchInTerminal({ name, executable, args = [], cwd = null, clos
 // Runs the command, then on success closes this window. Only Terminal can be asked to (other
 // terminal apps keep the window, and the message says it can be closed). The window is found by
 // this script's tty, so no other window is touched, and the close waits until the script has
-// exited, so Terminal has no running process to warn about. A script asking its own app needs no
-// Automation permission.
+// exited, so Terminal has no running process to warn about. Closing a window ends every tab in it,
+// so a window the user added tabs to stays open. A script asking its own app needs no Automation
+// permission.
 function closingTail(command) {
   const closer = [
     "delay 1",
     'tell application "Terminal"',
     "  repeat with w in windows",
     "    repeat with t in tabs of w",
-    '      if tty of t is "\'"$tty"\'" then close w',
+    '      if tty of t is "\'"$tty"\'" and (count of tabs of w) is 1 then close w',
     "    end repeat",
     "  end repeat",
     "end tell",
@@ -73,7 +74,7 @@ function closingTail(command) {
     '  printf "\\nDone. You can close this window.\\n"',
     "  exit 0",
     "fi",
-    'printf "\\nDone. This window closes in 5 seconds.\\n"',
+    'printf "\\nDone. This window closes in 5 seconds unless it has other tabs.\\n"',
     "sleep 5",
     "tty=$(tty)",
     `nohup osascript ${closer} >/dev/null 2>&1 &`,

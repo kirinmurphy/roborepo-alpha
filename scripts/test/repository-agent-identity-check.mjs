@@ -306,7 +306,8 @@ function terminalLaunchStartsInTheGivenFolder(checkout) {
   const script = fs.readFileSync(closing, "utf8");
   assert.equal(spawnSync("sh", ["-n", closing]).status, 0, "the script parses");
   assert.doesNotMatch(script, /^exec /m);
-  assert.match(script, /if tty of t is "'"\$tty"'" then close w/);
+  // Closing a window ends all its tabs, so only a window holding just the setup tab is closed.
+  assert.match(script, /if tty of t is "'"\$tty"'" and \(count of tabs of w\) is 1 then close w/);
   assert.match(script, /It stopped\. Read the message above, then close this window\./);
   assert.match(script, /if \[ "\$TERM_PROGRAM" != "Apple_Terminal" \]; then\n  printf "\\nDone\. You can close this window\.\\n"/);
   // A failing program exits with its status and never reaches the close.
