@@ -696,6 +696,9 @@ reads status and opens the terminal.
 - Review 2026-11-26: base synchronized at ea5c6905 (`main` e9595325, an empty commit); CI passed at f990aa0c (ubuntu, macos, windows-installer)
 - Review Validator pass 1 at ea5c6905 (fresh-context subagent, implementation-review, scope b4fde55d..HEAD): no code defects; 3 actionable record and doc findings, 1 escalate (above)
 - Review Validator pass 2 at 10314b88: 2 actionable fixes (an https remote with a user name; the hooks reference) and 2 notes (the setup message; Git 2.36), all fixed in 939e3457
+- Review Validator pass 3 at 939e3457: clean (two line-width notes, kept)
+- Agent check 2026-11-26 after the owner reran setup at 939e3457: throwaway local commits in an agent shell were authored by `codethings-agents <359884695+codethings-agents@users.noreply.github.com>` with a github.com remote, and by the user with a GitLab remote
+- `roborepo update` at 939e3457 suggested `maintenance repair local-config`, whose dry run would restore the `gh api` deny and posting asks the identity lifts (open finding)
 - `github-setup-check.mjs` and `github-identity-status-check.mjs` pass at ea5c6905 outside the Claude sandbox (inside it they fail on the `/**/*.pem` deny)
 
 ### Result
@@ -768,11 +771,12 @@ reads status and opens the terminal.
       state) showed `roborepo-alpha` as "needs attention", "A bot is signed in but the
       github-agent-identity package is off", the fix naming `roborepo github setup`, the token's
       expiry, and **Open setup**; repos with no GitHub remote showed no line.
-- [ ] **Open setup** on macOS opens a terminal running `roborepo github setup` in the repo's folder,
+- [x] **Open setup** on macOS opens a terminal running `roborepo github setup` in the repo's folder,
       and returning to the portal after it finishes shows "healthy". Needs a person: the setup is
       interactive and reads the bot's token at a hidden prompt in the owner's terminal.
       `repository-agent-identity-check.mjs` asserts the launched command and folder, and the
       browser spec covers the post and the refresh on return.
+      — Confirmed by the user 2026-11-26: with `hosts.yml` set aside, **Open setup** opened a terminal running the setup ("✓ You are kirinmurphy, setting up kirinmurphy/roborepo-alpha."); with the file back, "agent bot looks good and is on".
 - [ ] Agents' commits pushed by the bot show the bot as their author on GitHub. Needs a person:
       it needs `roborepo github setup` rerun to write the author file, then an agent commit and push.
       `github-setup-check.mjs` asserts the setup writes it, and `github-agent-identity-package-check.mjs`
