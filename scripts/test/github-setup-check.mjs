@@ -6,6 +6,7 @@
 // CLI entry itself refuses without a real terminal, however it is invoked.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { PassThrough } from "node:stream";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -50,7 +51,8 @@ try {
   // The setup module reads its state root at import, so the environment is set before importing it.
   Object.assign(process.env, env);
   for (const name of inherited) delete process.env[name];
-  const { runSetup } = await import("../cli/github-setup.mjs");
+  const { runSetup, interactiveInput } = await import("../cli/github-setup.mjs");
+  const { refreshCaBundle } = await import("../../modules/forge/agent-identity.mjs");
   // Answers come from a list, one per question, like the lines a person would type.
   const setup = async (answers) => {
     const lines = answers === "" ? [] : answers.replace(/\n$/, "").split("\n");
@@ -78,8 +80,11 @@ try {
     gh.clearCalls();
   };
 
-  // A full run.
+  // A full run. A staging folder another setup is using (the name older setups shared) is left alone.
   fresh();
+  const otherStaging = path.join(stateRoot, "github-agent", "gh-staging");
+  fs.mkdirSync(otherStaging, { recursive: true });
+  fs.writeFileSync(path.join(otherStaging, "hosts.yml"), "github.com:\n    user: another-setup\n");
   let result = await setup(`${BOT}\n${TOKEN}\ny\n`);
   assert.equal(result.status, 0, result.stdout + result.stderr);
   assert.match(result.stdout, /You are octo-admin, setting up example\/project/);
@@ -105,6 +110,11 @@ try {
   assert.deepEqual(fs.readFileSync(caCopy), fs.readFileSync(systemCa), "the CA copy is identical to the system bundle");
   const localConfig = fs.readFileSync(path.join(stateRoot, "github-agent", "gitconfig.local"), "utf8");
   assert.equal(localConfig.split("\n").filter((line) => !line.startsWith("#")).join("\n"), `[http "https://github.com/"]\n\tsslCAInfo = ${caCopy}\n`);
+  // A state folder whose path holds `#` or `;` still points Git at the copy, not at a truncated path.
+  const oddState = path.join(root, "state#one;two");
+  refreshCaBundle({ stateDir: oddState });
+  const readBack = spawnSync("git", ["config", "--file", path.join(oddState, "github-agent", "gitconfig.local"), "--get", "http.https://github.com/.sslCAInfo"], { encoding: "utf8" });
+  assert.equal(readBack.stdout.trim(), path.join(oddState, "github-agent", "ca-bundle.crt"), "Git reads the whole path back");
 
   // With the package's gitconfig included the way the harness settings include it, agents' commits
   // are authored by the bot at its noreply address.
@@ -113,14 +123,20 @@ try {
     encoding: "utf8",
     env: { ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: path.join(stateRoot, "package-runtime", "github-agent-identity", "gitconfig") },
   }).stdout.trim();
+  // Your own author, as your global Git config names it, which non-GitHub repos must keep.
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, "[user]\n\tname = Repo User\n\temail = repo-user@example.com\n");
   assert.equal(agentGit("user.name"), BOT);
   assert.equal(agentGit("user.email"), "4242+robo-bot@users.noreply.github.com");
   // The bot has no account off GitHub, so its author applies only in repos with a github.com remote.
   assert.equal(agentGit("user.name", clone("https-github", "https://github.com/example/project.git")), BOT);
   assert.equal(agentGit("user.name", clone("https-user-github", "https://robo-bot@github.com/example/project.git")), BOT);
   assert.equal(agentGit("user.name", clone("ssh-github", "ssh://git@github.com/example/project.git")), BOT);
-  assert.equal(agentGit("user.name", clone("gitlab", "git@gitlab.com:example/project.git")), "", "a GitLab repo keeps the user's author");
-  assert.equal(agentGit("user.name", clone("local-only", null)), "", "a repo with no remote keeps the user's author");
+  for (const [name, origin] of [["gitlab", "git@gitlab.com:example/project.git"], ["local-only", null]]) {
+    const other = clone(name, origin);
+    assert.equal(agentGit("user.name", other), "Repo User", `${name}: the user's author name is kept`);
+    assert.equal(agentGit("user.email", other), "repo-user@example.com", `${name}: the user's author email is kept`);
+  }
+  fs.writeFileSync(process.env.GIT_CONFIG_GLOBAL, "");
 
   const calls = gh.calls();
   const invite = calls.find((call) => call.method === "PUT" && /collaborators\/robo-bot$/.test(call.endpoint));
@@ -129,8 +145,11 @@ try {
   assert.ok(accept && accept.configDir === ghDir, "the invitation is accepted as the bot");
   const login = calls.find((call) => call.argv[0] === "auth" && call.argv[1] === "login");
   assert.deepEqual(login.argv, ["auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--with-token", "--insecure-storage"]);
-  assert.equal(login.configDir, path.join(stateRoot, "github-agent", "gh-staging"), "the token is tried in a staging folder first");
-  assert.ok(!fs.existsSync(path.join(stateRoot, "github-agent", "gh-staging")), "the staging folder is removed afterwards");
+  assert.equal(path.dirname(login.configDir), path.join(stateRoot, "github-agent"), "the token is tried in a staging folder beside the live one");
+  assert.match(path.basename(login.configDir), /^gh-staging-.+/, "each run stages in its own folder");
+  assert.ok(!fs.existsSync(login.configDir), "the staging folder is removed afterwards");
+  assert.equal(fs.readFileSync(path.join(otherStaging, "hosts.yml"), "utf8"), "github.com:\n    user: another-setup\n", "another setup's staging folder is untouched");
+  fs.rmSync(otherStaging, { recursive: true });
 
   // The token appears nowhere but the hosts.yml gh wrote (and the fake's own server-side state).
   const allowed = new Set([path.join(ghDir, "hosts.yml"), path.join(root, "fake-gh-state.json")].map((file) => fs.realpathSync(file)));
@@ -224,7 +243,7 @@ try {
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /That token was not stored: .*broader access than agents need \(workflow\)/);
   assert.ok(fs.readFileSync(hostsFile, "utf8").includes(SOON), "the working token is kept");
-  assert.ok(!fs.existsSync(path.join(stateRoot, "github-agent", "gh-staging")), "the staging folder is removed after a rejection");
+  assert.deepEqual(fs.readdirSync(path.join(stateRoot, "github-agent")).filter((name) => name.startsWith("gh-staging")), [], "the staging folder is removed after a rejection");
   fs.writeFileSync(hostsFile, `github.com:\n    oauth_token: ${TOKEN}\n    user: ${BOT}\n`, { mode: 0o600 });
   console.log("✓ A replacement token the checks reject is not stored, and the working one stays.");
 
@@ -289,6 +308,21 @@ try {
   assert.equal(fs.statSync(path.join(ghDir, "hosts.yml")).mode & 0o777, 0o600);
   console.log("✓ A working keychain token is moved to hosts.yml, mode 0600, without asking again.");
 
+  // A keychain token with scopes setup does not accept is not moved: setup asks for a new token.
+  const KEYCHAIN_WIDE = "ghp_keychainwide0000111122223333";
+  const keychainState = gh.readState();
+  keychainState.tokens[KEYCHAIN_WIDE] = { login: BOT, scopes: ["repo", "read:org", "workflow"], expires: FAR_EXPIRY, expired: false };
+  gh.setState(keychainState);
+  fs.writeFileSync(path.join(ghDir, "hosts.yml"), `github.com:\n    user: ${BOT}\n`);
+  fs.writeFileSync(path.join(ghDir, ".fake-token"), `${KEYCHAIN_WIDE}\n`);
+  result = await setup(`${TOKEN}\n`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /The token in the keychain was not moved: .*broader access than agents need \(workflow\)/);
+  assert.match(result.stdout, /open https:\/\/github\.com\/settings\/tokens\/new/, "a new token, not a regenerated one");
+  assert.match(result.stdout, /Token stored; signed in as robo-bot/);
+  assert.ok(fs.readFileSync(path.join(ghDir, "hosts.yml"), "utf8").includes(TOKEN), "the new token is stored");
+  console.log("✓ A keychain token with the wrong scopes is not moved, and setup asks for a new one.");
+
   // A token for another account is refused and never stored.
   fresh();
   result = await setup(`${BOT}\n${OTHER_TOKEN}\n`);
@@ -297,6 +331,27 @@ try {
   assert.ok(!fs.existsSync(path.join(ghDir, "hosts.yml")), "the wrong login was removed");
   assert.ok(!packageOn());
   console.log("✓ A token for the wrong account is refused and never stored.");
+
+  // A user sign-in check that fails names its cause: only a rejected sign-in asks you to sign in.
+  fresh({ failure: "tls" });
+  result = await setup("");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /Could not read your own GitHub sign-in: gh could not verify GitHub's certificate/);
+  assert.doesNotMatch(result.stderr, /not signed in as you/);
+  fresh({ failure: "user-unauthorized" });
+  result = await setup("");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /GitHub CLI is not signed in as you\. Run gh auth login/);
+  console.log("✓ A failed user sign-in check keeps its cause, and asks you to sign in only when that is it.");
+
+  // A Read collaborator cannot push: setup raises it to Write instead of counting it invited.
+  fresh({ collaborators: [{ login: BOT, permission: "pull" }] });
+  result = await setup(`${BOT}\n${TOKEN}\ny\n`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /✓ Gave robo-bot Write access to example\/project \(it had Read\)\./);
+  assert.deepEqual(gh.readState().collaborators, [{ login: BOT, permission: "push" }]);
+  assert.ok(packageOn());
+  console.log("✓ A bot with Read access is raised to Write, not reported as invited.");
 
   // The bot's own login, a missing account, and a refused invitation stop the run.
   fresh();
@@ -343,10 +398,51 @@ try {
   gh.setState({ ...gh.readState(), admin: false });
   result = await setup("");
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /The branch rules could not be verified\. The package was already on and stays on, so agents still act as the bot/);
+  assert.match(result.stderr, /The branch rules could not be verified\. The package is on and stays on\. Confirm the rules, or to stop agents using the bot meanwhile, turn it off in Settings or run roborepo package disable github-agent-identity\./);
   assert.doesNotMatch(result.stderr, /agents keep acting as you/);
   assert.ok(packageOn(), "the package stays on");
   console.log("✓ Unverifiable branch rules leave the package off, or say it stays on when it was on, and print the owner's message.");
+
+  // A blocking problem with the package already on: it stays on, and the refusal says how to turn
+  // it off without claiming which account agents use (a harness may still push as you).
+  const notReadyOn = /The bot is not ready\. The package is on and stays on\. Agents using the bot may fail on GitHub until this is fixed; to stop agents using the bot meanwhile, turn it off in Settings or run roborepo package disable github-agent-identity:/;
+  const claimsIdentity = /act(s|ing)? as (the bot|you)/;
+  gh.setState({ ...gh.readState(), admin: true, collaborators: [{ login: BOT, permission: "admin" }] });
+  result = await setup("");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, notReadyOn);
+  assert.match(result.stderr, /robo-bot is an admin of example\/project/);
+  assert.doesNotMatch(result.stderr, claimsIdentity);
+  assert.ok(packageOn(), "the package stays on");
+  // The same with a harness whose settings lack the bot's Git include: on, but pushes go out as you.
+  const gapState = path.join(stateRoot, "harnesses", "state.json");
+  fs.mkdirSync(path.dirname(gapState), { recursive: true });
+  fs.writeFileSync(gapState, JSON.stringify({
+    schemaVersion: 2, lastDiscoveredAt: new Date().toISOString(),
+    providers: { codex: { enabled: true, selectionSource: "user", confidence: "confirmed", evidence: [], warnings: [] } },
+  }));
+  const gapConfig = path.join(home, ".codex", "config.toml");
+  fs.writeFileSync(gapConfig, fs.readFileSync(gapConfig, "utf8").replace(/^GIT_CONFIG_COUNT = "2"$/m, 'GIT_CONFIG_COUNT = "1"'));
+  result = await setup("");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, notReadyOn);
+  assert.doesNotMatch(result.stderr, claimsIdentity);
+  fs.rmSync(gapState);
+  // A package selected with a file missing is partly installed: setup says so and changes nothing.
+  fs.rmSync(path.join(stateRoot, "package-runtime", "github-agent-identity", "gitconfig"));
+  result = await setup("");
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /The bot is not ready\. The package is partly installed and stays as it is, so agents may use the bot for some GitHub calls and not others\. .*roborepo package disable github-agent-identity:/);
+  assert.doesNotMatch(result.stderr, claimsIdentity);
+  console.log("✓ A blocking problem with the package on or partly installed keeps it, names how to turn it off, and claims no identity.");
+
+  // Ctrl+D at a visible prompt closes it without an answer, which cancels like Ctrl+C.
+  const closedInput = new PassThrough();
+  const asked = interactiveInput({ stdin: closedInput, stdout: new PassThrough() }).ask("Bot account login: ");
+  closedInput.end();
+  const settled = await Promise.race([asked.then(() => "answered", (error) => error.message), new Promise((resolve) => setTimeout(() => resolve("pending"), 2000))]);
+  assert.equal(settled, "Cancelled.", "a closed prompt rejects instead of staying pending");
+  console.log("✓ A prompt closed without an answer cancels the setup.");
 
   // A GH_CONFIG_DIR in your terminal naming another sign-in does not reach the protection steps.
   fresh();

@@ -14,13 +14,15 @@ import {
 import { GITHUB_PAGES, TOKEN_NOTE, TOKEN_SCOPES, expiryAdvice, scopesText } from "../../modules/forge/agent-identity-guide.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
-import { agentGitRoutingGaps, agentIdentityPackageInstalled, turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
+import { agentGitRoutingGaps, agentIdentityPackageEnabled, agentIdentityPackageInstalled, turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
 import { stateDir } from "./state-paths.mjs";
 
 const sameLogin = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
 
 class Stop extends Error {}
 const stop = (message) => { throw new Stop(message); };
+// A token that signed in but whose scopes or expiry setup does not accept.
+class TokenRejected extends Stop {}
 
 // The CLI entry. Setup reads a token and asks questions, so it only ever runs with a real terminal
 // on both ends; there is no switch around that. Tests call `runSetup` with their own input source.
@@ -71,8 +73,11 @@ async function guidedSetup({ input, io, cwd }) {
   let userLogin;
   try {
     userLogin = await githubClient.login(user);
-  } catch {
-    stop("GitHub CLI is not signed in as you. Run gh auth login, then rerun this.");
+  } catch (error) {
+    if (!(error instanceof GitHubError)) throw error;
+    // Signing in again fixes only a missing or rejected sign-in, not GitHub being out of reach.
+    const signedOut = error.status === 401 || /not signed in/.test(error.message);
+    stop(signedOut ? "GitHub CLI is not signed in as you. Run gh auth login, then rerun this." : `Could not read your own GitHub sign-in: ${error.message}.`);
   }
   io.log(`✓ You are ${userLogin}, setting up ${repo}.`);
 
@@ -111,7 +116,7 @@ async function guidedSetup({ input, io, cwd }) {
   // 4. The bot's token, stored in the agent directory. A working token that gh put in the keychain
   // (agents' sandboxes cannot read it) is moved to the agent directory, not asked for again.
   if (hosts.loggedIn && !hosts.hasToken && botLogin && !renewing) {
-    const moved = await moveKeychainToken({ cwd, dir, botLogin, bot });
+    const moved = await moveKeychainToken({ cwd, dir, botLogin, bot, io });
     if (moved) io.log(`✓ Token: moved from the keychain to ${agentHostsFile(stateDir)}, where agents can read it.`);
     hosts = readAgentHosts(stateDir);
   }
@@ -170,15 +175,17 @@ async function guidedSetup({ input, io, cwd }) {
   // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });
   const blocking = report.problems.filter((entry) => entry.severity === "problem");
-  // A failed check never turns the package off, so a bot already in use stays in use.
-  const alreadyOn = await agentIdentityPackageInstalled();
+  // A failed check never changes the package, so whatever agents use now they keep using. Only
+  // "off" says which account that is: a package that is on can still leave pushes going out as you
+  // (a harness without the bot's Git settings), and a partial install may route some calls only.
+  const packageState = await agentIdentityPackageState();
   for (const entry of report.problems.filter((item) => item.severity === "warn" || item.severity === "unverified")) io.log(`Note: ${entry.message}`);
   // Setup confirms nothing it could not check: an unread account or branch protection stops here.
-  if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. Setup does not turn the package on until every check runs.`);
+  if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. Setup does not change the package until every check runs.`);
   if (blocking.length > 0) {
-    io.error(alreadyOn
-      ? "The bot is not ready. The package was already on and stays on, so agents still act as the bot and may fail on GitHub until this is fixed:"
-      : "The bot is not ready, so agents keep acting as you:");
+    io.error(packageState === "off"
+      ? "The bot is not ready, so the package stays off and agents keep acting as you:"
+      : `The bot is not ready. ${PACKAGE_KEPT[packageState]} Agents using the bot may fail on GitHub until this is fixed; ${TURN_OFF}:`);
     for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
@@ -186,9 +193,9 @@ async function guidedSetup({ input, io, cwd }) {
   // Rules that apply but whose bypass list could not be read may let the bot merge unreviewed work,
   // so the package stays off until someone who can see them confirms them.
   if (report.state === "unverified") {
-    io.error(alreadyOn
-      ? "The branch rules could not be verified. The package was already on and stays on, so agents still act as the bot; confirm the rules, or turn the bot off in Settings."
-      : "The branch rules could not be verified, so the package stays off and agents keep acting as you.");
+    io.error(packageState === "off"
+      ? "The branch rules could not be verified, so the package stays off and agents keep acting as you."
+      : `The branch rules could not be verified. ${PACKAGE_KEPT[packageState]} Confirm the rules, or ${TURN_OFF}.`);
     for (const entry of report.problems.filter((item) => item.severity === "unverified")) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
@@ -214,10 +221,31 @@ async function guidedSetup({ input, io, cwd }) {
   return 0;
 }
 
+// What a refusal says about the package it leaves as it was, and how to stop agents using the bot.
+const PACKAGE_KEPT = {
+  on: "The package is on and stays on.",
+  partial: "The package is partly installed and stays as it is, so agents may use the bot for some GitHub calls and not others.",
+};
+const TURN_OFF = "to stop agents using the bot meanwhile, turn it off in Settings or run roborepo package disable github-agent-identity";
+
+// "on" when the package is selected and fully installed, "partial" when it is selected with a
+// resource missing, "off" when it is not selected.
+async function agentIdentityPackageState() {
+  if (await agentIdentityPackageInstalled()) return "on";
+  return agentIdentityPackageEnabled() ? "partial" : "off";
+}
+
 async function inviteBot({ user, repo, botLogin, io, done }) {
   try {
-    if (await githubClient.isCollaborator(user, repo, botLogin)) {
+    const permission = await githubClient.collaboratorPermission(user, repo, botLogin);
+    if (permission === "write" || permission === "admin") {
       done(`Invitation (${botLogin} is a collaborator)`);
+      return;
+    }
+    // A Read collaborator is a collaborator that cannot push: its role is raised, not re-invited.
+    if (permission === "read") {
+      await githubClient.inviteCollaborator(user, repo, botLogin);
+      io.log(`✓ Gave ${botLogin} Write access to ${repo} (it had Read).`);
       return;
     }
     const invited = (await githubClient.repoInvitations(user, repo)).some((invitation) => invitation.invitee?.login?.toLowerCase() === botLogin.toLowerCase());
@@ -262,20 +290,28 @@ async function storeToken({ input, io, cwd, dir, botLogin, hadLogin, renewing })
 
 // Reads the token gh keeps in the keychain for the bot's login and stores it in the agent directory
 // through the same checks as a pasted one. Your own terminal can read the keychain; agents cannot.
-// Returns false when gh has no token to give, so the caller asks for one instead.
-async function moveKeychainToken({ cwd, dir, botLogin, bot }) {
+// Returns false when gh has no token to give, or the checks reject it (its scopes, say), so the
+// caller asks for a new one instead.
+async function moveKeychainToken({ cwd, dir, botLogin, bot, io }) {
   const token = (await runGh(cwd, ["auth", "token", "--hostname", "github.com"], "", { env: bot.env }).catch(() => "")).trim();
   if (!token) return false;
-  await installToken({ token, cwd, dir, botLogin });
+  try {
+    await installToken({ token, cwd, dir, botLogin });
+  } catch (error) {
+    if (!(error instanceof TokenRejected)) throw error;
+    io.log(`The token in the keychain was not moved: ${error.findings.map((entry) => entry.message).join(" ")} Make a new one below.`);
+    return false;
+  }
   return true;
 }
 
 // Signs the token in to a staging folder and checks it there. Only a token for the right account
 // with acceptable scopes replaces the live login, so a rejected one never reaches agents and the
-// previous token keeps working.
-async function installToken({ token, cwd, dir, botLogin }) {  const staging = path.join(path.dirname(dir), "gh-staging");
-  fs.rmSync(staging, { recursive: true, force: true });
-  fs.mkdirSync(staging, { recursive: true, mode: 0o700 });
+// previous token keeps working. Each run stages in its own private folder beside the live one (the
+// same filesystem, so the rename is atomic), so two setups at once never promote each other's token.
+async function installToken({ token, cwd, dir, botLogin }) {
+  fs.mkdirSync(path.dirname(dir), { recursive: true });
+  const staging = fs.mkdtempSync(path.join(path.dirname(dir), "gh-staging-"));
   try {
     const stagedBot = { cwd, env: botGhEnv(stateDir, staging) };
     try {
@@ -292,7 +328,7 @@ async function installToken({ token, cwd, dir, botLogin }) {  const staging = pa
     }
     const blocking = tokenProblems(info).filter((entry) => entry.severity === "problem");
     if (blocking.length > 0) {
-      stop(`That token was not stored: ${blocking.map((entry) => entry.message).join(" ")} Fix: ${blocking[0].fix}`);
+      throw Object.assign(new TokenRejected(`That token was not stored: ${blocking.map((entry) => entry.message).join(" ")} Fix: ${blocking[0].fix}`), { findings: blocking });
     }
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     fs.chmodSync(dir, 0o700);
@@ -303,21 +339,27 @@ async function installToken({ token, cwd, dir, botLogin }) {  const staging = pa
   }
 }
 
-function interactiveInput() {
+// Exported for tests, which pass their own streams.
+export function interactiveInput({ stdin = process.stdin, stdout = process.stdout } = {}) {
   return {
     ask(question) {
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      return new Promise((resolve) => rl.question(question, (answer) => { rl.close(); resolve(answer); }));
+      const rl = readline.createInterface({ input: stdin, output: stdout });
+      return new Promise((resolve, reject) => {
+        let answered = false;
+        // Ctrl+D at an empty prompt closes the interface without an answer: that is a cancel.
+        rl.on("close", () => { if (!answered) reject(new Stop("Cancelled.")); });
+        rl.question(question, (answer) => { answered = true; rl.close(); resolve(answer); });
+      });
     },
     askHidden(question) {
-      process.stdout.write(question);
+      stdout.write(question);
       return new Promise((resolve, reject) => {
         let text = "";
         const finish = (fn) => {
-          process.stdin.setRawMode(false);
-          process.stdin.pause();
-          process.stdin.removeListener("data", onData);
-          process.stdout.write("\n");
+          stdin.setRawMode(false);
+          stdin.pause();
+          stdin.removeListener("data", onData);
+          stdout.write("\n");
           fn();
         };
         const onData = (chunk) => {
@@ -328,9 +370,9 @@ function interactiveInput() {
             else text += char;
           }
         };
-        process.stdin.setRawMode(true);
-        process.stdin.resume();
-        process.stdin.on("data", onData);
+        stdin.setRawMode(true);
+        stdin.resume();
+        stdin.on("data", onData);
       });
     },
     close() {},
