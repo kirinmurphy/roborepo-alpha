@@ -34,7 +34,10 @@ git ls-remote --heads origin repo-plans
   and a new repo has not invited it yet. Step 5's check reads the repo as the user; when its
   `problems` include `not-collaborator` or `invite-pending`, say that the bot needs an invitation:
   the user runs `roborepo github setup` in this repo, in their own terminal, then reruns
-  `/plan-suite-init`. `roborepo plans init` reports the same reason when it meets this.
+  `/plan-suite-init`. When `not-collaborator` carries `owner: true`, the user is not an admin of
+  the repo and setup cannot invite the bot: tell them to ask the repo's owner to invite it with
+  Write access (the report's `ownerMessage` is ready to send), then rerun `/plan-suite-init`.
+  `roborepo plans init` reports the same reason when it meets this.
 
 ### 2. Create or reconnect the store
 
