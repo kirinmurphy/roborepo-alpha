@@ -7,7 +7,7 @@
 // folder, a reason when it cannot open), the routes' handling of `fresh` and of a non-empty body,
 // and the real reads against a fake `gh` with the package on and off.
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -49,7 +49,7 @@ try {
   await updateRunsOnlyForTheGitGap();
   await setupLaunchIsTheServersChoice(checkout);
   await inviteNeedsAWorkingBotAndRereadsTheRepo();
-  terminalLaunchStartsInTheGivenFolder(checkout);
+  await terminalLaunchStartsInTheGivenFolder(checkout);
   await offerDismissalIsRemembered();
   await routesPassFreshAndRefuseABody();
   realStatusAgainstFakeGh(checkout);
@@ -127,6 +127,8 @@ async function statusReadIsCachedAndCarriesNoToken(checkout) {
     { state: "not-set-up", botLogin: null, savedLogin: null, signedIn: false, packageEnabled: false },
     { state: "problem", botLogin: null, problems: [{ id: "expired", severity: "problem", message: "GitHub rejected the bot's token.", fix: "Run roborepo github setup in your own terminal." }] },
     { state: "unavailable", reason: "GitHub could not be reached" },
+    // GitHub confirms the bot's token as your own account: reading the repo for it would report your access.
+    { state: "problem", botLogin: "me", problems: [{ id: "bot-is-user", severity: "problem", message: "The bot account me is your own account.", fix: "Run roborepo github setup in your own terminal." }] },
   ]) {
     account = readyAccount(waiting);
     const before = reads.length;
@@ -217,6 +219,30 @@ async function anOlderReadFinishingLastKeepsTheFreshReport() {
   await olderRepo;
   assert.equal((await loadRepo()).state, "healthy", "a repo's cache keeps its fresh report");
   assert.equal(repoReads.length, 2);
+
+  // Reads started before the cache is cleared (setup opening) never refill it or get reused.
+  clearAgentIdentityCache();
+  const pendingAccount = load();
+  clearAgentIdentityCache();
+  const afterClear = load();
+  assert.equal(accountReads.length, 4, "a read pending at the clear is not reused");
+  accountReads[2].resolve(readyAccount({ state: "problem", problems: [{ id: "expired", severity: "problem", message: "x", fix: "x" }] }));
+  await pendingAccount;
+  accountReads[3].resolve(readyAccount({ state: "healthy" }));
+  await afterClear;
+  assert.equal((await load()).state, "healthy", "the read started after the clear fills the account cache");
+  const pendingRepo = loadRepo();
+  await new Promise((resolve) => setImmediate(resolve));
+  clearAgentIdentityCache();
+  repoReads[2].resolve(repoReport("problem"));
+  await pendingRepo;
+  const nextRepo = loadRepo();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(repoReads.length, 4, "a repo read pending at the clear does not refill the cache");
+  repoReads[3].resolve(repoReport("healthy"));
+  assert.equal((await nextRepo).state, "healthy");
+  assert.equal((await loadRepo()).state, "healthy", "a repo read started after the clear fills the cache");
+  assert.equal(repoReads.length, 4);
   clearAgentIdentityCache();
 }
 
@@ -329,7 +355,7 @@ async function setupLaunchIsTheServersChoice(checkout) {
   await assert.rejects(launchAgentIdentitySetup({ repositoryId: "git:github.com/example/unknown", stateRoot, platform: "darwin", launch }), (error) => error.code === "NOT_FOUND");
 }
 
-function terminalLaunchStartsInTheGivenFolder(checkout) {
+async function terminalLaunchStartsInTheGivenFolder(checkout) {
   const dir = path.join(tmp, "launch");
   const run = () => ({ status: 0 });
   assert.deepEqual(launchInTerminal({ name: "setup", executable: process.execPath, args: ["x"], cwd: checkout }, { platform: "darwin", dir, run }), { ok: true });
@@ -346,7 +372,7 @@ function terminalLaunchStartsInTheGivenFolder(checkout) {
   assert.doesNotMatch(script, /^exec /m);
   // Closing a window ends all its tabs, so only a window holding just the setup tab is closed.
   assert.match(script, /if tty of t is "'"\$tty"'" and \(count of tabs of w\) is 1 then close w/);
-  assert.match(script, /It stopped\. Read the message above, then close this window\./);
+  assert.match(script, /It stopped\. Read the message above, then press Return\./);
   assert.match(script, /if \[ "\$TERM_PROGRAM" != "Apple_Terminal" \]; then\n  printf "\\nDone\. You can close this window\.\\n"/);
   // A failing program exits with its status and never reaches the close.
   const failing = path.join(dir, "failing.command");
@@ -354,6 +380,14 @@ function terminalLaunchStartsInTheGivenFolder(checkout) {
   const failed = spawnSync("sh", [failing], { encoding: "utf8", env: { ...process.env, TERM_PROGRAM: "Apple_Terminal" } });
   assert.equal(failed.status, 1);
   assert.match(failed.stdout, /It stopped/);
+  // A failed run waits for Return before the shell exits, so a profile that closes the window on
+  // exit cannot take the message with it.
+  const waiting = spawn("sh", [failing], { env: { ...process.env, TERM_PROGRAM: "Apple_Terminal" }, stdio: ["pipe", "ignore", "ignore"] });
+  const exited = new Promise((resolve) => waiting.on("exit", (code) => resolve(code)));
+  const early = await Promise.race([exited, new Promise((resolve) => setTimeout(() => resolve("waiting"), 500))]);
+  assert.equal(early, "waiting", "the failed run waits for acknowledgement");
+  waiting.stdin.end("\n");
+  assert.equal(await exited, 1, "after Return it exits with the program's status");
   // Outside Terminal a success only says the window can be closed.
   launchInTerminal({ name: "passing", executable: "/usr/bin/true", closeOnSuccess: true }, { platform: "darwin", dir, run });
   const passed = spawnSync("sh", [path.join(dir, "passing.command")], { encoding: "utf8", env: { ...process.env, TERM_PROGRAM: "iTerm.app" } });
@@ -452,7 +486,14 @@ function realStatusAgainstFakeGh(checkout) {
     ...process.env, ...gh.env, HOME: path.join(tmp, "home"), ROBOREPO_STATE_ROOT: stateRoot, ROBOREPO_SYSTEM_CA_BUNDLE: systemCa,
     PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`,
   };
+  // A gh sign-in or token exported in the caller's shell would outrank the fixture's in fake gh.
   delete env.GH_CONFIG_DIR;
+  delete env.GH_TOKEN;
+  delete env.GITHUB_TOKEN;
+  // The Git settings file the enabled package installs, which status checks is in place.
+  const agentGitconfig = path.join(env.HOME, ".roborepo", "package-runtime", "github-agent-identity", "gitconfig");
+  fs.mkdirSync(path.dirname(agentGitconfig), { recursive: true });
+  fs.writeFileSync(agentGitconfig, "# fixture\n");
   // Protection rulesets as `roborepo protect` writes them, so the healthy case is fully healthy.
   const protect = spawnSync(process.execPath, [path.join(repoRoot, "scripts/cli/main.mjs"), "protect"], { cwd: checkout, env, encoding: "utf8" });
   assert.equal(protect.status, 0, protect.stdout + protect.stderr);

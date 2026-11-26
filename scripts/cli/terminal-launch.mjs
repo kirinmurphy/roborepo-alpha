@@ -22,7 +22,8 @@ export function terminalLaunchSupported(platform = process.platform) {
 // The working directory is `cwd` when the program acts on a folder (a repo's setup), else the
 // script's own folder: neutral, empty, and owned by RoboRepo. A `cwd` must be an existing absolute
 // folder, like the executable. With `closeOnSuccess`, a run that exits 0 says so and closes its own
-// window a few seconds later; a failed run keeps the window open so its message can be read.
+// window a few seconds later; a failed run waits for Return before it exits, so a terminal profile
+// that closes the window when the shell exits cannot take the message with it.
 export function launchInTerminal({ name, executable, args = [], cwd = null, closeOnSuccess = false }, {
   platform = process.platform, dir = path.join(stateDir, "terminal-launch"), run = spawnSync,
 } = {}) {
@@ -67,7 +68,8 @@ function closingTail(command) {
     command,
     "status=$?",
     'if [ "$status" -ne 0 ]; then',
-    '  printf "\\nIt stopped. Read the message above, then close this window.\\n"',
+    '  printf "\\nIt stopped. Read the message above, then press Return.\\n"',
+    "  read -r _ || true",
     '  exit "$status"',
     "fi",
     'if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then',

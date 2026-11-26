@@ -40,8 +40,10 @@ let accountCache = null; // { at, key, report }
 let accountPending = null; // { key, promise }
 // Each read that starts counts up, and only the latest read started may write its cache: a fresh read
 // can start while an older one is pending, and the older one finishing last must not replace it.
+// Clearing the cache counts up too, so a read started before the clear never refills it.
 let accountReadCount = 0;
 const repoReadCounts = new Map();
+let repoGeneration = 0;
 
 // The bot account, shared by every repo. Concurrent callers (Home reads every repo card at once)
 // share one read. A cached or pending read is reused only while the local facts it was made with
@@ -96,10 +98,11 @@ export async function loadRepositoryAgentIdentity({
   if (!fresh && cached && now() - cached.at < CACHE_MS && cached.botLogin === account.botLogin) report = cached.report;
   else {
     const started = (repoReadCounts.get(repositoryId) ?? 0) + 1;
+    const generation = repoGeneration;
     repoReadCounts.set(repositoryId, started);
     // The checkout only matters to the gh calls as a working folder; the repo itself is named.
     report = await read({ repositoryId, cwd: checkout.ok ? checkout.path : neutralFolder(), timeoutMs: PORTAL_TIMEOUT_MS, botLogin: account.botLogin });
-    if (repoReadCounts.get(repositoryId) === started) repoCache.set(repositoryId, { at: now(), report, botLogin: account.botLogin });
+    if (repoReadCounts.get(repositoryId) === started && repoGeneration === generation) repoCache.set(repositoryId, { at: now(), report, botLogin: account.botLogin });
   }
   return {
     repositoryId,
@@ -128,7 +131,7 @@ export async function turnOnAgentIdentity({
     return { enabled: false, reason: "not_ready", message: "The bot account needs more than the package turned on; open the setup instead.", account: portalAccount(before, { platform }) };
   }
   const result = await turnOn();
-  repoCache.clear();
+  clearRepoCache();
   const after = await readAccount({ fresh: true, now, read });
   if (!result.ok) return { enabled: false, reason: "enable_failed", message: result.message, account: portalAccount(after, { platform }) };
   return { enabled: true, account: portalAccount(after, { platform }) };
@@ -143,7 +146,7 @@ export async function applyAgentGitRouting({
   const before = await readAccount({ fresh: true, now, read });
   if (!before.problems.some((entry) => entry.id === "git-not-routed")) return { applied: false, reason: "not_needed", account: portalAccount(before, { platform }) };
   const result = await apply();
-  repoCache.clear();
+  clearRepoCache();
   const after = await readAccount({ fresh: true, now, read });
   if (!result.ok) return { applied: false, reason: "apply_failed", message: `The update did not finish: ${result.error}`, account: portalAccount(after, { platform }) };
   return { applied: true, account: portalAccount(after, { platform }) };
@@ -160,6 +163,7 @@ export async function inviteAgentBot({
   if (!accountReady(account)) return { invited: false, reason: "not_ready", message: "The bot account needs fixing first." };
   const result = await invite({ repositoryId, cwd: neutralFolder(), timeoutMs: PORTAL_TIMEOUT_MS, botLogin: account.botLogin });
   repoCache.delete(repositoryId);
+  repoReadCounts.set(repositoryId, (repoReadCounts.get(repositoryId) ?? 0) + 1);
   const repository = await loadRepositoryAgentIdentity({ repositoryId, stateRoot, fresh: true, platform, now, readAccountReport, read });
   return result.ok ? { invited: true, repository } : { invited: false, reason: "refused", message: result.message, repository };
 }
@@ -189,12 +193,23 @@ export async function launchAgentIdentitySetup({
 }
 
 export function clearAgentIdentityCache() {
-  repoCache.clear();
+  clearRepoCache();
   accountCache = null;
+  accountPending = null;
+  accountReadCount += 1;
 }
 
+// Drops every repo's cached report, and stops any repo read still pending from writing the cache.
+function clearRepoCache() {
+  repoCache.clear();
+  repoGeneration += 1;
+}
+
+// A bot GitHub says is your own account is not one agents can use: reading or inviting for it would
+// report your access.
 const accountReady = (account) => Boolean(account.botLogin) && account.state !== "not-set-up"
-  && !(account.state === "unavailable" && account.problems.length === 0);
+  && !(account.state === "unavailable" && account.problems.length === 0)
+  && !account.problems.some((entry) => entry.id === "bot-is-user");
 
 // Throws NOT_FOUND for an id the portal does not list, so the routes act only on known repos.
 function repositoryTarget({ repositoryId, stateRoot = STATE_ROOT }) {
