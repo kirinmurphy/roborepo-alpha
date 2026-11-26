@@ -329,7 +329,8 @@ async function integrateRemote(store) {
 }
 
 async function replayPending(store, local, remote) {
-  let step = await storeGit(store, ["rebase", "--quiet", "--no-autostash", TRACKING_REF]);
+  // keepAgentGitConfig: replayed commits need a committer, which from an agent shell may be only the bot.
+  let step = await storeGit(store, ["rebase", "--quiet", "--no-autostash", TRACKING_REF], { keepAgentGitConfig: true });
   for (let guard = 0; !step.ok && guard < 50; guard += 1) {
     const conflicts = (await required(store, ["diff", "--name-only", "--diff-filter=U"])).split("\n").filter(Boolean);
     if (conflicts.length !== 1 || conflicts[0] !== PLANS_ORDER_RELATIVE_PATH) break;
@@ -337,7 +338,7 @@ async function replayPending(store, local, remote) {
     if (merged === null) break;
     fs.writeFileSync(path.join(store.root, PLANS_ORDER_RELATIVE_PATH), merged);
     await required(store, ["add", "--", PLANS_ORDER_RELATIVE_PATH]);
-    step = await storeGit(store, ["-c", "core.editor=true", "rebase", "--continue"]);
+    step = await storeGit(store, ["-c", "core.editor=true", "rebase", "--continue"], { keepAgentGitConfig: true });
   }
   if (step.ok) return;
   await storeGit(store, ["rebase", "--abort"]);

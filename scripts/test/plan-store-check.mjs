@@ -352,6 +352,20 @@ try {
   const agentSave = spawnSync(process.execPath, [path.join(import.meta.dirname, "..", "cli", "main.mjs"), "plans", "save", source("test-agent.md", planDoc({ id: "agent001" })), "--json"], { cwd: agentRepo, env: agentEnv, encoding: "utf8" });
   ok(agentSave, "an agent's save");
   assert.equal(git(storePath(agentRepo), "log", "-1", "--format=%an <%ae>").trim(), "robo-bot <4242+robo-bot@users.noreply.github.com>", "the agent's save is authored by the bot");
+  // An offline save from the agent shell, replayed over another machine's plan, keeps the bot as
+  // its committer: the rebase that replays it has the same identity as the save.
+  const agentSaveCli = (name, id) => spawnSync(process.execPath, [path.join(import.meta.dirname, "..", "cli", "main.mjs"), "plans", "save", source(name, planDoc({ id })), "--json"], { cwd: agentRepo, env: agentEnv, encoding: "utf8" });
+  const agentUrl = git(agentRepo, "remote", "get-url", "origin");
+  git(agentRepo, "remote", "set-url", "origin", path.join(tmp, "nowhere.git"));
+  assert.equal(ok(agentSaveCli("test-agent-offline.md", "agentoff"), "an agent's offline save").synchronized, false);
+  git(agentRepo, "remote", "set-url", "origin", agentUrl);
+  const agentMachine = clone(agentRepo, "agent-author-b");
+  git(agentMachine, "checkout", "--quiet", "-b", "repo-plans", "origin/repo-plans");
+  fx.commit(agentMachine, "A plan from elsewhere", { "plans/backlog/test-agent-elsewhere.md": planDoc({ id: "agentels" }) });
+  git(agentMachine, "push", "--quiet", "origin", "repo-plans");
+  assert.equal(ok(agentSaveCli("test-agent-back.md", "agentbak"), "the agent's next reachable save").synchronized, true);
+  const replayedAgent = git(storePath(agentRepo), "log", "-1", "--format=%cn", "--", "plans/backlog/test-agent-offline.md").trim();
+  assert.equal(replayedAgent, "robo-bot", "the replayed offline save keeps the bot as committer");
   fs.rmSync(agentGitconfig);
 
   console.log("plan-store-check: ok");
