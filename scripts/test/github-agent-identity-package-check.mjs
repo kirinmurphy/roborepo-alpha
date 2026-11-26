@@ -135,6 +135,31 @@ try {
   assert.equal(codexRules(), baselineRules, "off: Codex rules return to the identity-off baseline");
   assert.match(codexOff, /\[permissions\.managed-workspace\.network\]\nenabled = false/);
   assert.doesNotMatch(codexOff, /cert\.pem/);
+
+  // The package gitconfig clears inherited credential helpers for github.com only, so the bot's gh
+  // helper answers there and another host keeps the user's helper. A stub `gh` stands in for the bot.
+  const creds = path.join(home, "creds");
+  fs.mkdirSync(path.join(creds, "bin"), { recursive: true });
+  const stub = (file, user) => fs.writeFileSync(file, `#!/bin/sh\necho username=${user}\necho password=x\n`, { mode: 0o755 });
+  stub(path.join(creds, "bin", "gh"), "bot");
+  stub(path.join(creds, "user-helper"), "user");
+  fs.writeFileSync(path.join(creds, "global"), `[credential]\n\thelper = ${path.join(creds, "user-helper")}\n`);
+  const fill = (host) => spawnSync("git", ["credential", "fill"], {
+    input: `protocol=https\nhost=${host}\n\n`,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PATH: `${path.join(creds, "bin")}${path.delimiter}${process.env.PATH}`,
+      GIT_CONFIG_GLOBAL: path.join(creds, "global"),
+      GIT_CONFIG_SYSTEM: "/dev/null",
+      GIT_TERMINAL_PROMPT: "0",
+      GIT_CONFIG_COUNT: "1",
+      GIT_CONFIG_KEY_0: "include.path",
+      GIT_CONFIG_VALUE_0: path.join(repoRoot, "globals", "packages", ID, "gitconfig"),
+    },
+  }).stdout.match(/^username=(.*)$/m)?.[1];
+  assert.equal(fill("github.com"), "bot", "github.com asks the bot's gh helper, not the user's");
+  assert.equal(fill("gitlab.example.com"), "user", "another host keeps the user's credential helper");
 } finally {
   fs.rmSync(home, { recursive: true, force: true });
 }
