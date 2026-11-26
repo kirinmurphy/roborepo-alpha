@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Review at b4fde55d is done apart from the owner's checks. The owner runs roborepo github setup in their own terminal, settles the open Not tested entries, then resumes /plan-review for approval
+next_action: Review at 939e3457 waits on two owner checks (Open setup from Home, and an agent commit pushed with the bot as author), then the approval
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["rtkmc8kf", "f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -670,8 +670,9 @@ reads status and opens the terminal.
 
 - [x] Decision Log, package table, and Validation still describe core owning the `include.path` pair and `GIT_CONFIG_COUNT = 5` after the package took the pair — fixed in the plan record (November 26)
 - [x] The bot authoring agents' commits is recorded in no Decision Log entry or Not tested row — fixed in the plan record (November 26)
-- [ ] `docs/user/guides/setup-and-daily-use.md`: "a bot set up before this was added" will go stale, and the doc omits that the author applies in every repo agents commit in
-- [ ] The bot author include is unconditional, so agents' commits in non-GitHub repos also carry the GitHub bot's noreply author — escalated to the human: keep global and document, or scope it to GitHub remotes with `includeIf`
+- [x] `docs/user/guides/setup-and-daily-use.md`: "a bot set up before this was added" will go stale, and the doc omits that the author applies in every repo agents commit in
+      — fixed in review (10314b88)
+- [x] The bot author include is unconditional, so agents' commits in non-GitHub repos also carry the GitHub bot's noreply author — the user chose to scope it to github.com remotes; fixed in review (10314b88, 939e3457)
 
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
@@ -694,6 +695,7 @@ reads status and opens the terminal.
 - Branch pushed at b4fde55d on 2026-11-25 after the owner published `main` 97605225; CI result pending
 - Review 2026-11-26: base synchronized at ea5c6905 (`main` e9595325, an empty commit); CI passed at f990aa0c (ubuntu, macos, windows-installer)
 - Review Validator pass 1 at ea5c6905 (fresh-context subagent, implementation-review, scope b4fde55d..HEAD): no code defects; 3 actionable record and doc findings, 1 escalate (above)
+- Review Validator pass 2 at 10314b88: 2 actionable fixes (an https remote with a user name; the hooks reference) and 2 notes (the setup message; Git 2.36), all fixed in 939e3457
 - `github-setup-check.mjs` and `github-identity-status-check.mjs` pass at ea5c6905 outside the Claude sandbox (inside it they fail on the `/**/*.pem` deny)
 
 ### Result
@@ -723,37 +725,44 @@ reads status and opens the terminal.
 - [x] Codex's permission hook follows the identity. — Verified by agent 2026-11-22 at 35f1b186:
       `codex-command-permission-check.mjs` and a direct hook probe with an isolated state root:
       `gh api repos/o/r` → deny without the package asset, allow with it.
-- [ ] `roborepo github setup` end to end on the real repo: the hidden token prompt stores the
+- [x] `roborepo github setup` end to end on the real repo: the hidden token prompt stores the
       token in `~/.roborepo/github-agent/gh/hosts.yml` (mode 0600), the CA bundle copy and
       `gitconfig.local` are written, and the package is enabled. Needs a person: the token is typed
       at a hidden prompt in the owner's own terminal, and agents are denied the command.
       `roborepo github status` on 2026-11-22 at 43a377d4 already reported the real bot, scopes,
       expiry, and protection correctly.
-- [ ] Inside Codex with the identity on, as the bot: `gh` reads the token from `hosts.yml`;
+      — Confirmed by the user 2026-11-26, selecting "Agent shells as the bot" for the November 25 runs: setup reported every step already done. The hidden token prompt ran at the first setup, not on November 25. Agent check 2026-11-26: `hosts.yml` mode 0600, its folder 0700, `ca-bundle.crt` and `gitconfig.local` present, package enabled (file modes read with `stat`, contents not read).
+- [x] Inside Codex with the identity on, as the bot: `gh` reads the token from `hosts.yml`;
       `git fetch`, `git push` to a feature branch, `roborepo delivery fetch origin`, and
       `gh pr create` succeed with no prompt; a `roborepo plans save` made before the identity was on
       is pushed by the next save. Needs a person: every step needs the token the setup stores.
-- [ ] In a Claude agent shell with the identity on: push a feature branch and open a PR as the bot;
+      — Confirmed by the user 2026-11-26, selecting "Agent shells as the bot" for the November 25 runs: push, draft PRs 91 and 92, and plan saves as the bot with no prompt. In a linked worktree, `roborepo delivery fetch origin` asks to escalate, which the user chose to keep (Decision Log, November 26). The save made before the identity was on was not exercised, because the identity was already on.
+- [x] In a Claude agent shell with the identity on: push a feature branch and open a PR as the bot;
       `gh api graphql` reads `reviewThreads { isResolved }`, replies, and resolves a thread;
       `gh pr comment` runs without a prompt. Needs a person: it needs the token stored by the setup,
       and a new agent session to pick up the re-rendered environment.
-- [ ] The bot can push `repo-plans` directly (`roborepo plans save` from an agent shell reports
+      — Confirmed by the user 2026-11-26, selecting "Agent shells as the bot" for the November 25 runs: PR 90 pushed and opened as the bot; review threads read, replied to, and resolved, and `gh pr comment` posted, all as the bot.
+- [x] The bot can push `repo-plans` directly (`roborepo plans save` from an agent shell reports
       "synchronized"), and GitHub refuses a delete or force-push of `repo-plans` and an unapproved
       merge of the bot's PR. Needs a person: same token prerequisite; the refusal checks act on the
       real repo's protected branches and are the owner's call to run.
-- [ ] With the agent environment exported, `git push --no-verify origin HEAD:main` is rejected by
+      — Confirmed by the user 2026-11-26, selecting "GitHub refusals" and "Agent shells as the bot": plan saves reported "synchronized" as the bot; GitHub answered "Cannot force-push to this branch", "Cannot delete this branch", and refused the unapproved merge.
+- [x] With the agent environment exported, `git push --no-verify origin HEAD:main` is rejected by
       GitHub naming `roborepo-main-merge`, and the owner's own push to `main` still succeeds through
       the admin bypass. Needs a person: both attempt real pushes to `main`.
-- [ ] Renewing on the real repo: after the bot's token expires or is revoked, rerunning
+      — Confirmed by the user 2026-11-26, selecting "GitHub refusals": the bot's push was rejected with GH013 by the rules of `roborepo-main-merge` (GitHub's message does not print the ruleset name), and the owner's own push reported "Bypassed rule violations".
+- [x] Renewing on the real repo: after the bot's token expires or is revoked, rerunning
       `roborepo github setup` names the saved bot, opens the token list, takes a regenerated token,
       and status is healthy again; a rerun with a token expiring within 14 days offers to replace
       it. Needs a person: the token is typed at a hidden prompt in the owner's own terminal.
       `github-setup-check.mjs` covers both paths against a fake `gh`.
-- [ ] In a new Claude and a new Codex agent shell with the identity on, after exporting a token in
+      — Not run, by the user's choice 2026-11-26 ("Covered by tests"): the owner kept the working token. `github-setup-check.mjs` covers renewing an expired token and replacing one that expires soon, against a fake `gh`.
+- [x] In a new Claude and a new Codex agent shell with the identity on, after exporting a token in
       the launching shell: `printf '[%s]' "$GH_TOKEN"` prints `[]` and `gh auth status` names the
       bot. Needs a person: it needs the package on in the owner's install and new agent sessions
       started from that shell. A fake-token check (2026-11-23) showed `gh` hands Git the stored
       bot token when `GH_TOKEN` is empty, and the exported one when it is set.
+      — Confirmed by the user 2026-11-26, selecting "Agent shells as the bot" for the November 25 runs: both printed `[][]`, and `gh auth status` named codethings-agents (inside the Claude sandbox it fails on a certificate error instead).
 - [x] Home shows the bot identity for a real GitHub repo with the package off. — Verified by agent
       2026-11-23 at b39f969e: a portal started from the worktree (port 47821, the owner's normal
       state) showed `roborepo-alpha` as "needs attention", "A bot is signed in but the
@@ -768,10 +777,11 @@ reads status and opens the terminal.
       it needs `roborepo github setup` rerun to write the author file, then an agent commit and push.
       `github-setup-check.mjs` asserts the setup writes it, and `github-agent-identity-package-check.mjs`
       runs Git with the include and reads the bot's name and email.
-- [ ] `/plan-suite-init` in a repo without a plan store ends by offering `roborepo github setup`.
+- [x] `/plan-suite-init` in a repo without a plan store ends by offering `roborepo github setup`.
       Needs a person: initializing a store creates a remote branch on a real GitHub repo, which is
       the owner's call; `github-identity-status-check.mjs` covers the `not-set-up` answer the offer
       reads.
+      — Confirmed by the user 2026-11-26, selecting "plan-suite-init offer": in a new repo it ended offering `roborepo github setup`, because the bot was not yet invited; 58a34454 now names the missing invitation.
 
 ## Validation
 
@@ -898,6 +908,11 @@ None open.
   the package off left the always-rendered pair pointing at a removed file, and an existing install
   kept a stale count. Turning it off now removes the pair; a pair from the earlier baseline is
   removed too, since its value matches.
+- November 26, 2026 (user decision): the bot is the author only in repos with a github.com remote
+  (`includeIf "hasconfig:remote.*.url:..."`, Git 2.36 or later). The bot has an account only on
+  GitHub, so a GitLab or local-only repo keeps the user's author. Alternative: the bot as author
+  everywhere, documented. The user wants a forge-provider abstraction later, so each provider's
+  account acts only with that provider (future work).
 - November 26, 2026 (user decision): agents' commits are authored by the bot. The setup writes
   `~/.roborepo/github-agent/gitconfig.author` (the bot's login and `<id>+<login>@users.noreply.github.com`),
   and the package gitconfig includes it. Chosen because manual checks showed pull requests pushed
@@ -1009,6 +1024,9 @@ None open.
 
 ## Future work
 
+- A forge-provider layer: GitHub becomes one provider behind a common interface, so another
+  remote host (GitLab and others) is added as a provider with its own agent account, and each
+  account acts only with its own provider (user request, November 26).
 - Hide the user's SSH agent from agent shells. Codex's `shell_environment_policy` can exclude
   `SSH_AUTH_SOCK`; Claude's `env` can only set it to empty. With fetches on HTTPS, this closes the
   remaining path by which an agent can act as the admin.
