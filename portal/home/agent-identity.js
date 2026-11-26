@@ -22,6 +22,8 @@ const TOKEN_FINDINGS = new Set(["expired", "expiring", "no-expiry", "fine-graine
 const LEVEL_RANK = { ok: 0, muted: 1, warn: 2, problem: 3 };
 // How long the card shows "All set" after the last open item is checked off, before it closes.
 const COMPLETE_CLOSE_MS = 5_000;
+// What each action's button says while it waits on the server.
+const BUSY_LABELS = { enable: "Turning on…", update: "Updating…", setup: "Opening…", invite: "Inviting…", protect: "Protecting…" };
 
 // The bot identity is a GitHub feature: only listed GitHub repos show it. The server has the last
 // word (`applies: false`), so a repo it turns down shows nothing either.
@@ -70,6 +72,13 @@ function showAccount(report) {
   if (before && JSON.stringify(before) === JSON.stringify(report)) return;
   // Each repo's read depends on the account on the server, so a changed account means new reads.
   const changed = before && (before.state !== report.state || before.botLogin !== report.botLogin || before.packageEnabled !== report.packageEnabled);
+  if (changed) {
+    // Reads still in flight were asked under the old account: none of them may land now, and the
+    // rereads below start afresh rather than joining one.
+    pending.clear();
+    // Another bot's verdicts say nothing about this one: show none until this bot's reads answer.
+    if (botOf(before) !== botOf(report)) reports.clear();
+  }
   for (const repositoryId of badges.keys()) {
     if (report.packageEnabled && (changed || !reports.has(repositoryId))) load(repositoryId, { reread: true }).catch(() => {});
     renderBadges(repositoryId);
@@ -77,6 +86,20 @@ function showAccount(report) {
   if (!describeAccount(report).offersSetup && !report.enableOffered) watchingAccount = false;
   offer?.render(report);
   if (card?.showing("account")) card.render();
+}
+
+const botOf = (report) => report.botLogin || report.savedLogin || null;
+
+// An action's answer is newer than any read still in flight, so those reads are dropped: a slower
+// one answering after it would put back what the action just fixed.
+function publishAccount(report) {
+  accountPending = null;
+  showAccount(report);
+}
+
+function publishRepo(repositoryId, report) {
+  pending.delete(repositoryId);
+  showRepo(repositoryId, report);
 }
 
 // `reread` skips only this page's copy; `fresh` also skips the server's cache. As for the account,
@@ -218,6 +241,12 @@ export function repoView(accountReport, report) {
 export function renderAgentIdentityOffer(mount, repositories) {
   if (!mount) return;
   githubRepositories = repositories.filter(supportsAgentIdentity);
+  // Home rebuilds its cards before this runs, so a repo with no badge left on the page has left
+  // Home: it is no longer read on the poll or picked for the setup.
+  for (const [repositoryId, set] of badges) {
+    for (const old of set) if (!old.isConnected) set.delete(old);
+    if (set.size === 0) badges.delete(repositoryId);
+  }
   for (const repository of githubRepositories) names.set(repository.repositoryId, repository.displayName || repository.repositoryId);
   // Settings' setup link opens the account card even with no GitHub repo listed; the card then shows
   // the command to run, as there is no repo folder to open the setup in.
@@ -405,10 +434,10 @@ function renderBadge(badge, repositoryId) {
 // Actions shared by the offer and the card
 
 async function turnOn(button, onNote) {
-  await busy(button, "Turning on…", async () => {
+  await busy(button, BUSY_LABELS.enable, async () => {
     try {
       const result = await portalPostJson(`${ACCOUNT_URL}/enable`, {});
-      if (result.account) showAccount(result.account);
+      if (result.account) publishAccount(result.account);
       onNote(result.enabled ? "Agents act as the bot in new agent sessions; ones already open keep acting as you until restarted." : result.message);
     } catch (error) {
       onNote(error.message);
@@ -418,10 +447,10 @@ async function turnOn(button, onNote) {
 
 // Applies RoboRepo's config so agents' Git uses the bot. Takes a few seconds: the button says so.
 async function updateConfig(button, onNote) {
-  await busy(button, "Updating…", async () => {
+  await busy(button, BUSY_LABELS.update, async () => {
     try {
       const result = await portalPostJson(`${ACCOUNT_URL}/update`, {});
-      if (result.account) showAccount(result.account);
+      if (result.account) publishAccount(result.account);
       onNote(result.applied
         ? "Updated. New agent sessions push as the bot; ones already open still push as you until restarted."
         : result.message || null, Boolean(result.applied));
@@ -434,7 +463,7 @@ async function updateConfig(button, onNote) {
 async function openSetup(button, repositoryId) {
   watchingAccount = true;
   watching.add(repositoryId);
-  return busy(button, "Opening…", async () => {
+  return busy(button, BUSY_LABELS.setup, async () => {
     try {
       const result = await portalPostJson(`${repoUrl(repositoryId)}/setup`, {});
       return {
@@ -478,7 +507,7 @@ export function openAgentIdentityCard(repository) {
   void card.open({ kind: "repo", repositoryId: repository.repositoryId, name: repository.displayName || repository.repositoryId });
 }
 
-const firstGithubRepository = () => githubRepositories[0]?.repositoryId || [...badges.keys()][0] || null;
+const firstGithubRepository = () => githubRepositories[0]?.repositoryId || null;
 
 function buildCard() {
   const dialog = document.getElementById("agent-identity-dialog");
@@ -491,8 +520,20 @@ function buildCard() {
 
   // The open item's one button. Every action but the setup runs on the server; the setup opens a
   // terminal, because the bot's login and token are typed there and never pass through the page.
+  // While it runs, the card's re-renders draw its button busy too, so a status refresh cannot put
+  // back a button that sends it again.
   async function run(kind, button) {
     const opening = target;
+    opening.running = kind;
+    try {
+      await perform(kind, button, opening);
+    } finally {
+      opening.running = null;
+      if (target === opening) render();
+    }
+  }
+
+  async function perform(kind, button, opening) {
     const say = (message) => { if (target === opening) { opening.note = message || null; render(); } };
     if (kind === "enable") return turnOn(button, say);
     if (kind === "update") return updateConfig(button, say);
@@ -504,11 +545,11 @@ function buildCard() {
       return render();
     }
     const repositoryId = opening.repositoryId;
-    await busy(button, kind === "invite" ? "Inviting…" : "Protecting…", async () => {
+    await busy(button, BUSY_LABELS[kind], async () => {
       try {
         if (kind === "invite") {
           const result = await portalPostJson(`${repoUrl(repositoryId)}/invite`, {});
-          if (result.repository) showRepo(repositoryId, result.repository);
+          if (result.repository) publishRepo(repositoryId, result.repository);
           say(result.invited ? null : result.message);
         } else {
           const result = await applyProtection(repositoryId, "protect");
@@ -538,11 +579,19 @@ function buildCard() {
     }
   }
 
+  // Until a report for what the card shows is in: what is being read, and nothing to act on.
+  function showChecking(subject) {
+    fill(dialog, { subject, state: "checking", message: "Reading the bot's status from GitHub…" });
+    slot("state").dataset.level = "muted";
+    for (const name of ["steps", "bot-browser", "owner", "command-row", "launch-note", "recheck"]) slot(name).hidden = true;
+  }
+
   function render() {
     if (!target || !account) return;
     const accountReport = account.report;
     const repoReport = target.kind === "repo" ? reports.get(target.repositoryId)?.report : null;
-    if (target.kind === "repo" && !repoReport) return;
+    // The account changed to another bot, and this repo has not been read for it yet.
+    if (target.kind === "repo" && !repoReport) return showChecking(target.name);
     const applies = target.kind === "account" || repoReport.applies;
     const view = target.kind === "account" ? describeAccount(accountReport) : repoView(accountReport, repoReport);
     const steps = applies ? cardSteps(accountReport, repoReport) : [];
@@ -554,6 +603,10 @@ function buildCard() {
     if (complete) {
       target.note = null;
       target.copyFallback = false;
+    } else if (target.closeTimer) {
+      // Something reopened before the card closed: it stays open, and finishing again starts over.
+      clearTimeout(target.closeTimer);
+      target.closeTimer = null;
     }
     if (justFinished && !target.closeTimer) {
       const closing = target;
@@ -580,6 +633,7 @@ function buildCard() {
     slot("steps").replaceChildren(...steps.map((entry, index) => stepItem(entry, index, {
       current: index === current,
       button: index === current && !showCommand ? entry.button : null,
+      running: Boolean(target.running) && target.running === entry.button?.kind,
       onRun: run,
     })));
     slot("bot-browser").hidden = !step?.url;
@@ -616,10 +670,8 @@ function buildCard() {
     },
     async open(next) {
       if (target?.closeTimer) clearTimeout(target.closeTimer);
-      target = { ...next, copyFallback: false, note: null, hadOpenItems: false, closeTimer: null };
-      fill(dialog, { subject: next.kind === "account" ? "Bot account (all repos)" : next.name, state: "checking", message: "Reading the bot's status from GitHub…" });
-      slot("state").dataset.level = "muted";
-      for (const name of ["steps", "bot-browser", "owner", "command-row", "launch-note", "recheck"]) slot(name).hidden = true;
+      target = { ...next, copyFallback: false, note: null, hadOpenItems: false, closeTimer: null, running: null };
+      showChecking(next.kind === "account" ? "Bot account (all repos)" : next.name);
       showError(null);
       if (!dialog.open) dialog.showModal();
       await refresh({ fresh: false });
@@ -635,12 +687,7 @@ const setupRepository = (target) => (target.kind === "repo" ? target.repositoryI
 // disabled and shows the portal's inline spinner beside a label saying what is happening.
 async function busy(button, label, work) {
   const idle = [...button.childNodes];
-  const spinner = document.createElement("span");
-  spinner.className = "button-spinner";
-  spinner.setAttribute("aria-hidden", "true");
-  button.disabled = true;
-  button.setAttribute("aria-busy", "true");
-  button.replaceChildren(spinner, label);
+  const spinner = showBusy(button, label);
   try {
     return await work();
   } finally {
@@ -649,6 +696,16 @@ async function busy(button, label, work) {
     // A re-render may already have relabeled the button; keep that label.
     if (button.firstChild === spinner) button.replaceChildren(...idle);
   }
+}
+
+function showBusy(button, label) {
+  const spinner = document.createElement("span");
+  spinner.className = "button-spinner";
+  spinner.setAttribute("aria-hidden", "true");
+  button.disabled = true;
+  button.setAttribute("aria-busy", "true");
+  button.replaceChildren(spinner, label);
+  return spinner;
 }
 
 // One sentence above the list: what works, and where to start when something does not.
@@ -665,7 +722,7 @@ function summary(accountReport, view, steps) {
   return view.level === "warn" && accountReport.packageEnabled ? `Agents can work, but item ${first + 1} needs you soon.` : `Start at item ${first + 1}.`;
 }
 
-function stepItem(step, index, { current = false, button = null, onRun = null } = {}) {
+function stepItem(step, index, { current = false, button = null, running = false, onRun = null } = {}) {
   const action = current ? step.action : null;
   const url = current ? step.url : null;
   const item = fill(tpl("tpl-agent-identity-step"), { number: `${index + 1}.`, label: step.label, note: step.note || "", action: action || "" });
@@ -684,7 +741,8 @@ function stepItem(step, index, { current = false, button = null, onRun = null } 
   }
   const run = item.querySelector("[data-slot=run]");
   run.hidden = !button;
-  if (button) {
+  if (button && running) showBusy(run, BUSY_LABELS[button.kind]);
+  else if (button) {
     run.textContent = button.label;
     run.addEventListener("click", () => void onRun(button.kind, run));
   }

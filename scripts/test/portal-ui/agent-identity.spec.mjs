@@ -197,6 +197,11 @@ test.describe("Agent GitHub account", () => {
     for (const name of NAMES) await expect(repoCard(page, name)).toBeVisible();
   };
   const doneOf = (list) => list.evaluateAll((items) => items.map((item) => item.dataset.done === "true"));
+  // Moves the fake clock on until `ready()` holds, one Home poll at a time.
+  const pollUntil = (page, ready) => expect(async () => {
+    await page.clock.fastForward(10_000);
+    expect(ready()).toBe(true);
+  }).toPass({ intervals: [200] });
 
   test("while the package is off, Home offers the setup, and No thanks hides it for good", async ({ page }) => {
     let current = ACCOUNTS["not-set-up"].report;
@@ -438,7 +443,7 @@ test.describe("Agent GitHub account", () => {
     let on = false;
     let release;
     const held = () => new Promise((resolve) => { release = resolve; });
-    await stub(page, {
+    const { reads } = await stub(page, {
       accountNext: () => (on ? ACCOUNTS.healthy.report : ACCOUNTS["package-off"].report),
       enable: async () => { await held(); on = true; return { enabled: true, account: ACCOUNTS.healthy.report }; },
       invite: async (name) => { await held(); return { invited: true, repository: { repositoryId: `git:github.com/example/${name}`, ...REPOS["identity-ready"].report(name) } }; },
@@ -464,6 +469,14 @@ test.describe("Agent GitHub account", () => {
     const inviting = card(page).getByRole("button", { name: "Inviting…" });
     await expect(inviting).toBeDisabled();
     await expect(inviting.locator(".button-spinner")).toBeVisible();
+    // Coming back to the window redraws the card from the same status: the button stays busy, so a
+    // second click cannot send another invite.
+    reads.length = 0;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect.poll(() => reads.some((read) => read.kind === "repo" && read.name === "identity-uninvited" && read.fresh)).toBe(true);
+    await page.waitForTimeout(500);
+    await expect(inviting).toBeDisabled();
+    await expect(card(page).getByRole("button", { name: "Invite the bot" })).toHaveCount(0);
     release();
     await expect(card(page).locator(".button-spinner")).toHaveCount(0);
   });
@@ -577,18 +590,20 @@ test.describe("Agent GitHub account", () => {
 
   test("Invite the bot and Protect branches run from the card, with no terminal", async ({ page }) => {
     let invited = false;
-    let protectedRules = false;
+    // Only the repo the request names is protected, so a request sent for another repo fails here.
+    const protectedRepos = new Set();
     const { posts } = await stub(page, {
       accountNext: () => ACCOUNTS.healthy.report,
-      repoNext: (name) => (name === "identity-uninvited" && invited) || (name === "identity-unprotected" && protectedRules)
+      repoNext: (name) => (name === "identity-uninvited" && invited) || protectedRepos.has(`git:github.com/example/${name}`)
         ? REPOS["identity-ready"].report(name) : REPOS[name].report(name),
       invite: (name) => { invited = true; return { invited: true, repository: { repositoryId: `git:github.com/example/${name}`, ...REPOS["identity-ready"].report(name) } }; },
     });
     const protections = [];
     await page.route(/\/api\/repositories\/[^/]+\/protection$/, async (route) => {
       if (route.request().method() !== "POST") return route.fallback();
-      protections.push(route.request().postData());
-      protectedRules = true;
+      const repositoryId = decodeURIComponent(new URL(route.request().url()).pathname.split("/")[3]);
+      protections.push({ repositoryId, body: route.request().postData() });
+      protectedRepos.add(repositoryId);
       return route.fulfill({ contentType: "application/json", body: JSON.stringify({ state: "protected", policies: [], changes: [], refusal: null }) });
     });
     await openHome(page);
@@ -602,7 +617,7 @@ test.describe("Agent GitHub account", () => {
     await badge(page, "identity-unprotected").click();
     await card(page).getByRole("button", { name: "Protect branches" }).click();
     await expect(card(page).locator("[data-slot=message]")).toHaveText("All set: Agents act on GitHub as robo-bot. This closes in 5 seconds.");
-    expect(protections).toEqual([JSON.stringify({ action: "protect" })]);
+    expect(protections).toEqual([{ repositoryId: "git:github.com/example/identity-unprotected", body: JSON.stringify({ action: "protect" }) }]);
   });
 
   test("a failed invite keeps the item open and says why", async ({ page }) => {
@@ -751,6 +766,159 @@ test.describe("Agent GitHub account", () => {
     expect(reads.filter((read) => read.fresh)).toEqual([{ kind: "account", fresh: true }, { kind: "repo", name: "identity-invited", fresh: true }]);
   });
 
+  test("a changed bot shows none of the old bot's repo verdicts until each repo is read for it", async ({ page }) => {
+    await page.clock.install();
+    const other = account({ botLogin: "other-bot", savedLogin: "other-bot" });
+    let current = ACCOUNTS.healthy.report;
+    let release = null;
+    const { reads } = await stub(page, {
+      accountNext: () => current,
+      // The new bot is invited nowhere; its read of identity-ready hangs until released.
+      repoNext: (name) => current !== other ? REPOS[name].report(name)
+        : name === "identity-ready" ? new Promise((resolve) => { release = () => resolve(REPOS["identity-uninvited"].report(name)); })
+          : REPOS["identity-uninvited"].report(name),
+    });
+    await openHome(page);
+    await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
+    current = other;
+    await pollUntil(page, () => Boolean(release));
+    // The old bot's "ready" is not shown beside the new bot while its read is out.
+    await expect(badge(page, "identity-ready")).toBeHidden();
+    await expect(badge(page, "identity-invited")).toHaveAttribute("title", "Agent bot: not invited");
+    release();
+    await expect(badge(page, "identity-ready")).toHaveAttribute("title", "Agent bot: not invited");
+    expect(reads.filter((read) => read.kind === "repo" && read.name === "identity-ready").length).toBeGreaterThan(1);
+  });
+
+  test("a changed account reads each repo again rather than waiting on a read asked under the old one", async ({ page }) => {
+    await page.clock.install();
+    const other = account({ botLogin: "other-bot", savedLogin: "other-bot" });
+    let current = ACCOUNTS.healthy.report;
+    let releaseOld = null;
+    const { reads } = await stub(page, {
+      accountNext: () => current,
+      // The fresh read after Protect branches hangs, then answers with the old bot's "ready".
+      repoNext: (name, { fresh }) => (fresh && name === "identity-unprotected" && !releaseOld
+        ? new Promise((resolve) => { releaseOld = () => resolve(REPOS["identity-ready"].report(name)); })
+        : current === other ? REPOS["identity-uninvited"].report(name) : REPOS[name].report(name)),
+    });
+    await page.route(/\/api\/repositories\/[^/]+\/protection$/, (route) => (route.request().method() !== "POST" ? route.fallback()
+      : route.fulfill({ contentType: "application/json", body: JSON.stringify({ state: "protected", policies: [], changes: [], refusal: null }) })));
+    await openHome(page);
+    await badge(page, "identity-unprotected").click();
+    await card(page).getByRole("button", { name: "Protect branches" }).click();
+    await expect.poll(() => Boolean(releaseOld)).toBe(true);
+    current = other;
+    reads.length = 0;
+    await pollUntil(page, () => reads.some((read) => read.kind === "account"));
+    await expect(badge(page, "identity-unprotected")).toHaveAttribute("title", "Agent bot: not invited");
+    releaseOld();
+    await page.waitForTimeout(1_000);
+    await expect(badge(page, "identity-unprotected")).toHaveAttribute("title", "Agent bot: not invited");
+  });
+
+  test("a read that started before an action and answers after it does not put back what the action fixed", async ({ page }) => {
+    await page.clock.install();
+    let routed = false;
+    let hold = false;
+    let releaseAccount = null;
+    let invited = false;
+    let releaseRepo = null;
+    const { reads } = await stub(page, {
+      accountNext: () => (hold && !releaseAccount
+        ? new Promise((resolve) => { releaseAccount = () => resolve(ACCOUNTS["git-not-routed"].report); })
+        : routed ? ACCOUNTS.healthy.report : ACCOUNTS["git-not-routed"].report),
+      repoNext: (name, { fresh }) => (name !== "identity-uninvited" ? REPOS[name].report(name)
+        : hold && !fresh && !releaseRepo ? new Promise((resolve) => { releaseRepo = () => resolve(REPOS[name].report(name)); })
+          : REPOS[invited ? "identity-ready" : name].report(name)),
+      update: () => { routed = true; return { applied: true, account: ACCOUNTS.healthy.report }; },
+      invite: (name) => { invited = true; return { invited: true, repository: { repositoryId: `git:github.com/example/${name}`, ...REPOS["identity-ready"].report(name) } }; },
+    });
+    await openHome(page);
+    // A poll's account read is out when Update now answers, and answers with the old warning.
+    hold = true;
+    await pollUntil(page, () => Boolean(releaseAccount));
+    await offer(page).getByRole("button", { name: "Update now" }).click();
+    await expect(offer(page).locator("[data-slot=message]")).toHaveText("Updated. New agent sessions push as the bot; ones already open still push as you until restarted.");
+    releaseAccount();
+    await page.waitForTimeout(1_000);
+    await expect(offer(page)).not.toHaveClass(/notice-alert/);
+    await expect(offer(page).locator("[data-slot=message]")).toHaveText(/^Updated\./);
+
+    // The same for a poll's repo read that is out when Invite the bot answers.
+    await badge(page, "identity-uninvited").click();
+    await expect(card(page).getByRole("button", { name: "Invite the bot" })).toBeVisible();
+    reads.length = 0;
+    await page.clock.fastForward(5 * 60_000);
+    await pollUntil(page, () => Boolean(releaseRepo));
+    await card(page).getByRole("button", { name: "Invite the bot" }).click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("All set: Agents act on GitHub as robo-bot. This closes in 5 seconds.");
+    releaseRepo();
+    await page.waitForTimeout(1_000);
+    await expect(badge(page, "identity-uninvited")).toHaveAttribute("data-level", "ok");
+    await expect(card(page).locator("[data-slot=message]")).toHaveText(/^All set:/);
+  });
+
+  test("a card that finished stays open when something reopens before it closes, and closes once all is done again", async ({ page }) => {
+    await page.clock.install();
+    let routed = true;
+    let hold = false;
+    let releaseAccount = null;
+    const protectedRepos = new Set();
+    await stub(page, {
+      accountNext: () => (hold && !releaseAccount
+        ? new Promise((resolve) => { releaseAccount = () => resolve(ACCOUNTS["git-not-routed"].report); })
+        : routed ? ACCOUNTS.healthy.report : ACCOUNTS["git-not-routed"].report),
+      repoNext: (name) => REPOS[protectedRepos.has(name) ? "identity-ready" : name].report(name),
+      update: () => { routed = true; return { applied: true, account: ACCOUNTS.healthy.report }; },
+    });
+    await page.route(/\/api\/repositories\/[^/]+\/protection$/, (route) => {
+      if (route.request().method() !== "POST") return route.fallback();
+      protectedRepos.add("identity-unprotected");
+      return route.fulfill({ contentType: "application/json", body: JSON.stringify({ state: "protected", policies: [], changes: [], refusal: null }) });
+    });
+    await openHome(page);
+    await badge(page, "identity-unprotected").click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 5.");
+    hold = true;
+    await pollUntil(page, () => Boolean(releaseAccount));
+    await card(page).getByRole("button", { name: "Protect branches" }).click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("All set: Agents act on GitHub as robo-bot. This closes in 5 seconds.");
+    // Before it closes, the account reports pushes going out as the user again.
+    routed = false;
+    releaseAccount();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("Start at item 3.");
+    await page.clock.runFor(6_000);
+    await expect(card(page)).toBeVisible();
+    await card(page).getByRole("button", { name: "Update now" }).click();
+    await expect(card(page).locator("[data-slot=message]")).toHaveText("All set: Agents act on GitHub as robo-bot. This closes in 5 seconds.");
+    await page.clock.runFor(6_000);
+    await expect(card(page)).toBeHidden();
+  });
+
+  test("a repo removed from Home is no longer read on its poll", async ({ page }) => {
+    await page.clock.install();
+    let removed = false;
+    await page.route(/\/api\/home(\?.*)?$/, async (route) => {
+      const overview = await (await route.fetch()).json();
+      if (removed) overview.repositories = overview.repositories.filter((repository) => !String(repository.repositoryId).endsWith("/identity-ready"));
+      return route.fulfill({ json: overview });
+    });
+    const { reads } = await stub(page, { accountNext: () => ACCOUNTS.healthy.report });
+    await openHome(page);
+    await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
+    removed = true;
+    await expect(async () => {
+      await page.clock.fastForward(10_000);
+      await expect(repoCard(page, "identity-ready")).toHaveCount(0, { timeout: 200 });
+    }).toPass({ intervals: [200] });
+    // Past reuse, the poll reads the repos still listed, and only those.
+    reads.length = 0;
+    await page.clock.fastForward(5 * 60_000);
+    await pollUntil(page, () => reads.some((read) => read.kind === "repo" && read.name === "identity-invited"));
+    expect(reads.some((read) => read.kind === "repo" && read.name === "identity-ready")).toBe(false);
+  });
+
   test("a bot that is the user's own account gets the setup on item 1", async ({ page }) => {
     await stub(page, {
       accountNext: () => account({ state: "problem", findings: [finding("bot-is-user", "problem", `The bot account ${BOT} is your own account, so agents would have your access.`)] }),
@@ -782,7 +950,11 @@ test.describe("Agent GitHub account", () => {
 
   test("a repo the server turns down shows no badge", async ({ page }) => {
     await stub(page, { accountNext: () => ACCOUNTS.healthy.report, repoNext: () => ({ applies: false }) });
+    // Badges start hidden, so wait until every repo's answer is in before checking they stay so.
+    const answered = Promise.all(NAMES.map((name) => page.waitForResponse((response) => response.url().includes(`/${encodeURIComponent(`git:github.com/example/${name}`)}/agent-identity`))));
     await openHome(page);
+    await answered;
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 100)));
     for (const name of NAMES) await expect(badge(page, name)).toBeHidden();
   });
   test("Settings holds the one switch: Set it up links to Home's card, Turn on only for a ready bot, Turn off once on", async ({ page }) => {
