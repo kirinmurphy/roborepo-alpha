@@ -4,7 +4,8 @@
 import fs from "node:fs";
 import { AGENT_IDENTITY_PACKAGE_ID } from "../../modules/forge/agent-identity.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
-import { effectiveEnabledIds } from "./package-state.mjs";
+import { effectiveEnabledIds, readEnabledPackagesRegistry } from "./package-state.mjs";
+import { enabledPackagesPath } from "./state-paths.mjs";
 import { resolveHarnessPath } from "../harnesses/paths.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import { isProviderEnabled, readHarnessState } from "../harnesses/state.mjs";
@@ -40,6 +41,12 @@ function enabledAgentShellProviders() {
     return [];
   }
   return listHarnessProviders().filter((provider) => provider.adapters.agentShell && isProviderEnabled(state, provider.id));
+}
+
+// Every harness that gives its agents a RoboRepo-rendered shell environment, enabled or not: a
+// disabled harness's config can still be launched, and an unreadable harness state must not hide it.
+function agentShellProviders() {
+  return listHarnessProviders().filter((provider) => provider.adapters.agentShell);
 }
 
 const readRootConfig = (provider) => fs.readFileSync(resolveHarnessPath(provider.manifest, "rootConfig"), "utf8");
@@ -93,4 +100,59 @@ export async function agentIdentityPackageInstalled() {
   } catch {
     return false;
   }
+}
+
+// Whether the package is selected, or null when that cannot be read: a catalog that fails to load,
+// or a selection file that exists but does not parse (the registry reader treats that as no file).
+function readAgentIdentitySelection() {
+  try {
+    const registry = readEnabledPackagesRegistry();
+    if (!registry.exists && fs.existsSync(enabledPackagesPath)) return null;
+    return effectiveEnabledIds(loadPackageCatalog(), registry).includes(AGENT_IDENTITY_PACKAGE_ID);
+  } catch {
+    return null;
+  }
+}
+
+// The harnesses whose agent-shell settings still point away from your own sign-in: the bot's Git
+// include, or any GH_CONFIG_DIR (the package's, or one you set). Deselecting the package does not by
+// itself prove those were removed. A config that does not exist carries nothing; one that exists but
+// cannot be read is listed as unreadable, since nothing about it could be confirmed.
+export function agentIdentityLeftovers({ providers = agentShellProviders(), read = readRootConfig } = {}) {
+  const leftover = [];
+  const unreadable = [];
+  for (const provider of providers) {
+    let text;
+    try {
+      text = read(provider);
+    } catch (error) {
+      if (error?.code !== "ENOENT") unreadable.push(provider.manifest.displayName);
+      continue;
+    }
+    try {
+      const env = (name) => provider.adapters.agentShell.envValue(text, name);
+      if (includesAgentGitConfig(env) || String(env("GH_CONFIG_DIR") ?? "") !== "") leftover.push(provider.manifest.displayName);
+    } catch {
+      unreadable.push(provider.manifest.displayName);
+    }
+  }
+  return { leftover, unreadable };
+}
+
+// What the package leaves agents with, for messages that must not guess at an identity:
+// - "on": selected and every resource in place.
+// - "partial": selected with a resource missing.
+// - "unknown": the selection, or a harness config that would say, could not be read.
+// - "leftover": not selected, but a harness config still carries its settings (`harnesses`).
+// - "off": not selected and no harness config carries its settings, the only state in which
+//   agents verifiably act on GitHub as you.
+export async function agentIdentityPackageState() {
+  if (await agentIdentityPackageInstalled()) return { state: "on" };
+  const selected = readAgentIdentitySelection();
+  if (selected === null) return { state: "unknown" };
+  if (selected) return { state: "partial" };
+  const { leftover, unreadable } = agentIdentityLeftovers();
+  if (unreadable.length > 0) return { state: "unknown" };
+  if (leftover.length > 0) return { state: "leftover", harnesses: leftover };
+  return { state: "off" };
 }

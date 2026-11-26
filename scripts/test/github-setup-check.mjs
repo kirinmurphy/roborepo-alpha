@@ -468,6 +468,30 @@ try {
   assert.doesNotMatch(result.stdout, /Agents now act/);
   console.log("✓ A failing check prints each problem with its fix, exits 1, and leaves the package off.");
 
+  // A package selection that cannot be read is not "off": the refusal claims no identity.
+  fresh({ invitePermission: "admin" });
+  fs.mkdirSync(stateRoot, { recursive: true });
+  fs.writeFileSync(path.join(stateRoot, "enabled-packages.json"), "{ not json");
+  result = await setup(`${BOT}\n${TOKEN}\ny\n`);
+  assert.equal(result.status, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /The bot is not ready\. Setup could not read whether the package is on, or what your harness settings give agents, so it cannot tell which GitHub account agents use\. Setup changes nothing\./);
+  assert.doesNotMatch(result.stderr, /act(s|ing)? as (the bot|you)/);
+  console.log("✓ An unreadable package selection refuses without claiming which account agents use.");
+
+  // A deselected package whose settings are still in a harness config is not a clean "off" either.
+  for (const leftoverEnv of [
+    { GIT_CONFIG_COUNT: "2", GIT_CONFIG_KEY_1: "include.path", GIT_CONFIG_VALUE_1: "~/.roborepo/package-runtime/github-agent-identity/gitconfig" },
+    { GH_CONFIG_DIR: ghDir },
+  ]) {
+    fresh({ invitePermission: "admin" });
+    fs.writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify({ env: leftoverEnv }));
+    result = await setup(`${BOT}\n${TOKEN}\ny\n`);
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.match(result.stderr, /The bot is not ready\. The package is off, but your Claude Code settings still set GH_CONFIG_DIR or include the bot's Git settings, so setup cannot tell which GitHub account agents use\./, Object.keys(leftoverEnv).join(","));
+    assert.doesNotMatch(result.stderr, /act(s|ing)? as (the bot|you)/);
+  }
+  console.log("✓ Leftover bot settings after the package is off refuse without claiming which account agents use.");
+
   // A GH_CONFIG_DIR you set yourself is not the package's to replace: the install is partial, so
   // setup fails rather than reporting that agents act as the bot.
   fresh();

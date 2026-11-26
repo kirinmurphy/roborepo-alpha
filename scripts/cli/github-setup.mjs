@@ -14,7 +14,7 @@ import {
 import { GITHUB_PAGES, TOKEN_NOTE, TOKEN_SCOPES, expiryAdvice, scopesText } from "../../modules/forge/agent-identity-guide.mjs";
 import { applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
-import { agentGitRoutingGaps, agentIdentityPackageEnabled, agentIdentityPackageInstalled, turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
+import { agentGitRoutingGaps, agentIdentityPackageInstalled, agentIdentityPackageState, turnOnAgentIdentityPackage } from "./agent-identity-package.mjs";
 import { stateDir } from "./state-paths.mjs";
 
 const sameLogin = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
@@ -175,17 +175,18 @@ async function guidedSetup({ input, io, cwd }) {
   // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });
   const blocking = report.problems.filter((entry) => entry.severity === "problem");
-  // A failed check never changes the package, so whatever agents use now they keep using. Only
-  // "off" says which account that is: a package that is on can still leave pushes going out as you
-  // (a harness without the bot's Git settings), and a partial install may route some calls only.
+  // A failed check never changes the package, so whatever agents use now they keep using. Only a
+  // verified clean "off" says which account that is: a package that is on can still leave pushes
+  // going out as you (a harness without the bot's Git settings), a partial install may route some
+  // calls only, and an unread or deselected-but-leftover state proves nothing.
   const packageState = await agentIdentityPackageState();
   for (const entry of report.problems.filter((item) => item.severity === "warn" || item.severity === "unverified")) io.log(`Note: ${entry.message}`);
   // Setup confirms nothing it could not check: an unread account or branch protection stops here.
   if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. Setup does not change the package until every check runs.`);
   if (blocking.length > 0) {
-    io.error(packageState === "off"
+    io.error(packageState.state === "off"
       ? "The bot is not ready, so the package stays off and agents keep acting as you:"
-      : `The bot is not ready. ${PACKAGE_KEPT[packageState]} Agents using the bot may fail on GitHub until this is fixed; ${TURN_OFF}:`);
+      : `The bot is not ready. ${packageKept(packageState)} Agents using the bot may fail on GitHub until this is fixed; ${TURN_OFF}:`);
     for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
@@ -193,9 +194,9 @@ async function guidedSetup({ input, io, cwd }) {
   // Rules that apply but whose bypass list could not be read may let the bot merge unreviewed work,
   // so the package stays off until someone who can see them confirms them.
   if (report.state === "unverified") {
-    io.error(packageState === "off"
+    io.error(packageState.state === "off"
       ? "The branch rules could not be verified, so the package stays off and agents keep acting as you."
-      : `The branch rules could not be verified. ${PACKAGE_KEPT[packageState]} Confirm the rules, or ${TURN_OFF}.`);
+      : `The branch rules could not be verified. ${packageKept(packageState)} Confirm the rules, or ${TURN_OFF}.`);
     for (const entry of report.problems.filter((item) => item.severity === "unverified")) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
@@ -222,18 +223,14 @@ async function guidedSetup({ input, io, cwd }) {
 }
 
 // What a refusal says about the package it leaves as it was, and how to stop agents using the bot.
-const PACKAGE_KEPT = {
-  on: "The package is on and stays on.",
-  partial: "The package is partly installed and stays as it is, so agents may use the bot for some GitHub calls and not others.",
-};
-const TURN_OFF = "to stop agents using the bot meanwhile, turn it off in Settings or run roborepo package disable github-agent-identity";
-
-// "on" when the package is selected and fully installed, "partial" when it is selected with a
-// resource missing, "off" when it is not selected.
-async function agentIdentityPackageState() {
-  if (await agentIdentityPackageInstalled()) return "on";
-  return agentIdentityPackageEnabled() ? "partial" : "off";
+// Only a verified clean "off" names an identity; every other state says what it found instead.
+function packageKept({ state, harnesses = [] }) {
+  if (state === "on") return "The package is on and stays on.";
+  if (state === "partial") return "The package is partly installed and stays as it is, so agents may use the bot for some GitHub calls and not others.";
+  if (state === "leftover") return `The package is off, but your ${harnesses.join(" and ")} settings still set GH_CONFIG_DIR or include the bot's Git settings, so setup cannot tell which GitHub account agents use. Setup changes nothing.`;
+  return "Setup could not read whether the package is on, or what your harness settings give agents, so it cannot tell which GitHub account agents use. Setup changes nothing.";
 }
+const TURN_OFF = "to stop agents using the bot meanwhile, turn it off in Settings or run roborepo package disable github-agent-identity";
 
 async function inviteBot({ user, repo, botLogin, io, done }) {
   try {
