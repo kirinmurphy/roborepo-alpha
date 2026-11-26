@@ -19,7 +19,7 @@ import {
 const stateRoot = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-identity-render-"));
 process.env.ROBOREPO_STATE_ROOT = stateRoot;
 process.on("exit", () => fs.rmSync(stateRoot, { recursive: true, force: true }));
-const { CODEX_RULES_HOME_SUB, writeCodexRulesFile } = await import("../cli/permissions-render.mjs");
+const { CODEX_RULES_HOME_SUB, previewPermissionRenders, renderPermissionsTo, writeCodexRulesFile } = await import("../cli/permissions-render.mjs");
 const { effectivePermissions } = await import("../cli/config-mutate.mjs");
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -89,10 +89,35 @@ for (const [label, rules] of [["off", claudeOff], ["on", claudeOn]]) {
 // A personal push-code override still renders for Claude under the identity.
 assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { agentIdentity: true }).deny.includes("Bash(git push:*)"));
 
+// Doctor's preview renders what the live render writes, identity included, so an identity-on
+// install does not read as drift that `roborepo update` would not change.
+{
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-identity-preview-"));
+  try {
+    const codexConfigFile = path.join(tmp, ".codex", "config.toml");
+    fs.mkdirSync(path.dirname(codexConfigFile), { recursive: true });
+    fs.writeFileSync(codexConfigFile, "");
+    for (const agentIdentity of [true, false]) {
+      renderPermissionsTo(tmp, { manifest, agentIdentity });
+      const preview = previewPermissionRenders(tmp, { manifest, agentIdentity }).find((entry) => entry.file === codexConfigFile);
+      assert.ok(preview, "the Codex config is previewed");
+      assert.equal(preview.render(), fs.readFileSync(codexConfigFile, "utf8"), `identity ${agentIdentity ? "on" : "off"}: the preview matches the live render`);
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 // The live Codex rules file follows the identity, never writes through a rules folder linked into
-// the checkout, and returns to the shipped baseline when the identity is off.
+// the checkout, and returns to the shipped baseline when the identity is off. The link cases point
+// at the real checkout, since that is what the guard compares against; should the guard regress,
+// `finally` puts the shipped rules back and removes any folder made there.
 {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-codex-rules-"));
+  const shippedFile = path.join(repoRoot, "generated", "codex", "rules", "roborepo.rules");
+  const shippedRules = fs.readFileSync(shippedFile, "utf8");
+  const strayRules = path.join(repoRoot, "generated", "rules");
+  const strayExisted = fs.existsSync(strayRules);
   try {
     const codexHome = path.join(tmp, ".codex");
     const file = path.join(codexHome, CODEX_RULES_HOME_SUB);
@@ -139,6 +164,8 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
     assert.equal(fs.readFileSync(path.join(dotfilesCodex, "rules", "roborepo.rules"), "utf8"), rulesOn);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
+    if (fs.readFileSync(shippedFile, "utf8") !== shippedRules) fs.writeFileSync(shippedFile, shippedRules);
+    if (!strayExisted) fs.rmSync(strayRules, { recursive: true, force: true });
   }
 }
 

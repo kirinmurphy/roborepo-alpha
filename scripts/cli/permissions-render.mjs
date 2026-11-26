@@ -190,7 +190,7 @@ export function renderPermissionsTo(
 // update runs from, so a comparison from any other folder would report a false difference.
 export function previewPermissionRenders(
   baseDir,
-  { manifest = loadPermissionManifest(), overrides = {}, cwd = process.cwd() } = {},
+  { manifest = loadPermissionManifest(), overrides = {}, cwd = process.cwd(), agentIdentity = agentIdentityPackageEnabled() } = {},
 ) {
   const previews = [];
   for (const provider of listHarnessProviders()) {
@@ -206,7 +206,7 @@ export function previewPermissionRenders(
       file: target.file,
       current,
       cwdDependent: typeof adapter.workspaceRoots === "function" || typeof adapter.writablePaths === "function",
-      render: () => adapter.render(target.seedCurrent && current !== null ? current : "", manifest, overrides, target.file, permissionOptionsForProvider(provider, { cwd })),
+      render: () => adapter.render(target.seedCurrent && current !== null ? current : "", manifest, overrides, target.file, { ...permissionOptionsForProvider(provider, { cwd }), agentIdentity }),
     });
   }
   return previews;
