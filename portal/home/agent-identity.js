@@ -32,7 +32,7 @@ export function supportsAgentIdentity(repository) {
 let account = null; // { at, report }
 let accountPending = null;
 const reports = new Map(); // repositoryId -> { at, report }
-const pending = new Map(); // repositoryId -> Promise
+const pending = new Map(); // repositoryId -> { request, fresh }
 const badges = new Map(); // repositoryId -> Set of mounted badge elements
 const names = new Map(); // repositoryId -> display name
 let githubRepositories = [];
@@ -47,12 +47,14 @@ let card = null;
 // ---------------------------------------------------------------------------------------------
 // Reads
 
-// `reread` skips only this page's copy; `fresh` also skips the server's cache.
+// `reread` skips only this page's copy; `fresh` also skips the server's cache. Only the latest read
+// started is shown: an older one answering last would put back the status the fresh read replaced.
 function loadAccount({ fresh = false, reread = false } = {}) {
   if (!fresh && !reread && account && Date.now() - account.at < REUSE_MS) return Promise.resolve(account.report);
   if (!fresh && accountPending) return accountPending;
   const request = portalGetJson(`${ACCOUNT_URL}${fresh ? "?fresh=1" : ""}`)
     .then((report) => {
+      if (accountPending !== request) return account?.report ?? report;
       showAccount(report);
       return report;
     })
@@ -77,15 +79,18 @@ function showAccount(report) {
   if (card?.showing("account")) card.render();
 }
 
-// `reread` skips only this page's copy; `fresh` also skips the server's cache.
+// `reread` skips only this page's copy; `fresh` also skips the server's cache. As for the account,
+// only the latest read started is shown, and a reread waits on a fresh read in flight rather than
+// replacing it.
 function load(repositoryId, { fresh = false, reread = false } = {}) {
   const known = reports.get(repositoryId);
   if (!fresh && !reread && known && Date.now() - known.at < REUSE_MS) return Promise.resolve(known.report);
-  if (!fresh && !reread && pending.has(repositoryId)) return pending.get(repositoryId);
+  const inFlight = pending.get(repositoryId);
+  if (!fresh && inFlight && (!reread || inFlight.fresh)) return inFlight.request;
   const request = portalGetJson(`${repoUrl(repositoryId)}${fresh ? "?fresh=1" : ""}`)
-    .then((report) => showRepo(repositoryId, report))
-    .finally(() => { if (pending.get(repositoryId) === request) pending.delete(repositoryId); });
-  pending.set(repositoryId, request);
+    .then((report) => (pending.get(repositoryId)?.request === request ? showRepo(repositoryId, report) : reports.get(repositoryId)?.report ?? report))
+    .finally(() => { if (pending.get(repositoryId)?.request === request) pending.delete(repositoryId); });
+  pending.set(repositoryId, { request, fresh });
   return request;
 }
 

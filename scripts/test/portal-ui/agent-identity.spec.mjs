@@ -163,8 +163,9 @@ test.describe("Agent GitHub account", () => {
         const answer = kind === "enable" ? await enable() : kind === "update" ? await update() : { offerDismissed: true };
         return route.fulfill({ contentType: "application/json", body: JSON.stringify(answer) });
       }
-      reads.push({ kind: "account", fresh: url.searchParams.get("fresh") === "1" });
-      const answer = accountNext();
+      const fresh = url.searchParams.get("fresh") === "1";
+      reads.push({ kind: "account", fresh });
+      const answer = await accountNext({ fresh });
       // `null` stands for a failed read.
       if (answer === null) return route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "read failed" }) });
       return route.fulfill({ contentType: "application/json", body: JSON.stringify(answer) });
@@ -178,9 +179,10 @@ test.describe("Agent GitHub account", () => {
         posts.push({ kind, repositoryId, body: route.request().postData() });
         return route.fulfill({ contentType: "application/json", body: JSON.stringify(kind === "invite" ? await invite(name) : launch) });
       }
-      reads.push({ kind: "repo", name, fresh: url.searchParams.get("fresh") === "1" });
+      const fresh = url.searchParams.get("fresh") === "1";
+      reads.push({ kind: "repo", name, fresh });
       const body = !REPOS[name] ? { applies: false }
-        : ready() ? repoNext(name) : { applies: true, account: "waiting", state: null, findings: [], setupLaunch: { supported: true } };
+        : ready() ? await repoNext(name, { fresh }) : { applies: true, account: "waiting", state: null, findings: [], setupLaunch: { supported: true } };
       return route.fulfill({ contentType: "application/json", body: JSON.stringify({ repositoryId, ...body }) });
     });
     return { reads, posts };
@@ -668,6 +670,40 @@ test.describe("Agent GitHub account", () => {
       expect(reads.filter((read) => read.kind === "account").length).toBeGreaterThan(before);
     }).toPass({ intervals: [200] });
     await expect(offer(page).getByRole("button", { name: "Turn on" })).toBeVisible();
+  });
+
+  test("an older read answering after a fresh one does not put back the older status", async ({ page }) => {
+    await page.clock.install();
+    let hold = false;
+    const held = new Map();
+    // While `hold` is set, the poll's first account read and first read of the card's repo hang until
+    // released, then answer with stale status. Every other read answers at once.
+    const later = (kind, answer) => new Promise((resolve) => held.set(kind, () => resolve(answer)));
+    const { reads } = await stub(page, {
+      accountNext: ({ fresh }) => (hold && !fresh && !held.has("account") ? later("account", ACCOUNTS["package-off"].report) : ACCOUNTS.healthy.report),
+      repoNext: (name, { fresh }) => (hold && !fresh && name === "identity-invited" && !held.has("repo") ? later("repo", REPOS["identity-uninvited"].report(name)) : REPOS[name].report(name)),
+    });
+    await openHome(page);
+    // A card with something left to do, so coming back to the window re-reads it.
+    await badge(page, "identity-invited").click();
+    await expect(card(page).locator("li[data-current=true] [data-slot=run]")).toHaveText("Accept invitation");
+    hold = true;
+    await page.clock.fastForward(5 * 60_000);
+    await expect(async () => {
+      await page.clock.fastForward(10_000);
+      expect(held.size).toBe(2);
+    }).toPass({ intervals: [200] });
+    // Coming back to the window reads both again, past every cache, and those answer first.
+    reads.length = 0;
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await expect.poll(() => reads.filter((read) => read.fresh).length).toBe(2);
+    await expect(card(page).locator("li[data-current=true] [data-slot=run]")).toHaveText("Accept invitation");
+    for (const release of held.values()) release();
+    // The released answers have nothing to wait on in the page; give them time to land if they would.
+    await page.waitForTimeout(1_000);
+    await expect(offer(page)).toBeHidden();
+    await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
+    await expect(card(page).locator("li[data-current=true] [data-slot=run]")).toHaveText("Accept invitation");
   });
 
   test("coming back to the window re-reads an open card", async ({ page }) => {
