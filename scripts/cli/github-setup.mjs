@@ -126,7 +126,9 @@ async function guidedSetup({ input, io, cwd }) {
     replace = answer === "" || answer === "y" || answer === "yes";
   }
   if (replace) {
-    await storeToken({ input, io, cwd, dir, botLogin, hadLogin: hosts.loggedIn, renewing: renewing || tokenOk });
+    // Regenerating a token keeps its scopes, so a token with the wrong ones is replaced by a new one.
+    const wrongScopes = tokenIssues.some((entry) => WRONG_SCOPE_FINDINGS.has(entry.id));
+    await storeToken({ input, io, cwd, dir, botLogin, hadLogin: hosts.loggedIn, renewing: (renewing || tokenOk) && !wrongScopes });
   } else {
     done("Token");
   }
@@ -223,6 +225,8 @@ async function inviteBot({ user, repo, botLogin, io, done }) {
   }
   io.log(`✓ Invited ${botLogin} to ${repo}.`);
 }
+
+const WRONG_SCOPE_FINDINGS = new Set(["broad-scopes", "fine-grained-token", "scopes-missing"]);
 
 async function storeToken({ input, io, cwd, dir, botLogin, hadLogin, renewing }) {
   const hosts = readAgentHosts(stateDir);

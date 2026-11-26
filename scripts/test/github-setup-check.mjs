@@ -182,6 +182,21 @@ try {
   assert.ok(fs.readFileSync(hostsFile, "utf8").includes(TOKEN), "accepting installs the new token");
   console.log("✓ A working token that expires soon can be replaced on a rerun, or kept.");
 
+  // A working token with the wrong scopes is replaced by a new token: regenerating would keep them.
+  const WIDE = "ghp_widescopes00001111222233334444";
+  const wideState = gh.readState();
+  wideState.tokens[WIDE] = { login: BOT, scopes: ["repo", "read:org", "workflow"], expires: FAR_EXPIRY, expired: false };
+  gh.setState(wideState);
+  fs.writeFileSync(hostsFile, `github.com:\n    oauth_token: ${WIDE}\n    user: ${BOT}\n`, { mode: 0o600 });
+  result = await setup(`y\n${TOKEN}\n`);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Note: The bot's token has broader access than agents need \(workflow\)\./);
+  assert.doesNotMatch(result.stdout, /Regenerate token/, "a scope finding never suggests regenerating");
+  assert.match(result.stdout, /open https:\/\/github\.com\/settings\/tokens\/new/);
+  assert.match(result.stdout, /Scopes: repo and read:org only/);
+  assert.ok(fs.readFileSync(hostsFile, "utf8").includes(TOKEN));
+  console.log("✓ A token with the wrong scopes is replaced by a new token, not a regenerated one.");
+
   // A replacement the checks reject is never installed: the working token stays in place.
   const BROAD = "ghp_workflowscope0000111122223333";
   const broadState = gh.readState();
