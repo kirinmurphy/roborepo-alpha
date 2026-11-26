@@ -117,6 +117,17 @@ const alwaysAllowed = [
   path.join(home, '.roborepo'),
 ]
 
+// The Claude desktop app's shared notes folder: the app tells every side session to leave findings
+// for its sibling sessions under `<session-id>/` here, and to read theirs. Writing and reading it is
+// part of how those sessions are asked to work, so prompting for it only trains approval reflex.
+//
+// It is allowed explicitly rather than deferred like scratch space, because no static rule covers
+// it: the allow scopes must not name a home directory (permission-rule-home-path-check), and the
+// app adds only some sessions' folders as working directories, so a deferred read of a sibling's
+// notes would still prompt. Only this one folder is allowed — the rest of the app's support
+// directory still gets the boundary's bucket. Deny rules (read-secrets) still out-rank this allow.
+const sessionNotesDir = path.join(home, 'Library', 'Application Support', 'Claude', 'side-session-notes')
+
 const contains = (dir, target) => target === dir || target.startsWith(dir + path.sep)
 
 // Containment is a string comparison, so both sides have to describe a path the same way. They do
@@ -254,6 +265,21 @@ if (inZone) {
           inZone === root
             ? 'Inside the current repository.'
             : `Inside the same repository family (${inZone}).`,
+      },
+    }),
+  )
+  process.exit(0)
+}
+
+// The target is already resolved, so a symlink inside the notes folder that points elsewhere is
+// judged by where it lands, not by where it sits.
+if (contains(realpath(sessionNotesDir), target) && !repositoryRoot(path.dirname(target))) {
+  process.stdout.write(
+    JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'allow',
+        permissionDecisionReason: "Inside the Claude app's shared side-session notes folder.",
       },
     }),
   )

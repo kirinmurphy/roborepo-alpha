@@ -120,6 +120,44 @@ try {
     assert.equal(actual, expected, `${name}: expected ${expected}, got ${actual}`);
   }
 
+  // The desktop app's shared side-session notes folder is allowed for Read, Write and Edit from any
+  // checkout; the rest of the app's support directory still prompts. The fake HOME sits outside the
+  // temp dir, or the scratch exemption would defer the "still asks" cases before the boundary saw
+  // them; the hook resolves a path that does not exist lexically, so nothing is created there. The
+  // space in "Application Support" is part of what is exercised.
+  const fakeHome = path.join(path.parse(tmp).root, "roborepo-write-scope-no-such-dir", "fake home");
+  assert.ok(!fs.existsSync(fakeHome), "the fake home must not exist on this machine");
+  const appSupport = path.join(fakeHome, "Library", "Application Support", "Claude");
+  const homeEnv = { HOME: fakeHome };
+  for (const tool of ["Write", "Edit", "Read"]) {
+    assert.equal(
+      decide(repoA, path.join(appSupport, "side-session-notes", "local_abc", "findings.md"), homeEnv, tool),
+      "allow",
+      `${tool} inside the side-session notes folder should be allowed`,
+    );
+  }
+  for (const [name, target] of [
+    ["a sibling folder of the notes folder", path.join(appSupport, "other", "x.md")],
+    ["a folder sharing only the notes folder's name prefix", path.join(appSupport, "side-session-notes-x", "x.md")],
+    ["the app's support folder itself", path.join(appSupport, "config.json")],
+  ]) {
+    assert.equal(decide(repoA, target, homeEnv), "ask", `${name} must still ask`);
+  }
+
+  // A symlink inside the notes folder is judged by where it points. This one needs real files, so
+  // it lives under the temp dir, where the escaped target is scratch and defers rather than asks;
+  // what matters is that the notes allowance does not follow it out.
+  const realHome = path.join(tmp, "real home");
+  const realNotes = path.join(realHome, "Library", "Application Support", "Claude", "side-session-notes");
+  fs.mkdirSync(realNotes, { recursive: true });
+  fs.symlinkSync(path.join(realHome, "Library"), path.join(realNotes, "escape"));
+  assert.equal(decide(repoA, path.join(realNotes, "local_abc", "x.md"), { HOME: realHome }), "allow");
+  assert.notEqual(
+    decide(repoA, path.join(realNotes, "escape", "x.md"), { HOME: realHome }),
+    "allow",
+    "a symlink out of the notes folder must not carry the allowance with it",
+  );
+
   // An absent tool_name must fall back to the narrower WRITE zone. Widening on missing input would
   // hand out family-scoped access on exactly the malformed payloads the hook cannot interpret.
   const noToolName = spawnSync(process.execPath, [hook], {
