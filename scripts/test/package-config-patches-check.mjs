@@ -17,6 +17,7 @@ const { jsonConfigEdit } = await import("../harnesses/config-edit/json.mjs");
 const { tomlConfigEdit } = await import("../harnesses/config-edit/toml.mjs");
 const { applyConfigPatches, removeConfigPatches, probeConfigPatches, normalizeConfigPatches } = await import("../cli/package-config-patches.mjs");
 const { packageRuntimeAssetDestination } = await import("../cli/package-runtime-assets.mjs");
+const { readOwnedScalar } = await import("../cli/owned-scalars-state.mjs");
 
 const quiet = () => {};
 let fileCount = 0;
@@ -233,6 +234,48 @@ const setStatus = component("claude", [{ op: "set", path: ["statusLine"], value:
   assert.throws(() => normalizeConfigPatches([{ op: "set", path: ["a"], value: 1, delimiter: "," }], "claude", label), /delimiter only applies to union/);
   assert.throws(() => normalizeConfigPatches([{ op: "set", path: ["a"], value: null }], "codex", label), /TOML cannot hold null/);
   assert.throws(() => normalizeConfigPatches([{ op: "set", path: ["a"], value: 1 }], "no-such-harness", label));
+}
+
+// --- GIT_CONFIG_* pairs: recount, and close the gap a removed pair leaves --------------------
+
+{
+  const gitPair = (group) => component(group[0] === "env" ? "claude" : "codex", [
+    { op: "set", path: [...group, "GIT_CONFIG_KEY_1"], value: "include.path" },
+    { op: "set", path: [...group, "GIT_CONFIG_VALUE_1"], value: "~/pkg.gitconfig" },
+  ]);
+  const baseline = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "~/hooks" };
+
+  const box = sandbox("settings.json", `${JSON.stringify({ env: baseline })}\n`);
+  applyConfigPatches(pkg, gitPair(["env"]), box.options);
+  assert.equal(json(box.read()).env.GIT_CONFIG_COUNT, "2", "an added pair is counted");
+  // The user adds a pair after the package's and counts it.
+  box.options.write(JSON.stringify({ env: { ...json(box.read()).env, GIT_CONFIG_COUNT: "3", GIT_CONFIG_KEY_2: "core.editor", GIT_CONFIG_VALUE_2: "vim" } }));
+  removeConfigPatches(pkg, gitPair(["env"]), box.options);
+  assert.deepEqual(json(box.read()).env, { ...baseline, GIT_CONFIG_COUNT: "2", GIT_CONFIG_KEY_1: "core.editor", GIT_CONFIG_VALUE_1: "vim" }, "the user's later pair moves down and stays counted");
+
+  // A pair another package owns moves with its ownership record.
+  const owned = sandbox("settings.json", `${JSON.stringify({ env: baseline })}\n`);
+  applyConfigPatches(pkg, gitPair(["env"]), owned.options);
+  applyConfigPatches(pkg, component("claude", [
+    { op: "set", path: ["env", "GIT_CONFIG_KEY_2"], value: "core.editor" },
+    { op: "set", path: ["env", "GIT_CONFIG_VALUE_2"], value: "vim" },
+  ]), owned.options);
+  removeConfigPatches(pkg, gitPair(["env"]), owned.options);
+  assert.equal(json(owned.read()).env.GIT_CONFIG_KEY_1, "core.editor");
+  assert.ok(readOwnedScalar("claude", ["env", "GIT_CONFIG_KEY_1"]) && !readOwnedScalar("claude", ["env", "GIT_CONFIG_KEY_2"]), "the ownership record moves with the pair");
+
+  const alone = sandbox("settings.json", `${JSON.stringify({ env: baseline })}\n`);
+  applyConfigPatches(pkg, gitPair(["env"]), alone.options);
+  removeConfigPatches(pkg, gitPair(["env"]), alone.options);
+  assert.deepEqual(json(alone.read()).env, baseline, "only the baseline pair remains, counted once");
+
+  const toml = sandbox("config.toml", '[shell_environment_policy.set]\nGIT_CONFIG_COUNT = "1"\nGIT_CONFIG_KEY_0 = "core.hooksPath"\nGIT_CONFIG_VALUE_0 = "~/hooks"\n');
+  const group = ["shell_environment_policy", "set"];
+  applyConfigPatches(pkg, gitPair(group), toml.options);
+  toml.options.write(toml.read().replace('GIT_CONFIG_COUNT = "2"', 'GIT_CONFIG_COUNT = "3"\nGIT_CONFIG_KEY_2 = "core.editor"\nGIT_CONFIG_VALUE_2 = "vim"'));
+  removeConfigPatches(pkg, gitPair(group), toml.options);
+  const get = (key) => tomlConfigEdit.get(toml.read(), [...group, key]).value;
+  assert.deepEqual(["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_1", "GIT_CONFIG_VALUE_1", "GIT_CONFIG_KEY_2"].map(get), ["2", "core.editor", "vim", undefined], "TOML closes the gap too");
 }
 
 console.log("ok: package config patches");
