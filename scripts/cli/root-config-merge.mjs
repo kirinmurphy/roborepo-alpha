@@ -253,9 +253,10 @@ function reconcileTomlGitConfigCount(lines) {
   for (const { key } of tomlStatements(lines)) if (key) keys.add(unquoteTomlKey(key));
   const count = gitConfigPairCount((name) => keys.has(name));
   if (count === 0 && !keys.has(GIT_CONFIG_COUNT)) return lines;
-  return lines.map((line) => (unquoteTomlKey(tomlKey(line)) === GIT_CONFIG_COUNT
-    ? line.replace(/=.*$/, `= "${count}"`)
-    : line));
+  // Replace the whole statement, so a count written as a multiline string leaves no stray lines.
+  return tomlStatements(lines).flatMap(({ key, lines: statement }) => (unquoteTomlKey(key) === GIT_CONFIG_COUNT
+    ? [statement[0].replace(/=.*$/, `= "${count}"`)]
+    : statement));
 }
 
 export function mergeCodexConfig(repoText, localText) {

@@ -127,4 +127,9 @@ assert.match(codexCountMerged, /^GIT_CONFIG_COUNT = "2"$/m, "Codex: an existing 
 assert.equal(codexCountMerged.match(/GIT_CONFIG_COUNT/g).length, 1, "Codex: COUNT is written once");
 assert.match(codexCountMerged, /^KEEP = "yes"$/m, "Codex: other local env keys survive");
 
+// A count written as a multiline string is replaced as a whole statement.
+const codexMultilineCount = runMerge("codex", codexRepoEnv, codexLocalEnv.replace('GIT_CONFIG_COUNT = "1"', 'GIT_CONFIG_COUNT = """\n1"""'), "toml");
+assert.match(codexMultilineCount, /^GIT_CONFIG_COUNT = "2"$/m, "Codex: a multiline count is rewritten");
+assert.doesNotMatch(codexMultilineCount, /^1"""$/m, "Codex: no line of the old multiline count is left behind");
+
 console.log("root-config-merge ok");
