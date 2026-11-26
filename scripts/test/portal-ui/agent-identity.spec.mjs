@@ -672,6 +672,34 @@ test.describe("Agent GitHub account", () => {
     await expect(offer(page).getByRole("button", { name: "Turn on" })).toBeVisible();
   });
 
+  test("an idle Home reads each repo again once its report is past reuse", async ({ page }) => {
+    await page.clock.install();
+    // Nothing on Home changes: every overview read gets the first answer back, so Home redraws
+    // nothing and only its poll can notice the repo.
+    let overview = null;
+    await page.route(/\/api\/home(\?.*)?$/, async (route) => {
+      overview ??= await (await route.fetch()).json();
+      return route.fulfill({ json: overview });
+    });
+    let lost = false;
+    const { reads } = await stub(page, {
+      accountNext: () => ACCOUNTS.healthy.report,
+      repoNext: (name) => (name === "identity-ready" && lost ? REPOS["identity-uninvited"].report(name) : REPOS[name].report(name)),
+    });
+    await openHome(page);
+    await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "ok");
+    // The bot lost its access there while nothing on the page changed.
+    lost = true;
+    reads.length = 0;
+    await page.clock.fastForward(5 * 60_000);
+    await expect(async () => {
+      await page.clock.fastForward(10_000);
+      expect(reads.some((read) => read.kind === "repo" && read.name === "identity-ready")).toBe(true);
+    }).toPass({ intervals: [200] });
+    await expect(badge(page, "identity-ready")).toHaveAttribute("data-level", "problem");
+    expect(reads.filter((read) => read.kind === "repo").every((read) => !read.fresh), "the poll's reads use the server's cache").toBe(true);
+  });
+
   test("an older read answering after a fresh one does not put back the older status", async ({ page }) => {
     await page.clock.install();
     let hold = false;

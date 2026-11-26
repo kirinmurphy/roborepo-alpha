@@ -233,9 +233,13 @@ export function renderAgentIdentityOffer(mount, repositories) {
 // Called on each of Home's polls: re-reads the account so a change made outside the page (the
 // package turned on or off in a terminal, the setup finishing) shows within one poll. A changed
 // account re-reads the repos too (`showAccount`). A first read that failed is retried here too.
+// Each badge's repo is read again once its report is past reuse, so an idle page does not keep
+// showing a repo as fine after the bot lost access there.
 export function pollAgentIdentity() {
   if (githubRepositories.length === 0) return;
   loadAccount({ reread: true }).catch(() => {});
+  if (!account?.report.packageEnabled) return;
+  for (const repositoryId of badges.keys()) load(repositoryId).catch(() => {});
 }
 
 // Settings' "Set it up" links to Home with ?agent-identity=setup, since the setup runs in a repo's
