@@ -186,7 +186,7 @@ async function guidedSetup({ input, io, cwd }) {
   if (blocking.length > 0) {
     io.error(packageState.state === "off"
       ? "The bot is not ready, so the package stays off and agents keep acting as you:"
-      : `The bot is not ready. ${packageKept(packageState)} Agents using the bot may fail on GitHub until this is fixed; ${TURN_OFF}:`);
+      : `The bot is not ready. ${packageKept(packageState)} Agents using the bot may fail on GitHub until this is fixed; ${stopUsingBot(packageState)}:`);
     for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
@@ -196,7 +196,7 @@ async function guidedSetup({ input, io, cwd }) {
   if (report.state === "unverified") {
     io.error(packageState.state === "off"
       ? "The branch rules could not be verified, so the package stays off and agents keep acting as you."
-      : `The branch rules could not be verified. ${packageKept(packageState)} Confirm the rules, or ${TURN_OFF}.`);
+      : `The branch rules could not be verified. ${packageKept(packageState)} Confirm the rules, or ${stopUsingBot(packageState)}.`);
     for (const entry of report.problems.filter((item) => item.severity === "unverified")) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
     return 1;
@@ -230,7 +230,13 @@ function packageKept({ state, harnesses = [] }) {
   if (state === "leftover") return `The package is off, but your ${harnesses.join(" and ")} settings still set GH_CONFIG_DIR, GH_TOKEN, or GITHUB_TOKEN, or include the bot's Git settings, so setup cannot tell which GitHub account agents use. Setup changes nothing.`;
   return "Setup could not read whether the package is on, or what your harness settings give agents, so it cannot tell which GitHub account agents use. Setup changes nothing.";
 }
-const TURN_OFF = "to stop agents using the bot meanwhile, turn it off in Settings or run roborepo package disable github-agent-identity";
+// The way to stop agents using the bot that fits the state: turning the package off does nothing
+// once it is already off, so leftover settings are removed by hand.
+function stopUsingBot({ state, harnesses = [] }) {
+  if (state === "leftover") return `to stop agents using them meanwhile, remove those entries from your ${harnesses.join(" and ")} settings`;
+  if (state === "unknown") return "check `roborepo package status github-agent-identity` and your harness settings first";
+  return "to stop agents using the bot meanwhile, turn it off in Settings or run roborepo package disable github-agent-identity";
+}
 
 async function inviteBot({ user, repo, botLogin, io, done }) {
   try {

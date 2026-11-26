@@ -231,7 +231,7 @@ must set `GH_CONFIG_DIR` to the bot's folder and empty `GH_TOKEN` and `GITHUB_TO
 above that file must keep those values: each project `.codex/config.toml` from the session folder up
 to `/`, every `<CODEX_HOME>/*.config.toml` profile, `[profiles.*]` tables, and
 `/etc/codex/managed_config.toml`. A layer that names one of the identity variables with another
-value, uses `include_only`, or cannot be read keeps `gh api` denied, as does a codex home folder that
+value, uses `include_only`, leaves a string open, or cannot be read keeps `gh api` denied, as does a codex home folder that
 exists but cannot be listed. Codex `-c` overrides on its command line never reach a hook, so a session
 started with `-c shell_environment_policy…` can still give its shells another `gh`; the hook cannot
 check that.

@@ -475,6 +475,7 @@ try {
   result = await setup(`${BOT}\n${TOKEN}\ny\n`);
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /The bot is not ready\. Setup could not read whether the package is on, or what your harness settings give agents, so it cannot tell which GitHub account agents use\. Setup changes nothing\./);
+  assert.match(result.stderr, /check `roborepo package status github-agent-identity` and your harness settings first/);
   assert.doesNotMatch(result.stderr, /act(s|ing)? as (the bot|you)/);
   console.log("✓ An unreadable package selection refuses without claiming which account agents use.");
 
@@ -490,6 +491,9 @@ try {
     result = await setup(`${BOT}\n${TOKEN}\ny\n`);
     assert.equal(result.status, 1, result.stdout + result.stderr);
     assert.match(result.stderr, /The bot is not ready\. The package is off, but your Claude Code settings still set GH_CONFIG_DIR, GH_TOKEN, or GITHUB_TOKEN, or include the bot's Git settings, so setup cannot tell which GitHub account agents use\./, Object.keys(leftoverEnv).join(","));
+    // Turning off a package that is already off does nothing, so the advice names the settings instead.
+    assert.match(result.stderr, /remove those entries from your Claude Code settings/);
+    assert.doesNotMatch(result.stderr, /package disable/);
     assert.doesNotMatch(result.stderr, /act(s|ing)? as (the bot|you)/);
   }
   console.log("✓ Leftover bot settings after the package is off refuse without claiming which account agents use.");
