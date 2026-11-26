@@ -761,7 +761,8 @@ assert.equal(decide("git push origin feature", { env: temps }), "allow", "the pu
 assert.equal(decide(`git push origin feature && rm ${path.join(onMain, "a.txt")}`, { env: temps }), "ask", "a chained main delete asks");
 assert.equal(decide(`git push origin feature && rm ${path.join(scratch, "x")}`, { env: temps }), "defer", "a chained temp delete drops the allow");
 // Temp folders win: with the default temp roots, the system temp folder holding these fixtures is
-// temp, so even the checkout on main deletes freely there.
+// temp, so even the checkout on main deletes freely there. Every temporaryLocations entry follows
+// the same rule; ~/.roborepo/scratch is not treated differently from /tmp.
 assert.equal(decide("rm a.txt", { cwd: onMain }), "defer", "a checkout under a temp folder is temp");
 // Extra protected names count, and Codex, which cannot ask, denies.
 gitOk(onFeature, "switch", "-q", "-c", "release");

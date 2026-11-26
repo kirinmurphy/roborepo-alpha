@@ -9,7 +9,7 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 
 | Event | Hook | What it does | Installed by |
 | --- | --- | --- | --- |
-| SessionStart | Side-session notes cleanup | Removes folders in the Claude app's side-session notes folder that are unchanged for 14 days. Recent folders, and anything a link points to outside the folder, are kept | always |
+| SessionStart | Side-session notes cleanup | Removes folders in the Claude app's side-session notes folder that are unchanged for 14 days. Past 500 MB it also removes the oldest remaining folders, but never one changed in the last hour or the newest one. Nothing a link points to outside the folder is removed | always |
 | SessionStart | Unmanaged skills notice | Counts skills in `~/.claude/skills` and `~/.codex/skills` that RoboRepo does not manage and suggests `roborepo skill adopt <name>` | always |
 | PreToolUse `Bash` | Protected-branch push | Allows a `git push` it verified lands on a feature branch; denies protected branches and force pushes; denies merges into a checkout on a protected branch and asks before a delete there (see below) | always |
 | PreToolUse `Bash` | Output minimizer | Trims noisy build, lint, and typecheck output; denies `--watch`, `--verbose`, and `--debug`; auto-allows a short list of safe read-only commands, alone or piped into read-only filters such as `head` or `wc`, never with anything chained or redirected | always |

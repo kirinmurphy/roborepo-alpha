@@ -448,7 +448,7 @@ temporary files. Each entry names what cleans it up:
 | --- | --- | --- |
 | `/tmp`, `/private/tmp`, `/private/var/folders` (includes Claude's session scratchpad and sandbox `TMPDIR`) | Claude, Codex | The operating system |
 | `~/.roborepo/scratch` | Claude, Codex | `roborepo scratch`: folders unchanged for 14 days, or past 500 MB |
-| `~/Library/Application Support/Claude/side-session-notes` (the Claude app's hand-over notes between side sessions) | Claude | A Claude session-start hook: folders unchanged for 14 days |
+| `~/Library/Application Support/Claude/side-session-notes` (the Claude app's hand-over notes between side sessions) | Claude | A Claude session-start hook: folders unchanged for 14 days, or past 500 MB |
 
 Reading, writing, editing, and deleting in them never prompts, while `read-files`/`write-files` and
 `read-scope`/`write-scope` stay `allow`. The `read-secrets` denylist still applies inside them.

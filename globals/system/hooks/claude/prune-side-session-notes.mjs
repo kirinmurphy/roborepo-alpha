@@ -9,9 +9,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 // ~/Library/Application Support/Claude/side-session-notes/<session-id>/ and never removes them.
 // That folder is one of the manifest's temporaryLocations, which agents read and write without a
 // prompt, and every temporary location needs a cleanup. Session start is the folder's nearest
-// write path: a new side session is about to use it. A folder changed in the last 14 days, the
-// newest folder, and anything a link would reach outside the store are always kept; the policy
-// lives in modules/retention/registry.mjs.
+// write path: a new side session is about to use it. Folders unchanged for 14 days are removed;
+// past the 500 MB cap the oldest go first, though never one changed in the last hour or the newest
+// folder. Nothing a link reaches outside the store is removed. The policy lives in
+// modules/retention/registry.mjs.
 //
 // It never blocks or slows a session in a way that matters: every failure is silent, and an
 // absent folder (Linux, or no side sessions yet) is a no-op. Removals are reported on stderr only.
@@ -48,7 +49,7 @@ try {
   if (!store) quiet()
   const { removed } = retention.pruneFolderSet({ dirPath: store.target, policy: store.policy })
   if (removed.length) {
-    process.stderr.write(`roborepo: removed ${removed.length} side-session notes folder(s) unchanged for ${store.policy.maxAgeDays} days\n`)
+    process.stderr.write(`roborepo: removed ${removed.length} side-session notes folder(s) by the store's retention policy\n`)
   }
 } catch {
   // Pruning is housekeeping; a failure here must never surface as a session-start error.
