@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient } from "../../modules/forge/github.mjs";
 import { agentHostsFile, botGhEnv, readAccountIdentity, readAgentHosts, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
-import { agentGitRoutingGaps, agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
+import { agentGitRoutingGaps, agentIdentityPackageEnabled, includesAgentGitConfig } from "./agent-identity-package.mjs";
 import { currentRepositoryId } from "./current-repository.mjs";
 import { isMainModule } from "./roots.mjs";
 import { stateDir } from "./state-paths.mjs";
@@ -17,6 +17,25 @@ const DOCTOR_TIMEOUT_MS = 8000;
 export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs, repositoryId: known = null } = {}) {
   const repositoryId = known ?? await currentRepositoryId(cwd);
   return readAgentIdentity({ repositoryId, cwd, stateDir, timeoutMs, packageEnabled: agentIdentityPackageEnabled(), gitGaps: agentGitRoutingGaps() });
+}
+
+// With agents acting as the bot, Git answers "Repository not found" for a repo the bot was never
+// invited to, the same as for a wrong address. When this shell's Git goes out as the bot and the repo
+// is on github.com, it is read once as you (GH_CONFIG_DIR cleared; read-only): you seeing it means
+// the bot is what lacks access. Null in every other case, so the caller keeps its general reason.
+export async function explainBotRepoAccess({ cwd = process.cwd(), env = process.env, timeoutMs = DOCTOR_TIMEOUT_MS, read = githubClient.repository } = {}) {
+  if (!includesAgentGitConfig((name) => env[name])) return null;
+  const target = forgeTargetForRepositoryId(await currentRepositoryId(cwd));
+  if (target?.host !== "github.com" || !target.repo) return null;
+  try {
+    await read({ cwd, timeoutMs, env: { GH_CONFIG_DIR: null } }, target.repo);
+  } catch {
+    return null;
+  }
+  return {
+    message: `Agents act on GitHub as the bot account, and it cannot reach ${target.repo} yet, so nothing was set up.`,
+    resolution: "Run `roborepo github setup` in this repo, in your own terminal; it invites the bot. Then run this again.",
+  };
 }
 
 // Invites the bot to one repo as the user and accepts the invitation as the bot: the setup's invite

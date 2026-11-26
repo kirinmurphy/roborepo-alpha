@@ -315,6 +315,34 @@ try {
   assert.match(status.stdout, /could not be checked for example\/project: GitHub could not be reached/);
   console.log("✓ github status exits 1 only for a problem, and --json prints the report.");
 
+  // `roborepo plans init` in a repo the bot was never invited to: Git, going out as the bot, finds
+  // no repo. Read as you, it is there, so the bot's missing invitation is named. The package's
+  // gitconfig here sends the bot's Git to an address that does not exist, standing in for GitHub
+  // refusing the bot.
+  start();
+  const uninvited = clone("uninvited", "git@github.com:example/project.git");
+  const agentGitconfig = path.join(env.HOME, ".roborepo", "package-runtime", "github-agent-identity", "gitconfig");
+  fs.mkdirSync(path.dirname(agentGitconfig), { recursive: true });
+  fs.writeFileSync(agentGitconfig, `[url "${path.join(root, "nowhere.git")}"]\n\tinsteadOf = git@github.com:example/project.git\n`);
+  const asBot = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: "~/.roborepo/package-runtime/github-agent-identity/gitconfig" };
+  const init = () => spawnSync(process.execPath, [path.join(repoRoot, "scripts/cli/main.mjs"), "plans", "init", "--json"], { cwd: uninvited, env: { ...env, ...asBot }, encoding: "utf8" });
+  gh.clearCalls();
+  let refused = JSON.parse(init().stdout).error;
+  assert.equal(refused.message, "Agents act on GitHub as the bot account, and it cannot reach example/project yet, so nothing was set up.");
+  assert.match(refused.resolution, /^Run `roborepo github setup` in this repo, in your own terminal; it invites the bot\./);
+  assert.ok(gh.calls().length > 0 && gh.calls().every((call) => call.configDir === null && !["PUT", "PATCH", "POST", "DELETE"].includes(call.method)), "the check reads once as you and changes nothing");
+  // When you cannot see the repo either, the general reason stays.
+  start({ failure: "repo-forbidden" });
+  refused = JSON.parse(init().stdout).error;
+  assert.match(refused.message, /^The `origin` remote could not be reached/);
+  fs.rmSync(path.join(env.HOME, ".roborepo"), { recursive: true, force: true });
+  // A shell whose Git does not go out as the bot is not the bot's problem; nothing is read.
+  gh.clearCalls();
+  const { explainBotRepoAccess } = await import("../cli/github-identity.mjs");
+  assert.equal(await explainBotRepoAccess({ cwd: uninvited, env: {} }), null);
+  assert.deepEqual(gh.calls(), []);
+  console.log("✓ plans init names the bot's missing invitation when you can see the repo and the bot cannot.");
+
   // Outside a GitHub repo doctor adds no line.
   start();
   const other = spawnSync(process.execPath, [path.join(repoRoot, "scripts/cli/github-identity.mjs"), "--doctor"], { cwd: clone("gitlab", "git@gitlab.com:example/project.git"), env, encoding: "utf8" });

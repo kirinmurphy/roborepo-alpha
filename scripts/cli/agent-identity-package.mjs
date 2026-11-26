@@ -44,7 +44,7 @@ function enabledAgentShellProviders() {
 
 const readRootConfig = (provider) => fs.readFileSync(resolveHarnessPath(provider.manifest, "rootConfig"), "utf8");
 
-function includesAgentGitConfig(env) {
+export function includesAgentGitConfig(env) {
   const count = Number.parseInt(env("GIT_CONFIG_COUNT") ?? "", 10);
   for (let i = 0; Number.isInteger(count) && i < count; i += 1) {
     if (env(`GIT_CONFIG_KEY_${i}`) === "include.path" && env(`GIT_CONFIG_VALUE_${i}`) === AGENT_GITCONFIG_INCLUDE) return true;

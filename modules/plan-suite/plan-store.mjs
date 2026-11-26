@@ -120,8 +120,9 @@ export function pendingCommitCount(store) {
 
 // Creates or reconnects `origin/repo-plans` and the reserved worktree, recovers a missing checkout, and
 // pushes pending commits. Idempotent. Unlike a mutation it never reports a local-only success: it
-// either ends with the remote holding the branch, or it fails with the reason.
-export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktrees", repoName = null } = {}) {
+// either ends with the remote holding the branch, or it fails with the reason. `explainUnreachable`
+// may name why `origin` did not answer (`{ message, resolution }`, or null to keep the general reason).
+export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktrees", repoName = null, explainUnreachable = null } = {}) {
   const git = repositoryGitDirs(cwd);
   if (!git) throw domainError("PLAN_NOT_FOUND", "This directory is not inside a Git repository.", { resolution: "Clone the repo, then run `roborepo plans init` inside it." });
   const primary = path.dirname(git.commonDir);
@@ -130,7 +131,11 @@ export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktr
   const origin = await run(["remote", "get-url", "origin"]);
   if (!origin.ok) throw initFailure("This repo has no `origin` remote, so its plans have nowhere to live.", "Add an `origin` remote, then run `roborepo plans init` again.", origin);
   const remote = await run(["ls-remote", "--heads", "origin", LOCAL_REF], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
-  if (!remote.ok) throw initFailure("The `origin` remote could not be reached, so nothing was set up.", "Check the remote's address and your credentials, then run `roborepo plans init` again.", remote);
+  if (!remote.ok) {
+    const explained = explainUnreachable ? await explainUnreachable({ cwd: primary }) : null;
+    if (explained) throw initFailure(explained.message, explained.resolution, remote);
+    throw initFailure("The `origin` remote could not be reached, so nothing was set up.", "Check the remote's address and your credentials, then run `roborepo plans init` again.", remote);
+  }
 
   let state = "connected";
   if (remote.stdout.trim()) {

@@ -30,6 +30,11 @@ git ls-remote --heads origin repo-plans
   repository with an `origin` it can reach. When `origin` is on GitHub, run step 5's check before
   stopping and include its offer: on Codex the sandbox has no network until the GitHub agent
   identity is on, and `not-set-up` is read from local files, so the check still answers.
+- **`Repository not found` while the GitHub agent identity is on:** your Git goes out as the bot,
+  and a new repo has not invited it yet. Step 5's check reads the repo as the user; when its
+  `problems` include `not-collaborator` or `invite-pending`, say that the bot needs an invitation:
+  the user runs `roborepo github setup` in this repo, in their own terminal, then reruns
+  `/plan-suite-init`. `roborepo plans init` reports the same reason when it meets this.
 
 ### 2. Create or reconnect the store
 

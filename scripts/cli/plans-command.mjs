@@ -296,7 +296,9 @@ async function plansInitCommand(args) {
   const { flags } = parseArgs(args, ["worktree-root", "repo-name"]);
   let result;
   try {
-    result = await initStore({ worktreeRoot: flags["worktree-root"] || "~/.worktrees", repoName: flags["repo-name"] || null });
+    // Loaded only when origin does not answer: it names a bot that was never invited to the repo.
+    const explainUnreachable = async ({ cwd }) => (await import("./github-identity.mjs")).explainBotRepoAccess({ cwd });
+    result = await initStore({ worktreeRoot: flags["worktree-root"] || "~/.worktrees", repoName: flags["repo-name"] || null, explainUnreachable });
   } catch (err) {
     return failDomain(err, flags.json);
   }
