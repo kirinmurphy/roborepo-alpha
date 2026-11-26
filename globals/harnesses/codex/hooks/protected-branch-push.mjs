@@ -98,36 +98,118 @@ function agentIdentityActive() {
   // gh acts as whoever owns that token.
   if (GH_IDENTITY_VARIABLES.some((name) => name !== 'GH_CONFIG_DIR' && process.env[name])) return false
   const botDir = path.join(stateRoot, 'github-agent', 'gh')
+  if (forCodex && !codexShellsActAsBot(botDir, { userConfigRequired: !process.env.GH_CONFIG_DIR })) return false
   const dir = process.env.GH_CONFIG_DIR
-  if (!dir) return forCodex && codexShellsActAsBot(botDir)
+  if (!dir) return forCodex
   return path.resolve(dir) === path.resolve(botDir)
 }
 
-// Whether Codex gives its shells the bot's gh: its [shell_environment_policy.set] table sets
-// GH_CONFIG_DIR to the bot's dir and empties GH_TOKEN and GITHUB_TOKEN. The package's gitconfig
-// alone is not enough: an enable that could not set GH_CONFIG_DIR (one the user set themselves)
-// still installs it, and gh in those shells acts as the user. The config is the one beside this
-// hook's folder (~/.codex/hooks -> ~/.codex), or CODEX_HOME's. Anything unreadable reads as no.
-function codexShellsActAsBot(botDir) {
+// Whether Codex gives its shells the bot's gh. Its user config's [shell_environment_policy.set] table
+// must set GH_CONFIG_DIR to the bot's dir and empty GH_TOKEN and GITHUB_TOKEN (required when the hook
+// has no GH_CONFIG_DIR of its own), and no layer Codex puts above that file may set any of
+// GH_IDENTITY_VARIABLES to anything else. The package's gitconfig alone is not enough: an enable that
+// could not set GH_CONFIG_DIR (one the user set themselves) still installs it, and gh in those shells
+// acts as the user. The user config is the one beside this hook's folder (~/.codex/hooks ->
+// ~/.codex), or CODEX_HOME's. Anything unreadable reads as no.
+function codexShellsActAsBot(botDir, { userConfigRequired }) {
+  const codexHome = process.env.CODEX_HOME || path.dirname(hookDir)
+  const userFile = path.join(codexHome, 'config.toml')
+  const user = readCodexLayer(userFile, botDir)
+  if (user === null ? userConfigRequired : !user.keepsBot) return false
+  if (userConfigRequired) {
+    const dir = user.set.get('GH_CONFIG_DIR')
+    if (!dir || path.resolve(dir) !== path.resolve(botDir) || user.set.get('GH_TOKEN') !== '' || user.set.get('GITHUB_TOKEN') !== '') return false
+  }
+  return codexOverrideLayers(codexHome, userFile).every((file) => {
+    if (!fs.existsSync(file)) return true
+    return readCodexLayer(file, botDir)?.keepsBot === true
+  })
+}
+
+// The Codex config files that sit above the user config and can change what its shells get:
+// - a project's .codex/config.toml in the session's folder or any folder above it. Codex reads the
+//   trusted ones from the project root down; this reads every one up to /, trusted or not.
+// - each profile file a `--profile` can layer on (<codex home>/<name>.config.toml). Which one is
+//   active is not known here, so every one must keep the bot. Profiles written as [profiles.<name>]
+//   tables inside a config file are checked by readCodexLayer.
+// - the managed config an administrator installs.
+// `-c` overrides on Codex's own command line cannot be seen.
+const CODEX_MANAGED_CONFIG = '/etc/codex/managed_config.toml'
+let sessionFolders = []
+function codexOverrideLayers(codexHome, userFile) {
+  const files = new Set([CODEX_MANAGED_CONFIG])
+  try {
+    for (const name of fs.readdirSync(codexHome)) if (name.endsWith('.config.toml')) files.add(path.join(codexHome, name))
+  } catch {}
+  for (const start of sessionFolders) {
+    for (let dir = path.resolve(start); ; dir = path.dirname(dir)) {
+      files.add(path.join(dir, '.codex', 'config.toml'))
+      if (dir === path.dirname(dir)) break
+    }
+  }
+  const user = realFile(userFile)
+  return [...files].filter((file) => realFile(file) !== user)
+}
+function realFile(file) {
+  try {
+    return fs.realpathSync(file)
+  } catch {
+    return path.resolve(file)
+  }
+}
+
+// One Codex config file read line by line, without a TOML parser (hooks use only Node built-ins):
+// `set` holds the plain entries of its [shell_environment_policy.set] table, and `keepsBot` is false
+// when anything in it could give the shells another gh identity:
+// - one of GH_IDENTITY_VARIABLES named anywhere Codex reads shell settings from (the top level, a
+//   shell_environment_policy table, a profile) other than as a plain [shell_environment_policy.set]
+//   entry holding the bot's value: the bot's dir for GH_CONFIG_DIR, empty for the rest;
+// - a backslash there in a key, or in a shell_environment_policy or profile line, since an escape can
+//   spell one of those names;
+// - include_only, which can drop GH_CONFIG_DIR after it is set.
+// Lines inside multi-line strings are text, not settings. null when the file cannot be read.
+const IDENTITY_NAME = new RegExp(`(?<![A-Za-z0-9_])(?:${GH_IDENTITY_VARIABLES.join('|')})(?![A-Za-z0-9_])`)
+const SET_TABLE = 'shell_environment_policy.set'
+function readCodexLayer(file, botDir) {
   let text
   try {
-    text = fs.readFileSync(path.join(process.env.CODEX_HOME || path.dirname(hookDir), 'config.toml'), 'utf8')
+    text = fs.readFileSync(file, 'utf8')
   } catch {
-    return false
+    return null
   }
-  const values = new Map()
-  let inTable = false
+  const set = new Map()
+  let keepsBot = true
+  let table = ''
+  let multiline = null
   for (const line of text.split(/\r?\n/)) {
-    const header = /^\s*\[([^\]]+)\]\s*(?:#.*)?$/.exec(line)
-    if (header) {
-      inTable = header[1].replace(/[\s"]/g, '') === 'shell_environment_policy.set'
+    if (multiline) {
+      if (line.split(multiline).length % 2 === 0) multiline = null
       continue
     }
-    const entry = inTable && /^\s*"?([A-Za-z_][A-Za-z0-9_]*)"?\s*=\s*"([^"\\]*)"\s*(?:#.*)?$/.exec(line)
-    if (entry) values.set(entry[1], entry[2])
+    if (/^\s*(?:#.*)?$/.test(line)) continue
+    for (const delimiter of ['"""', "'''"]) if (line.split(delimiter).length % 2 === 0) multiline = delimiter
+    const header = /^\s*\[\[?([^\]]*)\]\]?\s*(?:#.*)?$/.exec(line)
+    if (header) {
+      if (header[1].includes('\\')) keepsBot = false
+      table = header[1].replace(/[\s"']/g, '')
+      continue
+    }
+    const readsShell = table === '' || table.startsWith('profiles') || table.includes('shell_environment_policy')
+    if (!readsShell) continue
+    const entry = table === SET_TABLE && /^\s*"?([A-Za-z_][A-Za-z0-9_]*)"?\s*=\s*"([^"\\]*)"\s*(?:#.*)?$/.exec(line)
+    if (entry) {
+      set.set(entry[1], entry[2])
+      if (GH_IDENTITY_VARIABLES.includes(entry[1])) {
+        const bots = entry[1] === 'GH_CONFIG_DIR' ? entry[2] !== '' && path.resolve(entry[2]) === path.resolve(botDir) : entry[2] === ''
+        if (!bots) keepsBot = false
+      }
+      continue
+    }
+    const key = line.split('=')[0]
+    if (IDENTITY_NAME.test(line) || /\binclude_only\b/.test(line) || key.includes('\\')
+      || (line.includes('\\') && (table !== '' || /shell_environment_policy|profiles/.test(line)))) keepsBot = false
   }
-  const dir = values.get('GH_CONFIG_DIR')
-  return !!dir && path.resolve(dir) === path.resolve(botDir) && values.get('GH_TOKEN') === '' && values.get('GITHUB_TOKEN') === ''
+  return { set, keepsBot }
 }
 
 // Whether any command in `text`, nested ones included, could make gh act as someone other than the
@@ -552,13 +634,66 @@ function classifyPush(cwd, args) {
 
 // REST paths and GraphQL mutations that merge. Agents never merge (merge-pull-requests), and the
 // bot's write role lets it merge an approved pull request, so the agent lift keeps these denied.
-// They are matched against the gh arguments and the whole command, heredoc bodies and variable
-// values included; a query read from a file is not seen.
-const API_MERGES = /(?:^|\/)pulls\/[^/\s]+\/merge\b|(?:^|\/)merges\b|(?:^|\/)merge-upstream\b|\b(?:mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest|mergeBranch)\b/
-// Set from the raw command before it is walked.
-let commandMerges = false
-function mergesThroughApi(args) {
-  return commandMerges || args.some((arg) => API_MERGES.test(arg))
+// They are matched against the operation only (the REST endpoint, or the GraphQL query), never the
+// data a call sends, so a review reply that mentions `mergePullRequest` is not a merge.
+const REST_MERGES = /(?:^|\/)pulls\/[^/\s]+\/merge\b|(?:^|\/)merges\b|(?:^|\/)merge-upstream\b/
+const GRAPHQL_MERGES = /\b(?:mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest|mergeBranch)\b/
+// `gh api` options that take their value as the next word, and the short ones that take the rest of
+// their cluster (`-XPUT`, `-iH 'Accept: x'`).
+const GH_API_VALUE_OPTIONS = new Set(['-X', '--method', '-H', '--header', '-f', '--raw-field', '-F', '--field', '-q', '--jq', '-t', '--template', '--input', '--hostname', '--cache', '-p', '--preview'])
+const GH_API_SHORT_VALUES = 'XHfFqtp'
+
+// Why the `gh api` call in `args` cannot keep the agent lift because of what it does, or null. It
+// merges, or the operation cannot be read from the command `text`: an endpoint the shell fills in
+// (`$EP`), or a GraphQL query that is missing or that the shell could change. A query may use GraphQL
+// variables (`$id`) only when it is written in single quotes, where the shell leaves `$` alone.
+function apiOperationRefusal(args, text) {
+  const { endpoint, queries } = apiOperation(args)
+  const unread = 'the hook cannot read which API operation this `gh api` call runs, so it cannot rule out a merge. Write the endpoint and any GraphQL query literally, or run it yourself.'
+  const merges = '`gh api` merges here, and agents never merge. Run it yourself.'
+  if (!endpoint || /[$`]/.test(endpoint)) return unread
+  if (REST_MERGES.test(endpoint)) return merges
+  if (!/(?:^|\/)graphql$/.test(endpoint.split('?')[0])) return null
+  if (!queries.length) return unread
+  for (const query of queries) {
+    if (GRAPHQL_MERGES.test(query)) return merges
+    const literal = !query.includes("'") && (text.includes(`query='${query}'`) || text.includes(`'query=${query}'`))
+    if (/[$`]/.test(query) && !literal) return unread
+  }
+  return null
+}
+
+// The endpoint and the `query` field values of a `gh api` call, from the gh arguments.
+function apiOperation(args) {
+  let i = 0
+  while (i < args.length && args[i] !== 'api') i += GH_VALUE_OPTIONS.has(args[i]) ? 2 : 1
+  let endpoint = null
+  const queries = []
+  let optionsEnded = false
+  for (i += 1; i < args.length; i += 1) {
+    const arg = args[i]
+    let field = null
+    if (optionsEnded || !arg.startsWith('-') || arg === '-') {
+      endpoint ??= arg
+    } else if (arg === '--') {
+      optionsEnded = true
+    } else if (arg === '-f' || arg === '-F' || arg === '--raw-field' || arg === '--field') {
+      field = args[++i] ?? ''
+    } else if (/^--(?:raw-)?field=/.test(arg)) {
+      field = arg.slice(arg.indexOf('=') + 1)
+    } else if (GH_API_VALUE_OPTIONS.has(arg)) {
+      i += 1
+    } else if (!arg.startsWith('--')) {
+      // A short cluster: flags up to the first option that takes a value, which takes the rest.
+      const at = [...arg.slice(1)].findIndex((letter) => GH_API_SHORT_VALUES.includes(letter))
+      if (at !== -1) {
+        const value = arg.slice(at + 2) || (args[++i] ?? '')
+        if ('fF'.includes(arg[at + 1])) field = value
+      }
+    }
+    if (field?.startsWith('query=')) queries.push(field.slice('query='.length))
+  }
+  return { endpoint, queries }
 }
 
 // Why the agent lift does not apply to these `gh api` arguments, or null when it does. An explicit
@@ -596,7 +731,7 @@ function apiLiftRefusal(args) {
 }
 
 // gh with its options removed, matched against the host's denied list.
-function classifyGh(args) {
+function classifyGh(args, text) {
   const words = []
   for (let i = 0; i < args.length; i += 1) {
     if (GH_VALUE_OPTIONS.has(args[i])) i += 1
@@ -605,8 +740,8 @@ function classifyGh(args) {
   const { denied: deniedList, allowedAsAgent } = HOST_CLIS.github
   const denied = deniedList.find((prefix) => prefix.every((word, k) => words[k] === word))
   if (!denied) return null
-  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive() && !mergesThroughApi(args)) {
-    const refusal = apiLiftRefusal(args)
+  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive()) {
+    const refusal = apiLiftRefusal(args) ?? apiOperationRefusal(args, text)
     if (!refusal) return null
     return { decision: 'deny', reason: `roborepo: ${refusal}` }
   }
@@ -1248,7 +1383,7 @@ function classifyCommand(text, startCwd) {
     // gh behind a wrapper (`env gh api`, `command gh api`) is still gh.
     const ghAt = programIndex(words)
     if (path.basename(words[ghAt] ?? '') === 'gh') {
-      result = stricter(result, classifyGh(words.slice(ghAt + 1)))
+      result = stricter(result, classifyGh(words.slice(ghAt + 1), text))
       continue
     }
     if (SHELLS.has(program)) {
@@ -1688,12 +1823,12 @@ if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string'
     || KEYWORDS.test(command.replace(/['"\\{}]/g, '')) || /[$`]/.test(command))) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
+sessionFolders = [...new Set([cwd, input.cwd || process.cwd()])]
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
 
 // Every walk reads the command without the heredoc bodies that are plainly data.
 const text = withoutHeredocBodies(command)
 ghIdentityChanged = changesGhIdentity(text)
-commandMerges = API_MERGES.test(command)
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
 let result = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
 // The walks read a body that a program reads (`node <<'EOF'`, `bash <<EOF`) as shell, so an
