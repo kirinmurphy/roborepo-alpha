@@ -216,11 +216,9 @@
   "alwaysThinkingEnabled": false,
   "awaySummaryEnabled": false,
   "env": {
-    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_COUNT": "1",
     "GIT_CONFIG_KEY_0": "core.hooksPath",
-    "GIT_CONFIG_VALUE_0": "~/.claude/git-hooks",
-    "GIT_CONFIG_KEY_1": "include.path",
-    "GIT_CONFIG_VALUE_1": "~/.roborepo/package-runtime/github-agent-identity/gitconfig"
+    "GIT_CONFIG_VALUE_0": "~/.claude/git-hooks"
   },
   "sandbox": {
     "enabled": true,

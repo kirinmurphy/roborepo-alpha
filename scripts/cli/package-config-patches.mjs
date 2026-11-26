@@ -192,6 +192,29 @@ function removeUnion(edit, text, harness, patch, log) {
   return remaining.length ? edit.set(text, patch.path, listValue(remaining, patch)) : edit.delete(text, patch.path);
 }
 
+// Git reads exactly GIT_CONFIG_COUNT of the GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n pairs in an
+// environment group. A package that adds or removes a pair therefore recounts them: every pair from
+// index 0 up to the first index missing its key or its value. The count is derived, like the
+// baseline merge's, so it is never claimed as a package's own setting.
+const GIT_CONFIG_PAIR = /^GIT_CONFIG_(KEY|VALUE)_\d+$/;
+
+function reconcileGitConfigCounts(edit, text, patches) {
+  const groups = new Map();
+  for (const patch of patches) {
+    if (GIT_CONFIG_PAIR.test(patch.path.at(-1))) groups.set(JSON.stringify(patch.path.slice(0, -1)), patch.path.slice(0, -1));
+  }
+  for (const group of groups.values()) {
+    const has = (name) => { try { const found = edit.get(text, [...group, name]); return found.found && typeof found.value === "string"; } catch { return false; } };
+    let count = 0;
+    while (has(`GIT_CONFIG_KEY_${count}`) && has(`GIT_CONFIG_VALUE_${count}`)) count += 1;
+    const current = (() => { try { return edit.get(text, [...group, "GIT_CONFIG_COUNT"]); } catch { return { found: false }; } })();
+    if (current.found && current.value === String(count)) continue;
+    if (!current.found && count === 0) continue;
+    text = edit.set(text, [...group, "GIT_CONFIG_COUNT"], String(count));
+  }
+  return text;
+}
+
 const APPLY = { set: applySet, union: applyUnion };
 const REMOVE = { set: removeSet, union: removeUnion };
 
@@ -211,6 +234,7 @@ function run(pkg, component, handlers, { configPath = rootConfigActive[component
     const resolved = resolvePatch(pkg, patch);
     text = handlers[resolved.op](edit, text, component.harness, resolved, log);
   }
+  text = reconcileGitConfigCounts(edit, text, component.patches);
   if (text === before) return;
   if (write) write(text);
   else writeRootConfig(component.harness, configPath, text);

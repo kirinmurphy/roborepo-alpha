@@ -190,10 +190,9 @@ async function guidedSetup({ input, io, cwd }) {
   io.log("✓ Check: the bot account, its access and the branch protection all look right.");
 
   // 9. Turn the package on. Enabling again re-applies every resource, which repairs one left
-  // missing when an earlier enable failed partway. The package being in place is not the whole
-  // switch: a harness whose agent settings leave out the bot's Git include (settings from an older
-  // install) still pushes as the user, and only the baseline merge in `roborepo update` adds it, so
-  // setup stops there rather than report success.
+  // missing when an earlier enable failed partway; that includes the pair that makes each harness's
+  // agent shells include the bot's Git settings. A harness whose config is missing still pushes as
+  // the user, and `roborepo update` writes it, so setup stops there rather than report success.
   const gapsBefore = agentGitRoutingGaps();
   if (await agentIdentityPackageInstalled()) {
     if (gapsBefore.length === 0) done("Package on");
