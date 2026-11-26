@@ -227,7 +227,7 @@ async function guidedSetup({ input, io, cwd }) {
 function packageKept({ state, harnesses = [] }) {
   if (state === "on") return "The package is on and stays on.";
   if (state === "partial") return "The package is partly installed and stays as it is, so agents may use the bot for some GitHub calls and not others.";
-  if (state === "leftover") return `The package is off, but your ${harnesses.join(" and ")} settings still set GH_CONFIG_DIR or include the bot's Git settings, so setup cannot tell which GitHub account agents use. Setup changes nothing.`;
+  if (state === "leftover") return `The package is off, but your ${harnesses.join(" and ")} settings still set GH_CONFIG_DIR, GH_TOKEN, or GITHUB_TOKEN, or include the bot's Git settings, so setup cannot tell which GitHub account agents use. Setup changes nothing.`;
   return "Setup could not read whether the package is on, or what your harness settings give agents, so it cannot tell which GitHub account agents use. Setup changes nothing.";
 }
 const TURN_OFF = "to stop agents using the bot meanwhile, turn it off in Settings or run roborepo package disable github-agent-identity";

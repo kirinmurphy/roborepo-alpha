@@ -482,12 +482,14 @@ try {
   for (const leftoverEnv of [
     { GIT_CONFIG_COUNT: "2", GIT_CONFIG_KEY_1: "include.path", GIT_CONFIG_VALUE_1: "~/.roborepo/package-runtime/github-agent-identity/gitconfig" },
     { GH_CONFIG_DIR: ghDir },
+    { GH_TOKEN: "another-account-token" },
+    { GITHUB_TOKEN: "another-account-token" },
   ]) {
     fresh({ invitePermission: "admin" });
     fs.writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify({ env: leftoverEnv }));
     result = await setup(`${BOT}\n${TOKEN}\ny\n`);
     assert.equal(result.status, 1, result.stdout + result.stderr);
-    assert.match(result.stderr, /The bot is not ready\. The package is off, but your Claude Code settings still set GH_CONFIG_DIR or include the bot's Git settings, so setup cannot tell which GitHub account agents use\./, Object.keys(leftoverEnv).join(","));
+    assert.match(result.stderr, /The bot is not ready\. The package is off, but your Claude Code settings still set GH_CONFIG_DIR, GH_TOKEN, or GITHUB_TOKEN, or include the bot's Git settings, so setup cannot tell which GitHub account agents use\./, Object.keys(leftoverEnv).join(","));
     assert.doesNotMatch(result.stderr, /act(s|ing)? as (the bot|you)/);
   }
   console.log("✓ Leftover bot settings after the package is off refuse without claiming which account agents use.");

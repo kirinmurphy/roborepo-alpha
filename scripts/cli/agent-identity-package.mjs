@@ -131,7 +131,9 @@ export function agentIdentityLeftovers({ providers = agentShellProviders(), read
     }
     try {
       const env = (name) => provider.adapters.agentShell.envValue(text, name);
-      if (includesAgentGitConfig(env) || String(env("GH_CONFIG_DIR") ?? "") !== "") leftover.push(provider.manifest.displayName);
+      // A token gh would use ahead of any stored login also leaves the account agents use unknown.
+      const set = (name) => String(env(name) ?? "") !== "";
+      if (includesAgentGitConfig(env) || set("GH_CONFIG_DIR") || set("GH_TOKEN") || set("GITHUB_TOKEN")) leftover.push(provider.manifest.displayName);
     } catch {
       unreadable.push(provider.manifest.displayName);
     }
