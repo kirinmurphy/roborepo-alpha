@@ -290,7 +290,7 @@ What the package changes, and who renders it:
 | `GH_TOKEN` and `GITHUB_TOKEN` set to empty (same two places) | Package `config-patch` (`set`) | `gh` uses either ahead of the stored login and treats an empty value as unset |
 | A short agent rule: an authentication failure means the bot's token expired, so stop and ask the user to rerun the setup | Package `rules` resource | Agents otherwise retry, or suggest a `gh auth login` they may not run |
 | Codex `network.domains` GitHub entries, `features.network_proxy` | Package `config-patch` | Keys the package can own; existing domains are kept |
-| Extra `GIT_CONFIG_*` pairs and `GIT_CONFIG_COUNT` | Core renderer, when the package is enabled | `GIT_CONFIG_COUNT` is shared with core's `core.hooksPath` entry, so one patch cannot own it |
+| The `include.path` pair (`GIT_CONFIG_KEY_1`/`GIT_CONFIG_VALUE_1`) | Package `config-patch` (`set`); applying or removing patches recounts `GIT_CONFIG_COUNT` from the pairs present | Core keeps pair 0 (`core.hooksPath`); the count is derived, so no single owner is needed (Decision Log, November 26) |
 | Codex `network.enabled` | Core renderer (`codexNetworkAccess`), when the package is enabled | Already rendered from `go-online` |
 | `gh api` and `post-to-github` moving to allow | Core permission rendering, when the package is enabled | Changes core behaviors in `agent-permissions.json` |
 
@@ -668,6 +668,11 @@ reads status and opens the terminal.
 - [x] Uninstall left `~/.roborepo/github-agent` (the bot's token) behind, so the remnant check failed and stopped the npm uninstall handoff — fixed in review (aaea734f); docs say the token still needs revoking on GitHub (e8583b4c)
 - [x] `npm run check` failed in agent shells with the identity on: the protection checks' fake `gh` inherited the bot's `GH_CONFIG_DIR` and answered 401 — fixed in review (b4fde55d)
 
+- [x] Decision Log, package table, and Validation still describe core owning the `include.path` pair and `GIT_CONFIG_COUNT = 5` after the package took the pair — fixed in the plan record (November 26)
+- [x] The bot authoring agents' commits is recorded in no Decision Log entry or Not tested row — fixed in the plan record (November 26)
+- [ ] `docs/user/guides/setup-and-daily-use.md`: "a bot set up before this was added" will go stale, and the doc omits that the author applies in every repo agents commit in
+- [ ] The bot author include is unconditional, so agents' commits in non-GitHub repos also carry the GitHub bot's noreply author — escalated to the human: keep global and document, or scope it to GitHub remotes with `includeIf`
+
 ### Verification
 - Base failure: `cli-surface-integration-check.mjs` fails intermittently at the remote-sync menu step, on `main` too
 - Validation pass 1 at 43a377d4 (fresh-context subagent): 10 findings above, all fixed
@@ -687,6 +692,9 @@ reads status and opens the terminal.
 - `npm run check` at b4fde55d, outside the Claude sandbox, from an agent shell with the identity's gh variables set: 428 tests passed, 103/103 suites passed. b4fde55d itself (test orchestration only) was validated by this gate run, not by another Validator pass
 - Inside the Claude sandbox the gate fails 13 suites on worktree creation and local port binding (`Operation not permitted`); environmental, all pass outside it
 - Branch pushed at b4fde55d on 2026-11-25 after the owner published `main` 97605225; CI result pending
+- Review 2026-11-26: base synchronized at ea5c6905 (`main` e9595325, an empty commit); CI passed at f990aa0c (ubuntu, macos, windows-installer)
+- Review Validator pass 1 at ea5c6905 (fresh-context subagent, implementation-review, scope b4fde55d..HEAD): no code defects; 3 actionable record and doc findings, 1 escalate (above)
+- `github-setup-check.mjs` and `github-identity-status-check.mjs` pass at ea5c6905 outside the Claude sandbox (inside it they fail on the `/**/*.pem` deny)
 
 ### Result
 - Status: pending — 9 person-only `## Not tested` entries open
@@ -756,6 +764,10 @@ reads status and opens the terminal.
       interactive and reads the bot's token at a hidden prompt in the owner's terminal.
       `repository-agent-identity-check.mjs` asserts the launched command and folder, and the
       browser spec covers the post and the refresh on return.
+- [ ] Agents' commits pushed by the bot show the bot as their author on GitHub. Needs a person:
+      it needs `roborepo github setup` rerun to write the author file, then an agent commit and push.
+      `github-setup-check.mjs` asserts the setup writes it, and `github-agent-identity-package-check.mjs`
+      runs Git with the include and reads the bot's name and email.
 - [ ] `/plan-suite-init` in a repo without a plan store ends by offering `roborepo github setup`.
       Needs a person: initializing a store creates a remote branch on a real GitHub repo, which is
       the owner's call; `github-identity-status-check.mjs` covers the `not-set-up` answer the offer
@@ -777,7 +789,7 @@ Automated:
   Identity on: `enabled = true`, both GitHub domains, existing domains kept, `~/.ssh/**` still
   denied, and `allow_local_binding` not `true`.
 - A package test shows enabling `github-agent-identity` adds its entries, including
-  `GIT_CONFIG_COUNT = 5` and an absolute `GH_CONFIG_DIR`, and disabling it restores the prior config.
+  the `include.path` pair with `GIT_CONFIG_COUNT = 2` and an absolute `GH_CONFIG_DIR`, and disabling it restores the prior config.
 - A `git-exec.mjs` test shows the new option keeps the `GIT_CONFIG_COUNT` pairs and the default
   still strips them.
 - `node scripts/test/delivery-operations-check.mjs` passes after the `gh` runner moves.
@@ -811,7 +823,7 @@ Manual, on the real repo, after Phase 6:
 | In an interactive Codex session and in `codex exec`: push a feature branch and open a PR | Both succeed as the bot, with no prompt and no sandbox escalation |
 | In an interactive Codex session and in `codex exec`: `roborepo plans save` on a plan | Reports "synchronized"; the commit is on `origin/repo-plans`, pushed with the bot's token, with no prompt and no sandbox escalation |
 | Save from Codex with the identity off, turn it on, then save again | The first save reports "not synchronized"; the second pushes both commits |
-| In a Codex session: `roborepo delivery fetch origin` | Succeeds over HTTPS as the bot |
+| In a Codex session: `roborepo delivery fetch origin` | Succeeds over HTTPS as the bot; from a linked worktree Codex asks to escalate (Decision Log, November 26) |
 | In a Codex session: `git push origin HEAD:main`, and `git push --no-verify origin HEAD:main` | The hook denies both before they reach GitHub |
 | In a Codex session: reach a host not on the allowlist, read `~/.ssh/known_hosts`, and bind a wildcard listener | All three are refused |
 | In a Codex session with the identity off: `git push --dry-run` to a feature branch | Fails on the network, as it does today |
@@ -880,6 +892,21 @@ Manual, on the real repo, after Phase 6:
 None open.
 
 ## Decision Log
+
+- November 26, 2026 (user decision): the `include.path` pair moved from the core baselines into the
+  package's config patches, and applying or removing patches recounts `GIT_CONFIG_COUNT`. Turning
+  the package off left the always-rendered pair pointing at a removed file, and an existing install
+  kept a stale count. Turning it off now removes the pair; a pair from the earlier baseline is
+  removed too, since its value matches.
+- November 26, 2026 (user decision): agents' commits are authored by the bot. The setup writes
+  `~/.roborepo/github-agent/gitconfig.author` (the bot's login and `<id>+<login>@users.noreply.github.com`),
+  and the package gitconfig includes it. Chosen because manual checks showed pull requests pushed
+  by the bot still listing the user as the commits' author.
+- November 26, 2026 (user decision): in a linked worktree, `roborepo delivery fetch` under Codex
+  asks to escalate, because the worktree's fetch results live in the main checkout's `.git`,
+  outside Codex's writable folders. Kept rather than granting writes there: landing detection
+  reads `origin/HEAD`, and a write grant on remote refs would let an agent fake "landed" and have
+  unmerged work cleaned up.
 
 - November 23, 2026: the github.com step text lives in `modules/forge/agent-identity-guide.mjs`,
   which the setup prints from and the status route returns as `guide`. Alternative: a portal copy of
@@ -951,7 +978,7 @@ None open.
   user's own credentials), running `gh` outside the sandbox (Codex would prompt), Claude only. This
   replaces the "never written to a file" rule for the token; it still never appears in a tracked or
   rendered file, an argument, or a transcript.
-- November 22, 2026: the Git settings reach agent shells through one `include.path` pair that core
+- November 22, 2026 (superseded November 26: the package owns the pair): the Git settings reach agent shells through one `include.path` pair that core
   always renders, pointing at `~/.roborepo/package-runtime/github-agent-identity/gitconfig`, a file the
   package installs. Chosen over rendering four more `GIT_CONFIG_*` pairs only when the package is on:
   Git honors `include.path` at command scope, expands `~`, and ignores a missing file (checked
