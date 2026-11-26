@@ -257,7 +257,7 @@ The package works through these settings in agent shells only:
   through a second pair of agents' `GIT_CONFIG_*` variables that the package adds (and removes
   when it is turned off), clears inherited credential helpers, has `gh auth git-credential` answer
   for github.com, and rewrites SSH remotes to HTTPS. It also makes the bot the author of agents'
-  commits once `roborepo github setup` has run.
+  commits in repos with a github.com remote, once `roborepo github setup` has run (Git 2.36 or later).
 
 It also adds a short rule to the agents' instructions: when `git` or `gh` fails authentication, the
 bot's token has likely expired, so the agent stops and asks you to rerun `roborepo github setup`.

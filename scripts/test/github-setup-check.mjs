@@ -108,7 +108,7 @@ try {
 
   // With the package's gitconfig included the way the harness settings include it, agents' commits
   // are authored by the bot at its noreply address.
-  assert.match(result.stdout, /✓ commit author: agents' commits are now authored by robo-bot <4242\+robo-bot@users\.noreply\.github\.com>/);
+  assert.match(result.stdout, /✓ commit author: agents' commits in github\.com repos are now authored by robo-bot <4242\+robo-bot@users\.noreply\.github\.com>/);
   const agentGit = (key, cwd = checkout) => spawnSync("git", ["-C", cwd, "config", "--get", key], {
     encoding: "utf8",
     env: { ...env, GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: path.join(stateRoot, "package-runtime", "github-agent-identity", "gitconfig") },
@@ -117,6 +117,7 @@ try {
   assert.equal(agentGit("user.email"), "4242+robo-bot@users.noreply.github.com");
   // The bot has no account off GitHub, so its author applies only in repos with a github.com remote.
   assert.equal(agentGit("user.name", clone("https-github", "https://github.com/example/project.git")), BOT);
+  assert.equal(agentGit("user.name", clone("https-user-github", "https://robo-bot@github.com/example/project.git")), BOT);
   assert.equal(agentGit("user.name", clone("ssh-github", "ssh://git@github.com/example/project.git")), BOT);
   assert.equal(agentGit("user.name", clone("gitlab", "git@gitlab.com:example/project.git")), "", "a GitLab repo keeps the user's author");
   assert.equal(agentGit("user.name", clone("local-only", null)), "", "a repo with no remote keeps the user's author");

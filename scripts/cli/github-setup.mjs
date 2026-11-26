@@ -165,7 +165,7 @@ async function guidedSetup({ input, io, cwd }) {
   // The bot as the author of agents' commits.
   const botId = await githubClient.accountId(user, botLogin);
   const authorChanged = writeAgentAuthor({ stateDir, login: botLogin, id: botId });
-  io.log(`✓ commit author: ${authorChanged ? "agents' commits are now authored by" : "already"} ${botLogin} <${agentNoreplyEmail({ login: botLogin, id: botId })}>`);
+  io.log(`✓ commit author: ${authorChanged ? "agents' commits in github.com repos are now authored by" : "already"} ${botLogin} <${agentNoreplyEmail({ login: botLogin, id: botId })}>`);
 
   // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });

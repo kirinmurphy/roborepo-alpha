@@ -80,7 +80,7 @@ The setup walks you through each step and skips the ones already done:
 In every repo with a github.com remote, agents' commits are authored by the bot, at its GitHub
 noreply address (`<id>+<login>@users.noreply.github.com`). This overrides a repo's own `user.name`
 and `user.email` for agents. Repos with no github.com remote (GitLab, local-only) keep your own
-author. A bot set up with an older RoboRepo gets the author on the next `roborepo github setup`.
+author. This needs Git 2.36 or later; older Git keeps your author everywhere. A bot set up with an older RoboRepo gets the author on the next `roborepo github setup`.
 
 In the portal, **Agent GitHub Account** in Settings is the on/off switch. While it is off, Home
 offers the setup once (**No thanks** hides the offer for good). While it is on but the bot cannot
