@@ -751,6 +751,18 @@ test.describe("Agent GitHub account", () => {
     expect(reads.filter((read) => read.fresh)).toEqual([{ kind: "account", fresh: true }, { kind: "repo", name: "identity-invited", fresh: true }]);
   });
 
+  test("a bot that is the user's own account gets the setup on item 1", async ({ page }) => {
+    await stub(page, {
+      accountNext: () => account({ state: "problem", findings: [finding("bot-is-user", "problem", `The bot account ${BOT} is your own account, so agents would have your access.`)] }),
+      ready: () => false,
+    });
+    await page.goto("/?agent-identity=setup");
+    const steps = card(page).locator("[data-slot=steps] > li");
+    await expect(steps.first()).toContainText(`${BOT} is your own account; use a separate one`);
+    await expect(card(page).locator("li[data-current=true] [data-slot=run]")).toHaveText("Open setup");
+    await expect(steps.first()).toHaveAttribute("data-current", "true");
+  });
+
   test("a repo the server turns down shows no badge", async ({ page }) => {
     await stub(page, { accountNext: () => ACCOUNTS.healthy.report, repoNext: () => ({ applies: false }) });
     await openHome(page);

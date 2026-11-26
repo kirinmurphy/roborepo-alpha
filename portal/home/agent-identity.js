@@ -706,7 +706,7 @@ export function cardSteps(accountReport, repoReport = null) {
   const accountDone = Boolean(accountReport.signedIn || accountReport.savedLogin) && !has("bot-is-user");
   const accountStep = { label: "Bot account", done: accountDone, note: has("bot-is-user") ? `${login} is your own account; use a separate one` : login || "not created yet" };
   const setup = { kind: "setup", label: "Open setup" };
-  if (!login) Object.assign(accountStep, { action: `${guide.get("account")?.note || ""} Then Open setup asks for its login in a terminal.`.trim(), url: guide.get("account")?.url, button: setup });
+  if (!accountDone) Object.assign(accountStep, { action: `${guide.get("account")?.note || ""} Then Open setup asks for its login in a terminal.`.trim(), url: guide.get("account")?.url, button: setup });
 
   const tokenDone = Boolean(accountReport.botLogin) && !tokenTrouble;
   const tokenStep = { label: "Token", done: tokenDone };
