@@ -236,8 +236,9 @@ exists but cannot be listed. Codex `-c` overrides on its command line never reac
 started with `-c shell_environment_policy…` could give its shells another `gh`. The hook cannot check
 your own command line, but while the identity is on it refuses an agent command that starts Codex
 with a `-c`/`--config` override of the shell environment or of a GitHub identity variable, run
-directly or behind a wrapper such as `env`. Indirect launches (`npx codex`, a command built from a
-variable) are not recognized.
+directly or behind a wrapper such as `env`. Indirect launches are not recognized, such as `npx codex`,
+`timeout` or `xargs` before `codex`, a subshell (`(codex …)`, `$(codex …)`), or a command built from a
+variable.
 
 The workflow an agent should follow:
 
