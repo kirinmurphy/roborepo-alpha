@@ -339,8 +339,9 @@ New checks, each failing without its phase:
   `hosts`, its config patches set only its `cli.identityVariables` and `networkDomains`, and a
   repo with a remote on another host gets neither the bot's credential helper nor its author
   (`git config --get-urlmatch` and `git var GIT_AUTHOR_IDENT` in a fixture repo).
-- **Hook parity:** each `HOST_CLIS` entry equals its provider manifest's CLI data, and the Claude and
-  Codex hook copies are byte-identical.
+- **Hook parity:** in each `HOST_CLIS` entry, `cli`, `identityVariables`, and `configSubfolder`
+  equal the manifest's `cli.*` values and `packageId` and `stateFolder` equal its `agent.*` values;
+  the Claude and Codex hook copies are byte-identical.
 
 Before calling the plan done, compare `roborepo github status --json`, `roborepo protect --check
 --json`, and `roborepo doctor` output on a machine with the bot set up, before and after; they must
@@ -365,7 +366,7 @@ be identical apart from timestamps.
    | Option | Gains | Loses |
    | --- | --- | --- |
    | All six phases (as written) | The whole layer exists while Part 01's code is fresh; a second provider is mostly data and an adapter | Commands, portal, delivery, hooks, and permissions get shaped before a real second provider shows what it needs |
-   | Phases 1–2 plus Phase 6's host-scoping test | About 40% of the work; nothing guessed beyond the registry and the GitHub move | The second-provider plan must generalize Phases 3–5 itself, rereading this context |
+   | Phases 1–2 plus Phase 6's host-scoping test | Roughly two of six phases of work; nothing guessed beyond the registry and the GitHub move | The second-provider plan must generalize Phases 3–5 itself, rereading this context |
 
    Recommendation: all six; each phase is small and checked by existing tests, and the owner asked
    for the full layer.
