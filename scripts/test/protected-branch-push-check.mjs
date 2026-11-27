@@ -324,6 +324,27 @@ cases.push(
   ["X+=1 git push origin main", "deny"],
   ["gh -R owner/repo pr create --head feat", "defer"],
   ["gh pr view 12", "defer"],
+  // A subshell, substitution, script string, or launch wrapper does not hide gh.
+  ["(gh pr merge 12)", "deny"],
+  ["true && (cd /tmp; gh pr merge 12)", "deny"],
+  ["echo $(gh pr merge 12)", "deny"],
+  ["echo \"`gh pr merge 12`\"", "deny"],
+  ["bash -c 'gh pr merge 12'", "deny"],
+  ["eval gh pr merge 12", "deny"],
+  ["timeout 30 gh pr merge 12", "deny"],
+  ["timeout -s KILL 30 gh pr merge 12", "deny"],
+  ["echo 12 | xargs gh pr merge", "deny"],
+  ["echo 12 | xargs -n 1 gh pr merge", "deny"],
+  ["(gh pr view 12)", "defer"],
+  ["echo $(gh pr view 12 --json title)", "defer"],
+  ["git commit -m 'run (gh pr merge 12) yourself'", "defer"],
+  // A wrapper named by its path is still a wrapper; an argument that only spells a shell runs nothing.
+  ["timeout 30 /usr/bin/env gh pr merge 12", "deny"],
+  ["/usr/bin/env gh pr merge 12", "deny"],
+  ["printf '%s\\n' sh -c 'gh pr merge 12'", "defer"],
+  ["echo eval gh pr merge 12", "defer"],
+  ["env -S 'gh pr merge 12'", "deny"],
+  ["bash <<< 'gh pr merge 12'", "deny"],
 );
 // The hook's gh deny list must cover every command the manifest denies, in the flag-first form the
 // prefix rules miss.
@@ -368,7 +389,21 @@ for (const [command, expected] of cases) {
       [`codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
       [`env codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
       [`command codex --config shell_environment_policy.inherit=all exec 'list files'`, "deny"],
+      // Neither does a subshell, a substitution, or a launch wrapper.
+      [`(codex exec -c 'shell_environment_policy.inherit=all' 'open a pr')`, "deny"],
+      [`echo $(codex exec -c 'shell_environment_policy.inherit=all' 'open a pr')`, "deny"],
+      [`echo \`codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'\``, "deny"],
+      [`timeout 600 codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`timeout --kill-after=5 600 codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`echo 'open a pr' | xargs codex exec -c 'shell_environment_policy.inherit=all'`, "deny"],
+      [`npx codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`npx -y @openai/codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`npx -y @openai/codex@latest exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`npx codex@0.50.0 exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`timeout 600 /usr/bin/env codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`sh -c "codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'"`, "deny"],
       [`codex exec -c 'model="o3"' 'list files'`, "defer"],
+      [`(timeout 600 npx codex exec -c 'model="o3"' 'list files')`, "defer"],
     ]) {
       assert.equal(decide(command, { ...options, env: asAgent }), expected, `${options.hookPath ? "Codex" : "Claude"}: ${command}`);
     }

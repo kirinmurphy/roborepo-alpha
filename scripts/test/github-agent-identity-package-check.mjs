@@ -8,20 +8,23 @@ import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { expandPackageRuntimeRefs } from "../cli/package-runtime-assets.mjs";
-import { renderCodexConfig, resolveArbitraryCommands, resolveBehaviors } from "../harnesses/permissions-render.mjs";
-import { mergeCodexConfig } from "../cli/root-config-merge.mjs";
-import { AGENT_GITCONFIG_INCLUDE, agentGitRoutingGaps } from "../cli/agent-identity-package.mjs";
-import { rootConfigBaseline } from "../cli/paths.mjs";
-import { listHarnessProviders } from "../harnesses/registry.mjs";
-import { resolveHarnessPath } from "../harnesses/paths.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const cli = path.join(repoRoot, "scripts", "cli", "main.mjs");
 const ID = "github-agent-identity";
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-gh-identity-"));
-const stateRoot = path.join(home, ".roborepo");
+// Not the default `~/.roborepo` of this HOME, so a path that ignores the state root shows up.
+const stateRoot = path.join(home, "state");
+// The modules read the state root once, when they load, so it is set before they are imported.
+process.env.ROBOREPO_STATE_ROOT = stateRoot;
+const { expandPackageRuntimeRefs } = await import("../cli/package-runtime-assets.mjs");
+const { renderCodexConfig, resolveArbitraryCommands, resolveBehaviors } = await import("../harnesses/permissions-render.mjs");
+const { mergeCodexConfig } = await import("../cli/root-config-merge.mjs");
+const { AGENT_GITCONFIG_INCLUDE, agentGitRoutingGaps } = await import("../cli/agent-identity-package.mjs");
+const { rootConfigBaseline } = await import("../cli/paths.mjs");
+const { listHarnessProviders } = await import("../harnesses/registry.mjs");
+const { resolveHarnessPath } = await import("../harnesses/paths.mjs");
 fs.mkdirSync(path.join(home, ".claude"), { recursive: true });
 fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
 // The baseline's own Git pair (the hooks path) is already there, as after any install.
@@ -99,7 +102,19 @@ try {
   assert.doesNotMatch(codexOn, /cert\.pem/);
   assert.match(codexOn, /^GIT_CONFIG_COUNT = "2"$/m);
   assert.ok(codexOn.includes(`GIT_CONFIG_VALUE_1 = ${JSON.stringify(AGENT_GITCONFIG_INCLUDE)}`), "Codex shell env includes the bot's Git settings");
-  assert.match(fs.readFileSync(gitconfig, "utf8"), /^\[include\]\n\tpath = ~\/\.roborepo\/github-agent\/gitconfig\.local$/m, "the gitconfig includes the setup-written CA config");
+  assert.equal(AGENT_GITCONFIG_INCLUDE, gitconfig, "the rendered include names the installed file under the state root");
+  // Git reads the bot's nested settings from the state root too: the include in the agent
+  // environment names the installed file, and its own includes resolve from that file's folder.
+  fs.mkdirSync(path.join(stateRoot, "github-agent"), { recursive: true });
+  fs.writeFileSync(path.join(stateRoot, "github-agent", "gitconfig.local"), "[roborepo]\n\tca = 1\n");
+  const codexValue = /^GIT_CONFIG_VALUE_1 = (".*")$/m.exec(codexOn)?.[1];
+  for (const value of [claudeSettings().env.GIT_CONFIG_VALUE_1, codexValue && JSON.parse(codexValue)]) {
+    const read = spawnSync("git", ["config", "--includes", "--get", "roborepo.ca"], {
+      cwd: home, encoding: "utf8",
+      env: { PATH: process.env.PATH, HOME: home, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: value },
+    });
+    assert.equal(read.stdout.trim(), "1", `the include ${value} reaches the setup-written CA config under the state root`);
+  }
 
   // Codex's prefix rules follow the identity: enable rewrites the live rules file.
   const rulesOn = codexRules();
@@ -119,6 +134,16 @@ try {
   assert.ok(updated.includes(`GH_CONFIG_DIR = ${JSON.stringify(ghDir)}`));
   assert.match(updated, /^GIT_CONFIG_COUNT = "2"$/m, "an update keeps the package's pair counted");
   assert.ok(updated.includes(`GIT_CONFIG_VALUE_1 = ${JSON.stringify(AGENT_GITCONFIG_INCLUDE)}`));
+
+  // An install rendered by an earlier release carries the `~/` include, which the package owns, so
+  // re-applying the package moves it to the path under the state root.
+  const settingsFile = path.join(home, ".claude", "settings.json");
+  const legacySettings = claudeSettings();
+  legacySettings.env.GIT_CONFIG_VALUE_1 = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
+  fs.writeFileSync(settingsFile, JSON.stringify(legacySettings, null, 2));
+  const reapplied = run("package", "enable", ID);
+  assert.equal(reapplied.status, 0, `re-enable failed\n${reapplied.stdout}\n${reapplied.stderr}`);
+  assert.equal(claudeSettings().env.GIT_CONFIG_VALUE_1, gitconfig, "re-applying rewrites the earlier `~/` include");
 
   const disabled = run("package", "disable", ID);
   assert.equal(disabled.status, 0, `disable failed\n${disabled.stdout}\n${disabled.stderr}`);
@@ -191,6 +216,28 @@ try {
   const [, ...others] = providers;
   const onlyFirst = byId({ [first.id]: baselines[first.id] });
   assert.deepEqual(agentGitRoutingGaps({ providers, read: onlyFirst }), others.map((provider) => provider.manifest.displayName), "a harness whose config cannot be read is a gap, never healthy");
+}
+
+// The `~/` include earlier releases rendered names the bot's file only under the default state root:
+// there it still counts until `roborepo update` re-renders it; under another state root it is a gap.
+{
+  const legacy = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
+  const module = JSON.stringify(path.join(repoRoot, "scripts", "cli", "agent-identity-package.mjs"));
+  const includes = (value, stateEnv) => {
+    const script = `import { includesAgentGitConfig } from ${module};
+      const pairs = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: ${JSON.stringify(value)} };
+      console.log(includesAgentGitConfig((name) => pairs[name]));`;
+    const childEnv = { ...process.env, HOME: home, ...stateEnv };
+    if (!stateEnv.ROBOREPO_STATE_ROOT) delete childEnv.ROBOREPO_STATE_ROOT;
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], { env: childEnv, encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim() === "true";
+  };
+  const defaultFile = path.join(home, ".roborepo", "package-runtime", ID, "gitconfig");
+  assert.equal(includes(legacy, {}), true, "the `~/` include counts under the default state root");
+  assert.equal(includes(defaultFile, {}), true, "the absolute include counts under the default state root");
+  assert.equal(includes(legacy, { ROBOREPO_STATE_ROOT: stateRoot }), false, "the `~/` include misses the bot's file under another state root");
+  assert.equal(includes(gitconfig, { ROBOREPO_STATE_ROOT: stateRoot }), true, "the include under the state root counts");
 }
 
 console.log("github-agent-identity-package ok");

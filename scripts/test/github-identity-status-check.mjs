@@ -49,7 +49,7 @@ try {
   assert.equal(protectRun.status, 0, protectRun.stdout + protectRun.stderr);
   const managed = gh.readState().rulesets;
 
-  const agentGitconfig = path.join(env.HOME, ".roborepo", "package-runtime", "github-agent-identity", "gitconfig");
+  const agentGitconfig = path.join(stateRoot, "package-runtime", "github-agent-identity", "gitconfig");
   const start = ({ token = {}, hosts = "token", enabled = true, ca = "current", ...overrides } = {}) => {
     fs.rmSync(stateRoot, { recursive: true, force: true });
     fs.mkdirSync(ghDir, { recursive: true });
@@ -362,8 +362,9 @@ try {
   // refusing the bot.
   start();
   const uninvited = clone("uninvited", "git@github.com:example/project.git");
-  fs.writeFileSync(agentGitconfig, `[url "${path.join(root, "nowhere.git")}"]\n\tinsteadOf = git@github.com:example/project.git\n`);
-  const asBot = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: "~/.roborepo/package-runtime/github-agent-identity/gitconfig" };
+  const refuseBot = () => fs.writeFileSync(agentGitconfig, `[url "${path.join(root, "nowhere.git")}"]\n\tinsteadOf = git@github.com:example/project.git\n`);
+  refuseBot();
+  const asBot = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: agentGitconfig };
   const init = () => spawnSync(process.execPath, [path.join(repoRoot, "scripts/cli/main.mjs"), "plans", "init", "--json"], { cwd: uninvited, env: { ...env, ...asBot }, encoding: "utf8" });
   gh.clearCalls();
   let refused = JSON.parse(init().stdout).error;
@@ -372,9 +373,10 @@ try {
   assert.ok(gh.calls().length > 0 && gh.calls().every((call) => call.configDir === null && !["PUT", "PATCH", "POST", "DELETE"].includes(call.method)), "the check reads once as you and changes nothing");
   // When you cannot see the repo either, the general reason stays.
   start({ failure: "repo-forbidden" });
+  refuseBot();
   refused = JSON.parse(init().stdout).error;
   assert.match(refused.message, /^The `origin` remote could not be reached/);
-  fs.rmSync(path.join(env.HOME, ".roborepo"), { recursive: true, force: true });
+  fs.rmSync(agentGitconfig, { force: true });
   // A shell whose Git does not go out as the bot is not the bot's problem; nothing is read.
   gh.clearCalls();
   const { explainBotRepoAccess } = await import("../cli/github-identity.mjs");

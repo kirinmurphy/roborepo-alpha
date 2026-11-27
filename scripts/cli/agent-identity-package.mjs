@@ -2,17 +2,30 @@
 // GitHub as the bot. Kept in its own module so the permission render and the `roborepo github`
 // commands share one check without importing each other.
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { AGENT_IDENTITY_PACKAGE_ID } from "../../modules/forge/agent-identity.mjs";
 import { loadPackageCatalog } from "./package-catalog.mjs";
 import { effectiveEnabledIds, readEnabledPackagesRegistry } from "./package-state.mjs";
-import { enabledPackagesPath } from "./state-paths.mjs";
+import { enabledPackagesPath, stateDir } from "./state-paths.mjs";
 import { resolveHarnessPath } from "../harnesses/paths.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import { isProviderEnabled, readHarnessState } from "../harnesses/state.mjs";
 
 // The Git settings file agent shells include so pushes go through the bot (credential helper, SSH
-// rewritten to HTTPS), exactly as RoboRepo renders it into each harness's agent environment.
-export const AGENT_GITCONFIG_INCLUDE = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
+// rewritten to HTTPS), exactly as RoboRepo renders it into each harness's agent environment: the
+// installed asset's absolute path under the state directory.
+export const AGENT_GITCONFIG_INCLUDE = path.join(stateDir, "package-runtime", AGENT_IDENTITY_PACKAGE_ID, "gitconfig");
+// How releases before the state directory was honored rendered the include. A harness config still
+// carrying it names the same file only when the state directory is the default one; `roborepo
+// update` re-renders it to the absolute path.
+const HOME_RELATIVE_INCLUDE = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
+
+// Whether an `include.path` value names the bot's Git settings file.
+function namesAgentGitConfig(value) {
+  if (value === AGENT_GITCONFIG_INCLUDE) return true;
+  return value === HOME_RELATIVE_INCLUDE && path.join(os.homedir(), HOME_RELATIVE_INCLUDE.slice(2)) === AGENT_GITCONFIG_INCLUDE;
+}
 
 // The enabled harnesses whose live config exists but does not include the bot's Git settings, so
 // their agents' `git push` still goes out with your credentials even though `gh` uses the bot. Each
@@ -54,7 +67,7 @@ const readRootConfig = (provider) => fs.readFileSync(resolveHarnessPath(provider
 export function includesAgentGitConfig(env) {
   const count = Number.parseInt(env("GIT_CONFIG_COUNT") ?? "", 10);
   for (let i = 0; Number.isInteger(count) && i < count; i += 1) {
-    if (env(`GIT_CONFIG_KEY_${i}`) === "include.path" && env(`GIT_CONFIG_VALUE_${i}`) === AGENT_GITCONFIG_INCLUDE) return true;
+    if (env(`GIT_CONFIG_KEY_${i}`) === "include.path" && namesAgentGitConfig(env(`GIT_CONFIG_VALUE_${i}`))) return true;
   }
   return false;
 }

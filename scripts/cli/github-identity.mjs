@@ -1,8 +1,6 @@
 // `roborepo github status`: reads whether agents act on GitHub as a safe bot account. The guided
 // setup that fixes what this reports is `roborepo github setup` (github-setup.mjs).
 import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { GitHubError, forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { githubClient } from "../../modules/forge/github.mjs";
 import { agentHostsFile, botGhEnv, readAccountIdentity, readAgentHosts, readAgentIdentity, readRepoAgentAccess } from "../../modules/forge/agent-identity.mjs";
@@ -24,9 +22,9 @@ export async function readCurrentAgentIdentity({ cwd = process.cwd(), timeoutMs,
   });
 }
 
-// Whether the Git settings file agents' Git includes is gone. Git resolves the include's `~` from
-// HOME and skips a missing file without a word, so agents' pushes would go out as you.
-const agentGitconfigMissing = () => !fs.existsSync(path.join(os.homedir(), AGENT_GITCONFIG_INCLUDE.replace(/^~\//, "")));
+// Whether the Git settings file agents' Git includes is gone. Git skips a missing include without a
+// word, so agents' pushes would go out as you.
+const agentGitconfigMissing = () => !fs.existsSync(AGENT_GITCONFIG_INCLUDE);
 
 // With agents acting as the bot, Git answers "Repository not found" for a repo the bot was never
 // invited to, the same as for a wrong address. When this shell's Git goes out as the bot and the repo
