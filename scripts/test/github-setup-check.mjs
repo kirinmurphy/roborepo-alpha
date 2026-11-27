@@ -386,7 +386,9 @@ try {
   fresh({ admin: false, collaborators: [{ login: BOT, permission: "push" }], rulesets: structuredClone(managedRulesets) });
   result = await setup(`${BOT}\n${TOKEN}\nn\n`);
   assert.equal(result.status, 1, result.stdout + result.stderr);
-  assert.match(result.stderr, /The branch rules could not be verified, so the package stays off/);
+  assert.match(result.stderr, /The branch rules could not be verified, so the package stays off and agents keep the GitHub sign-in they had before setup\./);
+  // A Codex project config or -c override can give agents another account, so no refusal names one.
+  assert.doesNotMatch(result.stderr, /act(s|ing)? as (the bot|you)/);
   assert.match(result.stderr, /Message for the repo's owner:/);
   assert.doesNotMatch(result.stdout, /all look right|Agents now act/);
   assert.ok(!packageOn(), "the package stays off");

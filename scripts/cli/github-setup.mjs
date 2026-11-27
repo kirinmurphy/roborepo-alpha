@@ -175,8 +175,9 @@ async function guidedSetup({ input, io, cwd }) {
   // 8. Check everything before agents switch over.
   const report = await readAgentIdentity({ repositoryId, cwd, stateDir, packageEnabled: true });
   const blocking = report.problems.filter((entry) => entry.severity === "problem");
-  // A failed check never changes the package, so whatever agents use now they keep using. Only a
-  // verified clean "off" says which account that is: a package that is on can still leave pushes
+  // A failed check never changes the package, so whatever agents use now they keep using. No
+  // refusal names that account: even a clean "off" cannot see a Codex project config or `-c`
+  // override that gives agents another one. A package that is on can still leave pushes
   // going out as you (a harness without the bot's Git settings), a partial install may route some
   // calls only, and an unread or deselected-but-leftover state proves nothing.
   const packageState = await agentIdentityPackageState();
@@ -185,7 +186,7 @@ async function guidedSetup({ input, io, cwd }) {
   if (report.state === "unavailable") stop(`Could not check the result: ${report.reason}. Setup does not change the package until every check runs.`);
   if (blocking.length > 0) {
     io.error(packageState.state === "off"
-      ? "The bot is not ready, so the package stays off and agents keep acting as you:"
+      ? "The bot is not ready, so the package stays off and agents keep the GitHub sign-in they had before setup:"
       : `The bot is not ready. ${packageKept(packageState)} Agents using the bot may fail on GitHub until this is fixed; ${stopUsingBot(packageState)}:`);
     for (const entry of blocking) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
@@ -195,7 +196,7 @@ async function guidedSetup({ input, io, cwd }) {
   // so the package stays off until someone who can see them confirms them.
   if (report.state === "unverified") {
     io.error(packageState.state === "off"
-      ? "The branch rules could not be verified, so the package stays off and agents keep acting as you."
+      ? "The branch rules could not be verified, so the package stays off and agents keep the GitHub sign-in they had before setup."
       : `The branch rules could not be verified. ${packageKept(packageState)} Confirm the rules, or ${stopUsingBot(packageState)}.`);
     for (const entry of report.problems.filter((item) => item.severity === "unverified")) io.error(`  - ${entry.message}\n    Fix: ${entry.fix}`);
     if (report.ownerMessage) io.error(`\nMessage for the repo's owner:\n${report.ownerMessage}`);
