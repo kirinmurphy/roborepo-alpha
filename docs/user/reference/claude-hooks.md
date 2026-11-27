@@ -235,7 +235,9 @@ value, uses `include_only`, leaves a string open, or cannot be read keeps `gh ap
 exists but cannot be listed. Codex `-c` overrides on its command line never reach a hook, so a session
 started with `-c shell_environment_policy…` could give its shells another `gh`. The hook cannot check
 your own command line, but while the identity is on it refuses an agent command that starts Codex
-with a `-c`/`--config` override of the shell environment or of a GitHub identity variable.
+with a `-c`/`--config` override of the shell environment or of a GitHub identity variable, run
+directly or behind a wrapper such as `env`. Indirect launches (`npx codex`, a command built from a
+variable) are not recognized.
 
 The workflow an agent should follow:
 

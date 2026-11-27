@@ -364,6 +364,10 @@ for (const [command, expected] of cases) {
       [`codex exec -c 'shell_environment_policy.set.GH_TOKEN="x"' 'gh api repos/o/r'`, "deny"],
       [`codex --config shell_environment_policy.inherit=all exec 'gh api repos/o/r'`, "deny"],
       [`codex exec --config=shell_environment_policy.set.GH_CONFIG_DIR=/tmp/x 'gh api repos/o/r'`, "deny"],
+      // A prompt with no other keyword still reaches the check, and a wrapper does not hide codex.
+      [`codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`env codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`command codex --config shell_environment_policy.inherit=all exec 'list files'`, "deny"],
       [`codex exec -c 'model="o3"' 'list files'`, "defer"],
     ]) {
       assert.equal(decide(command, { ...options, env: asAgent }), expected, `${options.hookPath ? "Codex" : "Claude"}: ${command}`);

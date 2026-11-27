@@ -1484,7 +1484,9 @@ function classifyCommand(text, startCwd) {
       result = stricter(result, classifyGh(words.slice(ghAt + 1), words.expands.slice(ghAt + 1)))
       continue
     }
-    if (program === 'codex' && codexIdentityOverride(words.slice(i + 1)) && agentIdentityActive()) {
+    // codex behind a wrapper (`env codex`, `command codex`) still starts a Codex session.
+    const codexAt = programIndex(words)
+    if (path.basename(words[codexAt] ?? '') === 'codex' && codexIdentityOverride(words.slice(codexAt + 1)) && agentIdentityActive()) {
       result = stricter(result, { decision: 'deny', reason: 'roborepo: a Codex `-c`/`--config` override of the shell environment or a GitHub identity variable never reaches a hook, so a Codex session started this way could run `gh api` as another account. Run it yourself.' })
       continue
     }
@@ -1919,7 +1921,7 @@ const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).
 // backtick can build a word the quick check cannot see (`$'pu\x73h'`, `pu$(true)sh`), so it sends
 // the command to the full check. Interpreter code lists words with commas (`['git','push']`), so the
 // check also reads the text with its commas kept.
-const KEYWORDS = /\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/
+const KEYWORDS = /\b(push|gh|codex|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/
 if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string'
   || !(KEYWORDS.test(command.replace(/\\\n/g, '').replace(/['"\\{},]/g, ''))
     || KEYWORDS.test(command.replace(/['"\\{}]/g, '')) || /[$`]/.test(command))) process.exit(0)
