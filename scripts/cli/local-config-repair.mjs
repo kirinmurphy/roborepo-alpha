@@ -6,6 +6,7 @@ import { isMainModule } from "./roots.mjs";
 import { getHarnessProvider } from "../harnesses/registry.mjs";
 import { recordWrite } from "./root-config-state.mjs";
 import { recordConfigWrite } from "./write-log.mjs";
+import { rootConfigPermissionRender } from "./permissions-render.mjs";
 
 // Registry-driven label ("<Display Name> settings"), not a hardcoded claude/codex map — every
 // registered provider's rootConfig gets a sensible label with no per-provider entry needed.
@@ -80,11 +81,35 @@ function parseMode(args) {
   return mode;
 }
 
-export function buildLocalConfigRepairPlans() {
-  return Object.keys(rootConfigActive).map(buildHarnessPlan).filter(Boolean);
+// `agentIdentity` overrides whether the GitHub agent identity package counts as on (tests); by
+// default the permission render reads it from package state, as `roborepo update` does.
+export function buildLocalConfigRepairPlans({ agentIdentity } = {}) {
+  return Object.keys(rootConfigActive).map((harness) => buildHarnessPlan(harness, { agentIdentity })).filter(Boolean);
 }
 
-function buildHarnessPlan(harness) {
+// `roborepo update` re-renders the permissions a provider keeps in its root config (Claude's
+// `permissions` and `sandbox` keys, Codex's generated block) and replaces them whole. Anything the
+// repair recovered there would be undone by the next update, and the generated baseline and older
+// backups carry the render's defaults, which for a lifted rule (the GitHub agent identity allows
+// `gh api`) would put back a deny the render removed on purpose. So both sides of the comparison go
+// through the same render first, and only settings outside the render's ownership can differ.
+// A provider without such a render, or a render that fails, compares the raw text as before.
+function permissionRenderFor(harness, activePath, { agentIdentity }) {
+  let render = null;
+  try {
+    render = rootConfigPermissionRender(harness, activePath, agentIdentity === undefined ? {} : { agentIdentity });
+  } catch {}
+  if (!render) return (text) => text;
+  return (text) => {
+    try {
+      return render(text);
+    } catch {
+      return text;
+    }
+  };
+}
+
+function buildHarnessPlan(harness, { agentIdentity } = {}) {
   const activePath = rootConfigActive[harness];
   const baselinePath = rootConfigBaseline[harness];
   if (!fs.existsSync(activePath) || !fs.existsSync(baselinePath)) return null;
@@ -93,6 +118,8 @@ function buildHarnessPlan(harness) {
   const baselineText = fs.readFileSync(baselinePath, "utf8");
   const backups = backupCandidates(harness, activePath);
   const activeNormalized = normalizeGeneratedMarkers(activeText);
+  const renderPermissions = permissionRenderFor(harness, activePath, { agentIdentity });
+  const activeRendered = normalizeGeneratedMarkers(renderPermissions(activeNormalized));
   const issues = [];
   if (activeNormalized !== activeText) issues.push("remove duplicated generated marker lines");
 
@@ -108,9 +135,9 @@ function buildHarnessPlan(harness) {
     if (isStaleBackup(backup, baselinePath)) continue;
     const backupText = fs.readFileSync(backup.path, "utf8");
     const backupMerged = mergeRootConfig(harness, baselineText, backupText);
-    const repaired = normalizeGeneratedMarkers(mergeRootConfig(harness, backupMerged, activeText));
-    if (repaired === activeText) continue;
-    const keyDiff = diffConfigKeys(harness, activeNormalized, repaired);
+    const repaired = normalizeGeneratedMarkers(renderPermissions(mergeRootConfig(harness, backupMerged, activeText)));
+    if (repaired === activeRendered) continue;
+    const keyDiff = diffConfigKeys(harness, activeRendered, repaired);
     const hasRealDiff = keyDiff.added.length > 0 || keyDiff.changed.length > 0;
     // No recoverable setting differs — mergeRootConfig only reserialized in a different
     // key/section order. Not actionable; do not surface a repair plan for a safe no-op.

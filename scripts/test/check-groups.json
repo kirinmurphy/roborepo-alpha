@@ -37,6 +37,7 @@
     "codex-command-permission-check.mjs",
     "agent-permission-defaults-check.mjs",
     "github-agent-identity-render-check.mjs",
+    "local-config-repair-render-check.mjs",
     "github-agent-identity-package-check.mjs",
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",

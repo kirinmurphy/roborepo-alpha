@@ -3,7 +3,7 @@ import path from "node:path";
 import os from "node:os";
 import { repoRoot } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
-import { recordAppRoot } from "./state-paths.mjs";
+import { commandOverridesPath, recordAppRoot } from "./state-paths.mjs";
 import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import {
@@ -210,6 +210,38 @@ export function previewPermissionRenders(
     });
   }
   return previews;
+}
+
+// The permission render `roborepo update` applies to one provider's root config, as a function of
+// that config's text: (text) => rendered text. Null when the provider keeps its permissions in a file
+// of their own (Gemini's policy file) or not under `file`, since rendering its root config would then
+// replace it with the wrong content. Lets a caller compare a candidate root config with what update
+// would leave in place, so the parts the render owns never read as a difference.
+export function rootConfigPermissionRender(
+  providerId,
+  file,
+  { baseDir = os.homedir(), manifest = loadPermissionManifest(), overrides = readPermissionOverrides(), cwd = process.cwd(), agentIdentity = agentIdentityPackageEnabled() } = {},
+) {
+  const provider = listHarnessProviders().find((entry) => entry.id === providerId);
+  if (!provider?.manifest.capabilities.includes("permissions")) return null;
+  const target = permissionsTargetFor(provider.manifest, baseDir);
+  if (!target?.seedCurrent || path.resolve(target.file) !== path.resolve(file)) return null;
+  const options = { ...permissionOptionsForProvider(provider, { cwd }), agentIdentity };
+  return (text) => provider.adapters.permissions.render(text, manifest, overrides, target.file, options);
+}
+
+// The personal permission overrides (`roborepo config` writes them), in the shape the render takes.
+// A missing or unreadable file means none.
+export function readPermissionOverrides() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(commandOverridesPath, "utf8"));
+    return {
+      behaviors: raw.behaviors && typeof raw.behaviors === "object" ? raw.behaviors : {},
+      commands: raw.commands && typeof raw.commands === "object" ? raw.commands : {},
+    };
+  } catch {
+    return { behaviors: {}, commands: {} };
+  }
 }
 
 // Global-scope render into the live home dir. This is the path that installs live permission hooks,

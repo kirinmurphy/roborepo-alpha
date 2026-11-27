@@ -8,6 +8,7 @@ import { loadPackageCatalog, unavailablePackageMessage } from "./package-catalog
 import { listSourceSkills } from "./skill-files.mjs";
 import {
   loadPermissionManifest,
+  readPermissionOverrides,
   renderPermissionsToHome,
   resolveBehaviors,
   resolveArbitraryCommands,
@@ -292,15 +293,7 @@ function overrideKeyForCommand(tokens) {
 }
 
 export function readCommandOverrides() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(commandOverridesPath, "utf8"));
-    return {
-      behaviors: raw.behaviors && typeof raw.behaviors === "object" ? raw.behaviors : {},
-      commands: raw.commands && typeof raw.commands === "object" ? raw.commands : {},
-    };
-  } catch {
-    return { behaviors: {}, commands: {} };
-  }
+  return readPermissionOverrides();
 }
 
 function writeCommandOverrides(overrides) {

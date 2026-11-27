@@ -26,27 +26,13 @@ import os from "node:os";
 import path from "node:path";
 import { repoRoot, harnessHome } from "./paths.mjs";
 import { isMainModule } from "./roots.mjs";
-import { commandOverridesPath, managedFilesStatePath, presetsStatePath, readJsonState } from "./state-paths.mjs";
+import { managedFilesStatePath, presetsStatePath, readJsonState } from "./state-paths.mjs";
 import { hashFile } from "./root-config-state.mjs";
-import { loadPermissionManifest, previewPermissionRenders } from "./permissions-render.mjs";
+import { loadPermissionManifest, previewPermissionRenders, readPermissionOverrides } from "./permissions-render.mjs";
 import { effectiveBundleIds, selectedBundleRoots } from "./bundle-selection.mjs";
 import { fragmentHooks } from "../harnesses/hook-readiness.mjs";
 
 const MARKER = "MANAGED_BY_ROBOREPO.md";
-
-// Same shape and fallback as readCommandOverrides in config-mutate.mjs, read here directly because
-// that module loads the whole package engine and doctor runs on every call.
-function readOverrides() {
-  try {
-    const raw = JSON.parse(fs.readFileSync(commandOverridesPath, "utf8"));
-    return {
-      behaviors: raw.behaviors && typeof raw.behaviors === "object" ? raw.behaviors : {},
-      commands: raw.commands && typeof raw.commands === "object" ? raw.commands : {},
-    };
-  } catch {
-    return { behaviors: {}, commands: {} };
-  }
-}
 
 function readManifestRows(root) {
   const text = fs.readFileSync(path.join(root, "manifests", "platform", "manifest.tsv"), "utf8");
@@ -142,7 +128,7 @@ function missingFileItem(preview) {
 
 function permissionDrift(installed, home) {
   const manifest = loadPermissionManifest();
-  const overrides = readOverrides();
+  const overrides = readPermissionOverrides();
   const items = [];
   const skipped = [];
   const renderedFiles = new Set();
