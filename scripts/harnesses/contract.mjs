@@ -16,6 +16,7 @@ export const HARNESS_CAPABILITIES = Object.freeze([
   "telemetry-transcripts",
   "session-launch",
   "session-resume",
+  "session-title",
 ]);
 
 const CAPABILITY_SET = new Set(HARNESS_CAPABILITIES);
@@ -50,6 +51,11 @@ export const CAPABILITY_REQUIRED_METHODS = Object.freeze({
   "telemetry-transcripts": { group: "transcripts", methods: ["locate", "parse"] },
   "session-launch": { group: "session", methods: ["launch"] },
   "session-resume": { group: "session", methods: ["resume"] },
+  // Both ends of the harness's prompt-hook format, so shared code decides whether to set a title
+  // without reading one harness's hook input or output: readHookInput(text) returns
+  // { prompt, title } (title null when the session has no custom title); hookOutput({ title })
+  // returns the text a hook prints to set that title.
+  "session-title": { group: "sessionTitle", methods: ["readHookInput", "hookOutput"] },
 });
 
 // Adapter groups no capability requires. A provider may omit one; one it supplies must be complete.

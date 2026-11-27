@@ -2,7 +2,8 @@
 // stubGroups below are placeholders that throw until their behavior moves here from scripts/cli/.
 //
 // Split by capability group across this directory: mcp.mjs (the 4 MCP methods), hooks-withdraw.mjs
-// (the withdraw-specific bulk strip), sandbox-settings.mjs (the `sandbox` key of permissions.render).
+// (the withdraw-specific bulk strip), sandbox-settings.mjs (the `sandbox` key of permissions.render),
+// session-title.mjs (the title hook's input and output).
 // This file is the composition root: rootConfig/package-component merge, hooks merge/unmerge,
 // telemetry, transcripts, and the final defineHarnessProvider wiring.
 
@@ -19,6 +20,7 @@ import { mergeHooksMap } from "../hooks-merge.mjs";
 import { mergeClaudeSettings, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
 import { claudeManagedRules, renderClaudeSettings, resolveBehaviors } from "../permissions-render.mjs";
 import { claudeSandboxSettings } from "./sandbox-settings.mjs";
+import { claudeSessionTitle } from "./session-title.mjs";
 import { mcpRemove, mcpAddServer, mcpRemoveServer, mcpList } from "./mcp.mjs";
 import { hooksWriteRemove } from "./hooks-withdraw.mjs";
 import { transcriptStats } from "../transcript-parse.mjs";
@@ -113,6 +115,7 @@ export const claudeProvider = defineHarnessProvider({
     // Agent shells read settings.json's `env`.
     agentShell: { envValue: (text, name) => jsonConfigEdit.get(text, ["env", name]).value },
     projectInventory: claudeProjectInventory,
+    sessionTitle: claudeSessionTitle,
     mcp: {
       ...stubGroups.mcp,
       remove: mcpRemove,

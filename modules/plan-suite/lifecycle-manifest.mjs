@@ -80,6 +80,8 @@ export function compileLifecycleModel(manifest) {
     stateIds: Object.freeze(states.map((state) => state.id)),
     folders: Object.freeze(new Set(states.filter((state) => state.folder).map((state) => state.folder))),
     worktreeBound: Object.freeze(new Set(states.filter((state) => state.worktreeBound).map((state) => state.id))),
+    // The plan commands, in manifest order: every command some state offers as an action.
+    commands: Object.freeze([...new Set(states.flatMap((state) => state.actions.map((action) => action.command)))]),
     transitions: Object.freeze(transitions),
     state: (id) => byId.get(id) || null,
     transition: (id) => transitionsById.get(id) || null,

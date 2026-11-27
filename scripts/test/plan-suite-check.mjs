@@ -196,6 +196,14 @@ Run targeted checks.
   assert.doesNotMatch(buildPrompt("start", [ready]), /^\//m, "a retired mode name produces no slash command");
   assert.doesNotMatch(buildPrompt("plan-start", [ready]), /^\//m, "the retired /plan-start command produces no slash command");
 
+  // A prompt for one plan with a plan command carries the session's stage title on its own line, in
+  // both modes, right after the command line.
+  assert.match(prompt, /^\/plan-execute\n\nSession title: \/plan-execute: Ready Plan\nWork with plan /);
+  assert.match(buildPrompt("plan-review", [ready], { mode: "portable" }), /^\/plan-review\n\nSession title: \/plan-review: Ready Plan\nUse this bounded portable plan context/);
+  assert.doesNotMatch(buildPrompt(null, [ready]), /Session title:/, "no command, no title");
+  assert.doesNotMatch(buildPrompt("plan-start", [ready]), /Session title:/, "a name that is no longer a plan command, no title");
+  assert.doesNotMatch(buildPrompt("plan-execute", [ready, ready]), /Session title:/, "several plans, no title");
+
   // Both YAML list forms are accepted. Inline arrays used to be detected, reported, and discarded,
   // which silently emptied the field — so a valid reference written in valid YAML vanished from the
   // relationship graph instead of being resolved.

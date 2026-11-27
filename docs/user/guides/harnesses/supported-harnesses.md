@@ -56,6 +56,7 @@ missing or broken.
 | `telemetry-rate-limits` | Rate-limit windows parsed from session data | — | ✅ | — |
 | `telemetry-transcripts` | Reading past session transcripts | ✅ | ✅ | — |
 | `session-launch` | Reserved for starting a session from RoboRepo; adapter pending | ⚠️ | ⚠️ | — |
+| `session-title` | A prompt hook that titles the session after its plan stage (plan-suite) | ✅ | — | — |
 
 Gemini CLI receives its declared configuration capabilities but no telemetry, because it does not
 expose the session data telemetry needs. Only Codex reports rate-limit windows.

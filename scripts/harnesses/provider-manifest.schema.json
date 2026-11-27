@@ -96,7 +96,8 @@
         "telemetry-rate-limits",
         "telemetry-transcripts",
         "session-launch",
-        "session-resume"
+        "session-resume",
+        "session-title"
       ]
     },
     "detection": {

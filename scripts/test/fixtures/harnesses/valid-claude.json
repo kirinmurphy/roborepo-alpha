@@ -30,7 +30,8 @@
     "config-edit",
     "telemetry-capture",
     "telemetry-transcripts",
-    "session-launch"
+    "session-launch",
+    "session-title"
   ],
   "extensions": {
     "app": {

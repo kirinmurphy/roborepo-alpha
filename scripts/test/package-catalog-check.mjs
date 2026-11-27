@@ -125,9 +125,9 @@ assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows
   assert(suite.description !== sections.get("Development Workflows").description, "the package and its category describe different things");
   assert(!suite.badges.some((badge) => /skills?$/.test(badge)), `plan-suite card should carry no skill-count badge: ${suite.badges}`);
   assert(suite.inspect?.kind === "package-contents", "plan-suite card label should open the contents view");
-  assert(suite.inspect.summary === "7 skills · 1 rules fragment", `contents summary: ${suite.inspect.summary}`);
+  assert(suite.inspect.summary === "7 skills · 1 rules fragment · 1 hooks file", `contents summary: ${suite.inspect.summary}`);
   const entries = suite.inspect.entries;
-  assert(entries.map((entry) => entry.label).join(",") === "/plan-suite-init,/plan-write,/plan-promote,/plan-execute,/plan-review,/plan-close,/plan-archive,Rules",
+  assert(entries.map((entry) => entry.label).join(",") === "/plan-suite-init,/plan-write,/plan-promote,/plan-execute,/plan-review,/plan-close,/plan-archive,Rules,Hooks",
     `contents entries: ${entries.map((entry) => entry.label)}`);
   for (const entry of entries.slice(0, 7)) {
     const id = entry.label.slice(1);
@@ -135,7 +135,7 @@ assert(!sections.get("Development Workflows").bulkToggle, "Development Workflows
     assert(entry.description && !/\n/.test(entry.description), `${id} entry has a one-line description`);
     assert(entry.contextCost?.onDemandTokens > 0, `${id} entry carries its own on-demand cost`);
   }
-  const rules = entries.at(-1);
+  const rules = entries.find((entry) => entry.label === "Rules");
   assert(rules.inspect.kind === "rules" && rules.inspect.id === "plan-suite", "rules entry opens the package's rules source");
   assert(rules.description === "Code Outlives Plans", `rules entry describes the fragment by its heading: ${rules.description}`);
   assert(rules.contextCost?.rulesTokens > 0, "rules entry carries its own cost");

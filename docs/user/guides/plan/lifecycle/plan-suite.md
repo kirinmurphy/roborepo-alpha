@@ -85,6 +85,30 @@ and what you must do, and flags any term it leaves unexplained. `/plan-write` an
 write shorter reports and run the same check themselves. A plan's next action, shown on the Plans
 page, follows the same standard: one sentence you can act on without the chat.
 
+## Session Titles
+
+With the suite on, a session's title starts with the stage it is in, so parallel sessions are easy
+to tell apart in the sidebar or session picker. Titles are at most 59 characters; a longer plan
+title is cut at a word and ends with `…`.
+
+| Session | Title |
+| --- | --- |
+| Running a plan command | `/plan-execute: <plan title>`, and the same for the other five commands |
+| Started by a plan session for part of its work | `/plan sub-task: <task>` |
+| Work with no plan | `Quick Change: <description>` |
+
+How the title gets set depends on the harness:
+
+| Harness | What sets it |
+| --- | --- |
+| Claude Code CLI | A hook sets the stage title when a prompt opens with a plan command for a plan it can find, or carries a `Session title:` line. `/plan-write` for a new plan takes the words after the command instead; any other command with an unknown plan sets no title. The title follows the session to its next plan command |
+| Claude desktop app | The agent renames the session itself; whether the hook also works there is not yet confirmed |
+| Codex | The agent prints a `/rename <title>` line for you to paste when a plan command starts |
+| Gemini | Not yet supported |
+
+A title you set yourself is never replaced, unless it starts with one of the stage prefixes above.
+A copied Plans page prompt for one plan includes a `Session title:` line with the title to use.
+
 ## Enable The Plan Suite
 
 The seven plan commands ship as one package, `plan-suite`, and turn on and off together.
@@ -94,8 +118,9 @@ The Plans page shows an onboarding banner until the suite is enabled. Its button
 and each command in the list has a **Details** button that shows that command's
 skill. The Agents page shows them under **Development Workflows** as the **Development Planning
 Lifecycle** card, with its own toggle.
-Click the Development Planning Lifecycle card's name to list its seven skills and its rules
-fragment, each of which opens its source.
+Click the Development Planning Lifecycle card's name to list its seven skills, its rules
+fragment, and its hooks file (the Claude session-title hook; see Session Titles), each of which
+opens its source.
 
 From the CLI:
 
@@ -603,6 +628,9 @@ With the suite enabled, the Copy menu offers these commands.
 | Active | **Continue** (`/plan-execute`), **Review** (`/plan-review`), **Archive** (`/plan-archive`) |
 | Review | **Review** (`/plan-review`), **Fix findings** (`/plan-execute`), **Close** (`/plan-close`), **Archive** (`/plan-archive`) |
 | Completed, Archived, or Unclassified | — |
+
+A copied prompt for one plan includes a `Session title:` line, such as
+`Session title: /plan-execute: <plan title>`, right after the command (see Session Titles).
 
 Use `/plan-write` in an agent chat to update an existing plan. **Copy file path** is
 available in every Copy menu. With the suite disabled, the menu offers a **Repo-aware prompt**

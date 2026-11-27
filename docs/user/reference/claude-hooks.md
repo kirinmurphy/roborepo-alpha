@@ -17,6 +17,7 @@ them. Turn a package's hooks off by disabling the package in `/agents` or with
 | PreToolUse `Write`, `Edit` | Write guard | When Claude edits under `~/.claude` or `~/.codex`, adds a reminder about which files RoboRepo manages. `settings.local.json` is exempt | always |
 | PostToolUse `Read` | Skill reference observer | Tells Claude which skill reference files it just read, for the skills-loaded line | `skill-visibility` |
 | SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop | Telemetry capture | Records token and tool usage locally | `telemetry`, once token tracking is enabled in the portal or CLI |
+| UserPromptSubmit | Session stage title (`roborepo plans session-title --harness claude`) | When a prompt opens with a plan command for a plan it can find (or `/plan-write` for a new one) or carries a `Session title:` line, sets the session title to the stage and plan, such as `/plan-review: <plan title>`. Leaves a title you wrote yourself alone, prints nothing for other prompts, and never blocks a prompt | `plan-suite` |
 
 ## Protected Branches
 

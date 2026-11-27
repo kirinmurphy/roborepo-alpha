@@ -101,6 +101,7 @@ const completeAdapters = {
   telemetry: { wireCaptureHooks() {} },
   transcripts: { locate() {}, parse() {} },
   session: { launch() {} },
+  sessionTitle: { readHookInput() {}, hookOutput() {} },
 };
 const claudeManifest = loadFixture("valid-claude.json");
 const provider = defineHarnessProvider({ manifest: claudeManifest, adapters: completeAdapters });
@@ -174,5 +175,23 @@ assertThrows(
   'status must be "unsupported" or "degraded"',
   "adapter action result with bad status",
 );
+
+// session-title: Claude declares it with a working adapter; Codex and Gemini have no way to set a
+// title from a hook, so they leave it undeclared rather than declaring placeholder methods.
+{
+  const { getHarnessProvider } = await import("../harnesses/registry.mjs");
+  const claude = getHarnessProvider("claude");
+  assert(claude.manifest.capabilities.includes("session-title"), "Claude declares session-title");
+  validateCapabilityAdapters(claude.manifest.capabilities, claude.adapters);
+  const read = claude.adapters.sessionTitle.readHookInput(JSON.stringify({ prompt: "/plan-review x", session_title: "/plan-execute: X" }));
+  assert(read.prompt === "/plan-review x" && read.title === "/plan-execute: X", "Claude reads prompt and session_title");
+  assert(claude.adapters.sessionTitle.readHookInput(JSON.stringify({ prompt: "p" })).title === null, "no session_title field, no title");
+  const output = JSON.parse(claude.adapters.sessionTitle.hookOutput({ title: "/plan-review: X" }));
+  assert(output.hookSpecificOutput.hookEventName === "UserPromptSubmit" && output.hookSpecificOutput.sessionTitle === "/plan-review: X",
+    "Claude's hook output sets sessionTitle on UserPromptSubmit");
+  for (const id of ["codex", "gemini"]) {
+    assert(!getHarnessProvider(id).manifest.capabilities.includes("session-title"), `${id} does not declare session-title`);
+  }
+}
 
 console.log("ok: harness manifest and schema checks passed");

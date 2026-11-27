@@ -15,6 +15,7 @@ import { syncBase } from "../../modules/plan-suite/sync-base.mjs";
 import { transitionPlan } from "../../modules/plan-suite/transition.mjs";
 import { stopPlanServers } from "../../modules/plan-suite/stop-servers.mjs";
 import { repairPlansMissingFrontmatter } from "../../modules/plan-suite/repair.mjs";
+import { plansSessionTitleCommand } from "./plans-session-title.mjs";
 
 const PLANS_USAGE = [
   "usage: roborepo plans init [--worktree-root <path>] [--repo-name <name>] [--json]",
@@ -29,6 +30,7 @@ const PLANS_USAGE = [
   "       roborepo plans preflight|approval|landed <plan> [--base <branch>] [--json]",
   "       roborepo plans sync-base [--continue] [--base <branch>] [--json]",
   "       roborepo plans stop-servers <plan> [--dry-run] [--json]",
+  "       roborepo plans session-title --harness <id>   (hook: reads the hook input on stdin)",
   "       roborepo plans repair <root> [--dry-run]",
   "       roborepo plans order place <plan> [--top|--bottom] [--json]",
 ].join("\n");
@@ -50,6 +52,7 @@ export function plansCommand(args) {
   if (sub === "landed") return plansLandedCommand(rest);
   if (sub === "sync-base") return plansSyncBaseCommand(rest);
   if (sub === "stop-servers") return plansStopServersCommand(rest);
+  if (sub === "session-title") return plansSessionTitleCommand(rest);
   console.error(`unknown: roborepo plans ${sub ?? ""}`.trim());
   console.error(PLANS_USAGE);
   process.exit(2);

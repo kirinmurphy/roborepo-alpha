@@ -1,0 +1,5 @@
+{
+  "UserPromptSubmit": [
+    { "matcher": "", "hooks": [{ "type": "command", "command": "roborepo plans session-title --harness claude" }] }
+  ]
+}

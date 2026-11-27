@@ -151,6 +151,7 @@ Each capability maps to a required adapter group and method set, defined in
 | `telemetry-transcripts` | `transcripts` | `locate`, `parse` |
 | `session-launch` | `session` | `launch` |
 | `session-resume` | `session` | `resume` |
+| `session-title` | `sessionTitle` | `readHookInput(text)` returns `{ prompt, title }` from a prompt hook's input (`title` null when the session has no custom title); `hookOutput({ title })` returns the text a hook prints to set that title |
 
 ### Optional groups: project inventory and agent shell
 

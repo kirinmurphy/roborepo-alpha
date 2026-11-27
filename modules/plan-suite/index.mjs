@@ -13,6 +13,7 @@ import { validatePlanNaming, readProjectNamespaces, resolvePlanNamespace } from 
 import { findDependencyCycles } from "./backlog-order.mjs";
 import { renderMarkdown } from "../../scripts/cli/markdown-render.mjs";
 import { PLANS_DIR, requireStore } from "./plan-store.mjs";
+import { sessionTitle, titleLine } from "./session-title.mjs";
 
 // The lifecycle folders a plan can live in, from manifests/platform/plan-lifecycle.json.
 export const LIFECYCLES = LIFECYCLE_MODEL.folders;
@@ -48,6 +49,21 @@ export function buildRepositoryPlanSnapshot({ cwd = process.cwd() } = {}) {
   const repository = repositoryRecord(fs.realpathSync(store.root), { name: path.basename(store.primary) });
   const plans = withRelationshipFindings(discoverPlansInRepository(repository));
   return { repository: publicRepository(repository), root: repository.root, plans };
+}
+
+// Each plan's id, H1 title, and store-relative path, read from the files alone. For callers that
+// only need to name a plan and must stay fast (the session-title hook runs on every prompt): the
+// full snapshot also asks Git about every plan, which takes seconds in a large store.
+export function listPlanTitles({ cwd = process.cwd() } = {}) {
+  const root = fs.realpathSync(requireStore(path.resolve(cwd)).root);
+  const files = [];
+  walkPlans(path.join(root, PLANS_DIR), root, files, []);
+  return files.flatMap((absolutePath) => {
+    if (fs.statSync(absolutePath).size > MAX_DOC_BYTES) return [];
+    const relativePath = relative(root, absolutePath);
+    const parsed = parsePlanMarkdown(fs.readFileSync(absolutePath, "utf8"));
+    return [{ plan: { id: parsed.frontmatter.id || "", title: parsed.title || path.basename(relativePath, ".md"), relativePath } }];
+  });
 }
 
 // Resolves `selector` — a plan id, or a path relative to the store root (`plans/<lifecycle>/x.md`), a path relative
@@ -151,11 +167,11 @@ export function readPlanDocument(snapshot, key) {
 // The suite commands a portal prompt may open with: every copy-prompt action the lifecycle manifest
 // offers. Each takes no mode argument; anything else (including no command at all) yields a
 // context-only prompt with no slash line.
-export const PLAN_SUITE_COMMANDS = new Set(LIFECYCLE_MODEL.states.flatMap((state) => state.actions.map((action) => action.command)));
+export const PLAN_SUITE_COMMANDS = new Set(LIFECYCLE_MODEL.commands);
 
 export function buildPrompt(command, selectedPlans, { mode = "repository-aware" } = {}) {
-  const commandLines = PLAN_SUITE_COMMANDS.has(command) ? [`/${command}`, ""] : [];
   const plans = selectedPlans.map((record) => record.plan ? record : stripPrivatePath(record));
+  const commandLines = PLAN_SUITE_COMMANDS.has(command) ? [`/${command}`, "", ...sessionTitleLines(command, plans)] : [];
   if (mode === "portable") {
     return [
       ...commandLines,
@@ -168,6 +184,14 @@ export function buildPrompt(command, selectedPlans, { mode = "repository-aware" 
     ...commandLines,
     ...plans.map((item) => `Work with plan \`${item.plan.id || item.plan.title}\` at \`${item.plan.relativePath}\` in repository \`${item.repository.name}\`.`),
   ].join("\n");
+}
+
+// One plan with a plan command gets a title line, which names the session's stage for the agent and
+// the person, and which the plan-suite title hook reads in harnesses that run it.
+function sessionTitleLines(command, plans) {
+  if (plans.length !== 1) return [];
+  const title = sessionTitle(command, plans[0].plan.title);
+  return title ? [titleLine(title)] : [];
 }
 
 // `root` is the plans worktree. `canonical` carries the registry's identity when the scan comes from
