@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Approved at 7303fe62; the owner merges pull request 82 on GitHub, then runs /plan-close to record the plan as finished
+next_action:
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["rtkmc8kf", "f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
