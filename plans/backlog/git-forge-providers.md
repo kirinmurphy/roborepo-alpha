@@ -1,6 +1,6 @@
 ---
 id: m7gjz0p6
-next_action: Pick the name of the shared command namespace above the providers (Open Question 1, recommended `roborepo git github setup`), then run /plan-promote on this plan.
+next_action: Run /plan-promote on this plan to confirm the phases against the current code and move it to ready.
 blocked_by: []
 depends_on: ["w7vls1yk"]
 related: ["f0jwe76j", "developer-runtime-remote-branch-status", "3xh2sq32"]
@@ -18,7 +18,7 @@ permission hooks, the setup command, and the portal card. This plan puts that co
 **forge provider** interface, with GitHub as the first and only provider, so a later plan can add
 GitLab, Bitbucket, or Gitea as a provider with its own agent account. Each provider's account acts
 only on that provider's hosts. Provider commands move under one shared namespace
-(`roborepo <host-namespace> github setup`); for GitHub users the existing `roborepo github` commands,
+(`roborepo git github setup`); for GitHub users the existing `roborepo github` commands,
 files, and output keep working unchanged.
 
 ## Context
@@ -111,7 +111,7 @@ a checked rule for every provider rather than a GitHub detail.
 
 ```mermaid
 flowchart LR
-  CLI["roborepo &lt;host-namespace&gt; github setup / status, protect, doctor"] -->|asks for a repo's provider| R["modules/forge/registry.mjs"]
+  CLI["roborepo git github setup / status, protect, doctor"] -->|asks for a repo's provider| R["modules/forge/registry.mjs"]
   Portal["portal agent identity card"] -->|reads provider info from| Server["repository-agent-identity.mjs"]
   Server -->|asks| R
   Delivery["modules/delivery"] -->|asks| R
@@ -224,15 +224,16 @@ per provider entry.
 ### Commands and portal
 
 - Provider commands sit under one shared namespace, then the provider:
-  `roborepo <host-namespace> github setup` and `roborepo <host-namespace> github status`, later
-  `roborepo <host-namespace> gitlab setup`. The namespace's name is Open Question 1. Each provider's
+  `roborepo git github setup` and `roborepo git github status`, later `roborepo git gitlab setup`.
+  The existing `git` namespace holds them beside its local commands (`git inventory`,
+  `git worktrees`), and its description widens to cover the Git host. Each provider's
   subcommands come from its manifest's `agent.commandNamespace`, backed by shared code
   (`scripts/cli/forge-setup.mjs`, `scripts/cli/forge-identity.mjs`).
 - `roborepo github setup` and `roborepo github status` stay as aliases with the same flags and
   output. Command definitions have no alias field, so an alias is a second definition pointing at
   the same module export: the existing files in
   `manifests/platform/cli/command-definitions/github/` stay, with descriptions that name the new
-  form, and new definitions under the `<host-namespace>` folder call the same exports. Installed rules, the Claude sandbox's excluded `github status` entry, older docs, and the
+  form, and new definitions in the `git/` folder call the same exports. Installed rules, the Claude sandbox's excluded `github status` entry, older docs, and the
   user's habits all name them, so removing them would break working setups. RoboRepo's own text
   (rules, fixes in status findings, setup guide, portal) switches to the new form.
 - Doctor checks each provider whose package is on, one line each; with only GitHub this is today's line.
@@ -288,7 +289,7 @@ have not been tested here.
 | Hooks entry | `HOST_CLIS.github` | `HOST_CLIS.gitlab` with its own denied list |
 | Permission behaviors | Eight `host: github` behaviors | Matching behaviors tagged `host: gitlab` |
 | Claude sandbox | `gh *` excluded | `glab *` excluded |
-| Commands | `roborepo <host-namespace> github setup | status` | `roborepo <host-namespace> gitlab setup | status` |
+| Commands | `roborepo git github setup | status` | `roborepo git gitlab setup | status` |
 
 One shared piece needs a decision before a second provider lands: each identity package adds its Git
 include through a fixed `GIT_CONFIG_KEY_1`/`VALUE_1` pair. Two packages cannot both own index 1. See
@@ -310,14 +311,15 @@ can stop after any phase.
       guide and setup steps of `scripts/cli/github-setup.mjs` behind `agent-identity`. Derive state
       paths from `agent.stateFolder`.
 - [ ] **Phase 3: commands, doctor, and portal through the registry.** Shared
-      `scripts/cli/forge-identity.mjs` and `forge-setup.mjs`. Add a
-      `manifests/platform/cli/command-definitions/<host-namespace>/` folder with the namespace and
-      its `github setup` and `github status` definitions, calling the same exports as the existing
+      `scripts/cli/forge-identity.mjs` and `forge-setup.mjs`. Add
+      `github.namespace.json`, `github-setup.command.json`, and `github-status.command.json` to
+      `manifests/platform/cli/command-definitions/git/` (the folder's existing `worktrees.*` naming),
+      widen `git/namespace.json`'s description to cover the Git host, and point the new definitions at the same exports as the existing
       `github/namespace.json`, `setup.command.json`, and `status.command.json`, which stay as the
       aliases. Give the new forms the same agent rules as the old: add the
-      `roborepo <host-namespace> github setup` prefix to the `set-up-github-identity` deny and the
+      `roborepo git github setup` prefix to the `set-up-github-identity` deny and the
       status prefix to `check-github-identity` in `manifests/inventory/agent-permissions.json`, and
-      add `<host-namespace> github status` beside `github status` in the Claude sandbox's
+      add `git github status` beside `github status` in the Claude sandbox's
       `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` (`scripts/harnesses/claude/sandbox-settings.mjs`). Switch
       RoboRepo's own text to the new form. Doctor iterates enabled providers. `scripts/cli/agent-identity-package.mjs` reads the
       package id and gitconfig path from the manifest. Portal server returns `provider`; card and menu
@@ -360,7 +362,7 @@ New checks, each failing without its phase:
   `hosts`, its config patches set only its `cli.identityVariables` and `networkDomains`, and a
   repo with a remote on another host gets neither the bot's credential helper nor its author
   (`git config --get-urlmatch` and `git var GIT_AUTHOR_IDENT` in a fixture repo).
-- **Namespaced commands:** `roborepo <host-namespace> github status --json` and `roborepo github
+- **Namespaced commands:** `roborepo git github status --json` and `roborepo github
   status --json` print identical output with the same exit code in the status check's fixture, the
   same holds for `setup` on its "already done" path in the setup check's fixture, and `roborepo
   --help` lists the new namespace.
@@ -390,17 +392,7 @@ be identical apart from timestamps.
 
 ## Open questions
 
-1. **The name of the namespace above the providers.** Provider commands sit under one shared word,
-   then the provider (see "Commands and portal"). Candidates:
-
-   | Command | For | Against |
-   | --- | --- | --- |
-   | `roborepo git github setup` | No new word; the existing `git` namespace and the `git` plan namespace already cover the Git host | Mixes host commands with local ones (`git inventory`, `git worktrees`); the namespace description changes |
-   | `roborepo forge github setup` | Exact, and matches the code (`modules/forge/`) | "Forge" is jargon many users do not know |
-   | `roborepo hosting github setup` | Plain word for what GitHub is to a repo | New namespace; less specific than "Git host" |
-   | `roborepo versioncontrol github setup` | The owner's first suggestion; reads plainly | Long to type; GitHub hosts the repo, Git is the version control |
-
-   Recommendation: `roborepo git github setup`. The plan uses `<host-namespace>` until this is settled.
+None. The decisions made while writing this plan are in the Decision log.
 
 ## Decision log
 
@@ -412,8 +404,8 @@ be identical apart from timestamps.
   plan. This plan leaves GitHub's `GIT_CONFIG_KEY_1` slot untouched. Alternative: each package
   claims its own `GIT_CONFIG_KEY_n` slot, which spreads index bookkeeping across packages.
 - November 27, 2026 (user decision): provider commands go under one shared namespace before the
-  provider name (`roborepo <host-namespace> github setup`), not a top-level namespace per provider.
-  The name is Open Question 1. Alternative: `roborepo github …`, `roborepo gitlab …` at top level.
+  provider name (`roborepo git github setup`), not a top-level namespace per provider.
+  Alternative: `roborepo github …`, `roborepo gitlab …` at top level.
 - November 27, 2026 (user decision): self-hosted instances (GitHub Enterprise Server, self-managed
   GitLab) stay out of scope; a configurable host list changes rule 3's host pinning and needs its
   own security review.
@@ -421,13 +413,18 @@ be identical apart from timestamps.
   this plan's `pull-requests` capability. Its retry-runner choice (local queue or GitHub Actions)
   stays open in that design session.
 
+- November 27, 2026 (user decision): the shared namespace is the existing `git` namespace
+  (`roborepo git github setup`). Chosen because it adds no new word and the `git` plan namespace
+  already covers the Git host. Alternatives: `forge` (exact but jargon), `hosting`,
+  `versioncontrol` (long, and GitHub hosts the repo rather than being the version control).
+
 ## Documentation impact
 
 | Doc | Update |
 | --- | --- |
 | `docs/internal/cli-internals.md` (`## Git host calls`) | Describe the registry, contract, and provider folders in place of "the one home for `gh` calls" |
 | `docs/internal/docs-map.md` | Rows for branch protection and agent identity point at `modules/forge/providers/github/`; add a row for forge providers |
-| `docs/user/reference/roborepo-cli.md` | Document the `<host-namespace>` namespace and its `github setup` and `github status` commands; note `roborepo github …` as aliases |
+| `docs/user/reference/roborepo-cli.md` | Document `roborepo git github setup` and `roborepo git github status`, the widened `git` namespace, and `roborepo github …` as aliases |
 | `docs/user/guides/setup-and-daily-use.md`, `docs/user/reference/repositories.md`, `docs/user/reference/claude-hooks.md`, `docs/user/reference/codex-hooks.md`, `docs/user/guides/plan/lifecycle/plan-suite.md`, `docs/internal/portal-architecture.md` | Name the new setup and status commands; hook behavior is unchanged |
 | `globals/packages/github-agent-identity/rules.md`, `globals/packages/plan-suite/skills/plan-suite-init/SKILL.md` | Tell agents to send the user to the new setup command |
 | `globals/packages/github-agent-identity/package.config.json` (`description`) | Name the new setup command |
