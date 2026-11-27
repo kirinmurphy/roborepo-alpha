@@ -491,7 +491,7 @@ function realStatusAgainstFakeGh(checkout) {
   delete env.GH_TOKEN;
   delete env.GITHUB_TOKEN;
   // The Git settings file the enabled package installs, which status checks is in place.
-  const agentGitconfig = path.join(env.HOME, ".roborepo", "package-runtime", "github-agent-identity", "gitconfig");
+  const agentGitconfig = path.join(stateRoot, "package-runtime", "github-agent-identity", "gitconfig");
   fs.mkdirSync(path.dirname(agentGitconfig), { recursive: true });
   fs.writeFileSync(agentGitconfig, "# fixture\n");
   // Protection rulesets as `roborepo protect` writes them, so the healthy case is fully healthy.

@@ -32,7 +32,7 @@
         {
           "op": "set",
           "path": ["env", "GIT_CONFIG_VALUE_1"],
-          "value": "~/.roborepo/package-runtime/github-agent-identity/gitconfig"
+          "value": "${package-runtime:gitconfig}"
         },
         {
           "op": "set",
@@ -64,7 +64,7 @@
         {
           "op": "set",
           "path": ["shell_environment_policy", "set", "GIT_CONFIG_VALUE_1"],
-          "value": "~/.roborepo/package-runtime/github-agent-identity/gitconfig"
+          "value": "${package-runtime:gitconfig}"
         },
         {
           "op": "set",

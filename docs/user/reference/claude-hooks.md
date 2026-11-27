@@ -278,7 +278,8 @@ The package works through these settings in agent shells only:
 - `GH_TOKEN` and `GITHUB_TOKEN` are set to empty. `gh` would use either one ahead of the stored
   login, so a token exported in your shell would otherwise make agents act as you; `gh` treats an
   empty value as unset.
-- A Git config file at `~/.roborepo/package-runtime/github-agent-identity/gitconfig`, included
+- A Git config file at `~/.roborepo/package-runtime/github-agent-identity/gitconfig` (under
+  `ROBOREPO_STATE_ROOT` when that is set), included by its absolute path
   through a second pair of agents' `GIT_CONFIG_*` variables that the package adds (and removes
   when it is turned off), replaces inherited credential helpers for github.com with
   `gh auth git-credential` (other hosts keep yours), and rewrites SSH remotes to HTTPS. It also makes the bot the author of agents'

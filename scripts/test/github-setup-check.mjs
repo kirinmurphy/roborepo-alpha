@@ -283,7 +283,7 @@ try {
     providers: { codex: { enabled: true, selectionSource: "user", confidence: "confirmed", evidence: [], warnings: [] } },
   }));
   const codexConfig = path.join(home, ".codex", "config.toml");
-  assert.match(fs.readFileSync(codexConfig, "utf8"), /^GIT_CONFIG_VALUE_1 = "~\/\.roborepo\/package-runtime\/github-agent-identity\/gitconfig"$/m);
+  assert.ok(fs.readFileSync(codexConfig, "utf8").includes(`GIT_CONFIG_VALUE_1 = ${JSON.stringify(path.join(stateRoot, "package-runtime", "github-agent-identity", "gitconfig"))}`));
   fs.writeFileSync(codexConfig, fs.readFileSync(codexConfig, "utf8").replace(/^GIT_CONFIG_COUNT = "2"$/m, 'GIT_CONFIG_COUNT = "1"'));
   result = await setup("");
   assert.equal(result.status, 1, result.stdout + result.stderr);
