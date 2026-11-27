@@ -64,7 +64,7 @@ Terms used below:
 - Building a second real provider (GitLab or others). That is its own plan, written when a repo
   that RoboRepo tracks actually uses that host.
 - Self-hosted instances (GitHub Enterprise Server, self-managed GitLab). Calls stay pinned to
-  `github.com` as today (`--hostname github.com`). See Open Questions.
+  `github.com` as today (`--hostname github.com`). See the Decision log.
 - Package install sources (`scripts/cli/package-source-git.mjs` accepts only `github.com` URLs).
   That is package distribution, not agent identity.
 - Reviewer providers and the "request a review when a PR opens" command. This plan only exposes the
@@ -291,9 +291,10 @@ have not been tested here.
 | Claude sandbox | `gh *` excluded | `glab *` excluded |
 | Commands | `roborepo git github setup | status` | `roborepo git gitlab setup | status` |
 
-One shared piece needs a decision before a second provider lands: each identity package adds its Git
-include through a fixed `GIT_CONFIG_KEY_1`/`VALUE_1` pair. Two packages cannot both own index 1. See
-Open Questions.
+One shared piece changes when a second provider lands: each identity package adds its Git include
+through a fixed `GIT_CONFIG_KEY_1`/`VALUE_1` pair, and two packages cannot both own index 1. The
+second-provider plan moves them to one shared include file that lists each enabled provider's
+gitconfig (see the Decision log).
 
 ## Implementation plan
 
