@@ -694,6 +694,19 @@ async function applyPackageComponents(pkg, { dryRun = false } = {}) {
   // Service/skill components run async handlers (lazy-imported to avoid import cycles); await them so
   // the function doesn't resolve before the side effects land.
   if (servicePromises.length) await Promise.all(servicePromises);
+  if (!dryRun) await renderPermissionsAfterPackageChange(pkg);
+}
+
+// A package that changes how permissions render (it flips a behavior's bucket) re-renders the live
+// permission files once its own components are in place, so the effective package set the render
+// reads already includes or excludes it.
+async function renderPermissionsAfterPackageChange(pkg) {
+  if (pkg.permissionsRender !== true) return;
+  const [{ readCommandOverrides }, { renderPermissionsToHome }] = await Promise.all([
+    import("./config-mutate.mjs"), import("./permissions-render.mjs"),
+  ]);
+  const { touched } = renderPermissionsToHome({ overrides: readCommandOverrides(), cwd: process.cwd() });
+  for (const file of touched) console.log(`  permissions: ${file}`);
 }
 
 // Re-apply one effective package from its current catalog entry, for when its installed copy
@@ -1003,7 +1016,10 @@ async function removePackageComponents(pkg, { dryRun = false } = {}) {
     }
   }
   if (servicePromises.length) await Promise.all(servicePromises);
-  if (!dryRun) setPackageApplied(pkg.id, false);
+  if (!dryRun) {
+    setPackageApplied(pkg.id, false);
+    await renderPermissionsAfterPackageChange(pkg);
+  }
 }
 
 // --------------------------------------------------------------------------- service component

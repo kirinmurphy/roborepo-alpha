@@ -29,7 +29,7 @@ const ruleset = (id, name, conditions, rules, extra = {}) => ({
 try {
   const gh = createFakeGh(root);
   const checkout = clone("checkout", "git@github.com:example/project.git");
-  const env = { ...process.env, ...gh.env, PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`, ROBOREPO_SKIP_NODE_RELEASE_CHECK: "1" };
+  const env = { ...process.env, ...gh.env, PATH: `${gh.dir}${path.delimiter}${process.env.PATH}`, ROBOREPO_SKIP_NODE_RELEASE_CHECK: "1", ROBOREPO_SKIP_AGENT_IDENTITY_CHECK: "1" };
   delete env.ROBOREPO_SKIP_PROTECTION_CHECK;
   const line = (cwd = checkout) => spawnSync(process.execPath, [path.join(repoRoot, "scripts/cli/protect.mjs"), "--doctor"], { cwd, env, encoding: "utf8" });
   const doctor = (extraEnv = {}) => spawnSync("bash", [path.join(repoRoot, "scripts/doctor.sh"), "--verbose"], { cwd: checkout, env: { ...env, ...extraEnv }, encoding: "utf8" });

@@ -79,4 +79,57 @@ const claudeMerged = JSON.parse(fs.readFileSync(claudeOut, "utf8"));
 assert.equal(claudeMerged.model, undefined, "Claude root config merge must not preserve global model");
 assert.deepEqual(claudeMerged.hooks, { Stop: [] }, "Claude root config merge still preserves other local settings");
 
+// An install from before a GIT_CONFIG pair existed already holds COUNT "1". The merge keeps local
+// scalars, but COUNT must follow the pairs the result holds or Git ignores the new include.path.
+const include = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
+const runMerge = (harness, repoText, localText, ext) => {
+  const [r, l, o] = ["repo", "local", "out"].map((name) => path.join(tmp, `count-${name}.${ext}`));
+  fs.writeFileSync(r, repoText);
+  fs.writeFileSync(l, localText);
+  const run = spawnSync(process.execPath, [path.resolve("scripts/cli/root-config-merge.mjs"), harness, r, l, o], { encoding: "utf8" });
+  assert.equal(run.status, 0, run.stderr);
+  return fs.readFileSync(o, "utf8");
+};
+
+const claudeCountMerged = JSON.parse(runMerge("claude",
+  JSON.stringify({ env: { GIT_CONFIG_COUNT: "2", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "~/.claude/git-hooks", GIT_CONFIG_KEY_1: "include.path", GIT_CONFIG_VALUE_1: include } }),
+  JSON.stringify({ env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "~/.claude/git-hooks", KEEP: "yes" } }),
+  "json"));
+assert.equal(claudeCountMerged.env.GIT_CONFIG_COUNT, "2", "Claude: an existing COUNT of 1 grows to cover the new include pair");
+assert.equal(claudeCountMerged.env.GIT_CONFIG_VALUE_1, include);
+assert.equal(claudeCountMerged.env.KEEP, "yes", "Claude: other local env keys survive");
+
+const claudeOwnPair = JSON.parse(runMerge("claude",
+  JSON.stringify({ env: { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "h" } }),
+  JSON.stringify({ env: { GIT_CONFIG_COUNT: "2", GIT_CONFIG_KEY_0: "core.hooksPath", GIT_CONFIG_VALUE_0: "h", GIT_CONFIG_KEY_1: "user.name", GIT_CONFIG_VALUE_1: "me" } }),
+  "json"));
+assert.equal(claudeOwnPair.env.GIT_CONFIG_COUNT, "2", "Claude: a pair the user added keeps counting");
+
+const codexRepoEnv = [
+  "[shell_environment_policy.set]",
+  'GIT_CONFIG_COUNT = "2"',
+  'GIT_CONFIG_KEY_0 = "core.hooksPath"',
+  'GIT_CONFIG_VALUE_0 = "~/.codex/git-hooks"',
+  'GIT_CONFIG_KEY_1 = "include.path"',
+  `GIT_CONFIG_VALUE_1 = "${include}"`,
+  "",
+].join("\n");
+const codexLocalEnv = [
+  "[shell_environment_policy.set]",
+  'GIT_CONFIG_COUNT = "1"',
+  'GIT_CONFIG_KEY_0 = "core.hooksPath"',
+  'GIT_CONFIG_VALUE_0 = "~/.codex/git-hooks"',
+  'KEEP = "yes"',
+  "",
+].join("\n");
+const codexCountMerged = runMerge("codex", codexRepoEnv, codexLocalEnv, "toml");
+assert.match(codexCountMerged, /^GIT_CONFIG_COUNT = "2"$/m, "Codex: an existing COUNT of 1 grows to cover the new include pair");
+assert.equal(codexCountMerged.match(/GIT_CONFIG_COUNT/g).length, 1, "Codex: COUNT is written once");
+assert.match(codexCountMerged, /^KEEP = "yes"$/m, "Codex: other local env keys survive");
+
+// A count written as a multiline string is replaced as a whole statement.
+const codexMultilineCount = runMerge("codex", codexRepoEnv, codexLocalEnv.replace('GIT_CONFIG_COUNT = "1"', 'GIT_CONFIG_COUNT = """\n1"""'), "toml");
+assert.match(codexMultilineCount, /^GIT_CONFIG_COUNT = "2"$/m, "Codex: a multiline count is rewritten");
+assert.doesNotMatch(codexMultilineCount, /^1"""$/m, "Codex: no line of the old multiline count is left behind");
+
 console.log("root-config-merge ok");

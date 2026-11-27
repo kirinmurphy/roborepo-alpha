@@ -28,7 +28,8 @@ function generatedHomeForRepo(root) {
   return path.join(path.sep, "Users", "you");
 }
 
-const generatedRenderOptions = { home: generatedHomeForRepo(repoRoot) };
+// The shipped baseline never assumes the optional GitHub agent identity package is on.
+const generatedRenderOptions = { home: generatedHomeForRepo(repoRoot), agentIdentity: false };
 
 // Provider manifest paths are home-relative (e.g. "~/.claude/settings.json"); the generated
 // candidate mirrors just the basename under generated/<provider-id>/. Most providers render

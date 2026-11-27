@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "id": "github-agent-identity",
+  "label": "GitHub Agent Identity",
+  "description": "Agents push, open pull requests, and read and reply to review threads as a separate GitHub bot account, which GitHub itself stops from pushing to main or merging without approval. Set it up with `roborepo github setup`.",
+  "lifecycle": "optional",
+  "defaultEnabled": false,
+  "permissionsRender": true,
+  "presentation": {
+    "category": "integrations",
+    "order": 10
+  },
+  "resources": [
+    {
+      "type": "package-runtime-asset",
+      "source": "gitconfig"
+    },
+    {
+      "type": "rules",
+      "source": "rules.md"
+    },
+    {
+      "type": "config-patch",
+      "harness": "claude",
+      "label": "Bot's Git settings, GitHub bot config directory, without your exported tokens",
+      "patches": [
+        {
+          "op": "set",
+          "path": ["env", "GIT_CONFIG_KEY_1"],
+          "value": "include.path"
+        },
+        {
+          "op": "set",
+          "path": ["env", "GIT_CONFIG_VALUE_1"],
+          "value": "~/.roborepo/package-runtime/github-agent-identity/gitconfig"
+        },
+        {
+          "op": "set",
+          "path": ["env", "GH_CONFIG_DIR"],
+          "value": "${roborepo-state:github-agent/gh}"
+        },
+        {
+          "op": "set",
+          "path": ["env", "GH_TOKEN"],
+          "value": ""
+        },
+        {
+          "op": "set",
+          "path": ["env", "GITHUB_TOKEN"],
+          "value": ""
+        }
+      ]
+    },
+    {
+      "type": "config-patch",
+      "harness": "codex",
+      "label": "Bot's Git settings, GitHub bot config directory, without your exported tokens, and network",
+      "patches": [
+        {
+          "op": "set",
+          "path": ["shell_environment_policy", "set", "GIT_CONFIG_KEY_1"],
+          "value": "include.path"
+        },
+        {
+          "op": "set",
+          "path": ["shell_environment_policy", "set", "GIT_CONFIG_VALUE_1"],
+          "value": "~/.roborepo/package-runtime/github-agent-identity/gitconfig"
+        },
+        {
+          "op": "set",
+          "path": ["shell_environment_policy", "set", "GH_CONFIG_DIR"],
+          "value": "${roborepo-state:github-agent/gh}"
+        },
+        {
+          "op": "set",
+          "path": ["shell_environment_policy", "set", "GH_TOKEN"],
+          "value": ""
+        },
+        {
+          "op": "set",
+          "path": ["shell_environment_policy", "set", "GITHUB_TOKEN"],
+          "value": ""
+        },
+        {
+          "op": "set",
+          "path": ["features", "network_proxy"],
+          "value": true
+        },
+        {
+          "op": "set",
+          "path": ["permissions", "managed-workspace", "network", "domains", "github.com"],
+          "value": "allow"
+        },
+        {
+          "op": "set",
+          "path": ["permissions", "managed-workspace", "network", "domains", "api.github.com"],
+          "value": "allow"
+        }
+      ]
+    }
+  ]
+}

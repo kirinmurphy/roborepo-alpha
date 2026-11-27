@@ -43,6 +43,10 @@ for (const key of Object.keys(gitEnv)) {
   if (/^GIT_CONFIG_(?:COUNT|PARAMETERS|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnv[key];
 }
 delete gitEnv.ROBOREPO_PROTECTED_BRANCHES;
+// The machine's own GitHub agent identity must not lift the gh api denial in the default cases, and a
+// token exported on the machine (or in CI) must not keep the agent cases from lifting it.
+for (const name of ["GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"]) delete gitEnv[name];
+gitEnv.ROBOREPO_STATE_ROOT = path.join(tmp, "default-state");
 // An agent shell carries the core.hooksPath override itself; the "human" git here must not.
 for (const key of Object.keys(gitEnv)) if (/^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) delete gitEnv[key];
 fs.writeFileSync(gitEnv.GIT_CONFIG_GLOBAL, "");
@@ -315,6 +319,9 @@ cases.push(
   // Agents never merge a pull request (merge-pull-requests), in either flag position.
   ["gh -R owner/repo pr merge 12 --admin", "deny"],
   ["gh pr merge 12", "deny"],
+  // bash's `NAME+=value` is a leading assignment too, so the program after it is still checked.
+  ["X+=1 gh pr merge 12", "deny"],
+  ["X+=1 git push origin main", "deny"],
   ["gh -R owner/repo pr create --head feat", "defer"],
   ["gh pr view 12", "defer"],
 );
@@ -326,6 +333,215 @@ for (const command of manifest.behaviors.find((b) => b.id === "change-github-dir
 }
 for (const [command, expected] of cases) {
   assert.equal(decide(command), expected, command);
+}
+// As the github-agent identity `gh api` is allowed: the package's Git config file is installed, the
+// hook's GH_CONFIG_DIR is exactly the identity's gh dir (or unset, under Codex), and the command does not change
+// which account gh acts as. Every other denied gh command stays denied.
+{
+  const installIdentity = (root) => {
+    const file = path.join(root, "package-runtime", "github-agent-identity", "gitconfig");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "");
+  };
+  const stateRoot = path.join(tmp, "agent-state");
+  const notInstalled = path.join(tmp, "agent-state-off");
+  installIdentity(stateRoot);
+  const agentDir = path.join(stateRoot, "github-agent", "gh");
+  // Codex's config, as the package renders it: the bot's gh for every shell. Codex hooks read it;
+  // Claude hooks ignore it.
+  const codexHome = path.join(tmp, "codex-home");
+  const codexConfig = (dir, { tokens = true } = {}) => {
+    fs.mkdirSync(codexHome, { recursive: true });
+    fs.writeFileSync(path.join(codexHome, "config.toml"), `model = "x"\n\n[shell_environment_policy.set]\nGH_CONFIG_DIR = "${dir}"\n${tokens ? 'GH_TOKEN = ""\nGITHUB_TOKEN = ""\n' : ""}\n[other]\nGH_CONFIG_DIR = "${agentDir}"\n`);
+  };
+  codexConfig(agentDir);
+  const asAgent = { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: agentDir, CODEX_HOME: codexHome };
+  const codexOptions = { toolName: "exec_command", hookPath: path.join(codexHooks, "protected-branch-push.mjs"), key: "cmd" };
+  // A Codex session started with a -c override of its shell environment never shows the override to
+  // its own hook, so starting one is refused while the identity is on; other -c settings are fine.
+  for (const options of [{}, codexOptions]) {
+    for (const [command, expected] of [
+      [`codex exec -c 'shell_environment_policy.set.GH_TOKEN="x"' 'gh api repos/o/r'`, "deny"],
+      [`codex --config shell_environment_policy.inherit=all exec 'gh api repos/o/r'`, "deny"],
+      [`codex exec --config=shell_environment_policy.set.GH_CONFIG_DIR=/tmp/x 'gh api repos/o/r'`, "deny"],
+      // A prompt with no other keyword still reaches the check, and a wrapper does not hide codex.
+      [`codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`env codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`command codex --config shell_environment_policy.inherit=all exec 'list files'`, "deny"],
+      [`codex exec -c 'model="o3"' 'list files'`, "defer"],
+    ]) {
+      assert.equal(decide(command, { ...options, env: asAgent }), expected, `${options.hookPath ? "Codex" : "Claude"}: ${command}`);
+    }
+  }
+  assert.equal(decide(`codex exec -c 'shell_environment_policy.set.GH_TOKEN="x"' 'gh api repos/o/r'`, { env: {} }), "defer", "without the identity a codex -c override is not ours to refuse");
+  for (const options of [{}, codexOptions]) {
+    const label = options.hookPath ? "Codex" : "Claude";
+    for (const command of [
+      "gh api repos/o/r", "gh api graphql -f query=x", "gh -R o/r api repos/o/r/pulls",
+      // Reads that mention merge state are not merges.
+      "gh api repos/o/r/pulls/12 --jq .mergeable",
+      "gh api -H 'Accept: application/vnd.github.raw+json' repos/o/r/contents/README.md",
+      "gh api --header 'Accept: application/vnd.github+json' repos/o/r/pulls",
+      "gh api graphql -F number=12 -f query='{ viewer { login } }'",
+      "gh api repos/o/r/pulls --jq '.[].merged_at'",
+      "gh api graphql -f query='{ repository(owner: \"o\", name: \"r\") { pullRequest(number: 1) { mergeable mergeStateStatus mergeQueueEntry { id } } } }'",
+      "git log --merges -1 && gh api repos/o/r",
+      // Only the operation is checked for a merge, never the data the call sends.
+      "gh api repos/o/r/pulls/1/comments/2/replies -f body='I tested mergePullRequest'",
+      "gh api repos/o/r/issues/1/comments -f body=\"see /repos/o/r/pulls/2/merge\"",
+      "gh api repos/o/r/issues/1/comments -F body=@- <<'B'\nmergePullRequest works now\nB",
+      "gh api graphql -f query='mutation($id: ID!, $body: String!) { addPullRequestReviewThreadReply(input: {pullRequestReviewThreadId: $id, body: $body}) { comment { id } } }' -f id=x -f body='tested mergePullRequest'",
+    ]) {
+      assert.equal(decide(command, { ...options, env: asAgent }), "defer", `${label} allows as agent: ${command}`);
+      // Codex hooks never see the shell's GH_CONFIG_DIR; a Claude hook without it belongs to a session
+      // whose gh acts as the user.
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "", CODEX_HOME: codexHome } }), options.hookPath ? "defer" : "deny", `${label} with the hook's GH_CONFIG_DIR unset: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ...asAgent, GH_CONFIG_DIR: path.join(tmp, "other-gh") } }), "deny", `${label} denies other GH_CONFIG_DIR: ${command}`);
+      // gh prefers an inherited token or host over the bot's config dir.
+      for (const name of ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"]) {
+        assert.equal(decide(command, { ...options, env: { ...asAgent, [name]: "x" } }), "deny", `${label} denies with ${name} inherited: ${command}`);
+      }
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled, GH_CONFIG_DIR: path.join(notInstalled, "github-agent", "gh") } }), "deny", `${label} denies without the installed identity: ${command}`);
+      assert.equal(decide(command, { ...options, env: { ROBOREPO_STATE_ROOT: notInstalled } }), "deny", `${label} denies without identity: ${command}`);
+    }
+    // The command itself must not change which account or host gh acts as.
+    for (const command of [
+      "GH_CONFIG_DIR=/x gh api repos/o/r",
+      "GH_TOKEN=abc gh api repos/o/r",
+      "GITHUB_TOKEN=abc gh api repos/o/r",
+      "GH_ENTERPRISE_TOKEN=abc gh api repos/o/r",
+      "GITHUB_ENTERPRISE_TOKEN=abc gh api repos/o/r",
+      "GH_HOST=example.com gh api repos/o/r",
+      "env -u GH_CONFIG_DIR gh api repos/o/r",
+      "env --unset=GH_CONFIG_DIR gh api repos/o/r",
+      "env gh api repos/o/r",
+      "env GH_TOKEN=abc gh api repos/o/r",
+      "unset GH_CONFIG_DIR; gh api repos/o/r",
+      "export GH_TOKEN=abc; gh api repos/o/r",
+      "export GH_CONFIG_DIR=/x && gh api repos/o/r",
+      "GH_CONFIG_DIR=/x; gh api repos/o/r",
+      "bash -c 'unset GH_CONFIG_DIR; gh api repos/o/r'",
+      "(export GH_TOKEN=abc; gh api repos/o/r)",
+      "export GH_TOKEN+=$OTHER; gh api repos/o/r",
+      "GITHUB_TOKEN+=x gh api repos/o/r",
+    ]) {
+      assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} denies a command that changes gh's identity: ${command}`);
+    }
+    for (const command of [
+      "gh auth token", "gh -R o/r pr merge 12", "gh secret set X", "gh release create v1", "gh workflow run x",
+      // Merging through the API is still merging, which agents never do.
+      "gh api -X PUT repos/O/R/pulls/12/merge",
+      "gh api --method PUT /repos/O/R/pulls/12/merge -f merge_method=squash",
+      "gh api repos/O/R/merges -f base=main -f head=feature",
+      "gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+      "gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+      "gh api graphql -f query='mutation { enqueuePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'",
+      "gh api graphql -f query='mutation { mergeBranch(input: {repositoryId: \"x\", base: \"main\", head: \"f\"}) { clientMutationId } }'",
+      "gh api -X POST repos/O/R/merge-upstream -f branch=main",
+      "gh api \"/repos/O/R/pulls/12/merge?x=1\" -XPUT",
+      // A query written in a heredoc or a variable is on the command line too.
+      "gh api graphql -F query=@- <<'Q'\nmutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }\nQ",
+      "Q='mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }'; gh api graphql -f query=\"$Q\"",
+      // An operation the shell fills in, or a missing query, cannot be checked for a merge.
+      "EP=repos/O/R/pulls/12/merge; gh api -X PUT \"$EP\"",
+      "gh api -X PUT \"$EP\"",
+      "gh api graphql -f query=\"mutation { $M }\"",
+      "gh api graphql -f query=\"$(cat q.graphql)\"",
+      // Only the query's own argument says whether its `$` is single-quoted, not other text that matches.
+      "gh api graphql -f query=\"$M\"; echo query='$M'",
+      "echo \"'query=$M'\"; gh api graphql -f query=\"$M\"",
+      "gh api graphql -f id=x",
+      "gh api -iX PUT repos/O/R/pulls/12/merge",
+      // An Authorization header replaces the bot's token, in every spelling gh accepts.
+      "gh api -H 'Authorization: Bearer x' user",
+      "gh api -H 'authorization: token x' user",
+      "gh api -H'Authorization: token x' user",
+      "gh api -iH 'AUTHORIZATION: token x' user",
+      "gh api --header 'Authorization: token x' user",
+      "gh api --header='Authorization: token x' user",
+      "gh api -H \"$AUTH\" user",
+      // A GraphQL query from a file or stdin cannot be checked for a merge mutation.
+      "gh api graphql -F query=@request.graphql",
+      "gh api graphql --field query=@request.graphql",
+      "gh api graphql -Fquery=@request.graphql",
+      "gh api graphql --input request.json",
+      "gh api /graphql --input=request.json",
+    ]) {
+      assert.equal(decide(command, { ...options, env: asAgent }), "deny", `${label} still denies as agent: ${command}`);
+    }
+  }
+  // A partial enable installs the gitconfig but leaves Codex's shells on another gh: the Codex hook
+  // then keeps gh api denied.
+  const codexUnset = { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: "", CODEX_HOME: codexHome };
+  for (const [label, write] of [
+    ["another GH_CONFIG_DIR", () => codexConfig(path.join(tmp, "users-own-gh"))],
+    ["tokens not emptied", () => codexConfig(agentDir, { tokens: false })],
+    ["no config", () => fs.rmSync(path.join(codexHome, "config.toml"), { force: true })],
+  ]) {
+    write();
+    assert.equal(decide("gh api repos/o/r", { ...codexOptions, env: codexUnset }), "deny", `Codex with ${label} denies gh api`);
+  }
+  codexConfig(agentDir);
+  // A layer Codex reads above the user config can give its shells another gh: a project's
+  // .codex/config.toml in the session's folder or above it, a profile file, or a profile table.
+  {
+    const projectConfig = path.join(work, ".codex", "config.toml");
+    const parentConfig = path.join(tmp, ".codex", "config.toml");
+    const profileConfig = path.join(codexHome, "work.config.toml");
+    const userConfig = path.join(codexHome, "config.toml");
+    const userText = fs.readFileSync(userConfig, "utf8");
+    const write = (file, text) => {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, text);
+    };
+    const codexDecides = (env) => decide("gh api repos/o/r", { ...codexOptions, env });
+    const setTable = (lines) => `[shell_environment_policy.set]\n${lines}\n`;
+    for (const [label, file, text, expected] of [
+      ["project sets another GH_CONFIG_DIR", projectConfig, setTable(`GH_CONFIG_DIR = "${path.join(tmp, "users-own-gh")}"`), "deny"],
+      ["project above the session sets GH_TOKEN", parentConfig, setTable('GH_TOKEN = "x"'), "deny"],
+      ["project sets GITHUB_TOKEN as a dotted key", projectConfig, 'shell_environment_policy.set.GITHUB_TOKEN = "x"\n', "deny"],
+      ["project sets GH_HOST in an inline table", projectConfig, '[shell_environment_policy]\nset = { GH_HOST = "example.com" }\n', "deny"],
+      ["project spells GH_TOKEN with an escape", projectConfig, setTable('"GH\\u005fTOKEN" = "x"'), "deny"],
+      ["project drops GH_CONFIG_DIR with include_only", projectConfig, '[shell_environment_policy]\ninclude_only = ["PATH"]\n', "deny"],
+      ["profile file sets GH_TOKEN", profileConfig, setTable('GH_TOKEN = "x"'), "deny"],
+      ["profile table sets GH_TOKEN", userConfig, `${userText}\n[profiles.p.shell_environment_policy.set]\nGH_TOKEN = "x"\n`, "deny"],
+      ["project keeps the bot's values", projectConfig, setTable(`GH_CONFIG_DIR = "${agentDir}"\nGH_TOKEN = ""`), "defer"],
+      ["project changes other settings", projectConfig, `model = "y"\ndeveloper_instructions = """\nGH_TOKEN = "x"\n"""\n${setTable('PATH_EXTRA = "/x"')}`, "defer"],
+      // A triple quote in a comment or inside a single-line string opens no multi-line string.
+      ["project hides GH_TOKEN after a commented triple quote", projectConfig, `model = "x" # """\n${setTable('GH_TOKEN = "x"')}`, "deny"],
+      ["project hides GH_TOKEN after a quoted triple quote", projectConfig, `model = '"""'\n${setTable('GH_TOKEN = "x"')}`, "deny"],
+      ["project leaves a multi-line string open", projectConfig, `developer_instructions = '''\n${setTable('GH_TOKEN = "x"')}`, "deny"],
+      ["project names GH_TOKEN only in a comment", projectConfig, `model = "x" # GH_TOKEN stays the bot's\n`, "defer"],
+    ]) {
+      write(file, text);
+      try {
+        assert.equal(codexDecides(codexUnset), expected, `Codex with ${label}`);
+        if (expected === "deny") assert.equal(codexDecides(asAgent), "deny", `Codex with ${label}, GH_CONFIG_DIR in the hook's environment`);
+      } finally {
+        if (file === userConfig) fs.writeFileSync(userConfig, userText);
+        else fs.rmSync(path.dirname(file).endsWith(".codex") ? path.dirname(file) : file, { recursive: true, force: true });
+      }
+    }
+    // A project config that cannot be read cannot show that it keeps the bot.
+    write(projectConfig, "");
+    fs.chmodSync(projectConfig, 0o000);
+    try {
+      if (process.getuid?.() !== 0) assert.equal(codexDecides(codexUnset), "deny", "Codex with an unreadable project config");
+    } finally {
+      fs.rmSync(path.dirname(projectConfig), { recursive: true, force: true });
+    }
+    // A codex home that exists but cannot be listed may hold a profile that changes gh.
+    fs.chmodSync(codexHome, 0o100);
+    try {
+      if (process.getuid?.() !== 0) assert.equal(codexDecides(codexUnset), "deny", "Codex with an unlistable profile folder");
+    } finally {
+      fs.chmodSync(codexHome, 0o755);
+    }
+    assert.equal(codexDecides(codexUnset), "defer", "Codex without override layers");
+  }
+  // The default state root is ~/.roborepo when ROBOREPO_STATE_ROOT is unset.
+  installIdentity(path.join(tmp, ".roborepo"));
+  assert.equal(decide("gh api repos/o/r", { env: { HOME: tmp, ROBOREPO_STATE_ROOT: "", GH_CONFIG_DIR: path.join(tmp, ".roborepo", "github-agent", "gh") } }), "defer", "default state root");
 }
 // Each command start scans only its own command, so a long chain stays fast.
 {

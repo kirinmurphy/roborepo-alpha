@@ -50,6 +50,102 @@ Some commands flood the terminal. Wrap them to get only the useful tail.
 roborepo run <command> [args]
 ```
 
+## Let agents act as a GitHub bot
+
+By default, Claude and Codex act on GitHub as you: pushes and pull requests carry your identity, and
+Codex's sandbox blocks GitHub, so it hands pushes back to you. The optional **GitHub Agent
+Identity** package gives agents their own bot account instead. The bot can push feature branches,
+open pull requests, and read and reply to review threads, but GitHub itself rejects its push to
+`main` and its merges without your approval. `/plan-suite-init` offers the setup when it is missing,
+or run it any time in your own terminal (agents are denied it, so the token never enters a
+transcript):
+
+```sh
+roborepo github setup
+roborepo github status    # read-only report
+```
+
+The setup walks you through each step and skips the ones already done:
+
+1. Create a GitHub account for the bot, in a private window (guided).
+2. Invite the bot to the repo as a collaborator with write access, not admin (automatic, as you).
+3. Create a classic token for the bot with only `repo` and `read:org`, an expiry (90 days is a
+   good default), and no `workflow` (guided, with the exact scopes shown), then paste it at a
+   hidden prompt.
+4. Accept the invite (automatic, as the bot).
+5. Run `roborepo protect` if the repo needs it (it asks first), so the bot is not on any bypass list.
+6. Check everything, then switch agents to the bot (the `github-agent-identity` package). A failed
+   check does not switch them; if they already use the bot, they still do.
+
+In every repo with a github.com remote, agents' commits are authored by the bot, at its GitHub
+noreply address (`<id>+<login>@users.noreply.github.com`). This overrides a repo's own `user.name`
+and `user.email` for agents. Repos with no github.com remote (GitLab, local-only) keep your own
+author. This needs Git 2.36 or later; older Git keeps your author everywhere. A bot set up with an older RoboRepo gets the author on the next `roborepo github setup`.
+
+In the portal, **Agent GitHub Account** in Settings is the on/off switch. While it is off, Home
+offers the setup once (**No thanks** hides the offer for good). While it is on but the bot cannot
+sign in, Home shows a red warning with **Fix it** until the bot works again (or **Update now**, when
+the only problem is that agents' git pushes still go out as you). Once it is on, each GitHub repo shows
+an **agent bot** badge, green when agents can work there, and the badge opens a numbered list of
+what is done and where to start, with one button on that item. Inviting the bot and protecting
+branches run from the portal; **Open setup** opens this same setup in a terminal for the login and
+token (macOS; elsewhere it shows the command to copy). If the bot is already signed in and only the switch is off,
+**Turn on** in Settings or on Home (or `roborepo package enable github-agent-identity`) is all that is
+left. See [Agent GitHub account](../reference/repositories.md#agent-github-account).
+
+In a repo someone else administers, the setup cannot invite the bot or add branch rules. It still
+finishes the bot account's own steps, leaves the package as it was, and prints a message to send the
+repo's owner. Until the owner invites the bot, agents there cannot push, because the package switches
+every repo to the bot at once. Rules you cannot see in full read as "unverified", never as ready.
+
+The token is stored in plaintext, mode 0600, under `~/.roborepo/github-agent/gh`, because neither
+Claude's nor Codex's sandbox can read the macOS keychain. If `gh` already saved the bot's token in
+the keychain, the setup moves it there instead of asking for a new one. Any process you run, agents
+included, can read it, so the bot's limited role and the token's expiry are what bound the damage.
+
+The setup prints each github.com address instead of opening it, because those steps are done
+signed in as the bot, and your default browser is usually signed in as you.
+
+### Renew the bot's token
+
+`roborepo doctor` and `roborepo github status` show a note when the token has 14 days or fewer
+left, and one for a token with no expiry date. Once GitHub stops accepting the token, because it
+expired or was revoked, agent pushes and `gh` calls fail with "Authentication failed" or "Bad
+credentials", and the agent tells you to renew it. Agents never fall back to your own credentials.
+
+To renew, run the setup again in your own terminal:
+
+```sh
+roborepo github setup
+```
+
+It recognizes the bot from the saved login and asks only for a new token. It opens your token list;
+sign in as the bot, open the "RoboRepo agents" token, and choose **Regenerate token**, which keeps
+its scopes. Paste the new value at the hidden prompt. Every other step reports itself already done.
+
+You can renew early: when the saved token still works but expires within 14 days, has no expiry
+date, or has the wrong scopes, the setup asks whether to replace it. A new token is checked before
+it replaces the saved one; if it belongs to another account or has the wrong scopes, it is not
+stored and the saved token keeps working.
+
+Setup, status, and agent shells use the bot's saved token even if your shell exports `GH_TOKEN` or
+`GITHUB_TOKEN`: the package sets both to empty in Claude and Codex agent shells. One exception: in a
+session the Claude desktop app starts, a variable the app's own launch environment sets takes
+precedence over Claude's settings, so do not set either token in that environment.
+
+Turning the package off stops agents using the bot but leaves its files behind: the plaintext token
+in `~/.roborepo/github-agent/gh/hosts.yml`, plus `ca-bundle.crt`, `gitconfig.local`, and `gitconfig.author` next to it.
+To remove the token, run `GH_CONFIG_DIR="$HOME/.roborepo/github-agent/gh" gh auth logout --hostname github.com`
+(gh needs an absolute path) and revoke the token on GitHub. Delete the `github-agent` folder to
+remove the rest. Uninstalling RoboRepo deletes the `github-agent` folder, token included, but does
+not revoke the token on GitHub; revoke it there yourself.
+
+If you decline, nothing changes: agents act as you, `gh api` stays denied, posting commands ask,
+and Codex hands pushes back to you. The identity does not cover Gemini: Gemini loads only the first
+`.env` it finds walking up from the working directory before `~/.gemini/.env`, so a repo's own
+`.env` would hide RoboRepo's settings. See
+[Claude Hooks](../reference/claude-hooks.md#acting-as-a-github-bot) for what it changes.
+
 ## Fix problems
 
 Something feels off — commands missing, config not loading, hooks not firing. Run this to verify key files, JSON/TOML config, helpers, and dependencies.

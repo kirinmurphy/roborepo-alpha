@@ -8,6 +8,7 @@
         {{LOADING}}
         <div id="home-harness-banner" class="home-harness-banner" hidden></div>
         <div id="home-hook-readiness" class="home-harness-banner" hidden></div>
+        <div id="home-agent-identity" class="home-harness-banner" hidden></div>
         <div id="home-auto-discovery" class="home-auto-discovery" hidden></div>
         <section class="home-heading" aria-labelledby="home-title">
         <div class="home-title-group">
@@ -47,6 +48,7 @@
             </div>
           </div>
           <span class="repository-head-actions">
+            <span data-slot="agent-identity-badge"></span>
             <span class="repository-shortcuts" data-slot="repository-shortcuts"></span>
             <span data-slot="repository-menu"></span>
           </span>
@@ -54,6 +56,63 @@
         <div class="repository-roots" data-slot="checkouts"></div>
         <div data-slot="cleanup-notice"></div>
       </article>
+    </template>
+    <!-- agent-identity.js: the offer above the repo list while the package is off. "No thanks" hides
+         it for good, after saying where to turn it on later. -->
+    <!-- agent-identity.js: the banner above the repo list. While the package is off it offers the
+         setup (info, with a lasting No thanks); while it is on but the bot cannot sign in, it warns
+         that agents cannot use GitHub (alert, Fix it only) until the bot works again. When the one
+         problem is that agents' git pushes still go out as the user, Update now applies the fix. -->
+    <template id="tpl-agent-identity-offer">
+      <portal-notice variant="info" icon="github" class="agent-identity-offer">
+        <div class="agent-identity-offer-body" data-slot="offer">
+          <p data-slot="message"></p>
+          <div class="agent-identity-actions">
+            <button type="button" data-btn="secondary" data-slot="enable" hidden>Turn on</button>
+            <button type="button" data-btn="secondary" data-slot="setup">Set it up</button>
+            <button type="button" data-btn="secondary" data-slot="fix" hidden>Fix it</button>
+            <button type="button" data-btn="secondary" data-slot="update" hidden>Update now</button>
+            <button type="button" data-btn="text" data-slot="dismiss">No thanks</button>
+            <button type="button" data-btn="text" data-slot="done" hidden>OK</button>
+          </div>
+          <p class="worktree-dialog-help" data-slot="note" hidden></p>
+        </div>
+        <div class="agent-identity-offer-body" data-slot="declined" hidden>
+          <p>Got it; Home won't offer this again. To set it up later, use <strong>Agent GitHub account</strong> in <a href="/settings">Settings</a>.</p>
+          <div class="agent-identity-actions">
+            <button type="button" data-btn="text" data-slot="close">OK</button>
+          </div>
+        </div>
+      </portal-notice>
+    </template>
+    <!-- agent-identity.js: the "agent bot" badge beside a GitHub repo's link once the package is on.
+         Its dot is green, amber, red, or grey; clicking it opens the repo's card. -->
+    <template id="tpl-agent-identity-badge">
+      <button type="button" class="agent-identity-badge repository-nested-control" data-level="muted">
+        <span class="agent-identity-badge-dot" aria-hidden="true"></span>agent bot
+      </button>
+    </template>
+    <!-- agent-identity.js: one numbered item of the card's list. An item still to do may carry what to
+         do and a github.com address to copy into the bot's browser. -->
+    <template id="tpl-agent-identity-step">
+      <li class="agent-identity-step">
+        <span class="agent-identity-step-mark" data-slot="mark" aria-hidden="true"></span>
+        <span class="agent-identity-step-number" data-slot="number"></span>
+        <div class="agent-identity-step-body">
+          <div class="agent-identity-step-head">
+            <strong data-slot="label"></strong>
+            <span class="agent-identity-step-note" data-slot="note"></span>
+          </div>
+          <div class="agent-identity-step-action" data-slot="action-row">
+            <span data-slot="action"></span>
+            <div class="agent-identity-command-line" data-slot="url-row" hidden>
+              <code data-slot="url"></code>
+              <portal-copy-button data-slot="copy" label="Copy link"></portal-copy-button>
+            </div>
+            <button type="button" data-btn="cta" data-slot="run" hidden></button>
+          </div>
+        </div>
+      </li>
     </template>
     <!-- worktree-dialogs.js: the card-footer offer to turn on automatic worktree cleanup. -->
     <template id="tpl-worktree-cleanup-notice">
@@ -212,6 +271,43 @@
           <button type="button" data-btn="cta" data-slot="confirm">Turn on</button>
         </div>
       </form>
+    </dialog>
+
+    <!-- agent-identity.js: the bot account's card (from the offer) and one repo's card (from its badge
+         or menu). They read status and open the terminal setup; the token is never typed here. -->
+    <dialog id="agent-identity-dialog" data-dialog-size="lg" aria-labelledby="agent-identity-title">
+      <div class="modal-head">
+        <h2 id="agent-identity-title">Agent GitHub account</h2>
+        <portal-close-button data-slot="close" aria-label="Close"></portal-close-button>
+      </div>
+      <div class="modal-body agent-identity-body">
+        <p class="agent-identity-summary" role="status">
+          <strong data-slot="subject"></strong>
+          <span class="agent-identity-state" data-slot="state"></span>
+        </p>
+        <p data-slot="message"></p>
+        <ol class="agent-identity-steps" data-slot="steps" hidden></ol>
+        <p class="worktree-dialog-help" data-slot="bot-browser" hidden></p>
+        <div class="agent-identity-owner" data-slot="owner" hidden>
+          <div class="agent-identity-owner-head">
+            <strong>Message for the repo's owner</strong>
+            <portal-copy-button data-slot="owner-copy" label="Copy message"></portal-copy-button>
+          </div>
+          <pre data-slot="owner-message"></pre>
+        </div>
+        <div class="agent-identity-command" data-slot="command-row" hidden>
+          <p class="worktree-dialog-help">Run this in your own terminal, in this repo's folder:</p>
+          <div class="agent-identity-command-line">
+            <code data-slot="command"></code>
+            <portal-copy-button data-slot="copy" label="Copy"></portal-copy-button>
+          </div>
+        </div>
+        <p class="worktree-dialog-help" data-slot="launch-note" hidden></p>
+        <div class="item-err" data-slot="error" hidden></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" data-btn="secondary" data-slot="recheck" hidden>Check again</button>
+      </div>
     </dialog>
 
     {{PLAN_DRAWER}}

@@ -1,6 +1,8 @@
 // Files and folders a package copies to ~/.roborepo/package-runtime/<package-id>/ so harness
 // config can point at them (a status-line script, a plugin folder). Config patches name an
-// installed asset as `${package-runtime:<source basename>}`.
+// installed asset as `${package-runtime:<source basename>}`. A patch may also name a path under the
+// RoboRepo state directory as `${roborepo-state:<relative path>}`, expanded to an absolute path
+// (tools such as gh do not expand `~`).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -55,9 +57,18 @@ function packageRuntimeSubstitutions(pkg) {
   );
 }
 
+function stateRelativePath(rel) {
+  if (!rel || path.isAbsolute(rel) || rel.split(/[\\/]+/).includes("..")) {
+    throw new Error(`invalid \${roborepo-state:${rel}}: use a relative path with no ".." segments`);
+  }
+  return path.join(stateDir, rel);
+}
+
 function expandValue(value, substitutions) {
   if (typeof value === "string") {
-    return value.replace(/\$\{package-runtime:([^}]+)\}/g, (match, name) => substitutions.get(name) || match);
+    return value
+      .replace(/\$\{package-runtime:([^}]+)\}/g, (match, name) => substitutions.get(name) || match)
+      .replace(/\$\{roborepo-state:([^}]*)\}/g, (_match, rel) => stateRelativePath(rel));
   }
   if (Array.isArray(value)) return value.map((entry) => expandValue(entry, substitutions));
   if (value && typeof value === "object") {

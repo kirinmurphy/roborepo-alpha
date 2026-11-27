@@ -4,6 +4,7 @@ import os from "node:os";
 import { repoRoot } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
 import { recordAppRoot } from "./state-paths.mjs";
+import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import {
   resolveBehaviors,
@@ -89,17 +90,65 @@ function ensureClaudePermissionHookAssets(baseDir) {
   }
 }
 
+// Codex's prefix-rule file, relative to the Codex home. Only RoboRepo writes it: the `owned` row in
+// manifests/platform/manifest.tsv installs the identity-off baseline from generated/codex/rules/,
+// and this module rewrites it for the live identity state.
+export const CODEX_RULES_HOME_SUB = "rules/roborepo.rules";
+
+// Writes Codex's rules/roborepo.rules for the live identity state, so with the GitHub agent identity
+// on, `gh api`, posting, and `git push` get the identity's buckets there too. Personal overrides are
+// not rendered into it; the Codex permission hook applies them. A `rules` folder linked into the
+// checkout (an old install did that) is left alone, so this never writes into the repo; the install
+// step replaces that link. A link anywhere else (a dotfiles folder) is written through, like a real
+// folder. Returns whether the file changed.
+export function writeCodexRulesFile(codexHome, { manifest = loadPermissionManifest(), agentIdentity = agentIdentityPackageEnabled() } = {}) {
+  const file = path.join(codexHome, CODEX_RULES_HOME_SUB);
+  const dir = path.dirname(file);
+  if (linksIntoCheckout(dir)) return false;
+  const content = renderCodexRules(manifest, {}, { agentIdentity });
+  const isFile = fs.existsSync(file) && fs.lstatSync(file).isFile();
+  if (isFile && fs.readFileSync(file, "utf8") === content) return false;
+  fs.mkdirSync(dir, { recursive: true });
+  fs.rmSync(file, { recursive: true, force: true });
+  fs.writeFileSync(file, content);
+  return true;
+}
+
+// Whether `dir` reaches into the checkout through a link: its own, or one on a folder above it (a
+// Codex home linked into the checkout). A folder not made yet resolves through the nearest one that
+// exists, since writing would create it there.
+function linksIntoCheckout(dir) {
+  try {
+    const lexical = path.resolve(dir);
+    const roots = [path.resolve(repoRoot), fs.realpathSync(repoRoot)];
+    const inside = (candidate) => roots.some((root) => candidate === root || candidate.startsWith(`${root}${path.sep}`));
+    let existing = lexical;
+    const rest = [];
+    while (!fs.existsSync(existing)) {
+      const parent = path.dirname(existing);
+      if (parent === existing) return false;
+      rest.unshift(path.basename(existing));
+      existing = parent;
+    }
+    return inside(path.join(fs.realpathSync(existing), ...rest)) && !inside(lexical);
+  } catch {
+    return false;
+  }
+}
+
 // Render the manifest (+ overrides) into each present harness's live config under `baseDir`.
 // Always global scope — no project override. `createClaude` retained for callers that might target
 // a fresh directory (e.g. a scratch/test harness home); default global-only usage never needs it.
 // `overrides` is the FULL override-file shape: { behaviors: {id: bucket}, commands: {key: {tokens, bucket}} }.
+// `agentIdentity` defaults to whether the GitHub agent identity package is enabled; pass it
+// explicitly to override.
 //
 // Iterates the provider registry rather than a fixed provider list, so a newly registered harness
 // receives permissions without editing this function. A provider that does not declare the
 // "permissions" capability is skipped by contract, not by omission.
 export function renderPermissionsTo(
   baseDir,
-  { manifest = loadPermissionManifest(), overrides = {}, createClaude = false, workspaceRoots = [], cwd = process.cwd() } = {},
+  { manifest = loadPermissionManifest(), overrides = {}, createClaude = false, workspaceRoots = [], cwd = process.cwd(), agentIdentity = agentIdentityPackageEnabled() } = {},
 ) {
   const touched = [];
 
@@ -117,10 +166,13 @@ export function renderPermissionsTo(
 
     fs.mkdirSync(path.dirname(target.file), { recursive: true });
     const cur = target.seedCurrent && fileExists ? fs.readFileSync(target.file, "utf8") : "";
-    const rendered = provider.adapters.permissions.render(cur, manifest, overrides, target.file, permissionOptionsForProvider(provider, { cwd, workspaceRoots }));
+    const rendered = provider.adapters.permissions.render(cur, manifest, overrides, target.file, { ...permissionOptionsForProvider(provider, { cwd, workspaceRoots }), agentIdentity });
     writeRootConfig(provider.id, target.file, rendered);
     if (provider.id === "claude") ensureClaudePermissionHookAssets(baseDir);
     touched.push(target.file);
+    if (provider.id === "codex" && writeCodexRulesFile(target.homeDir, { manifest, agentIdentity })) {
+      touched.push(path.join(target.homeDir, CODEX_RULES_HOME_SUB));
+    }
   }
 
   // The rendered sandboxes list ~/.roborepo/scratch as writable. Claude on Linux and WSL2 can skip
@@ -138,7 +190,7 @@ export function renderPermissionsTo(
 // update runs from, so a comparison from any other folder would report a false difference.
 export function previewPermissionRenders(
   baseDir,
-  { manifest = loadPermissionManifest(), overrides = {}, cwd = process.cwd() } = {},
+  { manifest = loadPermissionManifest(), overrides = {}, cwd = process.cwd(), agentIdentity = agentIdentityPackageEnabled() } = {},
 ) {
   const previews = [];
   for (const provider of listHarnessProviders()) {
@@ -154,7 +206,7 @@ export function previewPermissionRenders(
       file: target.file,
       current,
       cwdDependent: typeof adapter.workspaceRoots === "function" || typeof adapter.writablePaths === "function",
-      render: () => adapter.render(target.seedCurrent && current !== null ? current : "", manifest, overrides, target.file, permissionOptionsForProvider(provider, { cwd })),
+      render: () => adapter.render(target.seedCurrent && current !== null ? current : "", manifest, overrides, target.file, { ...permissionOptionsForProvider(provider, { cwd }), agentIdentity }),
     });
   }
   return previews;
@@ -168,7 +220,8 @@ export function renderPermissionsToHome({
   overrides = {},
   workspaceRoots,
   cwd = process.cwd(),
+  agentIdentity,
 } = {}) {
   recordAppRoot();
-  return renderPermissionsTo(home, { manifest, overrides, workspaceRoots, cwd });
+  return renderPermissionsTo(home, { manifest, overrides, workspaceRoots, cwd, ...(agentIdentity === undefined ? {} : { agentIdentity }) });
 }

@@ -1,0 +1,13 @@
+{
+  "path": ["github", "setup"],
+  "kind": "command",
+  "title": "setup",
+  "description": "Guided setup of the GitHub bot account agents use",
+  "order": 20,
+  "usage": "roborepo github setup",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/github-setup.mjs",
+    "export": "githubSetupCommand"
+  }
+}

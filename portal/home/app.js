@@ -12,6 +12,7 @@ import { repositoryDirectory, unresolvedActivity } from "./templates.js";
 import { createWorktreeCleanupDialog, createWorktreeRemoveDialog } from "./worktree-dialogs.js";
 import { createRepositorySourcesDialog } from "/portal/shared/repository-sources-dialog.js";
 import { createProtectionPanel } from "/portal/shared/protection-panel.js";
+import { openAgentIdentityCard, pollAgentIdentity, renderAgentIdentityOffer } from "./agent-identity.js";
 import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
 import { autoDiscoveryPrompt, repositoryEmptyState } from "/portal/shared/repository-sources-templates.js";
 import { fetchSetupState } from "/portal/shared/setup-api.js";
@@ -21,6 +22,7 @@ const content = document.getElementById("home-content");
 const warning = document.getElementById("home-warning");
 const harnessBanner = document.getElementById("home-harness-banner");
 const hookReadiness = document.getElementById("home-hook-readiness");
+const agentIdentityOffer = document.getElementById("home-agent-identity");
 const autoDiscoveryMount = document.getElementById("home-auto-discovery");
 const mockDisclaimer = document.getElementById("home-mock-disclaimer");
 const homeHeading = document.querySelector(".home-heading");
@@ -176,6 +178,7 @@ async function refresh({ force = false } = {}) {
           ? null
           : repositoryEmptyState({ autoDiscoveryEnabled, ...onboarding });
       content.replaceChildren(...(body ? [body] : []));
+      renderAgentIdentityOffer(agentIdentityOffer, overview.repositories);
       homeHeading.hidden = firstRunWithoutMocks;
       manageRepositories.hidden = !known;
       autoDiscoveryMount.hidden = autoDiscoveryEnabled;
@@ -184,6 +187,8 @@ async function refresh({ force = false } = {}) {
       if (overview.unresolvedActivity.length) content.append(unresolvedActivity(overview.unresolvedActivity));
       renderedVersion = version;
     }
+    // The bot identity is not part of the overview; it is read alongside it, on the same cadence.
+    pollAgentIdentity();
     warning.hidden = true;
     portalSetUpdatedAt(new Date(), { cadenceMs: POLL_MS });
   } catch (error) {
@@ -276,6 +281,10 @@ async function selectRepositoryAction(key, repository, item, event) {
   closeActionMenus();
   if (key === "protection") {
     void protectionPanel.open(repository);
+    return;
+  }
+  if (key === "agent-identity") {
+    openAgentIdentityCard(repository);
     return;
   }
   try {

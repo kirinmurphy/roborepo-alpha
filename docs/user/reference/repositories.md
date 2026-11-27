@@ -129,7 +129,7 @@ competes with a source that would find the repository again.
 
 A repo card's ⋮ menu lists **All Plans**, **Agent Config**, and **Token Activity** (each opens that page already
 filtered to the repo, as `?repo=<key>`), then **Pin**/**Unpin**, **Branch protection** for a repo
-with a Git remote, and **Ignore Repo** (**Forget This Repo** for a repo with no known checkout).
+with a Git remote, **Agent GitHub account** for a repo on github.com, and **Ignore Repo** (**Forget This Repo** for a repo with no known checkout).
 
 ### Branch protection
 
@@ -154,6 +154,85 @@ What the panel offers depends on the signed-in GitHub account:
 **Skip merge rules** asks for confirmation first. It turns off the required approval and the
 required CI checks on the default branch, for everyone who uses the repo; the plans and integrity
 rules stay on. Each button runs the same steps as the matching `roborepo protect` form.
+
+### Agent GitHub account
+
+Agents can act on GitHub as a separate
+[bot account](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot). Its on/off switch
+is **Agent GitHub Account** in Settings. Underneath, the switch is the `github-agent-identity`
+package, which points agent shells at the bot's login. The Agents page leaves that package to
+Settings, because Settings turns it on only once the bot works: on before then, agents would have no
+GitHub login at all.
+
+| Settings shows | Its controls |
+| --- | --- |
+| Off, agents act as you | **Set it up** opens the bot card on Home |
+| The bot is ready, agents act as you | **Turn on**, after a fresh check. Agent sessions already open keep acting as you until restarted |
+| On: the bot's login and token expiry | **Details** opens the bot card; **Turn off** makes agents act as you again |
+| On, but the bot needs attention | **Fix it** opens the bot card; **Turn off** |
+
+**While it is off**, Home offers the setup in an info notice above the repo list, whenever a listed
+repo is on github.com: **Set it up** (or **Turn on** when the bot is ready, or **Fix it** when a bot
+exists but needs attention first), and **No thanks**, which hides the offer for good and points to
+Settings for later.
+
+**While it is on but the bot cannot sign in** (no bot, an expired or unreadable token, or another
+problem), the same spot shows a red warning that agents can't push or open pull requests, with only
+**Fix it**, which opens the bot card. It has no **No thanks**; it goes when the bot works again, or
+when you turn the switch off in Settings. When the one problem is that agents' git pushes still go
+out as you, it has **Update now** instead: that runs `roborepo config apply` (what `roborepo update`
+does to your agent settings) and then says that agent sessions already open keep pushing as you until
+restarted.
+
+**Once it is on**, the offer is gone and each GitHub repo's card header has an **agent bot** badge,
+right-aligned before the icons for the repo's own pages. The dot's color covers both the bot account and that repo:
+
+| Dot | Means |
+| --- | --- |
+| Green | **ready**: the bot works, accepted its invitation with write (not admin) access, and the branch rules stop it from merging unreviewed work |
+| Amber | Agents can work, but something needs you: **renew soon** (the token expires within 14 days or has no expiry date), or **rules unverified** (you are not an admin of the repo, so RoboRepo cannot see who may bypass its rules) |
+| Red | Something stops the bot or leaves it unchecked: **not set up**, **token expired**, **needs attention** (an account check failed), **invite pending**, **not invited**, **branch rules missing**, or **too much access** (the bot is an admin of the repo) |
+| Grey | **not checked**: GitHub did not answer |
+
+The badge's tooltip names the state. Clicking it (or **Agent GitHub account** in the repo's menu)
+opens the repo's card: one numbered list in setup order, and a line saying which item to start at.
+Only that item says what to do, with one button; the others show their state and wait their turn.
+
+| Item | Checks | Its button |
+| --- | --- | --- |
+| 1. **Bot account** | its login | **Open setup**, after you sign it up on github.com |
+| 2. **Token** | scopes and expiry | **Open setup**, where you paste the new token (or it moves one out of the keychain) |
+| 3. **Agents use the bot** | the Settings switch, and whether your live Claude Code and Codex settings include the bot's Git settings (without them `gh` uses the bot but `git push` still goes out as you) | **Turn on**, or **Update now** |
+| 4. **Invited to this repo** | write, not admin, access | **Invite the bot** (or **Accept invitation**): invites it as you and accepts as the bot, from the portal |
+| 5. **Branch rules** | approval required to merge | **Protect branches**: the same rules as `roborepo protect`, from the portal |
+
+Done items are checked and dimmed, and a wrapped line starts under the item's text. An item done on
+github.com (creating the account, creating or renewing the token) carries the address to copy into
+the browser where the bot is signed in, instead of a link that would open in your own session. While the bot account is not usable, items 4 and 5
+wait. The card from the offer or Settings lists items 1 to 3. A bot with admin access is lowered to
+Write on github.com, in the repo's collaborator settings. For a repo someone else administers,
+items 4 and 5 say to ask the owner, and the card has a message to copy and send them: invite the bot
+with Write access, and the branch rules to add. `roborepo github status` prints the same message.
+
+**Open setup** opens a terminal running `roborepo github setup` in the repo's folder (macOS), because
+the bot's login and token are typed there, never in the portal. On another OS, or when the terminal
+does not open, the command to copy takes the button's place. Coming back to the portal window
+re-reads an open card, so it shows what you did elsewhere; **Check again** appears only when GitHub
+did not answer. Other repos reuse a result for five minutes.
+
+The routes. `:id` is the repo's canonical id, percent-encoded:
+
+| Route | Does |
+| --- | --- |
+| `GET /api/agent-identity` | The bot account: state, login, whether the package is on, the token's expiry and scopes, each finding's id, severity, message, and fix, whether **Turn on** is offered, whether the setup offer was declined, and the github.com steps. Never a token. `?fresh=1` skips the five-minute cache |
+| `POST /api/agent-identity/enable` | Turns the package on when a fresh read shows that is the only step left; otherwise returns `not_ready`. It takes no body |
+| `POST /api/agent-identity/update` | **Update now**: when a fresh read shows agents' git pushes still go out as you, runs `roborepo config apply` (the install step behind `roborepo update`) and returns `applied` with the account read after; otherwise `not_needed`. It takes no body |
+| `POST /api/agent-identity/dismiss-offer` | Records **No thanks** to the setup offer, in RoboRepo's state folder. It takes no body |
+| `GET /api/repositories/:id/agent-identity` | One repo: its state and findings, whether you administer it, the message for its owner when you do not, and whether the one-click setup works here. `account: "waiting"` while the bot account cannot be used; `{ "applies": false }` for a repo not on github.com. `?fresh=1` skips the cache |
+| `POST /api/repositories/:id/agent-identity/invite` | **Invite the bot**: with a working bot, invites it to the repo as you and accepts the invitation as the bot, then returns `invited` with the repo read afresh, or `not_ready` / `refused` with GitHub's reason. It takes no body |
+| `POST /api/repositories/:id/agent-identity/setup` | Opens the setup in a terminal and returns `launched`, or the reason it could not. It takes no body: the command and folder are the server's choice |
+
+Like every portal write, the POST routes require the portal's origin and token.
 
 ### Ignore repository
 

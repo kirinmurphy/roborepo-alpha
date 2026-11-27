@@ -4,6 +4,7 @@ import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import { runHarnessCheck } from "/portal/shared/harness-warning.js";
 import { createRepositorySourcesInline } from "/portal/shared/repository-sources-dialog.js";
 import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js";
+import { mountAgentIdentitySetting } from "./agent-identity.js";
 import * as api from "./api.js";
 import { harnessEmptyState, harnessRow } from "./templates.js";
 
@@ -31,6 +32,7 @@ repositorySurface = createRepositorySourcesInline({
 onRepositoriesChanged(() => refresh());
 checkHarnesses.addEventListener("click", refreshHarnesses);
 telemetryToggle.addEventListener("click", toggleTelemetry);
+mountAgentIdentitySetting(document.getElementById("agent-identity-row"), { onError: showError });
 
 async function refresh() {
   if (pending) {

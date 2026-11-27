@@ -40,7 +40,7 @@ export async function fetchTrackingRefs(cwd, remote) {
     "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-c", "protocol.ext.allow=never",
     "fetch", "--no-tags", "--no-prune", "--no-prune-tags", "--no-recurse-submodules",
     "--refmap=", "--", remote, `+refs/heads/*:refs/remotes/${remote}/*`,
-  ], { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
+  ], { timeoutMs: GIT_NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
   // Git's fetch diagnostics quote the remote URL, and a URL path can carry a token that Git's
   // own credential stripping misses, so the refusal names the remote but not Git's output.
   if (!result.ok) {

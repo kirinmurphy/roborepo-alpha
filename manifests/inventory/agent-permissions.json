@@ -148,7 +148,7 @@
     {
       "id": "go-online",
       "label": "Go online",
-      "description": "Codex's sandbox network switch: on or off for every host. Claude's shell sandbox reads the separate allowed-host list instead, so this switch never makes Claude network commands prompt.",
+      "description": "Codex's sandbox network switch: on or off for every host. Claude's shell sandbox reads the separate allowed-host list instead, so this switch never makes Claude network commands prompt. With the GitHub agent identity on, Codex's sandbox also opens github.com and api.github.com only.",
       "kind": "network",
       "codexOnly": true,
       "bucket": "deny",
@@ -195,7 +195,7 @@
     {
       "id": "push-code",
       "label": "Push code",
-      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history. Under Claude, ask renders no rule: an ask rule outranks the hook's approval, so the hook alone asks about a push it cannot verify.",
+      "description": "Send commits to a remote (git push). Prompts by default. Where the protected-branch hooks are installed, they approve pushes they verify land on a non-protected branch and deny the rest, so agents push to feature branches without a prompt; force variants are denied separately by rewrite-history. Under Claude, ask renders no rule: an ask rule outranks the hook's approval, so the hook alone asks about a push it cannot verify. Under the GitHub agent identity, Codex's git push rule becomes allow, so Codex pushes to non-protected branches without a prompt; Claude keeps its ask and gains no git push rule, so the hook still decides; the hooks still deny protected branches on both.",
       "kind": "commands",
       "commands": [
         [
@@ -204,6 +204,7 @@
         ]
       ],
       "bucket": "ask",
+      "agentIdentityBucket": "allow",
       "askDecidedByHook": true,
       "category": "git"
     },
@@ -292,6 +293,7 @@
     },
     {
       "id": "read-github",
+      "host": "github",
       "label": "Read GitHub",
       "description": "Look at pull requests and CI runs (gh pr view/list/status/checks/diff, gh run list/view, gh repo view). Read-only.",
       "kind": "commands",
@@ -342,6 +344,7 @@
     },
     {
       "id": "open-prs",
+      "host": "github",
       "label": "Open pull requests",
       "description": "Open a pull request (gh pr create). Allowed because opening a PR changes no branch; merging stays denied (merge-pull-requests). Push the branch first with git push and pass --head, so gh neither pushes nor forks on its own.",
       "kind": "commands",
@@ -357,8 +360,9 @@
     },
     {
       "id": "post-to-github",
+      "host": "github",
       "label": "Post to GitHub",
-      "description": "Write where other people read it: comment on, edit, review, close or reopen a pull request, or open and comment on issues. Prompts, since it speaks for you.",
+      "description": "Write where other people read it: comment on, edit, review, close or reopen a pull request, or open and comment on issues. Prompts, since it speaks for you; allowed when agents act as the GitHub agent identity, because the bot speaks as itself.",
       "kind": "commands",
       "commands": [
         [
@@ -403,10 +407,12 @@
         ]
       ],
       "bucket": "ask",
+      "agentIdentityBucket": "allow",
       "category": "git"
     },
     {
       "id": "merge-pull-requests",
+      "host": "github",
       "label": "Merge pull requests",
       "description": "Merge a pull request (gh pr merge). Denied, so agents never merge into the base branch: you merge on GitHub. The merge would not pass through the protected-branch hooks, so the hook also denies the flag-first form (gh -R owner/repo pr merge).",
       "kind": "commands",
@@ -422,14 +428,11 @@
     },
     {
       "id": "change-github-directly",
+      "host": "github",
       "label": "Change GitHub directly",
-      "description": "Act on GitHub without git: call the API (which can rewrite main), print the auth token, or change repository settings, secrets, variables, releases, or workflows. Denied, because none of it passes through the protected-branch hooks; only GitHub branch protection covers it. Merging a pull request prompts instead (merge-pull-requests).",
+      "description": "Act on GitHub without git: print the auth token (always denied, since it would print the credential), or change repository settings, secrets, variables, releases, or workflows. Denied, because none of it passes through the protected-branch hooks; only GitHub branch protection covers it. The GitHub API has its own setting (read-and-reply-on-github), and merging a pull request is denied separately (merge-pull-requests).",
       "kind": "commands",
       "commands": [
-        [
-          "gh",
-          "api"
-        ],
         [
           "gh",
           "auth",
@@ -469,6 +472,54 @@
         ]
       ],
       "bucket": "deny",
+      "category": "git"
+    },
+    {
+      "id": "read-and-reply-on-github",
+      "label": "Read and reply on GitHub",
+      "host": "github",
+      "description": "Call the GitHub API (gh api), which lets agents read review threads and whether they are resolved, reply to them, and resolve them. Denied unless agents act as the GitHub agent identity, because as you the API could rewrite main; as the bot, GitHub's rules and the bot's collaborator role limit it.",
+      "kind": "commands",
+      "commands": [
+        [
+          "gh",
+          "api"
+        ]
+      ],
+      "bucket": "deny",
+      "agentIdentityBucket": "allow",
+      "category": "git"
+    },
+    {
+      "id": "set-up-github-identity",
+      "label": "Set up the GitHub agent identity",
+      "host": "github",
+      "description": "The guided setup (roborepo github setup) reads a token, so agents never run it. Run it in your own terminal.",
+      "kind": "commands",
+      "commands": [
+        [
+          "roborepo",
+          "github",
+          "setup"
+        ]
+      ],
+      "bucket": "deny",
+      "category": "git"
+    },
+    {
+      "id": "check-github-identity",
+      "label": "Check the GitHub agent identity",
+      "host": "github",
+      "description": "Reads whether the GitHub bot identity is set up and healthy (roborepo github status). Changes nothing.",
+      "kind": "commands",
+      "commands": [
+        [
+          "roborepo",
+          "github",
+          "status"
+        ]
+      ],
+      "bucket": "allow",
       "category": "git"
     },
     {

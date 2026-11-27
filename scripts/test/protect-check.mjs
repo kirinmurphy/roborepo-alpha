@@ -66,10 +66,11 @@ const fullyHandMade = [
 try {
   const gh = createFakeGh(root);
   const checkout = clone("checkout", "git@github.com:example/project.git");
+  // A gh sign-in or token from the caller's shell would outrank the fixture's in fake gh.
+  const runEnv = { ...process.env, ...gh.env, PATH: `${gh.dir}${path.delimiter}${process.env.PATH}` };
+  for (const name of ["GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN"]) delete runEnv[name];
   const run = (args, cwd = checkout) => {
-    const result = spawnSync(process.execPath, [cli, "protect", ...args], {
-      cwd, encoding: "utf8", env: { ...process.env, ...gh.env, PATH: `${gh.dir}${path.delimiter}${process.env.PATH}` },
-    });
+    const result = spawnSync(process.execPath, [cli, "protect", ...args], { cwd, encoding: "utf8", env: runEnv });
     return { ...result, json: args.includes("--json") ? JSON.parse(result.stdout) : null };
   };
   const writes = () => gh.calls().filter((call) => call.method !== "GET");

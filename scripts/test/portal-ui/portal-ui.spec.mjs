@@ -129,6 +129,8 @@ test.describe("Agents page", () => {
     await expect(page.locator(".packages-intro p")).toHaveText("Extend your harness config. Toggling a package below writes it into every active harness's configuration.");
     // Settings owns the token telemetry toggle; the Agents page does not repeat it.
     await expect(page.getByText("Token Telemetry", { exact: true })).toHaveCount(0);
+    // Settings also owns the agent GitHub account, whose switch only turns on once the bot works.
+    await expect(page.getByText("GitHub Agent Identity", { exact: true })).toHaveCount(0);
     // Monitoring shows its other packages, never the telemetry row.
     const monitoring = page.locator("section.panel").filter({ has: page.getByRole("heading", { name: "Monitoring" }) });
     await expect(monitoring.locator(".item-label")).toHaveText(["Usage Statusline", "Capture Dense Bash"]);
@@ -2303,6 +2305,11 @@ test.describe("repository-first portal Home", () => {
     await page.route("**/api/config/hooks/*/status*", (route) => route.fulfill({
       json: { harness: "claude", displayName: "Claude Code", supported: true, state: "active", groups: [], guidance: null },
     }));
+    // A bot account with the package on, so the runner's GitHub sign-in never puts the setup offer
+    // (and its buttons) ahead of the Enable prompt.
+    await page.route(/\/api\/agent-identity(\?.*)?$/, (route) => route.fulfill({
+      json: { state: "healthy", botLogin: "robo-bot", signedIn: true, packageEnabled: true, expiresAt: null, scopes: ["repo", "read:org"], findings: [], enableOffered: false, offerDismissed: false, setupLaunch: { supported: true }, guide: null },
+    }));
     await page.goto("/");
     await expect(roboRepoCard(page)).toBeVisible();
     await page.keyboard.press("Tab");
@@ -2352,8 +2359,8 @@ test.describe("repository-first portal Home", () => {
     }
     await card.getByRole("button", { name: "Actions", exact: true }).click();
     const menu = card.locator(".card-head .menu-panel");
-    await expect(menu.locator("> *")).toHaveText(["Pin", "Branch protection", "Ignore Repo"]);
-    await expect(menu.locator("portal-icon")).toHaveCount(3);
+    await expect(menu.locator("> *")).toHaveText(["Pin", "Branch protection", "Agent GitHub account", "Ignore Repo"]);
+    await expect(menu.locator("portal-icon")).toHaveCount(4);
     await expect(page.locator("#home-content").getByRole("link", { name: "Agents", exact: true })).toHaveCount(0);
   });
 });

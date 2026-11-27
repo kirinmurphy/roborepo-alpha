@@ -1,0 +1,13 @@
+{
+  "path": ["github", "status"],
+  "kind": "command",
+  "title": "status",
+  "description": "Check that agents act on GitHub as a safe bot account",
+  "order": 10,
+  "usage": "roborepo github status [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/github-identity.mjs",
+    "export": "githubStatusCommand"
+  }
+}

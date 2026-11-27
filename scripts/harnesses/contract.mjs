@@ -57,8 +57,12 @@ export const CAPABILITY_REQUIRED_METHODS = Object.freeze({
 //     classify(relPath, { symlink }) names a path; describe(entry, text) extracts safe display
 //     metadata from text the caller read; the optional startupEntries(entries) says which listed
 //     files a session reads at start. See project-inventory.mjs for the record shapes.
+//   agentShell: the environment the harness gives its agents' shell commands, as RoboRepo renders it
+//     into the live root config. envValue(rootConfigText, name) is that variable's value, or
+//     undefined. A harness whose agent shells get no RoboRepo-rendered environment omits the group.
 export const OPTIONAL_ADAPTER_GROUPS = Object.freeze({
   projectInventory: ["classify", "describe"],
+  agentShell: ["envValue"],
 });
 
 const PLATFORMS = new Set(["darwin", "linux", "win32"]);

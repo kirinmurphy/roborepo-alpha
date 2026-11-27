@@ -123,7 +123,8 @@ does not know about them. Development-checkout mode still skips npm removal beca
 the checkout.
 
 Managed cleanup removes RoboRepo-owned copied files, rendered rules, managed skill copies, shell
-wiring, package projections, and machine-local state. If a genuine pre-install backup exists under
+wiring, package projections, and machine-local state, including the agent bot's saved GitHub
+token (revoke that token on GitHub yourself). If a genuine pre-install backup exists under
 `~/.roborepo/backups/pre-install/`, it is restored. Content that has drifted from what RoboRepo
 wrote, and harness files RoboRepo does not own, are left alone and reported.
 

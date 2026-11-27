@@ -164,12 +164,14 @@ export const codexProvider = defineHarnessProvider({
       render: (content) => normalizeRootConfigContent("codex", content),
     },
     configEdit: tomlConfigEdit,
+    // Agent shells read config.toml's [shell_environment_policy.set] table.
+    agentShell: { envValue: (text, name) => tomlConfigEdit.get(text, ["shell_environment_policy", "set", name]).value },
     projectInventory: codexProjectInventory,
     permissions: {
       workspaceRoots: ({ cwd } = {}) => loadPermissionWorkspaceRootsForCwd(cwd),
       writablePaths: codexPlansStoreWritablePaths,
       render: (current, manifest, overrides, target, options = {}) => {
-        const behaviors = resolveBehaviors(manifest, overrides.behaviors);
+        const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity: options.agentIdentity });
         const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
         const writablePaths = [...CODEX_SANDBOX_WRITABLE_PATHS, ...(options.writablePaths ?? [])];
         return renderCodexConfig(current, behaviors, arbitraryCommands, target, { ...options, writablePaths });

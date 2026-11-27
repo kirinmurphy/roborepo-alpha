@@ -192,6 +192,52 @@ function removeUnion(edit, text, harness, patch, log) {
   return remaining.length ? edit.set(text, patch.path, listValue(remaining, patch)) : edit.delete(text, patch.path);
 }
 
+// Git reads exactly GIT_CONFIG_COUNT of the GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n pairs in an
+// environment group, and fails on a gap below the count. A package that adds or removes a pair
+// therefore recounts them: the active pairs are those below the recorded count, plus every pair
+// from index 0 up to the first index missing its key or its value (so an added pair is counted).
+// When removal leaves a gap, the later active pairs move down to close it, and any ownership record
+// moves with its pair; a user's pair after the package's stays read. The count is derived, like the
+// baseline merge's, so it is never claimed as a package's own setting.
+const GIT_CONFIG_PAIR = /^GIT_CONFIG_(KEY|VALUE)_\d+$/;
+
+function reconcileGitConfigCounts(edit, text, harness, patches) {
+  const groups = new Map();
+  for (const patch of patches) {
+    if (GIT_CONFIG_PAIR.test(patch.path.at(-1))) groups.set(JSON.stringify(patch.path.slice(0, -1)), patch.path.slice(0, -1));
+  }
+  for (const group of groups.values()) {
+    const read = (name) => { try { return edit.get(text, [...group, name]); } catch { return { found: false }; } };
+    const has = (name) => { const found = read(name); return found.found && typeof found.value === "string"; };
+    // Candidate indices come from the text itself, so a large recorded count never drives the scan.
+    const candidates = [...new Set([...text.matchAll(/GIT_CONFIG_KEY_(0|[1-9]\d*)\b/g)].map((match) => Number(match[1])))].sort((a, b) => a - b);
+    const present = candidates.filter((i) => has(`GIT_CONFIG_KEY_${i}`) && has(`GIT_CONFIG_VALUE_${i}`));
+    let run = 0;
+    while (present.includes(run)) run += 1;
+    const current = read("GIT_CONFIG_COUNT");
+    const recorded = current.found && /^\d+$/.test(String(current.value)) ? Number(current.value) : 0;
+    const active = present.filter((i) => i < Math.max(recorded, run));
+    active.forEach((from, to) => {
+      if (from === to) return;
+      for (const kind of ["KEY", "VALUE"]) {
+        const fromPath = [...group, `GIT_CONFIG_${kind}_${from}`];
+        const toPath = [...group, `GIT_CONFIG_${kind}_${to}`];
+        text = edit.delete(edit.set(text, toPath, read(`GIT_CONFIG_${kind}_${from}`).value), fromPath);
+        const record = readOwnedScalar(harness, fromPath);
+        clearOwnedScalar(harness, toPath);
+        if (!record) continue;
+        clearOwnedScalar(harness, fromPath);
+        recordOwnedScalar(harness, toPath, record.existed ? record.priorValue : undefined);
+      }
+    });
+    const count = active.length;
+    if (current.found && current.value === String(count)) continue;
+    if (!current.found && count === 0) continue;
+    text = edit.set(text, [...group, "GIT_CONFIG_COUNT"], String(count));
+  }
+  return text;
+}
+
 const APPLY = { set: applySet, union: applyUnion };
 const REMOVE = { set: removeSet, union: removeUnion };
 
@@ -211,6 +257,7 @@ function run(pkg, component, handlers, { configPath = rootConfigActive[component
     const resolved = resolvePatch(pkg, patch);
     text = handlers[resolved.op](edit, text, component.harness, resolved, log);
   }
+  text = reconcileGitConfigCounts(edit, text, component.harness, component.patches);
   if (text === before) return;
   if (write) write(text);
   else writeRootConfig(component.harness, configPath, text);

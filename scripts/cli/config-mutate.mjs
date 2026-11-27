@@ -12,6 +12,7 @@ import {
   resolveBehaviors,
   resolveArbitraryCommands,
 } from "./permissions-render.mjs";
+import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
 import { commandOverridesPath, stateSkillsDir } from "./state-paths.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import { resolveHarnessPath } from "../harnesses/paths.mjs";
@@ -427,14 +428,16 @@ function commandCategory(manifest, tokens) {
 // commands (manifest.commands.allow defaults + personal additions/bucket changes), each carrying
 // override status for display. This is the single source both config.mjs's buildBehaviorView
 // (portal + onboard + `config status`) and any future consumer should read from — it's the merge
-// point, not the manifest alone.
-export function effectivePermissions() {
+// point, not the manifest alone. Buckets follow the GitHub agent identity the same way the render does
+// (`agentIdentity`, default: whether its package is enabled), so the default shown is the one rendered.
+export function effectivePermissions({ agentIdentity = agentIdentityPackageEnabled() } = {}) {
   const manifest = loadPermissionManifest();
   const overrides = readCommandOverrides();
-  const behaviors = resolveBehaviors(manifest, overrides.behaviors).map((b) => ({
+  const defaults = resolveBehaviors(manifest, {}, { agentIdentity });
+  const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity }).map((b, i) => ({
     ...b,
     overridden: overrides.behaviors[b.id] != null,
-    defaultBucket: manifest.behaviors.find((mb) => mb.id === b.id)?.bucket,
+    defaultBucket: defaults[i].bucket,
     category: manifest.behaviors.find((mb) => mb.id === b.id)?.category ?? null,
   }));
   const defaultAllowKeys = new Set((manifest.commands?.allow ?? []).map(overrideKeyForCommand));
