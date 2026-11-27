@@ -294,6 +294,21 @@ function changesGhIdentity(text) {
   }
   return false
 }
+// A `codex` command line whose `-c`/`--config` override touches the shell environment Codex hands its
+// shells, or names a GitHub identity variable. Hooks never see such overrides, so the session it starts
+// could give `gh` another account while its own hook lifts the `gh api` denial.
+function codexIdentityOverride(args) {
+  for (let k = 0; k < args.length; k += 1) {
+    const arg = args[k]
+    let value = null
+    if (arg === '-c' || arg === '--config') value = args[k + 1] ?? ''
+    else if (arg.startsWith('--config=')) value = arg.slice('--config='.length)
+    else if (/^-c./.test(arg)) value = arg.slice(2)
+    if (value !== null && (/shell_environment_policy/.test(value) || IDENTITY_NAME.test(value))) return true
+  }
+  return false
+}
+
 // gh options that take their value as the next word, before or between subcommands.
 const GH_VALUE_OPTIONS = new Set(['-R', '--repo', '--hostname'])
 const hookDir = path.dirname(fileURLToPath(import.meta.url))
@@ -1467,6 +1482,10 @@ function classifyCommand(text, startCwd) {
     const ghAt = programIndex(words)
     if (path.basename(words[ghAt] ?? '') === 'gh') {
       result = stricter(result, classifyGh(words.slice(ghAt + 1), words.expands.slice(ghAt + 1)))
+      continue
+    }
+    if (program === 'codex' && codexIdentityOverride(words.slice(i + 1)) && agentIdentityActive()) {
+      result = stricter(result, { decision: 'deny', reason: 'roborepo: a Codex `-c`/`--config` override of the shell environment or a GitHub identity variable never reaches a hook, so a Codex session started this way could run `gh api` as another account. Run it yourself.' })
       continue
     }
     if (SHELLS.has(program)) {

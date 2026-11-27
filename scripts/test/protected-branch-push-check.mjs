@@ -357,6 +357,19 @@ for (const [command, expected] of cases) {
   codexConfig(agentDir);
   const asAgent = { ROBOREPO_STATE_ROOT: stateRoot, GH_CONFIG_DIR: agentDir, CODEX_HOME: codexHome };
   const codexOptions = { toolName: "exec_command", hookPath: path.join(codexHooks, "protected-branch-push.mjs"), key: "cmd" };
+  // A Codex session started with a -c override of its shell environment never shows the override to
+  // its own hook, so starting one is refused while the identity is on; other -c settings are fine.
+  for (const options of [{}, codexOptions]) {
+    for (const [command, expected] of [
+      [`codex exec -c 'shell_environment_policy.set.GH_TOKEN="x"' 'gh api repos/o/r'`, "deny"],
+      [`codex --config shell_environment_policy.inherit=all exec 'gh api repos/o/r'`, "deny"],
+      [`codex exec --config=shell_environment_policy.set.GH_CONFIG_DIR=/tmp/x 'gh api repos/o/r'`, "deny"],
+      [`codex exec -c 'model="o3"' 'list files'`, "defer"],
+    ]) {
+      assert.equal(decide(command, { ...options, env: asAgent }), expected, `${options.hookPath ? "Codex" : "Claude"}: ${command}`);
+    }
+  }
+  assert.equal(decide(`codex exec -c 'shell_environment_policy.set.GH_TOKEN="x"' 'gh api repos/o/r'`, { env: {} }), "defer", "without the identity a codex -c override is not ours to refuse");
   for (const options of [{}, codexOptions]) {
     const label = options.hookPath ? "Codex" : "Claude";
     for (const command of [

@@ -233,8 +233,9 @@ to `/`, every `<CODEX_HOME>/*.config.toml` profile, `[profiles.*]` tables, and
 `/etc/codex/managed_config.toml`. A layer that names one of the identity variables with another
 value, uses `include_only`, leaves a string open, or cannot be read keeps `gh api` denied, as does a codex home folder that
 exists but cannot be listed. Codex `-c` overrides on its command line never reach a hook, so a session
-started with `-c shell_environment_policy…` can still give its shells another `gh`; the hook cannot
-check that.
+started with `-c shell_environment_policy…` could give its shells another `gh`. The hook cannot check
+your own command line, but while the identity is on it refuses an agent command that starts Codex
+with a `-c`/`--config` override of the shell environment or of a GitHub identity variable.
 
 The workflow an agent should follow:
 
