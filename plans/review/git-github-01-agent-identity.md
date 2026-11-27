@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Review at 939e3457 waits on two owner checks (Open setup from Home, and an agent commit pushed with the bot as author), then the approval
+next_action: Review at 7303fe62 is complete and waits on the owner's approval of that commit; then the owner merges PR 82 and runs /plan-close
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["rtkmc8kf", "f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -672,6 +672,7 @@ reads status and opens the terminal.
 - [x] The bot authoring agents' commits is recorded in no Decision Log entry or Not tested row — fixed in the plan record (November 26)
 - [x] `docs/user/guides/setup-and-daily-use.md`: "a bot set up before this was added" will go stale, and the doc omits that the author applies in every repo agents commit in
       — fixed in review (10314b88)
+- [x] A plan save from an agent shell was pushed by the bot but authored by the user, because the plan store's commits dropped the agent's Git settings — the user chose the bot as author when run by an agent; fixed in review (38e2e114)
 - [x] The bot author include is unconditional, so agents' commits in non-GitHub repos also carry the GitHub bot's noreply author — the user chose to scope it to github.com remotes; fixed in review (10314b88, 939e3457)
 
 ### Verification
@@ -697,14 +698,24 @@ reads status and opens the terminal.
 - Review Validator pass 1 at ea5c6905 (fresh-context subagent, implementation-review, scope b4fde55d..HEAD): no code defects; 3 actionable record and doc findings, 1 escalate (above)
 - Review Validator pass 2 at 10314b88: 2 actionable fixes (an https remote with a user name; the hooks reference) and 2 notes (the setup message; Git 2.36), all fixed in 939e3457
 - Review Validator pass 3 at 939e3457: clean (two line-width notes, kept)
+- Review Validator pass 4 at 38e2e114: clean; a note kept: a save replayed onto newer remote plans keeps the bot as author but takes the user as committer
+- Review Validator pass 5 at 9d867253: one actionable test gap (the blocking refusal with the package on), fixed in 35ee876d
+- Review Validator pass 6 at cb8a85b4, over the fixes for the pull request's review comments: two actionable fixes (hooks docs; per-argument query quoting), fixed in d90b551c; a note kept: a user's own Git config pair added after the package's moves to index 1 when the package is turned off, so turning it on again reports a conflict, which status shows as `git-not-routed`
+- Review Validator pass 7 at d90b551c: one actionable fix (refusal advice that did not fit a leftover or unknown package state), fixed in c86e2df5
+- Review Validator pass 8 at b1d75855: one blocking fix (the hook's quick pre-filter skipped a plain `codex exec -c` launch) and one actionable fix (a wrapper hid `codex`), both fixed in e3cc3198
+- Review Validator pass 9 at e3cc3198: no code fix; the docs now list the Codex launches the hook does not recognize (7303fe62). A subshell also hides `codex`, as it hides `gh pr merge` on `main` today
+- CI passed at 7303fe62 (ubuntu, macos, windows-installer)
+- `protected-branch-push-check.mjs` and `github-setup-check.mjs` pass at 7303fe62 outside the Claude sandbox; each new case failed on the code before its fix
+- - CI passed at cb8a85b4 (ubuntu, macos, windows-installer); the macOS portal failures at 9d867253 (repo list and repo scope specs, a dropped connection) did not recur
+- - `plan-store-check.mjs` passes at 38e2e114 outside the Claude sandbox, and its new agent-author case fails without the fix
+- GitHub reports 38e2e114, committed and pushed from an agent shell, with author and committer `codethings-agents`
 - Agent check 2026-11-26 after the owner reran setup at 939e3457: throwaway local commits in an agent shell were authored by `codethings-agents <359884695+codethings-agents@users.noreply.github.com>` with a github.com remote, and by the user with a GitLab remote
-- `roborepo update` at 939e3457 suggested `maintenance repair local-config`, whose dry run would restore the `gh api` deny and posting asks the identity lifts (open finding)
 - `github-setup-check.mjs` and `github-identity-status-check.mjs` pass at ea5c6905 outside the Claude sandbox (inside it they fail on the `/**/*.pem` deny)
 
 ### Result
-- Status: pending — 9 person-only `## Not tested` entries open
-- Reviewed implementation commit: b4fde55d20cc54e5643e60b1aedb23336f2ad5a4
-- Base commit: 976052259a3e93d27047c52259eda32a0799082b
+- Status: complete
+- Reviewed implementation commit: 7303fe62116522317fbb6747c58ee8d48fc3382b
+- Base commit: e9595325e4c00264438fd760e65093080a46f549
 
 ## Not tested
 
@@ -777,10 +788,11 @@ reads status and opens the terminal.
       `repository-agent-identity-check.mjs` asserts the launched command and folder, and the
       browser spec covers the post and the refresh on return.
       — Confirmed by the user 2026-11-26: with `hosts.yml` set aside, **Open setup** opened a terminal running the setup ("✓ You are kirinmurphy, setting up kirinmurphy/roborepo-alpha."); with the file back, "agent bot looks good and is on".
-- [ ] Agents' commits pushed by the bot show the bot as their author on GitHub. Needs a person:
+- [x] Agents' commits pushed by the bot show the bot as their author on GitHub. Needs a person:
       it needs `roborepo github setup` rerun to write the author file, then an agent commit and push.
       `github-setup-check.mjs` asserts the setup writes it, and `github-agent-identity-package-check.mjs`
       runs Git with the include and reads the bot's name and email.
+      — Owner reran `roborepo github setup` 2026-11-26 ("✓ commit author: agents' commits in github.com repos are now authored by codethings-agents"). Verified by agent 2026-11-26: 38e2e114, committed and pushed from an agent shell, shows author and committer `codethings-agents` on GitHub.
 - [x] `/plan-suite-init` in a repo without a plan store ends by offering `roborepo github setup`.
       Needs a person: initializing a store creates a remote branch on a real GitHub repo, which is
       the owner's call; `github-identity-status-check.mjs` covers the `not-set-up` answer the offer
@@ -912,6 +924,15 @@ None open.
   the package off left the always-rendered pair pointing at a removed file, and an existing install
   kept a stale count. Turning it off now removes the pair; a pair from the earlier baseline is
   removed too, since its value matches.
+- November 27, 2026 (user decision): Codex `-c` command-line overrides never reach a hook, so a
+  session started with one could hand its shells another GitHub account. The `gh api` lift stays for
+  normal Codex sessions; while the identity is on, the hooks refuse an agent command that starts Codex
+  with a `-c`/`--config` override of the shell environment or a GitHub identity variable. The owner's
+  own Codex command line stays a documented limit. Alternatives: never lift `gh api` under Codex
+  (Codex agents could not read or reply on review threads), or document the gap only.
+- November 26, 2026 (user decision): RoboRepo's own plan-store commits keep the agent's Git
+  settings, so a plan save from an agent shell is authored by the bot that pushes it, and one from
+  the user's terminal by the user. Alternative: RoboRepo's commits always the user's.
 - November 26, 2026 (user decision): the bot is the author only in repos with a github.com remote
   (`includeIf "hasconfig:remote.*.url:..."`, Git 2.36 or later). The bot has an account only on
   GitHub, so a GitLab or local-only repo keeps the user's author. Alternative: the bot as author
