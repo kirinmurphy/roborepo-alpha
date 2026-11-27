@@ -707,8 +707,8 @@ reads status and opens the terminal.
 - Approval: the owner answered "Approve 7303fe62" on 2026-11-27, after the review packet for that commit
 - CI passed at 7303fe62 (ubuntu, macos, windows-installer)
 - `protected-branch-push-check.mjs` and `github-setup-check.mjs` pass at 7303fe62 outside the Claude sandbox; each new case failed on the code before its fix
-- - CI passed at cb8a85b4 (ubuntu, macos, windows-installer); the macOS portal failures at 9d867253 (repo list and repo scope specs, a dropped connection) did not recur
-- - `plan-store-check.mjs` passes at 38e2e114 outside the Claude sandbox, and its new agent-author case fails without the fix
+- CI passed at cb8a85b4 (ubuntu, macos, windows-installer); the macOS portal failures at 9d867253 (repo list and repo scope specs, a dropped connection) did not recur
+- `plan-store-check.mjs` passes at 38e2e114 outside the Claude sandbox, and its new agent-author case fails without the fix
 - GitHub reports 38e2e114, committed and pushed from an agent shell, with author and committer `codethings-agents`
 - Agent check 2026-11-26 after the owner reran setup at 939e3457: throwaway local commits in an agent shell were authored by `codethings-agents <359884695+codethings-agents@users.noreply.github.com>` with a github.com remote, and by the user with a GitLab remote
 - `github-setup-check.mjs` and `github-identity-status-check.mjs` pass at ea5c6905 outside the Claude sandbox (inside it they fail on the `/**/*.pem` deny)
@@ -1065,3 +1065,40 @@ None open.
   Bitbucket as others, modeled on `scripts/harnesses/`. Build it only when a second host is
   actually used.
 - A GitHub App identity, if the repo moves to an organization or long-lived tokens are ruled out.
+
+## Completion
+
+Closed 2026-11-27. Agent shells under Claude and Codex now act on GitHub as a separate bot
+account, `codethings-agents`, once the user runs `roborepo github setup`. GitHub itself rejects an
+agent push to `main` and an agent merge without a human approval, and the bot cannot change repo
+settings or rulesets. With the identity on, agents read, reply to, and resolve review threads and
+post comments without a prompt, and Codex pushes branches, opens pull requests, and saves plans
+from inside its sandbox. The setup is offered at the end of `/plan-suite-init`, renews an expiring
+token on rerun, and the Home repo card shows the bot's status with an **Open setup** button that
+opens the setup in a terminal. The user's own terminal keeps the user's identity and admin bypass.
+Merged to `main` through kirinmurphy/roborepo-alpha#82.
+
+## Verification
+
+- Completion gate: CI on `main` at the merge commit 687be5f6 (run 46052610549) passed:
+  `check (ubuntu-latest)`, `check (macos-latest)`, and `windows-installer`.
+- Focused tests on `main` at 687be5f6, run outside the Claude sandbox, all pass:
+  `protected-branch-push-check`, `github-setup-check`, `github-identity-status-check`,
+  `github-agent-identity-package-check`, `github-agent-identity-render-check`,
+  `repository-agent-identity-check`, `delivery-operations-check`, `plan-store-check`,
+  `codex-command-permission-check`.
+- Plan validator: no findings before closure.
+- Approved commit: 7303fe62116522317fbb6747c58ee8d48fc3382b; `roborepo plans approval` reads
+  `fresh` against the branch tip.
+- Absorbing commit: 687be5f676bd51380789e88506bdc4a2c325e149
+- Landing: newly scanned by `roborepo plans landed` (not reused); the branch carried its own work
+  and the squash merge absorbs its tip.
+- Docs of record checked against the landed code: `docs/user/reference/claude-hooks.md`,
+  `docs/user/reference/codex-hooks.md`, `docs/user/guides/setup-and-daily-use.md` (setup, portal
+  card, Gemini not covered with the `.env` reason), `docs/user/reference/roborepo-cli.md`,
+  `docs/user/guides/plan/lifecycle/plan-suite.md`, `docs/internal/docs-map.md`.
+- Code claims spot-checked at 687be5f6: `modules/forge/agent-identity.mjs` and its guide, the
+  `github-agent-identity` package, `keepAgentGitConfig` on the plan store's and delivery's network
+  calls, the portal status and setup routes, and the `/plan-suite-init` offer.
+- Not verified at closure: the real-repo token renewal, which the owner chose to leave to
+  `github-setup-check.mjs` (see Not tested).
