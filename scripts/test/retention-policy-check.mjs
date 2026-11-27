@@ -219,7 +219,10 @@ try {
   assert.ok(fs.existsSync(path.join(loneDir, "older")));
 
   // ---- Registry ----
-  const stores = retentionStores(tempRoot);
+  // The side-session notes store lives under the home folder, not the state root, so the home is
+  // pinned inside the temp root too.
+  const homeRoot = path.join(tempRoot, "home");
+  const stores = retentionStores(tempRoot, { home: homeRoot });
   assert.ok(stores.length > 0, "the registry is populated");
   assertBounded(stores);
 
@@ -234,7 +237,8 @@ try {
   assert.equal(new Set(ids).size, ids.length, "store ids are unique");
   for (const store of stores) {
     assert.ok([LOG_SHAPE, FILE_SET_SHAPE, FOLDER_SET_SHAPE].includes(store.shape), `${store.id} has a known shape`);
-    assert.ok(store.target.startsWith(tempRoot), `${store.id} resolves under the given stateRoot`);
+    const root = store.id === "side-session-notes" ? homeRoot : tempRoot;
+    assert.ok(store.target.startsWith(root), `${store.id} resolves under the given stateRoot or home`);
     assert.ok(store.label && store.description, `${store.id} is described for reporting surfaces`);
   }
 

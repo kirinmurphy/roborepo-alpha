@@ -33,16 +33,32 @@ const HOME_TILDE = /(?:^|[^\w/])~\//;
 
 const offenders = [];
 
+// The one exemption: the manifest's temporaryLocations. They are fixed places that roborepo or the
+// harness app defines (`~/.roborepo/scratch`, the Claude app's side-session notes), the same on every
+// machine, each with a cleanup — not one person's directory layout. A `~/` rule is accepted only for
+// exactly those folders, and an expanded username never is.
+const manifestRel = path.join("manifests", "inventory", "agent-permissions.json");
+const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestRel), "utf8"));
+const temporaryHomeGlobs = new Set(
+  (manifest.temporaryLocations ?? []).flatMap((location) => location.paths ?? [])
+    .filter((folder) => folder.startsWith("~/"))
+    .map((folder) => `${folder}/**`),
+);
+for (const folder of (manifest.temporaryLocations ?? []).flatMap((location) => location.paths ?? [])) {
+  if (HOME_PATH.test(`${folder}/`)) offenders.push(`${manifestRel}: temporaryLocations names an expanded home ${folder}`);
+}
+const ruleGlob = (rule) => /^\w+\((.+)\)$/.exec(rule)?.[1] ?? rule;
+const exempt = (glob) => temporaryHomeGlobs.has(glob) && !HOME_PATH.test(glob);
+
 // --- The generated Claude artifact: parsed, so `allow` is checked as a bucket, not as text. ---
 const settingsPath = path.join(repoRoot, "generated", "claude", "settings.json");
 const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
 for (const rule of settings.permissions?.allow ?? []) {
+  if (exempt(ruleGlob(rule))) continue;
   if (HOME_TILDE.test(rule) || HOME_PATH.test(rule)) offenders.push(`generated/claude/settings.json: allow ${rule}`);
 }
 
 // --- The manifest source: only behaviors whose bucket is allow. ---
-const manifestRel = path.join("manifests", "inventory", "agent-permissions.json");
-const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestRel), "utf8"));
 for (const b of manifest.behaviors ?? []) {
   if (b.bucket !== "allow") continue;
   for (const p of b.paths ?? []) {
@@ -64,6 +80,9 @@ assert.ok(HOME_TILDE.test("~/projects/**"), "must match an un-expanded manifest 
 assert.ok(HOME_TILDE.test("Read(~/projects/**)"), "must match a wrapped Claude home path");
 assert.ok(!HOME_PATH.test("Read(//Users/<user>/projects/**)"), "must ignore anonymized placeholders");
 assert.ok(!HOME_TILDE.test("/tmp/**"), "must ignore scratch scope paths");
+assert.ok(exempt("~/.roborepo/scratch/**"), "a declared temporary location is exempt");
+assert.ok(!exempt("~/projects/**"), "an undeclared home path is not exempt");
+assert.ok(!exempt("~/.roborepo/scratch/../**"), "only the exact declared glob is exempt");
 
 // The deny bucket is exempt by construction: prove the secrets denylist is present, home-relative,
 // and not tied to the machine that rendered the generated artifact.

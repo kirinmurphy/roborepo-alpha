@@ -1,5 +1,17 @@
 {
   "_comment": "Core (non-package) Claude hook wiring. Package hooks declare their own fragments under globals/packages/<id>/hooks-claude.json and are merged on enable; these are the hooks roborepo always installs, so they had no fragment and lived only in generated/claude/settings.json — tracked state with no source. scripts/test/core-hook-wiring-check.mjs asserts the two agree.",
+  "SessionStart": [
+    {
+      "_comment": "Prunes the Claude desktop app's side-session notes folder by its retention policy (14 days unchanged), so that temporary location has a cleanup. See globals/system/hooks/claude/prune-side-session-notes.mjs.",
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"$HOME/.claude/hooks/prune-side-session-notes.mjs\""
+        }
+      ]
+    }
+  ],
   "PreToolUse": [
     {
       "matcher": "Bash",

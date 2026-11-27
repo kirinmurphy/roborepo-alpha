@@ -3,13 +3,19 @@
     "allow": [
       "Read(//tmp/**)",
       "Read(//private/tmp/**)",
-      "Read(//private/var/folders/**)",
+      "Read(//private/var/folders/*/*/T/**)",
+      "Read(~/.roborepo/scratch/**)",
+      "Read(~/Library/Application Support/Claude/side-session-notes/**)",
       "Write(//tmp/**)",
       "Write(//private/tmp/**)",
-      "Write(//private/var/folders/**)",
+      "Write(//private/var/folders/*/*/T/**)",
+      "Write(~/.roborepo/scratch/**)",
+      "Write(~/Library/Application Support/Claude/side-session-notes/**)",
       "Edit(//tmp/**)",
       "Edit(//private/tmp/**)",
-      "Edit(//private/var/folders/**)",
+      "Edit(//private/var/folders/*/*/T/**)",
+      "Edit(~/.roborepo/scratch/**)",
+      "Edit(~/Library/Application Support/Claude/side-session-notes/**)",
       "Bash(rm:*)",
       "Bash(git rm:*)",
       "Bash(git add:*)",
@@ -168,6 +174,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$HOME/.claude/hooks/prune-side-session-notes.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
             "command": "count=0; for d in \"${HOME}/.codex/skills\"/*/; do name=\"$(basename \"${d%/}\")\"; case \"${name}\" in .*) continue;; esac; [ -L \"${d%/}\" ] || count=$((count+1)); done; for d in \"${HOME}/.claude/skills\"/*/; do name=\"$(basename \"${d%/}\")\"; case \"${name}\" in .*) continue;; esac; [ -L \"${d%/}\" ] || count=$((count+1)); done; [ \"${count}\" -gt 0 ] && echo \"{\\\"systemMessage\\\": \\\"unmanaged skills: ${count} — run 'roborepo skill adopt <name>' to version-control\\\"}\" || true"
           }
         ]
@@ -287,7 +302,8 @@
     "filesystem": {
       "allowWrite": [
         "~/.npm",
-        "~/.roborepo/scratch"
+        "~/.roborepo/scratch",
+        "~/Library/Application Support/Claude/side-session-notes"
       ],
       "allowRead": [
         "/private/etc/ssl/cert.pem",

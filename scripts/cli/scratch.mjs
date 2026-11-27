@@ -15,8 +15,7 @@ import { isBodyLocation } from "./delivery.mjs";
 import {
   SCRATCH_STORE_ID,
   findRetentionStore,
-  measureFolderSet,
-  removeFolderSetEntries,
+  pruneFolderSet,
 } from "../../modules/retention/index.mjs";
 
 // One path segment, starting with a letter or digit: a plan id or a short topic. Leading dots,
@@ -80,10 +79,7 @@ export function openScratchFolder(root, name, { now = new Date() } = {}) {
 // the byte cap's one-hour spare, but the clock jumping forward by over an hour between the touch and
 // the measurement would move it into the byte walk, so it is also excluded by name.
 function pruneScratch(store, keep) {
-  const verdict = measureFolderSet({ dirPath: store.target, policy: store.policy });
-  const paths = verdict.files.filter((entryPath) => entryPath !== keep);
-  if (paths.length === 0) return;
-  const { removed, refused } = removeFolderSetEntries({ dirPath: store.target, paths, measured: verdict.entries });
+  const { removed, refused } = pruneFolderSet({ dirPath: store.target, policy: store.policy, keep: [keep] });
   if (removed.length) console.error(`scratch: removed ${removed.length} folder(s) unused for ${store.policy.maxAgeDays} days or over the cap`);
   for (const refusal of refused) console.error(`scratch: left ${refusal.path} (${refusal.reason})`);
 }

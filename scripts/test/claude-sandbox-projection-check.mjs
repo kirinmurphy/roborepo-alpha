@@ -17,6 +17,14 @@ const secrets = manifest.behaviors.find((b) => b.id === "read-secrets");
 const hosts = manifest.behaviors.find((b) => b.id === "reach-allowed-hosts");
 const logUpload = manifest.behaviors.find((b) => b.id === "reach-claude-log-upload");
 
+// The temporary locations under the home folder are listed for the sandbox directly; the absolute
+// ones reach it through the write-scope Edit rules checked below.
+const homeTemporaryFolders = manifest.temporaryLocations
+  .filter((location) => location.harnesses.includes("claude"))
+  .flatMap((location) => location.paths)
+  .filter((folder) => folder.startsWith("~/"));
+assert.ok(homeTemporaryFolders.includes("~/.roborepo/scratch"), "the agent scratch folder stays writable from the sandbox");
+
 // Default: confined, prompt-free, CA bundles re-allowed, listed hosts reachable, and the claude
 // program's own log upload refused so a `claude` command run from the shell does not prompt.
 const defaults = sandboxOf();
@@ -24,7 +32,7 @@ assert.deepEqual(defaults, {
   enabled: true,
   autoAllowBashIfSandboxed: true,
   excludedCommands: [...CLAUDE_SANDBOX_EXCLUDED_COMMANDS],
-  filesystem: { allowWrite: ["~/.npm", "~/.roborepo/scratch"], allowRead: secrets.readableExceptions },
+  filesystem: { allowWrite: ["~/.npm", ...homeTemporaryFolders], allowRead: secrets.readableExceptions },
   network: { allowLocalBinding: false, allowedDomains: hosts.hosts, deniedDomains: logUpload.hosts },
 });
 assert.deepEqual(logUpload.hosts, ["http-intake.logs.us5.datadoghq.com"]);

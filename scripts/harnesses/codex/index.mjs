@@ -13,7 +13,7 @@ import { readCodexHooks } from "./hooks-read.mjs";
 import { mergeCodexHooks } from "./hooks-merge.mjs";
 import { codexHookGuidance } from "./hook-guidance.mjs";
 import { mergeCodexConfig, normalizeRootConfigContent } from "../../cli/root-config-merge.mjs";
-import { resolveBehaviors, resolveArbitraryCommands, renderCodexConfig } from "../permissions-render.mjs";
+import { resolveBehaviors, resolveArbitraryCommands, renderCodexConfig, temporaryLocationGlobs } from "../permissions-render.mjs";
 import { loadPermissionWorkspaceRootsForCwd } from "../permission-workspace-roots.mjs";
 import { codexPlansStoreWritablePaths } from "./plans-store-grants.mjs";
 import { addCodexMcpBlock, removeCodexMcpBlock, codexHasMcp, listCodexMcpServers } from "../mcp-codex-toml.mjs";
@@ -24,12 +24,13 @@ import { locateTranscript, extractHeavyTurns, transcriptTitle } from "../transcr
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// Writable for every checkout, unlike the per-repository plans-store grants. Codex's `:workspace`
+// Writable for every checkout, unlike the per-repository plans-store grants: the manifest's
+// temporaryLocations that Codex can reach and that sit under the home folder. Codex's `:workspace`
 // profile already lets shells write the workspace, $TMPDIR, and /tmp, but nothing under the home
 // folder; Codex accepts `write` only on an exact path or a trailing `/**`.
-//   - ~/.roborepo/scratch: agents' temporary folders from `roborepo scratch <name>`. Listed here
-//     rather than in write-scope, whose shared allow rules may not name a home folder.
-export const CODEX_SANDBOX_WRITABLE_PATHS = Object.freeze(["~/.roborepo/scratch/**"]);
+export function codexSandboxWritablePaths(manifest) {
+  return temporaryLocationGlobs(manifest, "codex").filter((glob) => glob.startsWith("~/"));
+}
 const manifestPath = path.resolve(here, "..", "..", "..", "globals", "harnesses", "codex", "provider.json");
 const codexManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 
@@ -173,7 +174,7 @@ export const codexProvider = defineHarnessProvider({
       render: (current, manifest, overrides, target, options = {}) => {
         const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity: options.agentIdentity });
         const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
-        const writablePaths = [...CODEX_SANDBOX_WRITABLE_PATHS, ...(options.writablePaths ?? [])];
+        const writablePaths = [...codexSandboxWritablePaths(manifest), ...(options.writablePaths ?? [])];
         return renderCodexConfig(current, behaviors, arbitraryCommands, target, { ...options, writablePaths });
       },
     },

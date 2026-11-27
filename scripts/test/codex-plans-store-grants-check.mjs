@@ -14,10 +14,11 @@ const { loadPermissionManifest, renderPermissionsTo } = await import("../cli/per
 const { getHarnessProvider } = await import("../harnesses/registry.mjs");
 
 const codex = getHarnessProvider("codex");
-const { CODEX_SANDBOX_WRITABLE_PATHS } = await import("../harnesses/codex/index.mjs");
+const { codexSandboxWritablePaths } = await import("../harnesses/codex/index.mjs");
+const fixedGrants = codexSandboxWritablePaths(loadPermissionManifest());
 // Grants beyond the provider's fixed ones (the agent scratch folder), which every profile carries.
 const storeGrants = (toml) => [...toml.matchAll(/^"(.+)" = "write"$/gm)].map((match) => match[1])
-  .filter((grant) => !CODEX_SANDBOX_WRITABLE_PATHS.includes(grant));
+  .filter((grant) => !fixedGrants.includes(grant));
 const configFile = path.join(home, ".codex", "config.toml");
 fs.writeFileSync(configFile, "");
 const render = (cwd, overrides = {}) => {

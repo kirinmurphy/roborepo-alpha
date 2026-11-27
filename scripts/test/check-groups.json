@@ -46,6 +46,7 @@
     "claude-sandbox-projection-check.mjs",
     "permission-harness-notes-check.mjs",
     "permission-rule-home-path-check.mjs",
+    "temporary-locations-check.mjs",
     "node-release-health-check.mjs",
     "telemetry-oracle-check.mjs",
     "telemetry-oracle-core-check.mjs",
