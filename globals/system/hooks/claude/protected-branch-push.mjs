@@ -60,12 +60,255 @@ const SKIPS_BACKSTOP = new Set(['--no-verify'])
 const PLANS_STORE_BRANCH = 'repo-plans'
 
 const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
-// Covers the change-github-directly and merge-pull-requests behaviors in agent-permissions.json; a
-// test keeps the first equal to this list.
-const GH_DENIED = [
-  ['api'], ['auth', 'token'], ['pr', 'merge'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
-  ['secret'], ['variable'], ['release'], ['workflow', 'run'],
-]
+// Git hosts whose CLI can act on the host without going through git, so the push guards cannot check
+// it. Each entry names the CLI and the command prefixes denied. Only `github` exists today, and the
+// classifier reads it by name, so a second host also needs its CLI wired into classifyCommand.
+// The `github` list covers the change-github-directly and merge-pull-requests behaviors in
+// agent-permissions.json; a test keeps the first equal to this list.
+const HOST_CLIS = {
+  github: {
+    cli: 'gh',
+    denied: [
+      ['api'], ['auth', 'token'], ['pr', 'merge'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
+      ['secret'], ['variable'], ['release'], ['workflow', 'run'],
+    ],
+    // Denied prefixes lifted while the shell runs as the agent identity (see agentIdentityActive).
+    allowedAsAgent: [['api']],
+  },
+}
+// Variables that choose which account or host gh acts as.
+const GH_IDENTITY_VARIABLES = ['GH_CONFIG_DIR', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST']
+// Set from the whole command before it is walked (see changesGhIdentity).
+let ghIdentityChanged = false
+// True when gh in this shell acts as the github-agent identity. Acting as the bot, GitHub's rulesets
+// and the bot's collaborator role limit what `gh api` can do; as the user, `gh api` could rewrite
+// main. It takes all three: the package's Git config file is installed, this hook's own
+// GH_CONFIG_DIR names the identity's gh config dir, and the command does not change gh's identity
+// itself.
+// Claude hooks share the session's environment, so an unset GH_CONFIG_DIR means a session started
+// before the identity was on, whose gh acts as the user: it must match exactly. Codex starts command
+// hooks with its own process environment, not the shell_environment_policy values its shells get, so
+// under Codex an unset GH_CONFIG_DIR is expected, and the hook reads those values from Codex's config
+// instead (codexShellsActAsBot).
+function agentIdentityActive() {
+  if (ghIdentityChanged) return false
+  const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
+  if (!fs.existsSync(path.join(stateRoot, 'package-runtime', 'github-agent-identity', 'gitconfig'))) return false
+  // gh prefers a token or host from the environment over its config dir, so an inherited one means
+  // gh acts as whoever owns that token.
+  if (GH_IDENTITY_VARIABLES.some((name) => name !== 'GH_CONFIG_DIR' && process.env[name])) return false
+  const botDir = path.join(stateRoot, 'github-agent', 'gh')
+  if (forCodex && !codexShellsActAsBot(botDir, { userConfigRequired: !process.env.GH_CONFIG_DIR })) return false
+  const dir = process.env.GH_CONFIG_DIR
+  if (!dir) return forCodex
+  return path.resolve(dir) === path.resolve(botDir)
+}
+
+// Whether Codex gives its shells the bot's gh. Its user config's [shell_environment_policy.set] table
+// must set GH_CONFIG_DIR to the bot's dir and empty GH_TOKEN and GITHUB_TOKEN (required when the hook
+// has no GH_CONFIG_DIR of its own), and no layer Codex puts above that file may set any of
+// GH_IDENTITY_VARIABLES to anything else. The package's gitconfig alone is not enough: an enable that
+// could not set GH_CONFIG_DIR (one the user set themselves) still installs it, and gh in those shells
+// acts as the user. The user config is the one beside this hook's folder (~/.codex/hooks ->
+// ~/.codex), or CODEX_HOME's. Anything unreadable reads as no: a layer file or the profile folder
+// that exists but cannot be read, or a layer the line reader cannot follow. `-c` overrides on Codex's
+// own command line never reach a hook, so a session started with `-c shell_environment_policy...`
+// can still give its shells another gh; that is a known limit of this check.
+function codexShellsActAsBot(botDir, { userConfigRequired }) {
+  const codexHome = process.env.CODEX_HOME || path.dirname(hookDir)
+  const userFile = path.join(codexHome, 'config.toml')
+  const user = readCodexLayer(userFile, botDir)
+  if (user === null ? userConfigRequired : !user.keepsBot) return false
+  if (userConfigRequired) {
+    const dir = user.set.get('GH_CONFIG_DIR')
+    if (!dir || path.resolve(dir) !== path.resolve(botDir) || user.set.get('GH_TOKEN') !== '' || user.set.get('GITHUB_TOKEN') !== '') return false
+  }
+  const layers = codexOverrideLayers(codexHome, userFile)
+  if (!layers) return false
+  return layers.every((file) => {
+    const layer = readCodexLayer(file, botDir)
+    return layer === null || layer.keepsBot
+  })
+}
+
+// The Codex config files that sit above the user config and can change what its shells get:
+// - a project's .codex/config.toml in the session's folder or any folder above it. Codex reads the
+//   trusted ones from the project root down; this reads every one up to /, trusted or not.
+// - each profile file a `--profile` can layer on (<codex home>/<name>.config.toml). Which one is
+//   active is not known here, so every one must keep the bot. Profiles written as [profiles.<name>]
+//   tables inside a config file are checked by readCodexLayer.
+// - the managed config an administrator installs.
+// `-c` overrides on Codex's own command line cannot be seen. null when the codex home exists but
+// cannot be listed, since a profile in it could not be checked.
+const CODEX_MANAGED_CONFIG = '/etc/codex/managed_config.toml'
+let sessionFolders = []
+function codexOverrideLayers(codexHome, userFile) {
+  const files = new Set([CODEX_MANAGED_CONFIG])
+  try {
+    for (const name of fs.readdirSync(codexHome)) if (name.endsWith('.config.toml')) files.add(path.join(codexHome, name))
+  } catch (error) {
+    if (!isMissing(error)) return null
+  }
+  for (const start of sessionFolders) {
+    for (let dir = path.resolve(start); ; dir = path.dirname(dir)) {
+      files.add(path.join(dir, '.codex', 'config.toml'))
+      if (dir === path.dirname(dir)) break
+    }
+  }
+  const user = realFile(userFile)
+  return [...files].filter((file) => realFile(file) !== user)
+}
+function realFile(file) {
+  try {
+    return fs.realpathSync(file)
+  } catch {
+    return path.resolve(file)
+  }
+}
+
+// One Codex config file read line by line, without a TOML parser (hooks use only Node built-ins):
+// `set` holds the plain entries of its [shell_environment_policy.set] table, and `keepsBot` is false
+// when anything in it could give the shells another gh identity:
+// - one of GH_IDENTITY_VARIABLES named anywhere Codex reads shell settings from (the top level, a
+//   shell_environment_policy table, a profile) other than as a plain [shell_environment_policy.set]
+//   entry holding the bot's value: the bot's dir for GH_CONFIG_DIR, empty for the rest;
+// - a backslash there in a key, or in a shell_environment_policy or profile line, since an escape can
+//   spell one of those names;
+// - include_only, which can drop GH_CONFIG_DIR after it is set;
+// - a line the reader cannot follow: a string left open at the end of its line, or one left open at
+//   the end of the file.
+// Comments are dropped first, outside strings only, so `# """` opens nothing. Lines inside multi-line
+// strings are text, not settings. null when the file does not exist; one that exists but cannot be
+// read keeps nothing.
+const IDENTITY_NAME = new RegExp(`(?<![A-Za-z0-9_])(?:${GH_IDENTITY_VARIABLES.join('|')})(?![A-Za-z0-9_])`)
+const SET_TABLE = 'shell_environment_policy.set'
+function readCodexLayer(file, botDir) {
+  let text
+  try {
+    text = fs.readFileSync(file, 'utf8')
+  } catch (error) {
+    return isMissing(error) ? null : { set: new Map(), keepsBot: false }
+  }
+  const set = new Map()
+  let keepsBot = true
+  let table = ''
+  let multiline = null
+  for (const raw of text.split(/\r?\n/)) {
+    const scanned = tomlLineCode(raw, multiline)
+    multiline = scanned.multiline
+    if (scanned.unreadable) keepsBot = false
+    const line = scanned.code
+    if (/^\s*$/.test(line)) continue
+    const header = /^\s*\[\[?([^\]]*)\]\]?\s*(?:#.*)?$/.exec(line)
+    if (header) {
+      if (header[1].includes('\\')) keepsBot = false
+      table = header[1].replace(/[\s"']/g, '')
+      continue
+    }
+    const readsShell = table === '' || table.startsWith('profiles') || table.includes('shell_environment_policy')
+    if (!readsShell) continue
+    const entry = table === SET_TABLE && /^\s*"?([A-Za-z_][A-Za-z0-9_]*)"?\s*=\s*"([^"\\]*)"\s*(?:#.*)?$/.exec(line)
+    if (entry) {
+      set.set(entry[1], entry[2])
+      if (GH_IDENTITY_VARIABLES.includes(entry[1])) {
+        const bots = entry[1] === 'GH_CONFIG_DIR' ? entry[2] !== '' && path.resolve(entry[2]) === path.resolve(botDir) : entry[2] === ''
+        if (!bots) keepsBot = false
+      }
+      continue
+    }
+    const key = line.split('=')[0]
+    if (IDENTITY_NAME.test(line) || /\binclude_only\b/.test(line) || key.includes('\\')
+      || (line.includes('\\') && (table !== '' || /shell_environment_policy|profiles/.test(line)))) keepsBot = false
+  }
+  if (multiline) keepsBot = false
+  return { set, keepsBot }
+}
+
+// One TOML line with its comment removed, read from the `multiline` string state the line before
+// left (null, or the open """ or ''' delimiter). Strings are kept as written; a line that starts
+// inside a multi-line string keeps only what follows its closing delimiter. `unreadable` marks a
+// single-line string still open at the end of the line, which TOML does not allow.
+function tomlLineCode(line, multiline) {
+  let start = 0
+  let i = 0
+  if (multiline) {
+    const close = closingDelimiter(line, 0, multiline)
+    if (close === -1) return { code: '', multiline, unreadable: false }
+    i = start = close
+    multiline = null
+  }
+  while (i < line.length) {
+    const ch = line[i]
+    if (ch === '#') break
+    if (ch === '"' || ch === "'") {
+      const triple = ch.repeat(3)
+      if (line.startsWith(triple, i)) {
+        const close = closingDelimiter(line, i + 3, triple)
+        if (close === -1) return { code: line.slice(start), multiline: triple, unreadable: false }
+        i = close
+        continue
+      }
+      let j = i + 1
+      while (j < line.length && line[j] !== ch) j += ch === '"' && line[j] === '\\' ? 2 : 1
+      if (j >= line.length) return { code: line.slice(start), multiline: null, unreadable: true }
+      i = j + 1
+      continue
+    }
+    i += 1
+  }
+  return { code: line.slice(start, i), multiline: null, unreadable: false }
+}
+// Where the multi-line string `delimiter` closes in `line`, searching from `from`: the index after its
+// closing quotes (TOML lets up to two more quotes end the string's text), or -1 when it stays open.
+// A basic string's backslash escapes the next character.
+function closingDelimiter(line, from, delimiter) {
+  for (let i = from; i < line.length; i += 1) {
+    if (delimiter === '"""' && line[i] === '\\') {
+      i += 1
+      continue
+    }
+    if (line.startsWith(delimiter, i)) {
+      let end = i + 3
+      while (end < line.length && end < i + 5 && line[end] === delimiter[0]) end += 1
+      return end
+    }
+  }
+  return -1
+}
+function isMissing(error) {
+  return error?.code === 'ENOENT' || error?.code === 'ENOTDIR'
+}
+
+// Whether any command in `text`, nested ones included, could make gh act as someone other than the
+// identity: it assigns, exports, unsets, or otherwise names one of GH_IDENTITY_VARIABLES
+// (`GH_TOKEN=x gh api`, `export GH_TOKEN+=x`, `unset GH_CONFIG_DIR`, `env -u GH_CONFIG_DIR`), or runs
+// gh through `env`.
+function changesGhIdentity(text) {
+  const names = GH_IDENTITY_VARIABLES.join('|')
+  const namesVariable = new RegExp(`^(?:--unset=|-u)?(?:${names})(?:\\+?=|$)|\\$\\{(?:${names}):?=`)
+  for (const words of splitCommands(exposeNestedCommands(withoutComments(text)))) {
+    if (words.some((word) => namesVariable.test(word))) return true
+    const gh = words.findIndex((word) => path.basename(word) === 'gh')
+    if (gh > 0 && words.slice(0, gh).some((word) => path.basename(word) === 'env')) return true
+    if (nestedScripts(words).some((script) => changesGhIdentity(script))) return true
+  }
+  return false
+}
+// A `codex` command line whose `-c`/`--config` override touches the shell environment Codex hands its
+// shells, or names a GitHub identity variable. Hooks never see such overrides, so the session it starts
+// could give `gh` another account while its own hook lifts the `gh api` denial.
+function codexIdentityOverride(args) {
+  for (let k = 0; k < args.length; k += 1) {
+    const arg = args[k]
+    let value = null
+    if (arg === '-c' || arg === '--config') value = args[k + 1] ?? ''
+    else if (arg.startsWith('--config=')) value = arg.slice('--config='.length)
+    else if (/^-c./.test(arg)) value = arg.slice(2)
+    if (value !== null && (/shell_environment_policy/.test(value) || IDENTITY_NAME.test(value))) return true
+  }
+  return false
+}
+
 // gh options that take their value as the next word, before or between subcommands.
 const GH_VALUE_OPTIONS = new Set(['-R', '--repo', '--hostname'])
 const hookDir = path.dirname(fileURLToPath(import.meta.url))
@@ -100,23 +343,33 @@ function ansiCEscape(text, i) {
 // `parens`, an unquoted `(` or `)` is a word of its own, so `(true; git push origin main)` reads
 // `main` and not `main)`.
 // Expansion is not performed; a word that still holds $ or a backtick is reported so the caller can
-// decline to classify it.
+// decline to classify it. Each word list carries `expands`: per word, whether a $ or backtick in it
+// sits outside single quotes (`'$x'` and `$'\x24x'` stay as written; `"$x"` and `$x` expand).
 function splitCommands(text, { parens = false } = {}) {
   const commands = []
   let words = []
+  let expands = []
   let word = null
+  let expanding = false
   let quote = null
   const endWord = () => {
-    if (word !== null) words.push(word)
+    if (word !== null) {
+      words.push(word)
+      expands.push(expanding)
+    }
     word = null
+    expanding = false
   }
   const endCommand = () => {
     endWord()
-    if (words.length) commands.push(words)
+    if (words.length) commands.push(Object.assign(words, { expands }))
     words = []
+    expands = []
   }
   for (let i = 0; i < text.length; i += 1) {
     const ch = text[i]
+    const opensQuote = quote === null && ch === '$' && (text[i + 1] === "'" || text[i + 1] === '"')
+    if ((ch === '$' || ch === '`') && quote !== "'" && quote !== "$'" && !opensQuote) expanding = true
     if (quote === "'") {
       if (ch === "'") quote = null
       else word += ch
@@ -155,6 +408,7 @@ function splitCommands(text, { parens = false } = {}) {
     } else if (parens && (ch === '(' || ch === ')')) {
       endWord()
       words.push(ch)
+      expands.push(false)
     } else {
       word = (word ?? '') + ch
     }
@@ -471,15 +725,124 @@ function classifyPush(cwd, args) {
   return defaultKnown ? VERIFIED : unknownDefault(remote)
 }
 
-// gh with its options removed, matched against GH_DENIED.
-function classifyGh(args) {
+// REST paths and GraphQL mutations that merge. Agents never merge (merge-pull-requests), and the
+// bot's write role lets it merge an approved pull request, so the agent lift keeps these denied.
+// They are matched against the operation only (the REST endpoint, or the GraphQL query), never the
+// data a call sends, so a review reply that mentions `mergePullRequest` is not a merge.
+const REST_MERGES = /(?:^|\/)pulls\/[^/\s]+\/merge\b|(?:^|\/)merges\b|(?:^|\/)merge-upstream\b/
+const GRAPHQL_MERGES = /\b(?:mergePullRequest|enablePullRequestAutoMerge|enqueuePullRequest|mergeBranch)\b/
+// `gh api` options that take their value as the next word, and the short ones that take the rest of
+// their cluster (`-XPUT`, `-iH 'Accept: x'`).
+const GH_API_VALUE_OPTIONS = new Set(['-X', '--method', '-H', '--header', '-f', '--raw-field', '-F', '--field', '-q', '--jq', '-t', '--template', '--input', '--hostname', '--cache', '-p', '--preview'])
+const GH_API_SHORT_VALUES = 'XHfFqtp'
+
+// Why the `gh api` call in `args` cannot keep the agent lift because of what it does, or null. It
+// merges, or the operation cannot be read from the command `text`: an endpoint the shell fills in
+// (`$EP`), or a GraphQL query that is missing or that the shell could change. A query may use GraphQL
+// variables (`$id`) only when that argument's own `$` signs are inside single quotes, where the shell
+// leaves them alone; `expands` says, per argument, whether one is not (see splitCommands).
+function apiOperationRefusal(args, expands) {
+  const { endpoint, queries } = apiOperation(args, expands)
+  const unread = 'the hook cannot read which API operation this `gh api` call runs, so it cannot rule out a merge. Write the endpoint and any GraphQL query literally, or run it yourself.'
+  const merges = '`gh api` merges here, and agents never merge. Run it yourself.'
+  if (!endpoint || /[$`]/.test(endpoint)) return unread
+  if (REST_MERGES.test(endpoint)) return merges
+  if (!/(?:^|\/)graphql$/.test(endpoint.split('?')[0])) return null
+  if (!queries.length) return unread
+  for (const query of queries) {
+    if (GRAPHQL_MERGES.test(query.text)) return merges
+    if (query.expands) return unread
+  }
+  return null
+}
+
+// The endpoint and the `query` field values of a `gh api` call, from the gh arguments, each query
+// with whether the shell expands anything in the argument it came from. An argument with no `expands`
+// entry counts as expanding.
+function apiOperation(args, expands) {
+  let i = 0
+  while (i < args.length && args[i] !== 'api') i += GH_VALUE_OPTIONS.has(args[i]) ? 2 : 1
+  let endpoint = null
+  const queries = []
+  let optionsEnded = false
+  for (i += 1; i < args.length; i += 1) {
+    const arg = args[i]
+    let field = null
+    let fieldAt = i
+    if (optionsEnded || !arg.startsWith('-') || arg === '-') {
+      endpoint ??= arg
+    } else if (arg === '--') {
+      optionsEnded = true
+    } else if (arg === '-f' || arg === '-F' || arg === '--raw-field' || arg === '--field') {
+      fieldAt = ++i
+      field = args[i] ?? ''
+    } else if (/^--(?:raw-)?field=/.test(arg)) {
+      field = arg.slice(arg.indexOf('=') + 1)
+    } else if (GH_API_VALUE_OPTIONS.has(arg)) {
+      i += 1
+    } else if (!arg.startsWith('--')) {
+      // A short cluster: flags up to the first option that takes a value, which takes the rest.
+      const at = [...arg.slice(1)].findIndex((letter) => GH_API_SHORT_VALUES.includes(letter))
+      if (at !== -1) {
+        const value = arg.slice(at + 2) || (args[(fieldAt = ++i)] ?? '')
+        if ('fF'.includes(arg[at + 1])) field = value
+      }
+    }
+    if (field?.startsWith('query=')) queries.push({ text: field.slice('query='.length), expands: expands[fieldAt] ?? true })
+  }
+  return { endpoint, queries }
+}
+
+// Why the agent lift does not apply to these `gh api` arguments, or null when it does. An explicit
+// Authorization header replaces gh's configured token, so the call would act as whichever account
+// that token belongs to; a header whose name cannot be read (`-H "$H"`) may be one. A GraphQL query
+// read from a file or stdin (`-F query=@file`, `--input`) cannot be checked for a merge mutation.
+const READABLE_HEADER = /^\s*([A-Za-z0-9-]+)\s*:/
+function apiLiftRefusal(args) {
+  const headers = []
+  const fields = []
+  let input = false
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i]
+    if (arg === '-H' || arg === '--header') headers.push(args[++i] ?? '')
+    else if (arg.startsWith('--header=')) headers.push(arg.slice('--header='.length))
+    else if (/^-[A-Za-z]*H/.test(arg) && !arg.startsWith('--')) {
+      const value = arg.slice(arg.indexOf('H') + 1)
+      headers.push(value || (args[++i] ?? ''))
+    } else if (arg === '-F' || arg === '--field') fields.push(args[++i] ?? '')
+    else if (arg.startsWith('--field=')) fields.push(arg.slice('--field='.length))
+    else if (/^-F./.test(arg)) fields.push(arg.slice(2))
+    else if (arg === '--input' || arg.startsWith('--input=')) input = true
+  }
+  for (const header of headers) {
+    const name = READABLE_HEADER.exec(header)?.[1]
+    if (!name || name.toLowerCase() === 'authorization') {
+      return '`gh api` with an Authorization header, or one whose name cannot be read, acts as whichever account that token belongs to instead of the bot. Run it yourself.'
+    }
+  }
+  const graphql = args.some((arg) => /^\/?graphql$/.test(arg))
+  if (graphql && (input || fields.some((field) => /^[^=]*=@/.test(field)))) {
+    return 'a GraphQL query read from a file or stdin cannot be checked for a merge. Pass the query inline with `-f query=...`, or run it yourself.'
+  }
+  return null
+}
+
+// gh with its options removed, matched against the host's denied list.
+// `expands` holds, per argument, whether the shell expands anything in it (see splitCommands).
+function classifyGh(args, expands) {
   const words = []
   for (let i = 0; i < args.length; i += 1) {
     if (GH_VALUE_OPTIONS.has(args[i])) i += 1
     else if (!args[i].startsWith('-')) words.push(args[i])
   }
-  const denied = GH_DENIED.find((prefix) => prefix.every((word, k) => words[k] === word))
+  const { denied: deniedList, allowedAsAgent } = HOST_CLIS.github
+  const denied = deniedList.find((prefix) => prefix.every((word, k) => words[k] === word))
   if (!denied) return null
+  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive()) {
+    const refusal = apiLiftRefusal(args) ?? apiOperationRefusal(args, expands)
+    if (!refusal) return null
+    return { decision: 'deny', reason: `roborepo: ${refusal}` }
+  }
   return {
     decision: 'deny',
     reason: `roborepo: \`gh ${denied.join(' ')}\` acts on GitHub without going through git, so the protected-branch guards cannot check it. Run it yourself.`,
@@ -933,7 +1296,7 @@ function changedDirectory(cwd, args) {
 function programIndex(words) {
   let i = 0
   for (;;) {
-    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
+    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[i])) i += 1
     if (!SHELL_KEYWORDS.has(words[i])) return i
     const valueOptions = WRAPPER_VALUE_OPTIONS[words[i]]
     i += 1
@@ -1135,7 +1498,7 @@ function classifyCommand(text, startCwd) {
   let onlyVerifiedPushes = true
   for (const words of splitCommands(withoutComments(text), { parens: true })) {
     let i = 0
-    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1
+    while (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*\+?=/.test(words[i])) i += 1
     const plain = i === 0
     const program = words[i] && path.basename(words[i])
     if (program === 'cd' && plain && words[i + 1] && !/[$`~<>]/.test(words[i + 1]) && words.length === 2) {
@@ -1152,8 +1515,16 @@ function classifyCommand(text, startCwd) {
       return target !== '/dev/null' && !/^&\d$/.test(target)
     })
     if (writesFile) onlyVerifiedPushes = false
-    if (program === 'gh') {
-      result = stricter(result, classifyGh(words.slice(i + 1)))
+    // gh behind a wrapper (`env gh api`, `command gh api`) is still gh.
+    const ghAt = programIndex(words)
+    if (path.basename(words[ghAt] ?? '') === 'gh') {
+      result = stricter(result, classifyGh(words.slice(ghAt + 1), words.expands.slice(ghAt + 1)))
+      continue
+    }
+    // codex behind a wrapper (`env codex`, `command codex`) still starts a Codex session.
+    const codexAt = programIndex(words)
+    if (path.basename(words[codexAt] ?? '') === 'codex' && codexIdentityOverride(words.slice(codexAt + 1)) && agentIdentityActive()) {
+      result = stricter(result, { decision: 'deny', reason: 'roborepo: a Codex `-c`/`--config` override of the shell environment or a GitHub identity variable never reaches a hook, so a Codex session started this way could run `gh api` as another account. Run it yourself.' })
       continue
     }
     if (SHELLS.has(program)) {
@@ -1273,7 +1644,7 @@ function simpleCommands(text) {
 // behind any assignments, wrappers, or keywords. `((`, `$((`, and `=(` open arithmetic or an array,
 // not a command. Words and gaps stop at an operator or newline, so each command start scans only its
 // own command and the time stays linear. It reads text from `maskQuotedOperators`.
-const SUBSTITUTED_PROGRAM = /(?:^|[;&|\n]|(?<![(=$])\((?!\()|\$\((?!\())[ \t]*(?:[A-Za-z_]\w*=[^\s;&|()]*[ \t]+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)[ \t]+(?:-[^\s;&|()]+[ \t]+)*)*"?(?:\$\(|`)/
+const SUBSTITUTED_PROGRAM = /(?:^|[;&|\n]|(?<![(=$])\((?!\()|\$\((?!\())[ \t]*(?:[A-Za-z_]\w*\+?=[^\s;&|()]*[ \t]+)*(?:(?:env|sudo|nohup|nice|time|exec|command|builtin|then|do|else|if|while|until|!)[ \t]+(?:-[^\s;&|()]+[ \t]+)*)*"?(?:\$\(|`)/
 
 // Whether some line of `text` starts a program that could run a heredoc's body or a file it wrote:
 // a shell, a script runner or interpreter, a program the shell fills in (`$SHELL`, `$(which sh)`),
@@ -1587,16 +1958,18 @@ const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).
 // backtick can build a word the quick check cannot see (`$'pu\x73h'`, `pu$(true)sh`), so it sends
 // the command to the full check. Interpreter code lists words with commas (`['git','push']`), so the
 // check also reads the text with its commas kept.
-const KEYWORDS = /\b(push|gh|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/
+const KEYWORDS = /\b(push|gh|codex|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/
 if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string'
   || !(KEYWORDS.test(command.replace(/\\\n/g, '').replace(/['"\\{},]/g, ''))
     || KEYWORDS.test(command.replace(/['"\\{}]/g, '')) || /[$`]/.test(command))) process.exit(0)
 
 const cwd = toolInput.workdir || input.cwd || process.cwd()
+sessionFolders = [...new Set([cwd, input.cwd || process.cwd()])]
 unsandboxed = toolInput.dangerouslyDisableSandbox === true
 
 // Every walk reads the command without the heredoc bodies that are plainly data.
 const text = withoutHeredocBodies(command)
+ghIdentityChanged = changesGhIdentity(text)
 // A delete's or merge's ask or deny outranks a verified push, so the push allow never covers it.
 let result = stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd))
 // The walks read a body that a program reads (`node <<'EOF'`, `bash <<EOF`) as shell, so an

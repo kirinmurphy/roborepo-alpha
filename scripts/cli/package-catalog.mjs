@@ -413,6 +413,9 @@ function normalizePackage(pkg, { file, root, origin }) {
   if (pkg.selectable !== undefined && typeof pkg.selectable !== "boolean") {
     throw new Error(`${pkg.id}: selectable must be a boolean`);
   }
+  if (pkg.permissionsRender !== undefined && typeof pkg.permissionsRender !== "boolean") {
+    throw new Error(`${pkg.id}: permissionsRender must be a boolean`);
+  }
   const presentation = normalizePresentation(pkg);
   const resources = normalizeResources(pkg.resources, { pkgId: pkg.id, file, root });
   // Self-declared behavior capabilities (e.g. "doc-lookup", "code-lookup") — how consumers match

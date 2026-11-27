@@ -64,4 +64,29 @@ for (const reviewer of ["user", "auto_review"]) {
   const config = renderCodexConfig(`approvals_reviewer = "${reviewer}"\n`, manifest.behaviors, [], "fixture");
   assert.match(config, new RegExp(`approvals_reviewer = "${reviewer}"`));
 }
+// The hook applies agentIdentityBucket when the GitHub agent identity package's Git config file is
+// installed under the state root, and the default buckets without it.
+{
+  const identityState = path.join(home, "identity-state");
+  const identityEnv = { ...env, ROBOREPO_STATE_ROOT: identityState };
+  const decide = (command, hookEnv) => {
+    const result = spawnSync(process.execPath, [hook], {
+      input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }), encoding: "utf8", env: hookEnv,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim() ? JSON.parse(result.stdout).hookSpecificOutput.permissionDecision : undefined;
+  };
+  assert.equal(decide("gh api repos/o/r", identityEnv), "deny", "without the identity, gh api is denied");
+  assert.equal(decide("gh pr comment 1 --body hi", identityEnv), undefined, "without the identity, posting defers to the prompt");
+  const asset = path.join(identityState, "package-runtime", "github-agent-identity", "gitconfig");
+  fs.mkdirSync(path.dirname(asset), { recursive: true });
+  fs.writeFileSync(asset, "");
+  assert.notEqual(decide("gh api repos/o/r", identityEnv), "deny", "with the identity, gh api is not denied");
+  assert.equal(decide("gh pr comment 1 --body hi", identityEnv), "allow", "with the identity, posting is allowed");
+  assert.equal(decide("gh pr merge 1", identityEnv), "deny", "merging stays denied");
+  // A personal override still wins over the identity bucket.
+  fs.writeFileSync(path.join(identityState, "command-overrides.json"), JSON.stringify({ behaviors: { "read-and-reply-on-github": "deny" }, commands: {} }));
+  assert.equal(decide("gh api repos/o/r", identityEnv), "deny", "a personal deny beats the identity bucket");
+  fs.rmSync(identityState, { recursive: true, force: true });
+}
 console.log("codex-command-permission-check passed");

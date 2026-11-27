@@ -407,6 +407,20 @@ The portal shows the same status: a one-time notice on the
 [Plans page](plans-portal.md#branch-protection-notice) and a **Branch protection** panel on each
 [Home repo card](repositories.md#branch-protection).
 
+## GitHub agent identity
+
+The optional `github-agent-identity` package lets Claude and Codex act on GitHub as a separate bot
+account. See [Setup And Daily Use](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot)
+for the walkthrough and [Claude Hooks](claude-hooks.md#acting-as-a-github-bot) for what it changes.
+
+| Command | What it does |
+| --- | --- |
+| `roborepo github setup` | Guided, interactive setup: create the bot account, invite it as a collaborator, create a classic token (`repo` and `read:org`, with an expiry), paste it at a hidden prompt, accept the invite, run `roborepo protect` if needed (it asks), check everything, then enable the package. Reruns skip finished steps, and re-apply the package if one of its files is missing. A failed check does not turn the package on; a package that is already on stays on. A new token is checked before it replaces the saved one, so a rejected token never reaches agents. When GitHub no longer accepts the saved token (expired or revoked), a rerun renews it for the same bot and asks only for the new token; when the token still works but expires soon, never expires, or has the wrong scopes, a rerun offers to replace it ([Renew the bot's token](../guides/setup-and-daily-use.md#renew-the-bots-token)). Run it in your own terminal: agents are denied it so the token never enters a transcript. |
+| `roborepo github status [--json]` | Read-only report on whether the identity is set up and healthy, including a note when the token has 14 days or fewer left or has no expiry date. When it cannot read your own account or the branch protection, it reports "could not be fully checked" rather than healthy, and setup does not turn the package on until every check runs. Agents may run it. |
+
+`roborepo doctor` adds a line for the same check; set `ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1` to skip
+it.
+
 ## Guarded feature delivery
 
 These commands validate the current target before running Git or GitHub CLI. They provide narrow

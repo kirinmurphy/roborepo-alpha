@@ -21,9 +21,10 @@ import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js"
 const modal = createConfigModal();
 const recommendationsDialog = createRecommendationsDialog();
 const disableDependentsDialog = createDisableDependentsDialog();
-// Packages whose on/off control lives on another page. Settings owns token telemetry, so a second
-// toggle here would only duplicate it; the terminal `roborepo config` view still lists it.
-const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry"]);
+// Packages whose on/off control lives on another page. Settings owns token telemetry and the agent
+// GitHub account, so a second toggle here would only duplicate them (and this one could switch
+// agents to a bot that is not set up yet); the terminal `roborepo config` view still lists them.
+const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry", "github-agent-identity"]);
 
 function withoutPackagesControlledElsewhere(view) {
   return view

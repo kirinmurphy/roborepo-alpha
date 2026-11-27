@@ -22,6 +22,7 @@
     "backlog-order-check.mjs",
     "backlog-model-check.mjs",
     "plan-store-check.mjs",
+    "git-exec-identity-check.mjs",
     "migrate-plans-once-check.mjs",
     "codex-plans-store-grants-check.mjs",
     "worktree-lifecycle-check.mjs",
@@ -35,8 +36,11 @@
     "minimize-bash-output-check.mjs",
     "codex-command-permission-check.mjs",
     "agent-permission-defaults-check.mjs",
+    "github-agent-identity-render-check.mjs",
+    "github-agent-identity-package-check.mjs",
     "hook-readiness-check.mjs",
     "hook-review-launch-check.mjs",
+    "repository-agent-identity-check.mjs",
     "hook-review-cli-check.mjs",
     "codex-credential-projection-check.mjs",
     "claude-sandbox-projection-check.mjs",
@@ -96,6 +100,8 @@
     "delivery-operations-check.mjs",
     "protect-check.mjs",
     "doctor-protection-check.mjs",
+    "github-identity-status-check.mjs",
+    "github-setup-check.mjs",
     "run-tmpdir-check.mjs",
     "install-drift-check.mjs"
   ]

@@ -1,7 +1,6 @@
 // `roborepo protect`: report whether the current repo's plans and default branches match the
 // managed protection policy on GitHub and, unless --check is given, make them match.
-import { runGitProcess } from "../../modules/repositories/git-exec.mjs";
-import { normalizeGitRemote } from "../../modules/repositories/identity.mjs";
+import { currentRepositoryId } from "./current-repository.mjs";
 import { forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
 import { MERGE_POLICY_KEY } from "../../modules/forge/protection-policy.mjs";
 import { PROTECTED_STATES, applyProtection, readProtection } from "../../modules/forge/protection.mjs";
@@ -63,15 +62,6 @@ function parseArgs(argv) {
   }
   if (options.check && options.action !== "protect") throw new Error("--check changes nothing and cannot be combined with --skip or --unskip.");
   return options;
-}
-
-// The canonical id of the repo `cwd` is in, from its `origin` remote; null outside a Git repo or
-// without an origin.
-async function currentRepositoryId(cwd) {
-  const top = await runGitProcess(cwd, ["rev-parse", "--show-toplevel"]);
-  if (!top.ok) return null;
-  const origin = await runGitProcess(top.stdout.trim(), ["remote", "get-url", "origin"]);
-  return origin.ok ? normalizeGitRemote(origin.stdout.trim()) : null;
 }
 
 function formatReport(report) {

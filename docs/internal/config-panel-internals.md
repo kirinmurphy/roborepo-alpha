@@ -290,7 +290,8 @@ printout, and onboarding label those rows "Claude only".
 | Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm"]` plus the home-folder `temporaryLocations`, `network.allowLocalBinding: false` |
 
 `excludedCommands` names individual `roborepo` subcommands rather than the whole CLI: the plans
-store, delivery, linked worktrees, the web portal, telemetry commands that write capture state,
+store, delivery, the read-only GitHub identity check (`github status`), linked worktrees, the web
+portal, telemetry commands that write capture state,
 and the commands that write harness config. Commands that launch other programs (`agent-run`, `run`,
 `browser`) stay sandboxed, so a wrapper cannot carry a test suite, scenario or script out of the
 sandbox. `sandbox-settings.mjs` gives the
@@ -308,8 +309,8 @@ every provider renders them; `delete-files` and `switch-branches` depend on the 
 | Behavior | Change | Reason |
 | --- | --- | --- |
 | `delete-files` | Default `ask` → `allow` | Claude's shell sandbox confines deletes; `protected-branch-push.mjs` asks (Codex: denies) before deletes and discarded work in a checkout on a protected branch. Gemini has neither |
-| `merge-pull-requests` | New, default `deny` | Split from `change-github-directly` so it shows as its own row; agents never merge into the base branch. The protected-branch hook's `GH_DENIED` list also names `pr merge`, for the flag-first form |
-| `push-code` | Default stays `ask`; `askDecidedByHook` | Claude renders no rule for its ask (`permissions-render.mjs`), because an ask rule outranks the protected-branch hook's allow of a verified push; the hook asks about the rest. Codex and Gemini render it as before |
+| `merge-pull-requests` | New, default `deny` | Split from `change-github-directly` so it shows as its own row; agents never merge into the base branch. The protected-branch hook's `HOST_CLIS.github.denied` list also names `pr merge`, for the flag-first form |
+| `push-code` | Default stays `ask`; `askDecidedByHook` | Claude renders no rule for its ask (`permissions-render.mjs`), because an ask rule outranks the protected-branch hook's allow of a verified push; the hook asks about the rest. Codex and Gemini render it as before. Under the GitHub agent identity, Claude keeps this default (no `git push` rule), while Codex renders its `agentIdentityBucket` (`allow`) |
 | `switch-branches` | Default stays `ask` | `git checkout *` and `git switch *` are now in `excludedCommands`, because the desktop app runs sandboxed commands without consulting ask rules |
 
 `plan-store-commands` and `plan-lifecycle` (`roborepo plans sync-base` and `stop-servers`) together

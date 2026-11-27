@@ -19,6 +19,8 @@
 // of scope here.
 
 import { execFile, spawnSync } from "node:child_process";
+import os from "node:os";
+import path from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -95,9 +97,9 @@ export function defaultRunGitSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS } = {}
   return runGitProcessSync(cwd, args, { timeoutMs });
 }
 
-export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
+export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER, keepAgentGitConfig = false } = {}) {
   try {
-    const pending = execFileAsync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer }));
+    const pending = execFileAsync("git", [...HARDENING_ARGS, ...args], execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer, keepAgentGitConfig }));
     pending.child.stdin.on("error", () => {});
     pending.child.stdin.end(input);
     const result = await pending;
@@ -113,8 +115,8 @@ export async function runGitProcess(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, inp
   }
 }
 
-export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
-  const result = spawnSync("git", [...HARDENING_ARGS, ...args], { ...execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer }), input });
+export function runGitProcessSync(cwd, args, { timeoutMs = GIT_TIMEOUT_MS, input = null, binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER, keepAgentGitConfig = false } = {}) {
+  const result = spawnSync("git", [...HARDENING_ARGS, ...args], { ...execOptions(cwd, timeoutMs, { binary, plumbing, maxBuffer, keepAgentGitConfig }), input });
   if (result.error || result.status !== 0) {
     return {
       ok: false,
@@ -138,14 +140,127 @@ const REPOSITORY_ENV = [
   "GIT_COMMON_DIR",
 ];
 
-function gitEnvironment() {
-  const env = { ...process.env, ...HARDENING_ENV };
+// The Git settings file the github-agent-identity package installs, as RoboRepo renders it into agent
+// shells' `include.path` pair.
+const AGENT_GITCONFIG_REL = path.join("package-runtime", "github-agent-identity", "gitconfig");
+const AGENT_GITCONFIG_RENDERED = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
+
+function agentGitConfigPaths() {
+  const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), ".roborepo");
+  return new Set([
+    AGENT_GITCONFIG_RENDERED,
+    path.join(os.homedir(), ".roborepo", AGENT_GITCONFIG_REL),
+    path.join(stateRoot, AGENT_GITCONFIG_REL),
+  ]);
+}
+
+// The GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n pairs RoboRepo itself renders into agent shells:
+// `core.hooksPath`, and `include.path` naming the agent identity's Git settings file.
+function renderedAgentGitConfigPair(key, value) {
+  if (key === "core.hooksPath") return true;
+  return key === "include.path" && agentGitConfigPaths().has(value);
+}
+
+// `keepAgentGitConfig` exists for RoboRepo's own network calls (fetch and push), and for its commits,
+// which the same settings author as the bot. An agent's shell
+// carries the settings that make Git reach GitHub as the agent's identity (credential helper, HTTPS
+// routing) through an `include.path` pair among its GIT_CONFIG_COUNT / GIT_CONFIG_KEY_n /
+// GIT_CONFIG_VALUE_n variables. Stripping it would send those calls out as the user, or over SSH where
+// the sandbox blocks it. Only the pairs RoboRepo renders survive: `core.hooksPath`, and
+// `include.path` whose value is exactly the package's gitconfig path (as rendered, or expanded under
+// the state root). Every other pair is dropped and the kept ones are renumbered under a rebuilt
+// GIT_CONFIG_COUNT, so a pair an agent added (`core.sshCommand`, `credential.helper`) never reaches
+// these calls. GIT_CONFIG_PARAMETERS keeps only the sandbox's proxy settings (see
+// sandboxProxySetting); GIT_CONFIG and every other repository variable are still removed. The
+// wrapper's own `-c core.hooksPath=/dev/null` is a command-line setting that outranks env pairs, and
+// callers opt in per call, never by default.
+function gitEnvironment({ keepAgentGitConfig = false } = {}) {
+  const inherited = { ...process.env };
+  const env = { ...inherited, ...HARDENING_ENV };
   for (const name of REPOSITORY_ENV) delete env[name];
+  for (const name of Object.keys(env)) {
+    if (/^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(name)) delete env[name];
+  }
+  if (keepAgentGitConfig) {
+    // Walk the indexed pairs that exist rather than counting up to GIT_CONFIG_COUNT, which is
+    // inherited and could be large enough to stall the call before Git starts.
+    const count = Number.parseInt(inherited.GIT_CONFIG_COUNT ?? "", 10);
+    const indices = Number.isInteger(count)
+      ? Object.keys(inherited)
+        .map((name) => /^GIT_CONFIG_KEY_(0|[1-9]\d*)$/.exec(name)?.[1])
+        .filter((index) => index !== undefined)
+        .map(Number)
+        .filter((index) => index < count)
+        .sort((a, b) => a - b)
+      : [];
+    let kept = 0;
+    for (const i of indices) {
+      const key = inherited[`GIT_CONFIG_KEY_${i}`];
+      const value = inherited[`GIT_CONFIG_VALUE_${i}`];
+      if (typeof key !== "string" || typeof value !== "string" || !renderedAgentGitConfigPair(key, value)) continue;
+      env[`GIT_CONFIG_KEY_${kept}`] = key;
+      env[`GIT_CONFIG_VALUE_${kept}`] = value;
+      kept += 1;
+    }
+    if (kept > 0) env.GIT_CONFIG_COUNT = String(kept);
+    const proxySettings = parseConfigParameters(inherited.GIT_CONFIG_PARAMETERS).filter(([key, value]) => sandboxProxySetting(key, value));
+    // The 'key'='value' form keeps a key containing `=` (a URL-scoped proxy) whole.
+    if (proxySettings.length > 0) env.GIT_CONFIG_PARAMETERS = proxySettings.map(([key, value]) => `${sqQuote(key)}=${sqQuote(value)}`).join(" ");
+  }
   return env;
 }
 
-function execOptions(cwd, timeoutMs, { binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER } = {}) {
-  const env = gitEnvironment();
+// A sandboxed agent shell reaches the network only through the sandbox's proxy, and the sandbox
+// tells Git how to talk to that proxy in GIT_CONFIG_PARAMETERS: `http.proxyAuthMethod`, and an
+// empty `credential.<proxy url>.helper` so no helper is asked for the proxy's credentials. Without
+// them a fetch fails with "Proxy CONNECT aborted". These are the only entries kept: proxy settings,
+// and a helper reset, which can remove a credential helper but never add one.
+function sandboxProxySetting(key, value) {
+  const name = key.toLowerCase();
+  if (/^http\.(.+\.)?proxy[a-z]*$/.test(name)) return true;
+  return /^credential\..+\.helper$/.test(name) && value === "";
+}
+
+// GIT_CONFIG_PARAMETERS as Git writes it: shell single-quoted entries separated by spaces, each
+// either 'key=value' or 'key'='value', with a quote inside written as '\'' and an exclamation
+// mark as '\!'. Anything malformed yields no entries, so nothing is kept.
+function parseConfigParameters(text) {
+  if (typeof text !== "string" || !text.trim()) return [];
+  const words = [];
+  let i = 0;
+  const readQuoted = () => {
+    let out = "";
+    for (;;) {
+      if (text[i] !== "'") return null;
+      const end = text.indexOf("'", i + 1);
+      if (end === -1) return null;
+      out += text.slice(i + 1, end);
+      i = end + 1;
+      if (text[i] === "\\" && (text[i + 1] === "'" || text[i + 1] === "!")) { out += text[i + 1]; i += 2; continue; }
+      return out;
+    }
+  };
+  while (i < text.length) {
+    if (text[i] === " ") { i += 1; continue; }
+    const first = readQuoted();
+    if (first === null) return [];
+    if (text[i] === "=") {
+      i += 1;
+      const value = text[i] === "'" ? readQuoted() : "";
+      if (value === null) return [];
+      words.push([first, value]);
+      continue;
+    }
+    const eq = first.indexOf("=");
+    words.push(eq === -1 ? [first, ""] : [first.slice(0, eq), first.slice(eq + 1)]);
+  }
+  return words;
+}
+
+const sqQuote = (text) => `'${text.replace(/'/g, "'\\''")}'`;
+
+function execOptions(cwd, timeoutMs, { binary = false, plumbing = null, maxBuffer = GIT_MAX_BUFFER, keepAgentGitConfig = false } = {}) {
+  const env = gitEnvironment({ keepAgentGitConfig });
   // Only explicit plumbing callers can choose a temporary index/object store. Ambient repository
   // variables remain stripped; callers must create and own these paths.
   for (const [key, value] of Object.entries(plumbing || {})) {

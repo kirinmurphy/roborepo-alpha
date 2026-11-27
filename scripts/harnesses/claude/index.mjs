@@ -42,7 +42,7 @@ function readCoreHooksFragment() {
 function renderClaudeRootConfig(current, manifest, overrides = {}, options = {}) {
   const rendered = JSON.parse(renderClaudeSettings(current, manifest, overrides, options));
   rendered.hooks = mergeHooksMap(rendered.hooks || {}, readCoreHooksFragment()).hooks;
-  const sandbox = claudeSandboxSettings(resolveBehaviors(manifest, overrides.behaviors));
+  const sandbox = claudeSandboxSettings(resolveBehaviors(manifest, overrides.behaviors, { agentIdentity: options.agentIdentity }));
   if (sandbox) rendered.sandbox = sandbox;
   return `${JSON.stringify(rendered, null, 2)}\n`;
 }
@@ -110,6 +110,8 @@ export const claudeProvider = defineHarnessProvider({
       render: (content) => normalizeRootConfigContent("claude", content),
     },
     configEdit: jsonConfigEdit,
+    // Agent shells read settings.json's `env`.
+    agentShell: { envValue: (text, name) => jsonConfigEdit.get(text, ["env", name]).value },
     projectInventory: claudeProjectInventory,
     mcp: {
       ...stubGroups.mcp,

@@ -19,18 +19,24 @@ export function terminalLaunchSupported(platform = process.platform) {
 }
 
 // `name` names the script file, so repeated launches reuse one file instead of piling up copies.
-// The working directory is the script's own folder: neutral, empty, and owned by RoboRepo.
-export function launchInTerminal({ name, executable, args = [] }, {
+// The working directory is `cwd` when the program acts on a folder (a repo's setup), else the
+// script's own folder: neutral, empty, and owned by RoboRepo. A `cwd` must be an existing absolute
+// folder, like the executable. With `closeOnSuccess`, a run that exits 0 says so and closes its own
+// window a few seconds later; a failed run waits for Return before it exits, so a terminal profile
+// that closes the window when the shell exits cannot take the message with it.
+export function launchInTerminal({ name, executable, args = [], cwd = null, closeOnSuccess = false }, {
   platform = process.platform, dir = path.join(stateDir, "terminal-launch"), run = spawnSync,
 } = {}) {
   if (!terminalLaunchSupported(platform)) return { ok: false, reason: "unsupported_platform" };
   if (!path.isAbsolute(executable) || !fs.existsSync(executable)) return { ok: false, reason: "no_executable" };
+  if (cwd !== null && !(path.isAbsolute(cwd) && isDirectory(cwd))) return { ok: false, reason: "no_folder" };
   fs.mkdirSync(dir, { recursive: true });
   const scriptPath = path.join(dir, `${name}.command`);
+  const command = [executable, ...args].map(shellQuote).join(" ");
   fs.writeFileSync(scriptPath, [
     "#!/bin/sh",
-    `cd ${shellQuote(dir)} || exit 1`,
-    `exec ${[executable, ...args].map(shellQuote).join(" ")}`,
+    `cd ${shellQuote(cwd ?? dir)} || exit 1`,
+    ...(closeOnSuccess ? closingTail(command) : [`exec ${command}`]),
     "",
   ].join("\n"), { mode: 0o700 });
   fs.chmodSync(scriptPath, 0o700);
@@ -39,4 +45,49 @@ export function launchInTerminal({ name, executable, args = [] }, {
     return { ok: false, reason: "launch_failed", error: String(result.error?.message || result.stderr || `open exited ${result.status}`).trim() };
   }
   return { ok: true };
+}
+
+// Runs the command, then on success closes this window. Only Terminal can be asked to (other
+// terminal apps keep the window, and the message says it can be closed). The window is found by
+// this script's tty, so no other window is touched, and the close waits until the script has
+// exited, so Terminal has no running process to warn about. Closing a window ends every tab in it,
+// so a window the user added tabs to stays open. A script asking its own app needs no Automation
+// permission.
+function closingTail(command) {
+  const closer = [
+    "delay 1",
+    'tell application "Terminal"',
+    "  repeat with w in windows",
+    "    repeat with t in tabs of w",
+    '      if tty of t is "\'"$tty"\'" and (count of tabs of w) is 1 then close w',
+    "    end repeat",
+    "  end repeat",
+    "end tell",
+  ].map((line) => `-e '${line}'`).join(" ");
+  return [
+    command,
+    "status=$?",
+    'if [ "$status" -ne 0 ]; then',
+    '  printf "\\nIt stopped. Read the message above, then press Return.\\n"',
+    "  read -r _ || true",
+    '  exit "$status"',
+    "fi",
+    'if [ "$TERM_PROGRAM" != "Apple_Terminal" ]; then',
+    '  printf "\\nDone. You can close this window.\\n"',
+    "  exit 0",
+    "fi",
+    'printf "\\nDone. This window closes in 5 seconds unless it has other tabs.\\n"',
+    "sleep 5",
+    "tty=$(tty)",
+    `nohup osascript ${closer} >/dev/null 2>&1 &`,
+    "exit 0",
+  ];
+}
+
+function isDirectory(folder) {
+  try {
+    return fs.statSync(folder).isDirectory();
+  } catch {
+    return false;
+  }
 }

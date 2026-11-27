@@ -256,3 +256,71 @@ main.home-main { padding-top: 28px; padding-bottom: 40px; }
 /* The heading's ⚠ sits on the text's center line rather than its baseline, beside the label it marks. */
 .token-warnings-panel .domain-heading { align-items: center; column-gap: 8px; }
 .token-warnings-glyph { color: var(--warn); margin-right: -2px; }
+/* agent-identity.js: the setup offer above the repo list, the "agent bot" badge in a GitHub repo's
+   title, and the card behind them. */
+.agent-identity-offer { font-size: var(--text-sm); }
+.agent-identity-offer-body { display: grid; gap: 8px; }
+.agent-identity-offer-body p { margin: 0; }
+.agent-identity-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.agent-identity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  align-self: center;
+}
+.agent-identity-badge:hover, .agent-identity-badge:focus-visible { color: var(--ink); border-color: var(--dim); }
+.agent-identity-badge[hidden] { display: none; }
+.agent-identity-badge-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.agent-identity-badge[data-level="ok"] .agent-identity-badge-dot { background: var(--ok); }
+.agent-identity-badge[data-level="warn"] .agent-identity-badge-dot { background: var(--warn); }
+.agent-identity-badge[data-level="problem"] .agent-identity-badge-dot { background: var(--danger); }
+.agent-identity-state {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: var(--text-xs);
+}
+.agent-identity-state[data-level="ok"] { color: var(--ok, var(--ink)); }
+.agent-identity-state[data-level="warn"] { color: var(--warn); }
+.agent-identity-state[data-level="problem"] { color: var(--danger); }
+.agent-identity-state[data-level="muted"] { color: var(--dim); }
+.agent-identity-body { display: grid; gap: 12px; font-size: var(--text-sm); }
+.agent-identity-body p { margin: 0; }
+.agent-identity-summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.agent-identity-command { display: grid; gap: 4px; }
+.agent-identity-command-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.agent-identity-command-line code { font-family: var(--mono); overflow-wrap: anywhere; }
+/* A checklist: a done step is marked and dimmed, so the eye lands on what is left. */
+.agent-identity-steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+/* The number has its own column, so a wrapped line starts under the item's text, not its number. */
+.agent-identity-step { display: grid; grid-template-columns: 18px auto 1fr; gap: 8px; align-items: start; }
+.agent-identity-step-mark {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+.agent-identity-step[data-done="true"], .agent-identity-step[data-waiting="true"] { opacity: 0.55; }
+.agent-identity-step[data-done="true"] .agent-identity-step-mark { color: var(--ok, var(--ink)); border-color: currentColor; }
+.agent-identity-step-body { display: grid; gap: 4px; min-width: 0; }
+.agent-identity-step-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.agent-identity-step-number { color: var(--dim); }
+.agent-identity-step-note { color: var(--dim); }
+.agent-identity-step-action { display: grid; gap: 6px; justify-items: start; }
+.agent-identity-step-action[hidden] { display: none; }
+.agent-identity-owner { display: grid; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.agent-identity-owner-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.agent-identity-owner pre { margin: 0; white-space: pre-wrap; font-family: var(--mono); font-size: var(--text-xs); color: var(--dim); }

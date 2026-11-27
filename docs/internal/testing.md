@@ -55,7 +55,7 @@ generated-output drift (doctor), broken doc links, and whitespace errors or conf
 pushed commits. Doctor and the docs check read the working tree, not the pushed commits, so a dirty
 tree can make them disagree with what is pushed; CI covers that gap. The check skips doctor's Node
 release lookup (`ROBOREPO_SKIP_NODE_RELEASE_CHECK=1`) and its branch protection read
-(`ROBOREPO_SKIP_PROTECTION_CHECK=1`), and makes no network calls beyond the push's
+(`ROBOREPO_SKIP_PROTECTION_CHECK=1`) and agent identity read (`ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1`), and makes no network calls beyond the push's
 own remote, which it asks for its default branch only when `<remote>/HEAD` is not recorded. It does
 not run the plan validator: CI does not
 validate plans, and the lifecycle transition commands already validate each plan they move.

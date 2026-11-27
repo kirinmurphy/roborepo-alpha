@@ -13,6 +13,7 @@ cd "${repo_root}"
 export ROBOREPO_SKIP_NODE_RELEASE_CHECK=1
 # doctor's branch protection check reads GitHub through gh; doctor-protection-check.mjs covers it.
 export ROBOREPO_SKIP_PROTECTION_CHECK=1
+export ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1
 
 # An agent shell points git at RoboRepo's agent hooks through GIT_CONFIG_* (see
 # docs/user/reference/claude-hooks.md). Fixture repositories push to bare remotes with no default
@@ -20,6 +21,11 @@ export ROBOREPO_SKIP_PROTECTION_CHECK=1
 while IFS='=' read -r name _; do
   [[ "${name}" =~ ^GIT_CONFIG_(COUNT|KEY_[0-9]+|VALUE_[0-9]+)$ ]] && unset "${name}"
 done < <(env)
+
+# With the GitHub agent identity on, an agent shell also points gh at the bot's config folder and
+# blanks GH_TOKEN and GITHUB_TOKEN. Tests that run a fake gh as "the user" would inherit the bot's
+# folder and fail where CI, which has none of these, passes.
+unset GH_CONFIG_DIR GH_TOKEN GITHUB_TOKEN
 
 run() {
   echo ""

@@ -120,8 +120,9 @@ export function pendingCommitCount(store) {
 
 // Creates or reconnects `origin/repo-plans` and the reserved worktree, recovers a missing checkout, and
 // pushes pending commits. Idempotent. Unlike a mutation it never reports a local-only success: it
-// either ends with the remote holding the branch, or it fails with the reason.
-export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktrees", repoName = null } = {}) {
+// either ends with the remote holding the branch, or it fails with the reason. `explainUnreachable`
+// may name why `origin` did not answer (`{ message, resolution }`, or null to keep the general reason).
+export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktrees", repoName = null, explainUnreachable = null } = {}) {
   const git = repositoryGitDirs(cwd);
   if (!git) throw domainError("PLAN_NOT_FOUND", "This directory is not inside a Git repository.", { resolution: "Clone the repo, then run `roborepo plans init` inside it." });
   const primary = path.dirname(git.commonDir);
@@ -129,8 +130,12 @@ export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktr
 
   const origin = await run(["remote", "get-url", "origin"]);
   if (!origin.ok) throw initFailure("This repo has no `origin` remote, so its plans have nowhere to live.", "Add an `origin` remote, then run `roborepo plans init` again.", origin);
-  const remote = await run(["ls-remote", "--heads", "origin", LOCAL_REF], { timeoutMs: NETWORK_TIMEOUT_MS });
-  if (!remote.ok) throw initFailure("The `origin` remote could not be reached, so nothing was set up.", "Check the remote's address and your credentials, then run `roborepo plans init` again.", remote);
+  const remote = await run(["ls-remote", "--heads", "origin", LOCAL_REF], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
+  if (!remote.ok) {
+    const explained = explainUnreachable ? await explainUnreachable({ cwd: primary }) : null;
+    if (explained) throw initFailure(explained.message, explained.resolution, remote);
+    throw initFailure("The `origin` remote could not be reached, so nothing was set up.", "Check the remote's address and your credentials, then run `roborepo plans init` again.", remote);
+  }
 
   let state = "connected";
   if (remote.stdout.trim()) {
@@ -139,7 +144,7 @@ export async function initStore({ cwd = process.cwd(), worktreeRoot = "~/.worktr
     state = (await createRemoteBranch({ run, primary, worktreeRoot, repoName })) ? "created" : "connected";
   } else {
     // The remote lost the branch but this clone still has it: the local copy recreates it.
-    const pushed = await run(["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+    const pushed = await run(["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
     if (!pushed.ok) throw initFailure("The plans branch could not be pushed back to `origin`, so nothing was set up.", "Check that you can push to `origin`, then run `roborepo plans init` again.", pushed);
     await run(["update-ref", TRACKING_REF, LOCAL_REF]);
     state = "created";
@@ -171,7 +176,7 @@ function initFailure(message, resolution, result) {
 }
 
 async function fetchInto(run) {
-  const fetched = await run(["fetch", "--no-prune", "--no-tags", "origin", `+${LOCAL_REF}:${TRACKING_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+  const fetched = await run(["fetch", "--no-prune", "--no-tags", "origin", `+${LOCAL_REF}:${TRACKING_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
   if (!fetched.ok) throw initFailure("The plans branch could not be fetched.", "Check your credentials, then run `roborepo plans init` again.", fetched);
   // A local branch with pending commits is kept; only a machine without one takes the remote's.
   if (!(await run(["rev-parse", "--verify", "-q", LOCAL_REF])).ok) {
@@ -201,9 +206,10 @@ async function createRemoteBranch({ run, primary, worktreeRoot, repoName }) {
       if (!added.ok) throw initFailure("The plans scaffold could not be written.", "Run `git status` in the repo, resolve what it shows, then try again.", added);
     }
     const tree = await run(["write-tree"], { plumbing });
-    const commit = await run(["commit-tree", tree.stdout.trim(), "-m", "Create plans branch"]);
+    // Commits keep the agent's Git settings, so one made from an agent shell carries the bot as author.
+    const commit = await run(["commit-tree", tree.stdout.trim(), "-m", "Create plans branch"], { keepAgentGitConfig: true });
     if (!commit.ok) throw initFailure("The plans scaffold could not be committed.", "Set your Git user.name and user.email, then run `roborepo plans init` again.", commit);
-    const pushed = await run(["push", "origin", `${commit.stdout.trim()}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+    const pushed = await run(["push", "origin", `${commit.stdout.trim()}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
     if (!pushed.ok) {
       if (isPushRace(pushed)) {
         await fetchInto(run);
@@ -295,7 +301,7 @@ async function syncRemote(store) {
 }
 
 function fetchRemote(store) {
-  return storeGit(store, ["fetch", "--no-prune", "--no-tags", "origin", `+${LOCAL_REF}:${TRACKING_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+  return storeGit(store, ["fetch", "--no-prune", "--no-tags", "origin", `+${LOCAL_REF}:${TRACKING_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
 }
 
 // Brings the local branch up to the fetched remote. Returns the paths the remote changed that this
@@ -323,7 +329,8 @@ async function integrateRemote(store) {
 }
 
 async function replayPending(store, local, remote) {
-  let step = await storeGit(store, ["rebase", "--quiet", "--no-autostash", TRACKING_REF]);
+  // keepAgentGitConfig: replayed commits need a committer, which from an agent shell may be only the bot.
+  let step = await storeGit(store, ["rebase", "--quiet", "--no-autostash", TRACKING_REF], { keepAgentGitConfig: true });
   for (let guard = 0; !step.ok && guard < 50; guard += 1) {
     const conflicts = (await required(store, ["diff", "--name-only", "--diff-filter=U"])).split("\n").filter(Boolean);
     if (conflicts.length !== 1 || conflicts[0] !== PLANS_ORDER_RELATIVE_PATH) break;
@@ -331,7 +338,7 @@ async function replayPending(store, local, remote) {
     if (merged === null) break;
     fs.writeFileSync(path.join(store.root, PLANS_ORDER_RELATIVE_PATH), merged);
     await required(store, ["add", "--", PLANS_ORDER_RELATIVE_PATH]);
-    step = await storeGit(store, ["-c", "core.editor=true", "rebase", "--continue"]);
+    step = await storeGit(store, ["-c", "core.editor=true", "rebase", "--continue"], { keepAgentGitConfig: true });
   }
   if (step.ok) return;
   await storeGit(store, ["rebase", "--abort"]);
@@ -378,7 +385,7 @@ function sameRelativeOrder(a, b) {
 }
 
 async function pushBranch(store) {
-  const pushed = await storeGit(store, ["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS });
+  const pushed = await storeGit(store, ["push", "origin", `${LOCAL_REF}:${LOCAL_REF}`], { timeoutMs: NETWORK_TIMEOUT_MS, keepAgentGitConfig: true });
   if (pushed.ok) {
     // A single-branch clone's fetch refspec would not move this on its own, and pending counts read it.
     await storeGit(store, ["update-ref", TRACKING_REF, LOCAL_REF]);
@@ -500,7 +507,8 @@ async function commitFiles(store, planned, paths) {
     await required(store, ["add", "-A", "--", ...paths]);
     // An operation that recomputes identical content, such as pinning a pinned namespace, has nothing to commit.
     if ((await storeGit(store, ["diff", "--cached", "--quiet", "--", ...paths])).ok) return null;
-    await required(store, ["commit", "--quiet", "--only", "-m", planned.message, "--", ...paths]);
+    // keepAgentGitConfig: a save from an agent shell is authored by the bot that pushes it.
+    await required(store, ["commit", "--quiet", "--only", "-m", planned.message, "--", ...paths], { keepAgentGitConfig: true });
   } catch (err) {
     await storeGit(store, ["reset", "--quiet", "--", ...paths]);
     restore();

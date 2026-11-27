@@ -29,6 +29,7 @@
       "Bash(gh run view:*)",
       "Bash(gh repo view:*)",
       "Bash(gh pr create:*)",
+      "Bash(roborepo github status:*)",
       "Bash(roborepo agent-run:*)",
       "Bash(roborepo doctor:*)",
       "Bash(roborepo telemetry:*)",
@@ -116,7 +117,6 @@
       "Bash(git switch main:*)",
       "Bash(git checkout -B main:*)",
       "Bash(gh pr merge:*)",
-      "Bash(gh api:*)",
       "Bash(gh auth token:*)",
       "Bash(gh repo edit:*)",
       "Bash(gh repo delete:*)",
@@ -124,7 +124,9 @@
       "Bash(gh secret:*)",
       "Bash(gh variable:*)",
       "Bash(gh release:*)",
-      "Bash(gh workflow run:*)"
+      "Bash(gh workflow run:*)",
+      "Bash(gh api:*)",
+      "Bash(roborepo github setup:*)"
     ],
     "ask": [
       "Bash(git pull:*)",
@@ -246,6 +248,7 @@
       "git switch *",
       "roborepo plans *",
       "roborepo delivery *",
+      "roborepo github status *",
       "roborepo git worktrees *",
       "roborepo web *",
       "roborepo web-stop *",
@@ -271,6 +274,7 @@
       "roborepo package dev *",
       "./bin/roborepo plans *",
       "./bin/roborepo delivery *",
+      "./bin/roborepo github status *",
       "./bin/roborepo git worktrees *",
       "./bin/roborepo web *",
       "./bin/roborepo web-stop *",

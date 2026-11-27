@@ -1,0 +1,26 @@
+# Agent shells act on GitHub as the bot logged in under GH_CONFIG_DIR. Inherited helpers
+# (osxkeychain) may hold the user's credential, so the empty helper clears them first. Both are
+# scoped to github.com, so other hosts (a private GitLab remote, say) keep the user's helpers.
+[credential "https://github.com"]
+	helper =
+	helper = !gh auth git-credential
+# SSH remotes go over HTTPS, so git asks gh (as the bot) instead of using the user's SSH key.
+[url "https://github.com/"]
+	insteadOf = git@github.com:
+	insteadOf = ssh://git@github.com/
+# gitconfig.local is a Git config the setup writes. It points http.sslCAInfo at a copy of the
+# system CA bundle (ca-bundle.crt); Git ignores the include until the file exists.
+[include]
+	path = ~/.roborepo/github-agent/gitconfig.local
+# gitconfig.author, also written by the setup, makes the bot the author of agents' commits in
+# repos with a github.com remote (Git 2.36 or later; older Git skips the condition). Elsewhere the bot has no account, so commits keep the user's
+# author. One pattern per remote URL form; `*/**` because `**` alone does not cross the `/` in
+# `git@github.com:owner/repo`.
+[includeIf "hasconfig:remote.*.url:https://github.com/**"]
+	path = ~/.roborepo/github-agent/gitconfig.author
+[includeIf "hasconfig:remote.*.url:https://*@github.com/**"]
+	path = ~/.roborepo/github-agent/gitconfig.author
+[includeIf "hasconfig:remote.*.url:git@github.com:*/**"]
+	path = ~/.roborepo/github-agent/gitconfig.author
+[includeIf "hasconfig:remote.*.url:ssh://git@github.com/**"]
+	path = ~/.roborepo/github-agent/gitconfig.author

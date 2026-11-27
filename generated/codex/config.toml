@@ -34,7 +34,8 @@ enabled = false
 # END GENERATED AGENT PERMISSIONS
 
 # Agent shells run git hooks from ~/.codex/git-hooks: a pre-push check that refuses protected
-# branches, then the repo's own hooks.
+# branches, then the repo's own hooks. The GitHub Agent Identity package adds a second pair, which
+# includes its gitconfig, while it is on.
 [shell_environment_policy.set]
 GIT_CONFIG_COUNT = "1"
 GIT_CONFIG_KEY_0 = "core.hooksPath"

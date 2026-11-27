@@ -18,6 +18,7 @@ process.env.ROBOREPO_APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.m
 const {
   loadPermissionManifest,
   renderPermissionsTo,
+  renderCodexRules,
 } = await import("../cli/permissions-render.mjs");
 
 const manifest = loadPermissionManifest();
@@ -77,8 +78,13 @@ function makeHome() {
     fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
     fs.writeFileSync(path.join(home, ".codex", "config.toml"), "model_reasoning_effort = \"high\"\n");
     fs.mkdirSync(path.join(home, ".gemini"), { recursive: true });
-    const { touched } = renderPermissionsTo(home, { manifest, cwd: home });
-    assert.equal(touched.length, 3, "all three present harness targets are touched");
+    const { touched } = renderPermissionsTo(home, { manifest, cwd: home, agentIdentity: false });
+    // Codex also gets its rules/roborepo.rules prefix-rule file, rendered for the identity state.
+    const codexRules = path.join(home, ".codex", "rules", "roborepo.rules");
+    assert.equal(touched.length, 4, "all three present harness targets and Codex's rules file are touched");
+    assert.ok(touched.includes(codexRules), "Codex's rules file is touched");
+    assert.equal(fs.readFileSync(codexRules, "utf8"), renderCodexRules(manifest), "Codex's rules file is the identity-off render");
+    assert.equal(renderPermissionsTo(home, { manifest, cwd: home, agentIdentity: false }).touched.includes(codexRules), false, "an unchanged rules file is not rewritten");
 
     const settings = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
     assert.equal(settings.model, undefined, "model key is always stripped from Claude settings");
