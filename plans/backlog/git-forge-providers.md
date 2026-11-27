@@ -83,6 +83,7 @@ All of this was read from the code at `7303fe62`.
 | Setup page text | `modules/forge/agent-identity-guide.mjs` | github.com pages, classic token note and scopes |
 | Branch protection | `modules/forge/protection.mjs`, `protection-policy.mjs`; `roborepo protect` in `scripts/cli/protect.mjs` | Rulesets, classic protection, Actions-derived required checks |
 | Guided setup | `scripts/cli/github-setup.mjs` (`guidedSetup`, `inviteBot`, `storeToken`, `moveKeychainToken`, `installToken`) | Every step |
+| Command definitions | `manifests/platform/cli/command-definitions/github/` (`namespace.json`, `setup.command.json`, `status.command.json`) | The top-level `github` namespace |
 | Status and doctor | `scripts/cli/github-identity.mjs`; `explainBotRepoAccess` also serves `roborepo plans init` (`scripts/cli/plans-command.mjs`) | Reads as GitHub only |
 | Package state and routing gaps | `scripts/cli/agent-identity-package.mjs` | `AGENT_GITCONFIG_INCLUDE` path, package id |
 | Portal | `scripts/cli/repository-agent-identity.mjs` (server); `portal/home/agent-identity.js` (card), `portal/home/templates.js` (menu label) | `supportsAgentIdentity` tests `startsWith("git:github.com/")`; label "Agent GitHub account" |
@@ -110,7 +111,7 @@ a checked rule for every provider rather than a GitHub detail.
 
 ```mermaid
 flowchart LR
-  CLI["roborepo github setup / status, protect, doctor"] -->|asks for a repo's provider| R["modules/forge/registry.mjs"]
+  CLI["roborepo &lt;host-namespace&gt; github setup / status, protect, doctor"] -->|asks for a repo's provider| R["modules/forge/registry.mjs"]
   Portal["portal agent identity card"] -->|reads provider info from| Server["repository-agent-identity.mjs"]
   Server -->|asks| R
   Delivery["modules/delivery"] -->|asks| R
@@ -159,7 +160,7 @@ unsupported host is reported today (`{ supported: false }`, "not available for <
 | Capability | Methods (GitHub implementation today) | Used by |
 | --- | --- | --- |
 | `repository` | `parseRemote(url)` → `{ host, repo }` or null; `repository(context, repo)` | Repo targeting, delivery's remote check, plans init |
-| `agent-identity` | Reading: `readAccount(context)` → login, token expiry, scopes (`tokenInfo`); `readRepoAccess(context, repo, login)` (`collaboratorPermission`); `accountProblems(info)` (`tokenProblems`, required scopes); `agentEnv(stateDir)` (`botGhEnv`); `readStoredLogin(stateDir)` (`readAgentHosts`); `authorIdentity({ login, id })` (noreply email). Setup: `guide()` (`setupGuide`); `storeToken(...)`, `installToken(...)`; `invite(...)`, `acceptInvitation(...)`; `refreshLocalFiles(stateDir)` (CA bundle copy and author gitconfig) | Status, doctor, portal, `roborepo github setup` |
+| `agent-identity` | Reading: `readAccount(context)` → login, token expiry, scopes (`tokenInfo`); `readRepoAccess(context, repo, login)` (`collaboratorPermission`); `accountProblems(info)` (`tokenProblems`, required scopes); `agentEnv(stateDir)` (`botGhEnv`); `readStoredLogin(stateDir)` (`readAgentHosts`); `authorIdentity({ login, id })` (noreply email). Setup: `guide()` (`setupGuide`); `storeToken(...)`, `installToken(...)`; `invite(...)`, `acceptInvitation(...)`; `refreshLocalFiles(stateDir)` (CA bundle copy and author gitconfig) | Status, doctor, portal, the provider's setup command |
 | `branch-protection` | `readProtection(target)`, `applyProtection(target, options)`, `manualSteps` | `roborepo protect`, doctor, setup's protection step, portal |
 | `pull-requests` | `findPullRequest`, `editBody`, `markReady`, `rerunFailedChecks` (today's delivery calls); open for `openPullRequest` and `comment` when a later plan needs them | `roborepo delivery`, Runtime PR status (Part 03), review requests |
 
@@ -228,7 +229,10 @@ per provider entry.
   subcommands come from its manifest's `agent.commandNamespace`, backed by shared code
   (`scripts/cli/forge-setup.mjs`, `scripts/cli/forge-identity.mjs`).
 - `roborepo github setup` and `roborepo github status` stay as aliases with the same flags and
-  output. Installed rules, the Claude sandbox's excluded `github status` entry, older docs, and the
+  output. Command definitions have no alias field, so an alias is a second definition pointing at
+  the same module export: the existing files in
+  `manifests/platform/cli/command-definitions/github/` stay, with descriptions that name the new
+  form, and new definitions under the `<host-namespace>` folder call the same exports. Installed rules, the Claude sandbox's excluded `github status` entry, older docs, and the
   user's habits all name them, so removing them would break working setups. RoboRepo's own text
   (rules, fixes in status findings, setup guide, portal) switches to the new form.
 - Doctor checks each provider whose package is on, one line each; with only GitHub this is today's line.
@@ -306,9 +310,16 @@ can stop after any phase.
       guide and setup steps of `scripts/cli/github-setup.mjs` behind `agent-identity`. Derive state
       paths from `agent.stateFolder`.
 - [ ] **Phase 3: commands, doctor, and portal through the registry.** Shared
-      `scripts/cli/forge-identity.mjs` and `forge-setup.mjs`. Add the `<host-namespace>` command
-      namespace with `github setup` and `github status` under it, keep `roborepo github …` as
-      aliases, and switch RoboRepo's own text to the new form. Doctor iterates enabled providers. `scripts/cli/agent-identity-package.mjs` reads the
+      `scripts/cli/forge-identity.mjs` and `forge-setup.mjs`. Add a
+      `manifests/platform/cli/command-definitions/<host-namespace>/` folder with the namespace and
+      its `github setup` and `github status` definitions, calling the same exports as the existing
+      `github/namespace.json`, `setup.command.json`, and `status.command.json`, which stay as the
+      aliases. Give the new forms the same agent rules as the old: add the
+      `roborepo <host-namespace> github setup` prefix to the `set-up-github-identity` deny and the
+      status prefix to `check-github-identity` in `manifests/inventory/agent-permissions.json`, and
+      add `<host-namespace> github status` beside `github status` in the Claude sandbox's
+      `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` (`scripts/harnesses/claude/sandbox-settings.mjs`). Switch
+      RoboRepo's own text to the new form. Doctor iterates enabled providers. `scripts/cli/agent-identity-package.mjs` reads the
       package id and gitconfig path from the manifest. Portal server returns `provider`; card and menu
       label read from it; `supportsAgentIdentity` uses the server's list.
 - [ ] **Phase 4: protection and delivery through capabilities.** `roborepo protect`, the setup's
@@ -349,6 +360,14 @@ New checks, each failing without its phase:
   `hosts`, its config patches set only its `cli.identityVariables` and `networkDomains`, and a
   repo with a remote on another host gets neither the bot's credential helper nor its author
   (`git config --get-urlmatch` and `git var GIT_AUTHOR_IDENT` in a fixture repo).
+- **Namespaced commands:** `roborepo <host-namespace> github status --json` and `roborepo github
+  status --json` print identical output with the same exit code in the status check's fixture, the
+  same holds for `setup` on its "already done" path in the setup check's fixture, and `roborepo
+  --help` lists the new namespace.
+- **Agent rules cover both forms:** the rendered Claude and Codex permissions deny both setup forms
+  to agents and allow both status forms, and the Claude sandbox settings run both status forms
+  outside the sandbox (extending `permissions-render-live-characterization-check.mjs` and the
+  `claude-sandbox-projection-check.mjs`).
 - **Hook parity:** in each `HOST_CLIS` entry, `cli`, `identityVariables`, and `configSubfolder`
   equal the manifest's `cli.*` values and `packageId` and `stateFolder` equal its `agent.*` values;
   the Claude and Codex hook copies are byte-identical.
@@ -411,4 +430,5 @@ be identical apart from timestamps.
 | `docs/user/reference/roborepo-cli.md` | Document the `<host-namespace>` namespace and its `github setup` and `github status` commands; note `roborepo github …` as aliases |
 | `docs/user/guides/setup-and-daily-use.md`, `docs/user/reference/repositories.md`, `docs/user/reference/claude-hooks.md`, `docs/user/reference/codex-hooks.md`, `docs/user/guides/plan/lifecycle/plan-suite.md`, `docs/internal/portal-architecture.md` | Name the new setup and status commands; hook behavior is unchanged |
 | `globals/packages/github-agent-identity/rules.md`, `globals/packages/plan-suite/skills/plan-suite-init/SKILL.md` | Tell agents to send the user to the new setup command |
+| `globals/packages/github-agent-identity/package.config.json` (`description`) | Name the new setup command |
 | Repo-local `roborepo-development` skill | Name forge providers beside harness providers in its provider-adapter guidance, with the second-provider checklist |
