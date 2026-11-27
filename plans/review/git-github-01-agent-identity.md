@@ -1,6 +1,6 @@
 ---
 id: w7vls1yk
-next_action: Review at 7303fe62 is complete and waits on the owner's approval of that commit; then the owner merges PR 82 and runs /plan-close
+next_action: Approved at 7303fe62; the owner merges pull request 82 on GitHub, then runs /plan-close to record the plan as finished
 blocked_by: []
 depends_on: ["3xh2sq32"]
 related: ["rtkmc8kf", "f0jwe76j", "permva27", "developer-runtime-remote-branch-status", "4zyo2woj", "8bjltk2n", "vzgsx5vz", "i5mnkm7z", "pvgx8oh7", "git-exec-consolidation"]
@@ -704,6 +704,7 @@ reads status and opens the terminal.
 - Review Validator pass 7 at d90b551c: one actionable fix (refusal advice that did not fit a leftover or unknown package state), fixed in c86e2df5
 - Review Validator pass 8 at b1d75855: one blocking fix (the hook's quick pre-filter skipped a plain `codex exec -c` launch) and one actionable fix (a wrapper hid `codex`), both fixed in e3cc3198
 - Review Validator pass 9 at e3cc3198: no code fix; the docs now list the Codex launches the hook does not recognize (7303fe62). A subshell also hides `codex`, as it hides `gh pr merge` on `main` today
+- Approval: the owner answered "Approve 7303fe62" on 2026-11-27, after the review packet for that commit
 - CI passed at 7303fe62 (ubuntu, macos, windows-installer)
 - `protected-branch-push-check.mjs` and `github-setup-check.mjs` pass at 7303fe62 outside the Claude sandbox; each new case failed on the code before its fix
 - - CI passed at cb8a85b4 (ubuntu, macos, windows-installer); the macOS portal failures at 9d867253 (repo list and repo scope specs, a dropped connection) did not recur
