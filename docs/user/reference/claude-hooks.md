@@ -194,8 +194,10 @@ With the [GitHub agent identity](../guides/setup-and-daily-use.md#let-agents-act
 on, two rows change: the ask commands are allowed, and `gh api` is allowed. Everything else in the
 deny row stays denied, including `gh pr merge` and `gh auth token`.
 
-The protected-branch hook also denies the deny-bucket commands when global flags come first
-(`gh -R owner/repo api …`), a form the prefix rules miss. It lifts the `gh api` denial only when
+The protected-branch hook also denies the deny-bucket commands in forms the prefix rules miss: with
+global flags first (`gh -R owner/repo api …`), inside a subshell, `$(…)`, or backticks
+(`(gh pr merge 12)`), in a script string (`sh -c '…'`, `eval …`), and behind a wrapper (`env`,
+`command`, `timeout`, `xargs`). It lifts the `gh api` denial only when
 all three hold: the agent identity is installed (its Git config file
 `~/.roborepo/package-runtime/github-agent-identity/gitconfig` exists); the hook's own
 `GH_CONFIG_DIR` is exactly the agent identity's folder, `~/.roborepo/github-agent/gh` (or, under
@@ -236,9 +238,10 @@ exists but cannot be listed. Codex `-c` overrides on its command line never reac
 started with `-c shell_environment_policy…` could give its shells another `gh`. The hook cannot check
 your own command line, but while the identity is on it refuses an agent command that starts Codex
 with a `-c`/`--config` override of the shell environment or of a GitHub identity variable, run
-directly or behind a wrapper such as `env`. Indirect launches are not recognized, such as `npx codex`,
-`timeout` or `xargs` before `codex`, a subshell (`(codex …)`, `$(codex …)`), or a command built from a
-variable.
+directly, behind a wrapper (`env`, `command`, `timeout`, `xargs`, `npx codex`, `npx @openai/codex`),
+inside a subshell, `$(…)`, or backticks, or in a `sh -c` or `eval` string. A launch the hook cannot
+read is not recognized, such as one built from a variable, an alias, or another package runner
+(`npm exec`, `bunx`, `pnpm dlx`).
 
 The workflow an agent should follow:
 
