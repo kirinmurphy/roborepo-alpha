@@ -717,6 +717,11 @@ reads status and opens the terminal.
 - Reviewed implementation commit: 7303fe62116522317fbb6747c58ee8d48fc3382b
 - Base commit: e9595325e4c00264438fd760e65093080a46f549
 
+### Approval
+- Decision: approved
+- Reviewed implementation commit: 7303fe62116522317fbb6747c58ee8d48fc3382b
+- Confirmed by: human
+
 ## Not tested
 
 - [x] Codex with the identity off still cannot reach GitHub. — Verified by agent 2026-11-22 at
