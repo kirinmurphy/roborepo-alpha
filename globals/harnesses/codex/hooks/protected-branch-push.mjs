@@ -1523,9 +1523,11 @@ const LAUNCH_WRAPPERS = {
 }
 
 // Where the program a simple command finally runs sits: past what `programIndex` skips and past
-// the launch wrappers above, in any order.
+// the launch wrappers above, in any order. A wrapper named by its path (`/usr/bin/env gh`) is
+// skipped like the bare name; this only ever finds more programs to refuse.
 function launchedProgram(words) {
-  let i = programIndex(words)
+  const named = words.map((word) => (/^[^=]*\/[^/=]+$/.test(word) && SHELL_KEYWORDS.has(path.basename(word)) ? path.basename(word) : word))
+  let i = programIndex(named)
   for (;;) {
     const wrapper = LAUNCH_WRAPPERS[path.basename(words[i] ?? '')]
     if (!wrapper) return i
@@ -1533,8 +1535,38 @@ function launchedProgram(words) {
     while (i < words.length && words[i].startsWith('-') && words[i] !== '--') i += wrapper.values.has(words[i]) ? 2 : 1
     if (words[i] === '--') i += 1
     i += wrapper.operands
-    i += programIndex(words.slice(i))
+    i += programIndex(named.slice(i))
   }
+}
+
+// A program word as a name: its basename without an npx version (`@openai/codex@latest` is codex).
+function programName(word) {
+  return path.basename(word ?? '').replace(/(?<=.)@[^@/]*$/, '')
+}
+
+// Text the launched program at `at` runs as a script: the string a shell gets with `-c` or `<<<`,
+// what `eval` or `watch` runs, and an `env -S` string before it. An argument that only spells one
+// of these (`printf '%s' sh -c '…'`) runs nothing.
+function launchScripts(words, at) {
+  const name = programName(words[at])
+  const scripts = []
+  if (SHELLS.has(name)) {
+    const flag = words.findIndex((w, m) => m > at && /^-[a-z]*c[a-z]*$/.test(w))
+    if (flag !== -1 && words[flag + 1]) scripts.push(words[flag + 1])
+  }
+  if (SHELLS.has(name) || name === 'source' || name === '.') {
+    words.forEach((word, k) => {
+      if (k > at && word.includes('<<<')) scripts.push(word.slice(word.indexOf('<<<') + 3) || words[k + 1] || '')
+    })
+  }
+  if (name === 'eval' || name === 'watch') scripts.push(words.slice(at + 1).join(' '))
+  words.slice(0, at).forEach((word, k) => {
+    const rest = words.slice(k + 1, at + 1)
+    if (path.basename(word) === 'env' && rest.some((w) => /^(-S|--split-string)/.test(w))) {
+      scripts.push(words.slice(k + 1).map((w) => w.replace(/^(-S|--split-string=?)/, '')).join(' '))
+    }
+  })
+  return scripts
 }
 
 const CODEX_OVERRIDE_DENIAL = { decision: 'deny', reason: 'roborepo: a Codex `-c`/`--config` override of the shell environment or a GitHub identity variable never reaches a hook, so a Codex session started this way could run `gh api` as another account. Run it yourself.' }
@@ -1548,10 +1580,10 @@ function classifyLaunches(text) {
   for (const words of splitCommands(exposeNestedCommands(withoutComments(text)))) {
     if (words[0] === SCOPE_OPEN || words[0] === SCOPE_CLOSE) continue
     const at = launchedProgram(words)
-    const program = path.basename(words[at] ?? '')
+    const program = programName(words[at])
     if (program === 'gh') result = stricter(result, classifyGh(words.slice(at + 1), words.expands.slice(at + 1)))
     else if (program === 'codex' && codexIdentityOverride(words.slice(at + 1)) && agentIdentityActive()) result = stricter(result, CODEX_OVERRIDE_DENIAL)
-    for (const script of nestedScripts(words)) result = stricter(result, classifyLaunches(script))
+    for (const script of launchScripts(words, at)) result = stricter(result, classifyLaunches(script))
   }
   return result
 }

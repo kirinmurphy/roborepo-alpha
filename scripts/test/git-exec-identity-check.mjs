@@ -77,6 +77,10 @@ try {
   // The include.path pair expanded under the state root is accepted too.
   setPairs([["include.path", path.join(stateRoot, AGENT_GITCONFIG)]]);
   assert.equal((await get("roborepo.included", keep)).stdout.trim(), "1", "the expanded state-root path is accepted");
+  // A relative state root names the same absolute file the CLI renders.
+  process.env.ROBOREPO_STATE_ROOT = path.relative(process.cwd(), stateRoot);
+  assert.equal((await get("roborepo.included", keep)).stdout.trim(), "1", "a relative state root still accepts the absolute include");
+  process.env.ROBOREPO_STATE_ROOT = stateRoot;
 
   // An inherited count far past the pairs that exist must not stall the call before Git starts.
   process.env.GIT_CONFIG_COUNT = "999999999999";

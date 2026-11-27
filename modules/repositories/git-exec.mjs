@@ -146,7 +146,8 @@ const AGENT_GITCONFIG_REL = path.join("package-runtime", "github-agent-identity"
 const AGENT_GITCONFIG_RENDERED = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
 
 function agentGitConfigPaths() {
-  const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), ".roborepo");
+  // Resolved as roots.mjs resolves it, so a relative state root matches the absolute include rendered.
+  const stateRoot = process.env.ROBOREPO_STATE_ROOT ? path.resolve(process.env.ROBOREPO_STATE_ROOT) : path.join(os.homedir(), ".roborepo");
   return new Set([
     AGENT_GITCONFIG_RENDERED,
     path.join(os.homedir(), ".roborepo", AGENT_GITCONFIG_REL),

@@ -338,6 +338,13 @@ cases.push(
   ["(gh pr view 12)", "defer"],
   ["echo $(gh pr view 12 --json title)", "defer"],
   ["git commit -m 'run (gh pr merge 12) yourself'", "defer"],
+  // A wrapper named by its path is still a wrapper; an argument that only spells a shell runs nothing.
+  ["timeout 30 /usr/bin/env gh pr merge 12", "deny"],
+  ["/usr/bin/env gh pr merge 12", "deny"],
+  ["printf '%s\\n' sh -c 'gh pr merge 12'", "defer"],
+  ["echo eval gh pr merge 12", "defer"],
+  ["env -S 'gh pr merge 12'", "deny"],
+  ["bash <<< 'gh pr merge 12'", "deny"],
 );
 // The hook's gh deny list must cover every command the manifest denies, in the flag-first form the
 // prefix rules miss.
@@ -391,6 +398,9 @@ for (const [command, expected] of cases) {
       [`echo 'open a pr' | xargs codex exec -c 'shell_environment_policy.inherit=all'`, "deny"],
       [`npx codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
       [`npx -y @openai/codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`npx -y @openai/codex@latest exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`npx codex@0.50.0 exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
+      [`timeout 600 /usr/bin/env codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'`, "deny"],
       [`sh -c "codex exec -c 'shell_environment_policy.inherit=all' 'open a pr'"`, "deny"],
       [`codex exec -c 'model="o3"' 'list files'`, "defer"],
       [`(timeout 600 npx codex exec -c 'model="o3"' 'list files')`, "defer"],
