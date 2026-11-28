@@ -26,7 +26,7 @@ The page polls synchronization progress, but does not subscribe to general plan-
 
 Live file-change refresh and static no-argument command preflight are independent optional
 workstreams. Implement neither implicitly while preparing the other. Native invocation discovery
-is owned by [[wrap-up-coderabbit-integration-plan]] Workstream 1; decide static help only after its
+is owned by [[skills-vs-commands-invocation-policy]]; decide static help only after its
 supported provider mechanism is known. Manual refresh remains an acceptance fallback.
 
 ## Context
