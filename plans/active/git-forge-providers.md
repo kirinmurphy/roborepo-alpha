@@ -1,6 +1,6 @@
 ---
 id: m7gjz0p6
-next_action: Finish /plan-execute's handoff - push branch git-forge-providers, open the draft pull request, run the validation loop, wait for CI, then submit the plan to review.
+next_action: Run /plan-review on PR kirinmurphy/roborepo-alpha#96 - check the open Not tested entry (both setup forms in a real terminal with the bot set up) and decide whether untagged identity buckets should lift only when every provider's bot is on.
 blocked_by: []
 depends_on: ["w7vls1yk"]
 related: ["f0jwe76j", "developer-runtime-remote-branch-status", "3xh2sq32"]
@@ -614,3 +614,4 @@ None. The decisions made while writing this plan are in the Decision log.
 - Validation pass 1 at d5ec928b (fresh-context subagent): 4 actionable fix findings, all fixed in d5de920d
 - Validation pass 2 at d5de920d (fresh-context subagent): 1 blocking fix finding, fixed in 3135d77d; the Agents page's degraded read went to the Decision Log
 - Validation pass 3 at 2d3005b4 (fresh-context subagent): 1 actionable fix finding, fixed in 8d448421; Home's one-account read added to the second-provider checklist
+- Validation pass 4 at 8d448421 (fresh-context subagent): clean, notes only (Settings heading flashes "Agent Accounts" before the provider list loads; design rules 3 and 6 have no dedicated test, which the Validation list does not require)
