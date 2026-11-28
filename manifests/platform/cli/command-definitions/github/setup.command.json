@@ -2,12 +2,13 @@
   "path": ["github", "setup"],
   "kind": "command",
   "title": "setup",
-  "description": "Guided setup of the GitHub bot account agents use",
+  "description": "Same as roborepo git github setup",
   "order": 20,
   "usage": "roborepo github setup",
   "execution": {
     "adapter": "module",
-    "module": "scripts/cli/github-setup.mjs",
-    "export": "githubSetupCommand"
+    "module": "scripts/cli/forge-setup.mjs",
+    "export": "forgeSetupCommand",
+    "prependArgs": ["github"]
   }
 }

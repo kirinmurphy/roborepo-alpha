@@ -16,7 +16,7 @@ if (process.platform === "win32") {
   process.exit(0);
 }
 
-// modules/forge/ is the one home for `gh`: nothing else in shipped code may start it.
+// The GitHub provider's client is the one home for `gh`: nothing else in shipped code may start it.
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 const startsGh = /\b(?:execFile|execFileSync|execFileAsync|spawn|spawnSync)\(\s*["'`]gh["'`]/;
 const ghCallers = ["modules", "scripts/cli", "scripts/harnesses", "scripts/build", "scripts/lib", "scripts/install", "globals"]
@@ -24,8 +24,8 @@ const ghCallers = ["modules", "scripts/cli", "scripts/harnesses", "scripts/build
     .filter((entry) => entry.isFile() && /\.(?:mjs|js|cjs)$/.test(entry.name))
     .map((entry) => path.relative(repoRoot, path.join(entry.parentPath, entry.name))))
   .filter((file) => startsGh.test(fs.readFileSync(path.join(repoRoot, file), "utf8")));
-assert.deepEqual(ghCallers.map((file) => file.split(path.sep).join("/")), ["modules/forge/github.mjs"]);
-console.log("✓ Only modules/forge/ starts the GitHub CLI.");
+assert.deepEqual(ghCallers.map((file) => file.split(path.sep).join("/")), ["modules/forge/providers/github/client.mjs"]);
+console.log("✓ Only the GitHub provider's client starts the GitHub CLI.");
 
 const cli = fileURLToPath(new URL("../cli/main.mjs", import.meta.url));
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-protect-"));

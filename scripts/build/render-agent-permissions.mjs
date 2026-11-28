@@ -29,7 +29,7 @@ function generatedHomeForRepo(root) {
 }
 
 // The shipped baseline never assumes the optional GitHub agent identity package is on.
-const generatedRenderOptions = { home: generatedHomeForRepo(repoRoot), agentIdentity: false };
+const generatedRenderOptions = { home: generatedHomeForRepo(repoRoot), agentIdentityProviders: [] };
 
 // Provider manifest paths are home-relative (e.g. "~/.claude/settings.json"); the generated
 // candidate mirrors just the basename under generated/<provider-id>/. Most providers render

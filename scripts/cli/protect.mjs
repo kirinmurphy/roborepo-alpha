@@ -1,8 +1,9 @@
 // `roborepo protect`: report whether the current repo's plans and default branches match the
-// managed protection policy on GitHub and, unless --check is given, make them match.
+// managed protection policy on its Git host and, unless --check is given, make them match. The
+// repo's forge provider does the reading and writing through its `branch-protection` capability.
 import { currentRepositoryId } from "./current-repository.mjs";
-import { forgeTargetForRepositoryId } from "../../modules/forge/index.mjs";
-import { MERGE_POLICY_KEY } from "../../modules/forge/protection-policy.mjs";
+import { hasForgeCapability, providerForRepositoryId } from "../../modules/forge/index.mjs";
+import { MERGE_POLICY_KEY } from "../../modules/forge/protection-report.mjs";
 import { PROTECTED_STATES, applyProtection, readProtection } from "../../modules/forge/protection.mjs";
 import { isMainModule } from "./roots.mjs";
 
@@ -131,7 +132,7 @@ export function doctorLine(report) {
 async function doctorMode() {
   try {
     const repositoryId = await currentRepositoryId(process.cwd());
-    if (forgeTargetForRepositoryId(repositoryId)?.host !== "github.com") return 0;
+    if (!hasForgeCapability(providerForRepositoryId(repositoryId)?.provider, "branch-protection")) return 0;
     const { level, text } = doctorLine(await readProtection({ repositoryId, cwd: process.cwd(), timeoutMs: DOCTOR_TIMEOUT_MS }));
     console.log(text);
     return level === "hint" ? 1 : 0;

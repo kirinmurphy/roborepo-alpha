@@ -99,7 +99,7 @@ async function statusReadIsCachedAndCarriesNoToken(checkout) {
 
   const accountView = await loadAgentIdentityAccount({ now: () => clock, read: readAccountReport, platform: "darwin" });
   assert.equal(accountView.botLogin, "robo-bot");
-  assert.equal(accountView.guide.command, "roborepo github setup");
+  assert.equal(accountView.guide.command, "roborepo git github setup");
   assert.ok(accountView.guide.steps.some((step) => step.id === "token" && step.url === "https://github.com/settings/tokens/new"));
   assert.match(accountView.guide.lead, /where the bot is signed in/);
   assert.ok(!JSON.stringify(accountView).includes(TOKEN), "no token reaches the account answer");
@@ -340,7 +340,7 @@ async function setupLaunchIsTheServersChoice(checkout) {
   assert.equal(launches.length, 1);
   const { request } = launches[0];
   assert.equal(request.executable, process.execPath, "the Node running the portal");
-  assert.deepEqual(request.args, [path.join(repoRoot, "scripts", "cli", "main.mjs"), "github", "setup"]);
+  assert.deepEqual(request.args, [path.join(repoRoot, "scripts", "cli", "main.mjs"), "git", "github", "setup"]);
   assert.ok(path.isAbsolute(request.args[0]) && fs.existsSync(request.args[0]));
   assert.equal(request.cwd, checkout, "the setup runs in the repo's folder, so it sets up that repo");
   assert.equal(request.closeOnSuccess, true, "a finished setup closes its window");
@@ -350,7 +350,7 @@ async function setupLaunchIsTheServersChoice(checkout) {
   assert.deepEqual(failed, { launched: false, reason: "launch_failed", error: "open exited 1" });
   assert.equal((await launchAgentIdentitySetup({ repositoryId: GITHUB, stateRoot, platform: "linux", launch })).reason, "unsupported_platform");
   assert.equal((await launchAgentIdentitySetup({ repositoryId: NO_CHECKOUT, stateRoot, platform: "darwin", launch })).reason, "no_checkout");
-  assert.equal((await launchAgentIdentitySetup({ repositoryId: GITLAB, stateRoot, platform: "darwin", launch })).reason, "not_github");
+  assert.equal((await launchAgentIdentitySetup({ repositoryId: GITLAB, stateRoot, platform: "darwin", launch })).reason, "unsupported_host");
   assert.equal(launches.length, 1, "only the first call opened a terminal");
   await assert.rejects(launchAgentIdentitySetup({ repositoryId: "git:github.com/example/unknown", stateRoot, platform: "darwin", launch }), (error) => error.code === "NOT_FOUND");
 }

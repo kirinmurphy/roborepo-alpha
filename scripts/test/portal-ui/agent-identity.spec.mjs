@@ -11,8 +11,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { test, expect } from "@playwright/test";
-import { setupGuide } from "../../../modules/forge/agent-identity-guide.mjs";
-import { ownerMessage } from "../../../modules/forge/agent-identity.mjs";
+import { setupGuide } from "../../../modules/forge/providers/github/agent-identity-guide.mjs";
+import { ownerMessage } from "../../../modules/forge/providers/github/agent-identity.mjs";
 import { createPlanFixture } from "../lib/plan-git-fixture.mjs";
 import { addRepositorySource, removeFixtureContents, removeRepositorySources } from "./helpers.mjs";
 
@@ -527,7 +527,7 @@ test.describe("Agent GitHub account", () => {
     await openHome(page);
     await badge(page, "identity-invited").click();
     await card(page).getByRole("button", { name: "Open setup" }).click();
-    await expect(card(page)).toContainText("A terminal opened running roborepo github setup in identity-invited's folder.");
+    await expect(card(page)).toContainText("A terminal opened running roborepo git github setup in identity-invited's folder.");
     expect(posts).toEqual([{ kind: "setup", repositoryId: "git:github.com/example/identity-invited", body: "{}" }]);
     await card(page).getByRole("button", { name: "Close" }).click();
 
@@ -571,7 +571,7 @@ test.describe("Agent GitHub account", () => {
     await openHome(page);
     await offer(page).getByRole("button", { name: "Set it up" }).click();
     await expect(card(page).getByRole("button", { name: "Open setup" })).toBeHidden();
-    await expect(card(page).locator("[data-slot=command]")).toHaveText("roborepo github setup");
+    await expect(card(page).locator("[data-slot=command]")).toHaveText("roborepo git github setup");
     await card(page).getByRole("button", { name: "Close" }).click();
 
     await page.unrouteAll({ behavior: "ignoreErrors" });
@@ -584,7 +584,7 @@ test.describe("Agent GitHub account", () => {
     await expect(card(page).locator("[data-slot=command-row]")).toBeHidden();
     await card(page).getByRole("button", { name: "Open setup" }).click();
     await expect(card(page)).toContainText("The terminal did not open. Run the command below in your own terminal instead.");
-    await expect(card(page).locator("[data-slot=command]")).toHaveText("roborepo github setup");
+    await expect(card(page).locator("[data-slot=command]")).toHaveText("roborepo git github setup");
     // The command stands in for the button rather than beside it.
     await expect(card(page).getByRole("button", { name: "Open setup" })).toBeHidden();
   });
@@ -964,7 +964,7 @@ test.describe("Agent GitHub account", () => {
     await expect(card(page).locator("[data-slot=subject]")).toHaveText("Bot account (all repos)");
     // No repo folder to open the setup in, so the command is shown to run instead.
     await expect(card(page).locator("[data-slot=command-row]")).toBeVisible();
-    await expect(card(page).locator("[data-slot=command]")).toContainText("roborepo github setup");
+    await expect(card(page).locator("[data-slot=command]")).toContainText("roborepo git github setup");
     await expect(offer(page)).toBeHidden();
     await expect(page).toHaveURL(/\/$/);
   });
@@ -991,7 +991,7 @@ test.describe("Agent GitHub account", () => {
       current = ACCOUNTS["package-off"].report;
       return route.fulfill({ json: { ok: true } });
     });
-    const row = page.locator("#agent-identity-row");
+    const row = page.getByRole("group", { name: "Agent GitHub account" });
 
     await page.goto("/settings");
     await expect(row.getByRole("status")).toHaveText("Off: agents act on GitHub as you.");

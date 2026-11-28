@@ -1,11 +1,11 @@
-// The GitHub bot identity on Home. While the package is off, Home offers the setup once, in an info
+// The bot identity of the Git host's forge provider on Home (GitHub today). While the package is off, Home offers the setup once, in an info
 // prompt above the repo list that "No thanks" hides for good. Once the package is on, each GitHub
 // repo's title carries an "agent bot" badge (green when agents can work there, red when something
 // is in the way), and the badge opens a card listing, in setup order, the bot account, its token,
 // agents using it, the bot's invitation to that repo, and the branch rules. Settings owns the on/off
 // switch and links here to set it up. The card shows one action at a time, on the first open item:
 // the server turns the package on, applies the config, invites the bot, or protects branches; the
-// login and token go through `roborepo github setup`, which the server opens in a terminal, so the
+// login and token go through `roborepo git <provider> setup`, which the server opens in a terminal, so the
 // token is typed at its hidden prompt and never passes through here.
 import { portalFillSlots as fill, portalGetJson, portalPostJson, portalTpl as tpl, portalWireBackdropClose } from "/portal/shared/api.js";
 import { applyProtection, supportsProtectionPanel } from "/portal/shared/protection-panel.js";
@@ -17,7 +17,8 @@ const repoUrl = (repositoryId) => `/api/repositories/${encodeURIComponent(reposi
 // since the server re-checks the local facts, such as the package being on, on every request.
 const REUSE_MS = 5 * 60_000;
 const FOCUS_THROTTLE_MS = 2_000;
-const SETUP_COMMAND_PATTERN = /roborepo github setup/;
+// A fix that names the setup, in either form: `roborepo git <provider> setup` or its GitHub alias.
+const SETUP_COMMAND_PATTERN = /roborepo (?:git [a-z][a-z0-9-]* |github )setup/;
 const TOKEN_FINDINGS = new Set(["expired", "expiring", "no-expiry", "fine-grained-token", "broad-scopes", "scopes-missing", "token-in-keychain"]);
 const LEVEL_RANK = { ok: 0, muted: 1, warn: 2, problem: 3 };
 // How long the card shows "All set" after the last open item is checked off, before it closes.
@@ -25,10 +26,25 @@ const COMPLETE_CLOSE_MS = 5_000;
 // What each action's button says while it waits on the server.
 const BUSY_LABELS = { enable: "Turning on…", update: "Updating…", setup: "Opening…", invite: "Inviting…", protect: "Protecting…" };
 
-// The bot identity is a GitHub feature: only listed GitHub repos show it. The server has the last
-// word (`applies: false`), so a repo it turns down shows nothing either.
+// The forge providers the server lists, read once when Home loads: which hosts have an agent account,
+// and each one's name for labels. An unreadable list shows no agent account anywhere.
+const PROVIDERS = await portalGetJson("/api/forge-providers")
+  .then((providers) => providers.filter((provider) => provider.capabilities.includes("agent-identity")))
+  .catch(() => []);
+
+// The provider whose agent account a repo can use, by the host in its id, or null.
+export function agentIdentityProviderFor(repository) {
+  const id = String(repository?.repositoryId || "");
+  return PROVIDERS.find((provider) => provider.hosts.some((host) => id.startsWith(`git:${host}/`))) ?? null;
+}
+
+// "Agent GitHub account": the menu item, the card's title, and the Settings row all say it.
+export const agentAccountLabel = (provider) => `Agent ${provider?.displayName ?? "Git host"} account`;
+
+// Only listed repos on a host with an agent account show it. The server has the last word
+// (`applies: false`), so a repo it turns down shows nothing either.
 export function supportsAgentIdentity(repository) {
-  return supportsProtectionPanel(repository) && String(repository.repositoryId).startsWith("git:github.com/");
+  return supportsProtectionPanel(repository) && Boolean(agentIdentityProviderFor(repository));
 }
 
 let account = null; // { at, report }
@@ -293,6 +309,7 @@ function buildOffer(mount) {
   let note = null;
   let updated = null;
   mount.replaceChildren(node);
+  slot("label").textContent = agentAccountLabel(PROVIDERS[0]);
 
   slot("setup").addEventListener("click", () => openAccountCard());
   slot("fix").addEventListener("click", () => openAccountCard());
@@ -472,7 +489,7 @@ async function openSetup(button, repositoryId) {
       return {
         launched: result.launched,
         note: result.launched
-          ? `A terminal opened running roborepo github setup in ${names.get(repositoryId) || "the repo"}'s folder. Finish it there; this page updates when you come back.`
+          ? `A terminal opened running ${account?.report.guide?.command ?? "the setup"} in ${names.get(repositoryId) || "the repo"}'s folder. Finish it there; this page updates when you come back.`
           : launchFailureNote(result),
       };
     } catch (error) {
@@ -487,7 +504,7 @@ const LAUNCH_REASONS = {
   no_folder: "This repo's folder could not be found.",
   no_executable: "The portal could not find the program to run.",
   launch_failed: "The terminal did not open.",
-  not_github: "This repo is not on github.com.",
+  unsupported_host: "This repo's host has no agent account in RoboRepo.",
 };
 
 function launchFailureNote(result) {
@@ -674,6 +691,9 @@ function buildCard() {
     async open(next) {
       if (target?.closeTimer) clearTimeout(target.closeTimer);
       target = { ...next, copyFallback: false, note: null, hadOpenItems: false, closeTimer: null, running: null };
+      // The account card is the server's default provider's, which is the first one it lists.
+      const provider = next.kind === "account" ? PROVIDERS[0] : agentIdentityProviderFor({ repositoryId: next.repositoryId });
+      dialog.querySelector("#agent-identity-title").textContent = agentAccountLabel(provider);
       showChecking(next.kind === "account" ? "Bot account (all repos)" : next.name);
       showError(null);
       if (!dialog.open) dialog.showModal();

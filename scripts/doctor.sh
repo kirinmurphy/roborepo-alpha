@@ -461,9 +461,10 @@ check_branch_protection() {
   esac
 }
 
-# Whether agents in this GitHub repo act as the optional bot account safely. Not setting it up is
-# fine, and a problem is a hint, never a failure. Prints nothing outside a Git repo with a GitHub
-# origin. Test suites set ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1 to stay off the network.
+# Whether agents act as the optional bot account safely, for each forge provider (GitHub today)
+# that serves the current repo, one line each.
+# Not setting it up is fine, and a problem is a hint, never a failure. Prints nothing when no
+# provider applies here. Test suites set ROBOREPO_SKIP_AGENT_IDENTITY_CHECK=1 to stay off the network.
 check_agent_identity() {
   if ! command -v node >/dev/null 2>&1; then
     ok "node unavailable; skipped GitHub agent identity check"
@@ -475,15 +476,19 @@ check_agent_identity() {
   fi
   local output status
   set +e
-  output="$(node "${repo_root}/scripts/cli/github-identity.mjs" --doctor 2>&1)"
+  output="$(node "${repo_root}/scripts/cli/forge-identity.mjs" --doctor 2>&1)"
   status=$?
   set -e
   [[ -z "${output}" && "${status}" -eq 0 ]] && return 0
-  case "${status}" in
-    0) ok "${output}" ;;
-    1) hint "${output}" ;;
-    *) fail "GitHub agent identity check crashed: ${output}" ;;
-  esac
+  if [[ "${status}" -ne 0 && "${status}" -ne 1 ]]; then
+    fail "agent identity check crashed: ${output}"
+    return 0
+  fi
+  # The exit code is the worst line's level, so with several providers every line takes it.
+  local line
+  while IFS= read -r line; do
+    if [[ "${status}" -eq 0 ]]; then ok "${line}"; else hint "${line}"; fi
+  done <<< "${output}"
 }
 
 # Installed harness config that `roborepo update` would change: owned permission rules, sandbox and

@@ -23,7 +23,7 @@ Use it when you want to:
 
 | Command | What you get |
 | --- | --- |
-| `/plan-suite-init` | Set up a repo for the suite once: the plans branch and its worktree, where worktrees go, and `plans-config.json` with your plan-name namespaces. On a new machine it reconnects to the existing plans. It ends by checking [branch protection](#protect-the-plans-branch) and offering to add it, then runs `roborepo github status --json` and offers the [GitHub agent identity](../../setup-and-daily-use.md#let-agents-act-as-a-github-bot) setup when it is not set up. `/plan-write` runs it for you when the config is missing |
+| `/plan-suite-init` | Set up a repo for the suite once: the plans branch and its worktree, where worktrees go, and `plans-config.json` with your plan-name namespaces. On a new machine it reconnects to the existing plans. It ends by checking [branch protection](#protect-the-plans-branch) and offering to add it, then runs `roborepo git github status --json` and offers the [GitHub agent identity](../../setup-and-daily-use.md#let-agents-act-as-a-github-bot) setup when it is not set up. `/plan-write` runs it for you when the config is missing |
 | `/plan-write` | Create a plan with its initial checklist, or revise an existing one, including bringing it up to date with the repository |
 | `/plan-promote` | Review and prepare a plan for development, then move it to `ready/` |
 | `/plan-execute` | Start or resume implementation in an isolated worktree, check it with a validator and fix what it finds, then move the plan to `review/`; or fix findings a review sent back |

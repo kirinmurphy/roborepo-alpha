@@ -56,7 +56,9 @@ import { buildTelemetryRepositoryProjection, fixtureTelemetryRepositories, homeT
 import { previewRepositoryWorktree, removeRepositoryWorktree, stopRepositoryWorktreeServers } from "./worktree-cleanup.mjs";
 import { dismissWorktreeCleanupNotice, enableWorktreeCleanup } from "./worktree-cleanup-optin.mjs";
 import { applyRepositoryProtection, loadRepositoryProtection } from "./repository-protection.mjs";
-import { applyAgentGitRouting, dismissAgentIdentityOffer, inviteAgentBot, launchAgentIdentitySetup, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity } from "./repository-agent-identity.mjs";
+import {
+  applyAgentGitRouting, dismissAgentIdentityOffer, inviteAgentBot, launchAgentIdentitySetup, listPortalForgeProviders, loadAgentIdentityAccount, loadRepositoryAgentIdentity, turnOnAgentIdentity,
+} from "./repository-agent-identity.mjs";
 import { packageStatusSummary } from "./package-status.mjs";
 import { buildAnalysisPrompt } from "../harnesses/transcript-locate.mjs";
 import { insightsSummary } from "./telemetry-insights.mjs";
@@ -878,9 +880,10 @@ export async function serveCommand(args, { allowPortFallback = false, openPath =
     launchAgentIdentitySetup: (params) => launchAgentIdentitySetup(params),
     inviteAgentBot: (params) => inviteAgentBot(params),
     loadAgentIdentityAccount: (params) => loadAgentIdentityAccount(params),
-    turnOnAgentIdentity: () => turnOnAgentIdentity(),
+    turnOnAgentIdentity: (params) => turnOnAgentIdentity(params),
     dismissAgentIdentityOffer: () => dismissAgentIdentityOffer(),
-    applyAgentGitRouting: () => applyAgentGitRouting().finally(invalidateHookReadiness),
+    applyAgentGitRouting: (params) => applyAgentGitRouting(params).finally(invalidateHookReadiness),
+    listForgeProviders: () => listPortalForgeProviders(),
     // Source changes alter which repositories exist, so the cached Plans snapshot is rebuilt after
     // each one; enabling auto-discovery starts the first process scan immediately.
     loadRepositorySources: () => loadRepositorySources(),

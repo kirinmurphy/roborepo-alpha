@@ -61,72 +61,92 @@ const PLANS_STORE_BRANCH = 'repo-plans'
 
 const VERIFIED = { decision: 'allow', reason: 'roborepo: push to a non-protected branch, checked by the protected-branch hooks.' }
 // Git hosts whose CLI can act on the host without going through git, so the push guards cannot check
-// it. Each entry names the CLI and the command prefixes denied. Only `github` exists today, and the
-// classifier reads it by name, so a second host also needs its CLI wired into classifyCommand.
-// The `github` list covers the change-github-directly and merge-pull-requests behaviors in
+// it: one entry per forge provider, keyed by its id. Hooks import only Node built-ins, so this table
+// mirrors each provider's manifest (modules/forge/providers/<id>/provider.json): `cli`,
+// `identityVariables`, `configDirVariable`, `tokenVariables`, and `configSubfolder` equal its `cli.*`
+// values, `packageId` and `stateFolder` its `agent.*` values, and `displayName` its own; a check
+// (forge-provider-parity-check.mjs) keeps them equal. `denied` lists the command prefixes denied,
+// `allowedAsAgent` the ones lifted while the shell runs as the provider's agent identity (see
+// agentIdentityActive), and `liftRefusal` what still refuses a lifted command. The `github` denied
+// list covers the change-github-directly and merge-pull-requests behaviors in
 // agent-permissions.json; a test keeps the first equal to this list.
 const HOST_CLIS = {
   github: {
     cli: 'gh',
+    displayName: 'GitHub',
+    identityVariables: ['GH_CONFIG_DIR', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST'],
+    configDirVariable: 'GH_CONFIG_DIR',
+    tokenVariables: ['GH_TOKEN', 'GITHUB_TOKEN'],
+    packageId: 'github-agent-identity',
+    stateFolder: 'github-agent',
+    configSubfolder: 'gh',
+    // gh options that take their value as the next word, before or between subcommands.
+    valueOptions: ['-R', '--repo', '--hostname'],
     denied: [
       ['api'], ['auth', 'token'], ['pr', 'merge'], ['repo', 'edit'], ['repo', 'delete'], ['repo', 'rename'],
       ['secret'], ['variable'], ['release'], ['workflow', 'run'],
     ],
-    // Denied prefixes lifted while the shell runs as the agent identity (see agentIdentityActive).
     allowedAsAgent: [['api']],
+    // `gh api` stays refused, even as the bot, for a merge, an Authorization header, or GraphQL read
+    // from a file (see apiLiftRefusal and apiOperationRefusal).
+    liftRefusal: (args, expands) => apiLiftRefusal(args) ?? apiOperationRefusal(args, expands),
   },
 }
-// Variables that choose which account or host gh acts as.
-const GH_IDENTITY_VARIABLES = ['GH_CONFIG_DIR', 'GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'GH_HOST']
-// Set from the whole command before it is walked (see changesGhIdentity).
-let ghIdentityChanged = false
-// True when gh in this shell acts as the github-agent identity. Acting as the bot, GitHub's rulesets
-// and the bot's collaborator role limit what `gh api` can do; as the user, `gh api` could rewrite
-// main. It takes all three: the package's Git config file is installed, this hook's own
-// GH_CONFIG_DIR names the identity's gh config dir, and the command does not change gh's identity
-// itself.
-// Claude hooks share the session's environment, so an unset GH_CONFIG_DIR means a session started
-// before the identity was on, whose gh acts as the user: it must match exactly. Codex starts command
-// hooks with its own process environment, not the shell_environment_policy values its shells get, so
-// under Codex an unset GH_CONFIG_DIR is expected, and the hook reads those values from Codex's config
-// instead (codexShellsActAsBot).
-function agentIdentityActive() {
-  if (ghIdentityChanged) return false
+const HOST_CLI_ENTRIES = Object.values(HOST_CLIS)
+const hostCliFor = (program) => HOST_CLI_ENTRIES.find((entry) => entry.cli === program) ?? null
+// Variables that choose which account or host any provider's CLI acts as.
+const ALL_IDENTITY_VARIABLES = [...new Set(HOST_CLI_ENTRIES.flatMap((entry) => entry.identityVariables))]
+// Set from the whole command before it is walked (see changesHostIdentity).
+let hostIdentityChanged = false
+// True when the entry's CLI in this shell acts as that provider's agent identity. Acting as the bot,
+// the host's rules (GitHub's rulesets) and the bot's collaborator role limit what a lifted command
+// (`gh api`) can do; as the user, it could rewrite main. It takes all three: the provider package's
+// Git config file is installed, this hook's own config dir variable (GH_CONFIG_DIR) names the
+// identity's config dir, and the command does not change any CLI's identity itself.
+// Claude hooks share the session's environment, so an unset config dir variable means a session
+// started before the identity was on, whose CLI acts as the user: it must match exactly. Codex starts
+// command hooks with its own process environment, not the shell_environment_policy values its shells
+// get, so under Codex an unset config dir variable is expected, and the hook reads those values from
+// Codex's config instead (codexShellsActAsBot).
+function agentIdentityActive(entry) {
+  if (hostIdentityChanged) return false
   const stateRoot = process.env.ROBOREPO_STATE_ROOT || path.join(os.homedir(), '.roborepo')
-  if (!fs.existsSync(path.join(stateRoot, 'package-runtime', 'github-agent-identity', 'gitconfig'))) return false
-  // gh prefers a token or host from the environment over its config dir, so an inherited one means
-  // gh acts as whoever owns that token.
-  if (GH_IDENTITY_VARIABLES.some((name) => name !== 'GH_CONFIG_DIR' && process.env[name])) return false
-  const botDir = path.join(stateRoot, 'github-agent', 'gh')
-  if (forCodex && !codexShellsActAsBot(botDir, { userConfigRequired: !process.env.GH_CONFIG_DIR })) return false
-  const dir = process.env.GH_CONFIG_DIR
+  if (!fs.existsSync(path.join(stateRoot, 'package-runtime', entry.packageId, 'gitconfig'))) return false
+  // The CLI prefers a token or host from the environment over its config dir, so an inherited one
+  // means it acts as whoever owns that token.
+  if (entry.identityVariables.some((name) => name !== entry.configDirVariable && process.env[name])) return false
+  const botDir = path.join(stateRoot, entry.stateFolder, entry.configSubfolder)
+  if (forCodex && !codexShellsActAsBot(entry, botDir, { userConfigRequired: !process.env[entry.configDirVariable] })) return false
+  const dir = process.env[entry.configDirVariable]
   if (!dir) return forCodex
   return path.resolve(dir) === path.resolve(botDir)
 }
+const anyAgentIdentityActive = () => HOST_CLI_ENTRIES.some((entry) => agentIdentityActive(entry))
 
-// Whether Codex gives its shells the bot's gh. Its user config's [shell_environment_policy.set] table
-// must set GH_CONFIG_DIR to the bot's dir and empty GH_TOKEN and GITHUB_TOKEN (required when the hook
-// has no GH_CONFIG_DIR of its own), and no layer Codex puts above that file may set any of
-// GH_IDENTITY_VARIABLES to anything else. The package's gitconfig alone is not enough: an enable that
+// Whether Codex gives its shells the entry's bot. Its user config's [shell_environment_policy.set]
+// table must set the config dir variable (GH_CONFIG_DIR) to the bot's dir and empty the token
+// variables (GH_TOKEN and GITHUB_TOKEN; required when the hook has no config dir variable of its
+// own), and no layer Codex puts above that file may set any of the entry's identity variables to
+// anything else. The package's gitconfig alone is not enough: an enable that
 // could not set GH_CONFIG_DIR (one the user set themselves) still installs it, and gh in those shells
 // acts as the user. The user config is the one beside this hook's folder (~/.codex/hooks ->
 // ~/.codex), or CODEX_HOME's. Anything unreadable reads as no: a layer file or the profile folder
 // that exists but cannot be read, or a layer the line reader cannot follow. `-c` overrides on Codex's
 // own command line never reach a hook, so a session started with `-c shell_environment_policy...`
 // can still give its shells another gh; that is a known limit of this check.
-function codexShellsActAsBot(botDir, { userConfigRequired }) {
+function codexShellsActAsBot(entry, botDir, { userConfigRequired }) {
   const codexHome = process.env.CODEX_HOME || path.dirname(hookDir)
   const userFile = path.join(codexHome, 'config.toml')
-  const user = readCodexLayer(userFile, botDir)
+  const user = readCodexLayer(userFile, entry, botDir)
   if (user === null ? userConfigRequired : !user.keepsBot) return false
   if (userConfigRequired) {
-    const dir = user.set.get('GH_CONFIG_DIR')
-    if (!dir || path.resolve(dir) !== path.resolve(botDir) || user.set.get('GH_TOKEN') !== '' || user.set.get('GITHUB_TOKEN') !== '') return false
+    const dir = user.set.get(entry.configDirVariable)
+    if (!dir || path.resolve(dir) !== path.resolve(botDir) || entry.tokenVariables.some((name) => user.set.get(name) !== '')) return false
   }
   const layers = codexOverrideLayers(codexHome, userFile)
   if (!layers) return false
   return layers.every((file) => {
-    const layer = readCodexLayer(file, botDir)
+    const layer = readCodexLayer(file, entry, botDir)
     return layer === null || layer.keepsBot
   })
 }
@@ -168,21 +188,24 @@ function realFile(file) {
 
 // One Codex config file read line by line, without a TOML parser (hooks use only Node built-ins):
 // `set` holds the plain entries of its [shell_environment_policy.set] table, and `keepsBot` is false
-// when anything in it could give the shells another gh identity:
-// - one of GH_IDENTITY_VARIABLES named anywhere Codex reads shell settings from (the top level, a
-//   shell_environment_policy table, a profile) other than as a plain [shell_environment_policy.set]
-//   entry holding the bot's value: the bot's dir for GH_CONFIG_DIR, empty for the rest;
+// when anything in it could give the shells another identity for the entry's CLI:
+// - one of the entry's identity variables named anywhere Codex reads shell settings from (the top
+//   level, a shell_environment_policy table, a profile) other than as a plain
+//   [shell_environment_policy.set] entry holding the bot's value: the bot's dir for the config dir
+//   variable (GH_CONFIG_DIR), empty for the rest;
 // - a backslash there in a key, or in a shell_environment_policy or profile line, since an escape can
 //   spell one of those names;
-// - include_only, which can drop GH_CONFIG_DIR after it is set;
+// - include_only, which can drop the config dir variable after it is set;
 // - a line the reader cannot follow: a string left open at the end of its line, or one left open at
 //   the end of the file.
 // Comments are dropped first, outside strings only, so `# """` opens nothing. Lines inside multi-line
 // strings are text, not settings. null when the file does not exist; one that exists but cannot be
 // read keeps nothing.
-const IDENTITY_NAME = new RegExp(`(?<![A-Za-z0-9_])(?:${GH_IDENTITY_VARIABLES.join('|')})(?![A-Za-z0-9_])`)
+const identityNamePattern = (names) => new RegExp(`(?<![A-Za-z0-9_])(?:${names.join('|')})(?![A-Za-z0-9_])`)
+const ANY_IDENTITY_NAME = identityNamePattern(ALL_IDENTITY_VARIABLES)
 const SET_TABLE = 'shell_environment_policy.set'
-function readCodexLayer(file, botDir) {
+function readCodexLayer(file, cli, botDir) {
+  const identityName = identityNamePattern(cli.identityVariables)
   let text
   try {
     text = fs.readFileSync(file, 'utf8')
@@ -210,14 +233,14 @@ function readCodexLayer(file, botDir) {
     const entry = table === SET_TABLE && /^\s*"?([A-Za-z_][A-Za-z0-9_]*)"?\s*=\s*"([^"\\]*)"\s*(?:#.*)?$/.exec(line)
     if (entry) {
       set.set(entry[1], entry[2])
-      if (GH_IDENTITY_VARIABLES.includes(entry[1])) {
-        const bots = entry[1] === 'GH_CONFIG_DIR' ? entry[2] !== '' && path.resolve(entry[2]) === path.resolve(botDir) : entry[2] === ''
+      if (cli.identityVariables.includes(entry[1])) {
+        const bots = entry[1] === cli.configDirVariable ? entry[2] !== '' && path.resolve(entry[2]) === path.resolve(botDir) : entry[2] === ''
         if (!bots) keepsBot = false
       }
       continue
     }
     const key = line.split('=')[0]
-    if (IDENTITY_NAME.test(line) || /\binclude_only\b/.test(line) || key.includes('\\')
+    if (identityName.test(line) || /\binclude_only\b/.test(line) || key.includes('\\')
       || (line.includes('\\') && (table !== '' || /shell_environment_policy|profiles/.test(line)))) keepsBot = false
   }
   if (multiline) keepsBot = false
@@ -279,24 +302,25 @@ function isMissing(error) {
   return error?.code === 'ENOENT' || error?.code === 'ENOTDIR'
 }
 
-// Whether any command in `text`, nested ones included, could make gh act as someone other than the
-// identity: it assigns, exports, unsets, or otherwise names one of GH_IDENTITY_VARIABLES
-// (`GH_TOKEN=x gh api`, `export GH_TOKEN+=x`, `unset GH_CONFIG_DIR`, `env -u GH_CONFIG_DIR`), or runs
-// gh through `env`.
-function changesGhIdentity(text) {
-  const names = GH_IDENTITY_VARIABLES.join('|')
+// Whether any command in `text`, nested ones included, could make a provider's CLI act as someone
+// other than the identity: it assigns, exports, unsets, or otherwise names one of any entry's
+// identity variables (`GH_TOKEN=x gh api`, `export GH_TOKEN+=x`, `unset GH_CONFIG_DIR`,
+// `env -u GH_CONFIG_DIR`), or runs a provider's CLI through `env`.
+function changesHostIdentity(text) {
+  const names = ALL_IDENTITY_VARIABLES.join('|')
   const namesVariable = new RegExp(`^(?:--unset=|-u)?(?:${names})(?:\\+?=|$)|\\$\\{(?:${names}):?=`)
+  const clis = new Set(HOST_CLI_ENTRIES.map((entry) => entry.cli))
   for (const words of splitCommands(exposeNestedCommands(withoutComments(text)))) {
     if (words.some((word) => namesVariable.test(word))) return true
-    const gh = words.findIndex((word) => path.basename(word) === 'gh')
-    if (gh > 0 && words.slice(0, gh).some((word) => path.basename(word) === 'env')) return true
-    if (nestedScripts(words).some((script) => changesGhIdentity(script))) return true
+    const cli = words.findIndex((word) => clis.has(path.basename(word)))
+    if (cli > 0 && words.slice(0, cli).some((word) => path.basename(word) === 'env')) return true
+    if (nestedScripts(words).some((script) => changesHostIdentity(script))) return true
   }
   return false
 }
 // A `codex` command line whose `-c`/`--config` override touches the shell environment Codex hands its
-// shells, or names a GitHub identity variable. Hooks never see such overrides, so the session it starts
-// could give `gh` another account while its own hook lifts the `gh api` denial.
+// shells, or names a provider CLI's identity variable. Hooks never see such overrides, so the session
+// it starts could give `gh` another account while its own hook lifts the `gh api` denial.
 function codexIdentityOverride(args) {
   for (let k = 0; k < args.length; k += 1) {
     const arg = args[k]
@@ -304,13 +328,11 @@ function codexIdentityOverride(args) {
     if (arg === '-c' || arg === '--config') value = args[k + 1] ?? ''
     else if (arg.startsWith('--config=')) value = arg.slice('--config='.length)
     else if (/^-c./.test(arg)) value = arg.slice(2)
-    if (value !== null && (/shell_environment_policy/.test(value) || IDENTITY_NAME.test(value))) return true
+    if (value !== null && (/shell_environment_policy/.test(value) || ANY_IDENTITY_NAME.test(value))) return true
   }
   return false
 }
 
-// gh options that take their value as the next word, before or between subcommands.
-const GH_VALUE_OPTIONS = new Set(['-R', '--repo', '--hostname'])
 const hookDir = path.dirname(fileURLToPath(import.meta.url))
 const gitHooksDir = process.env.ROBOREPO_GIT_HOOKS_DIR || path.join(hookDir, '..', 'git-hooks')
 const forCodex = ['.codex', 'codex'].includes(path.basename(path.dirname(hookDir)))
@@ -761,7 +783,7 @@ function apiOperationRefusal(args, expands) {
 // entry counts as expanding.
 function apiOperation(args, expands) {
   let i = 0
-  while (i < args.length && args[i] !== 'api') i += GH_VALUE_OPTIONS.has(args[i]) ? 2 : 1
+  while (i < args.length && args[i] !== 'api') i += HOST_CLIS.github.valueOptions.includes(args[i]) ? 2 : 1
   let endpoint = null
   const queries = []
   let optionsEnded = false
@@ -827,25 +849,24 @@ function apiLiftRefusal(args) {
   return null
 }
 
-// gh with its options removed, matched against the host's denied list.
+// A provider's CLI with its options removed, matched against that entry's denied list.
 // `expands` holds, per argument, whether the shell expands anything in it (see splitCommands).
-function classifyGh(args, expands) {
+function classifyHostCli(entry, args, expands) {
   const words = []
   for (let i = 0; i < args.length; i += 1) {
-    if (GH_VALUE_OPTIONS.has(args[i])) i += 1
+    if (entry.valueOptions.includes(args[i])) i += 1
     else if (!args[i].startsWith('-')) words.push(args[i])
   }
-  const { denied: deniedList, allowedAsAgent } = HOST_CLIS.github
-  const denied = deniedList.find((prefix) => prefix.every((word, k) => words[k] === word))
+  const denied = entry.denied.find((prefix) => prefix.every((word, k) => words[k] === word))
   if (!denied) return null
-  if (allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive()) {
-    const refusal = apiLiftRefusal(args) ?? apiOperationRefusal(args, expands)
+  if (entry.allowedAsAgent.some((prefix) => prefix.join(' ') === denied.join(' ')) && agentIdentityActive(entry)) {
+    const refusal = entry.liftRefusal(args, expands)
     if (!refusal) return null
     return { decision: 'deny', reason: `roborepo: ${refusal}` }
   }
   return {
     decision: 'deny',
-    reason: `roborepo: \`gh ${denied.join(' ')}\` acts on GitHub without going through git, so the protected-branch guards cannot check it. Run it yourself.`,
+    reason: `roborepo: \`${entry.cli} ${denied.join(' ')}\` acts on ${entry.displayName} without going through git, so the protected-branch guards cannot check it. Run it yourself.`,
   }
 }
 
@@ -1618,8 +1639,8 @@ function classifyLaunches(text) {
     if (words[0] === SCOPE_OPEN || words[0] === SCOPE_CLOSE) continue
     const at = launchedProgram(words)
     const program = programName(words[at])
-    if (program === 'gh') result = stricter(result, classifyGh(words.slice(at + 1), words.expands.slice(at + 1)))
-    else if (program === 'codex' && codexIdentityOverride(words.slice(at + 1)) && agentIdentityActive()) result = stricter(result, CODEX_OVERRIDE_DENIAL)
+    if (hostCliFor(program)) result = stricter(result, classifyHostCli(hostCliFor(program), words.slice(at + 1), words.expands.slice(at + 1)))
+    else if (program === 'codex' && codexIdentityOverride(words.slice(at + 1)) && anyAgentIdentityActive()) result = stricter(result, CODEX_OVERRIDE_DENIAL)
     for (const script of launchScripts(words, at)) result = stricter(result, classifyLaunches(script))
   }
   return result
@@ -1729,11 +1750,11 @@ function mayRunScripts(text) {
 }
 
 // Whether the simple command `words` only stores or forwards a heredoc as data: `cat` (into a file
-// or a substitution), `tee`, a git message read from stdin, or a gh body.
+// or a substitution), `tee`, a git message read from stdin, or a body for a provider's CLI (gh).
 function readsHeredocAsData(words) {
   const p = programIndex(words)
   const program = path.basename(words[p] ?? '')
-  if (['cat', 'tee', 'gh'].includes(program)) return true
+  if (['cat', 'tee'].includes(program) || hostCliFor(program)) return true
   if (program !== 'git') return false
   let j = p + 1
   while (j < words.length && words[j].startsWith('-')) j += GIT_VALUE_OPTIONS.has(words[j]) ? 2 : 1
@@ -2021,7 +2042,8 @@ const command = Array.isArray(rawCommand) ? rawCommand.map((w) => `'${String(w).
 // backtick can build a word the quick check cannot see (`$'pu\x73h'`, `pu$(true)sh`), so it sends
 // the command to the full check. Interpreter code lists words with commas (`['git','push']`), so the
 // check also reads the text with its commas kept.
-const KEYWORDS = /\b(push|gh|codex|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\b/
+// Every provider's CLI is a keyword, so a second host's commands reach the checks too.
+const KEYWORDS = new RegExp(`\\b(push|${HOST_CLI_ENTRIES.map((entry) => entry.cli).join('|')}|codex|rm|rmdir|unlink|delete|xargs|clean|reset|restore|stash|merge|pull|rebase|cherry-pick|am)\\b`)
 if (!SHELL_TOOLS.has(toolName) || typeof command !== 'string'
   || !(KEYWORDS.test(command.replace(/\\\n/g, '').replace(/['"\\{},]/g, ''))
     || KEYWORDS.test(command.replace(/['"\\{}]/g, '')) || /[$`]/.test(command))) process.exit(0)
@@ -2032,7 +2054,7 @@ unsandboxed = toolInput.dangerouslyDisableSandbox === true
 
 // Every walk reads the command without the heredoc bodies that are plainly data.
 const text = withoutHeredocBodies(command)
-ghIdentityChanged = changesGhIdentity(text)
+hostIdentityChanged = changesHostIdentity(text)
 // A delete's, merge's, or gh/codex launch's ask or deny outranks a verified push, so the push allow
 // never covers it.
 let result = stricter(stricter(classifyCommand(text, cwd), classifyDeletes(text, cwd)), classifyLaunches(text))

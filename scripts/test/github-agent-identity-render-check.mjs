@@ -26,32 +26,32 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifests", "inventory", "agent-permissions.json"), "utf8"));
 const commands = resolveArbitraryCommands(manifest);
 
-const codexConfig = (agentIdentity, overrides = {}) =>
-  renderCodexConfig("", resolveBehaviors(manifest, overrides, { agentIdentity }), commands, "config.toml", { agentIdentity });
+const codexConfig = (agentIdentityProviders, overrides = {}) =>
+  renderCodexConfig("", resolveBehaviors(manifest, overrides, { agentIdentityProviders }), commands, "config.toml", { agentIdentityProviders });
 
 // Codex: off.
-const off = codexConfig(false);
+const off = codexConfig([]);
 assert.match(off, /\[permissions\.managed-workspace\.network\]\nenabled = false/, "off: Codex network stays off");
 assert.doesNotMatch(off, /cert\.pem/, "off: no CA bundle grants");
 assert.doesNotMatch(off, /github\.com/, "off: no GitHub domains");
 
 // Codex: on.
-const on = codexConfig(true);
+const on = codexConfig(["github"]);
 assert.match(on, /\[permissions\.managed-workspace\.network\]\nenabled = true/, "on: Codex network is on");
 assert.doesNotMatch(on, /cert\.pem/, "on: no CA bundle grants (setup copies the bundle instead)");
 assert.match(on, /^"~\/\.ssh\/\*\*" = "deny"$/m, "on: SSH keys stay denied");
 assert.doesNotMatch(on, /allow_local_binding\s*=\s*true/, "on: no local binding");
-assert.equal(codexConfig(true), on, "on: rendering is stable");
+assert.equal(codexConfig(["github"]), on, "on: rendering is stable");
 
 // The identity bucket applies before personal overrides, which still win.
-const overridden = resolveBehaviors(manifest, { "read-and-reply-on-github": "deny" }, { agentIdentity: true });
+const overridden = resolveBehaviors(manifest, { "read-and-reply-on-github": "deny" }, { agentIdentityProviders: ["github"] });
 assert.equal(overridden.find((b) => b.id === "read-and-reply-on-github").bucket, "deny", "a personal override beats the identity bucket");
-assert.equal(resolveBehaviors(manifest, {}, { agentIdentity: true }).find((b) => b.id === "push-code").bucket, "allow");
+assert.equal(resolveBehaviors(manifest, {}, { agentIdentityProviders: ["github"] }).find((b) => b.id === "push-code").bucket, "allow");
 assert.equal(resolveBehaviors(manifest).find((b) => b.id === "push-code").bucket, "ask", "default bucket without the identity");
 
 // Codex rules: pushes stop prompting under the identity; setup stays forbidden and status allowed.
 const rulesOff = renderCodexRules(manifest);
-const rulesOn = renderCodexRules(manifest, {}, { agentIdentity: true });
+const rulesOn = renderCodexRules(manifest, {}, { agentIdentityProviders: ["github"] });
 const rule = (text, pattern) => text.split("\n").find((line) => line.startsWith(`prefix_rule(pattern=${pattern},`)) ?? "";
 assert.match(rule(rulesOff, '["git", "push"]'), /decision="prompt"/);
 assert.match(rule(rulesOn, '["git", "push"]'), /decision="allow"/);
@@ -66,7 +66,7 @@ assert.match(rule(rulesOn, '["gh", "api"]'), /decision="allow"/);
 
 // Claude.
 const claudeOff = claudePermissions(manifest);
-const claudeOn = claudePermissions(manifest, {}, { agentIdentity: true });
+const claudeOn = claudePermissions(manifest, {}, { agentIdentityProviders: ["github"] });
 assert.ok(claudeOff.deny.includes("Bash(gh api:*)"), "off: gh api denied");
 assert.ok(!claudeOff.allow.includes("Bash(gh api:*)"));
 assert.ok(claudeOn.allow.includes("Bash(gh api:*)"), "on: gh api allowed");
@@ -87,7 +87,7 @@ for (const [label, rules] of [["off", claudeOff], ["on", claudeOn]]) {
   }
 }
 // A personal push-code override still renders for Claude under the identity.
-assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { agentIdentity: true }).deny.includes("Bash(git push:*)"));
+assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { agentIdentityProviders: ["github"] }).deny.includes("Bash(git push:*)"));
 
 // Doctor's preview renders what the live render writes, identity included, so an identity-on
 // install does not read as drift that `roborepo update` would not change.
@@ -97,11 +97,11 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
     const codexConfigFile = path.join(tmp, ".codex", "config.toml");
     fs.mkdirSync(path.dirname(codexConfigFile), { recursive: true });
     fs.writeFileSync(codexConfigFile, "");
-    for (const agentIdentity of [true, false]) {
-      renderPermissionsTo(tmp, { manifest, agentIdentity });
-      const preview = previewPermissionRenders(tmp, { manifest, agentIdentity }).find((entry) => entry.file === codexConfigFile);
+    for (const agentIdentityProviders of [["github"], []]) {
+      renderPermissionsTo(tmp, { manifest, agentIdentityProviders });
+      const preview = previewPermissionRenders(tmp, { manifest, agentIdentityProviders }).find((entry) => entry.file === codexConfigFile);
       assert.ok(preview, "the Codex config is previewed");
-      assert.equal(preview.render(), fs.readFileSync(codexConfigFile, "utf8"), `identity ${agentIdentity ? "on" : "off"}: the preview matches the live render`);
+      assert.equal(preview.render(), fs.readFileSync(codexConfigFile, "utf8"), `identity ${agentIdentityProviders ? "on" : "off"}: the preview matches the live render`);
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -121,10 +121,10 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
   try {
     const codexHome = path.join(tmp, ".codex");
     const file = path.join(codexHome, CODEX_RULES_HOME_SUB);
-    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentity: true }), true);
+    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentityProviders: ["github"] }), true);
     assert.equal(fs.readFileSync(file, "utf8"), rulesOn);
-    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentity: true }), false, "an unchanged render writes nothing");
-    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentity: false }), true);
+    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentityProviders: ["github"] }), false, "an unchanged render writes nothing");
+    assert.equal(writeCodexRulesFile(codexHome, { manifest, agentIdentityProviders: [] }), true);
     assert.equal(fs.readFileSync(file, "utf8"), fs.readFileSync(path.join(repoRoot, "generated", "codex", "rules", "roborepo.rules"), "utf8"));
 
     // A rules folder linked into the checkout is never written through.
@@ -133,19 +133,19 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
     const linkedHome = path.join(tmp, "linked");
     fs.mkdirSync(linkedHome);
     fs.symlinkSync(checkoutRules, path.join(linkedHome, "rules"));
-    assert.equal(writeCodexRulesFile(linkedHome, { manifest, agentIdentity: true }), false);
+    assert.equal(writeCodexRulesFile(linkedHome, { manifest, agentIdentityProviders: ["github"] }), false);
     assert.equal(fs.readFileSync(path.join(checkoutRules, "roborepo.rules"), "utf8"), shipped, "a rules folder linked into the checkout is left alone");
 
     // A Codex home linked into the checkout is never written through either, whether the rules
     // folder below it exists or would be made.
     const checkoutCodex = path.join(repoRoot, "generated", "codex");
     fs.symlinkSync(checkoutCodex, path.join(tmp, "linked-home"));
-    assert.equal(writeCodexRulesFile(path.join(tmp, "linked-home"), { manifest, agentIdentity: true }), false);
+    assert.equal(writeCodexRulesFile(path.join(tmp, "linked-home"), { manifest, agentIdentityProviders: ["github"] }), false);
     assert.equal(fs.readFileSync(path.join(checkoutRules, "roborepo.rules"), "utf8"), shipped, "a rules folder below a linked home is left alone");
     const noRules = path.join(repoRoot, "generated");
     assert.ok(!fs.existsSync(path.join(noRules, "rules")));
     fs.symlinkSync(noRules, path.join(tmp, "linked-bare-home"));
-    assert.equal(writeCodexRulesFile(path.join(tmp, "linked-bare-home"), { manifest, agentIdentity: true }), false);
+    assert.equal(writeCodexRulesFile(path.join(tmp, "linked-bare-home"), { manifest, agentIdentityProviders: ["github"] }), false);
     assert.ok(!fs.existsSync(path.join(noRules, "rules")), "no rules folder is made inside the checkout");
 
     // A rules folder linked anywhere else (a dotfiles folder) gets the file, like a real folder.
@@ -154,13 +154,13 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
     fs.mkdirSync(dotfilesRules, { recursive: true });
     fs.mkdirSync(dotfilesHome);
     fs.symlinkSync(dotfilesRules, path.join(dotfilesHome, "rules"));
-    assert.equal(writeCodexRulesFile(dotfilesHome, { manifest, agentIdentity: true }), true);
+    assert.equal(writeCodexRulesFile(dotfilesHome, { manifest, agentIdentityProviders: ["github"] }), true);
     assert.equal(fs.readFileSync(path.join(dotfilesRules, "roborepo.rules"), "utf8"), rulesOn, "a rules folder linked outside the checkout is written through");
     // So does a home linked to a dotfiles folder, with its rules folder made there.
     const dotfilesCodex = path.join(tmp, "dotfiles", "codex");
     fs.mkdirSync(dotfilesCodex);
     fs.symlinkSync(dotfilesCodex, path.join(tmp, "dotfiles-linked-home"));
-    assert.equal(writeCodexRulesFile(path.join(tmp, "dotfiles-linked-home"), { manifest, agentIdentity: true }), true);
+    assert.equal(writeCodexRulesFile(path.join(tmp, "dotfiles-linked-home"), { manifest, agentIdentityProviders: ["github"] }), true);
     assert.equal(fs.readFileSync(path.join(dotfilesCodex, "rules", "roborepo.rules"), "utf8"), rulesOn);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -173,9 +173,9 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
 // render writes: the identity's buckets when it is on, personal overrides on top.
 {
   fs.writeFileSync(path.join(stateRoot, "command-overrides.json"), JSON.stringify({ behaviors: { "post-to-github": "deny" }, commands: {} }));
-  const byId = (agentIdentity) => new Map(effectivePermissions({ agentIdentity }).behaviors.map((b) => [b.id, b]));
-  const on = byId(true);
-  const off = byId(false);
+  const byId = (agentIdentityProviders) => new Map(effectivePermissions({ agentIdentityProviders }).behaviors.map((b) => [b.id, b]));
+  const on = byId(["github"]);
+  const off = byId([]);
   assert.equal(on.get("read-and-reply-on-github").bucket, "allow", "on: gh api shows allow");
   assert.equal(on.get("read-and-reply-on-github").defaultBucket, "allow", "on: its default is the identity bucket");
   assert.equal(on.get("push-code").bucket, "allow");

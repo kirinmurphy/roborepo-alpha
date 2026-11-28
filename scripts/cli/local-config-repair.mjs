@@ -81,10 +81,10 @@ function parseMode(args) {
   return mode;
 }
 
-// `agentIdentity` overrides whether the GitHub agent identity package counts as on (tests); by
+// `agentIdentityProviders` overrides which forge providers' agent identity packages count as on (tests); by
 // default the permission render reads it from package state, as `roborepo update` does.
-export function buildLocalConfigRepairPlans({ agentIdentity } = {}) {
-  return Object.keys(rootConfigActive).map((harness) => buildHarnessPlan(harness, { agentIdentity })).filter(Boolean);
+export function buildLocalConfigRepairPlans({ agentIdentityProviders } = {}) {
+  return Object.keys(rootConfigActive).map((harness) => buildHarnessPlan(harness, { agentIdentityProviders })).filter(Boolean);
 }
 
 // `roborepo update` re-renders the permissions a provider keeps in its root config (Claude's
@@ -94,10 +94,10 @@ export function buildLocalConfigRepairPlans({ agentIdentity } = {}) {
 // `gh api`) would put back a deny the render removed on purpose. So both sides of the comparison go
 // through the same render first, and only settings outside the render's ownership can differ.
 // A provider without such a render, or a render that fails, compares the raw text as before.
-function permissionRenderFor(harness, activePath, { agentIdentity }) {
+function permissionRenderFor(harness, activePath, { agentIdentityProviders }) {
   let render = null;
   try {
-    render = rootConfigPermissionRender(harness, activePath, agentIdentity === undefined ? {} : { agentIdentity });
+    render = rootConfigPermissionRender(harness, activePath, agentIdentityProviders === undefined ? {} : { agentIdentityProviders });
   } catch {}
   if (!render) return (text) => text;
   return (text) => {
@@ -109,7 +109,7 @@ function permissionRenderFor(harness, activePath, { agentIdentity }) {
   };
 }
 
-function buildHarnessPlan(harness, { agentIdentity } = {}) {
+function buildHarnessPlan(harness, { agentIdentityProviders } = {}) {
   const activePath = rootConfigActive[harness];
   const baselinePath = rootConfigBaseline[harness];
   if (!fs.existsSync(activePath) || !fs.existsSync(baselinePath)) return null;
@@ -118,7 +118,7 @@ function buildHarnessPlan(harness, { agentIdentity } = {}) {
   const baselineText = fs.readFileSync(baselinePath, "utf8");
   const backups = backupCandidates(harness, activePath);
   const activeNormalized = normalizeGeneratedMarkers(activeText);
-  const renderPermissions = permissionRenderFor(harness, activePath, { agentIdentity });
+  const renderPermissions = permissionRenderFor(harness, activePath, { agentIdentityProviders });
   const activeRendered = normalizeGeneratedMarkers(renderPermissions(activeNormalized));
   const issues = [];
   if (activeNormalized !== activeText) issues.push("remove duplicated generated marker lines");

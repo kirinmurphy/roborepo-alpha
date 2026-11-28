@@ -6,7 +6,7 @@ import { worktreeCleanupNotice } from "./worktree-dialogs.js";
 import { worktreeDetailsButton } from "./worktree-details.js";
 import { buildRootSection } from "/portal/developer-runtime/repository-root-row.js";
 import { supportsProtectionPanel } from "/portal/shared/protection-panel.js";
-import { mountAgentIdentityBadge, supportsAgentIdentity } from "./agent-identity.js";
+import { agentAccountLabel, agentIdentityProviderFor, mountAgentIdentityBadge, supportsAgentIdentity } from "./agent-identity.js";
 
 const MOCK_NAMES = {
   "git:github.com/example/shared-stack-fixture": "Mock: Shared Compose stack",
@@ -158,7 +158,7 @@ function homeMenuItems(repository) {
   return [
     { key: "pin", label: repository.pinned ? "Unpin" : "Pin", icon: "pin" },
     ...(supportsProtectionPanel(repository) ? [{ key: "protection", label: "Branch protection", icon: "git-branch" }] : []),
-    ...(supportsAgentIdentity(repository) ? [{ key: "agent-identity", label: "Agent GitHub account", icon: "github" }] : []),
+    ...(supportsAgentIdentity(repository) ? [{ key: "agent-identity", label: agentAccountLabel(agentIdentityProviderFor(repository)), icon: agentIdentityProviderFor(repository).id }] : []),
     knownCheckout
       ? { key: "hide", label: "Ignore Repo", icon: "eye-off" }
       : { key: "forget", label: "Forget This Repo", icon: "trash" },

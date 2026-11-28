@@ -1,0 +1,14 @@
+{
+  "path": ["git", "github", "status"],
+  "kind": "command",
+  "title": "status",
+  "description": "Check that agents act on GitHub as a safe bot account",
+  "order": 10,
+  "usage": "roborepo git github status [--json]",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/forge-identity.mjs",
+    "export": "forgeStatusCommand",
+    "prependArgs": ["github"]
+  }
+}

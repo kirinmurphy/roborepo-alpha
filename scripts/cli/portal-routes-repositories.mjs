@@ -59,20 +59,32 @@ export const repositoriesRoutes = defineRoutes([
     },
   },
   postRoute("/api/repositories/:id/protection", (handlers, body, params) => handlers.applyRepositoryProtection({ repositoryId: params.id, action: body.action })),
-  // The GitHub bot identity. The GET only reads status (`?fresh=1` skips the server's five-minute
-  // cache of GitHub's answers; local state such as the package being on is read every time); the POST opens `roborepo github setup` in a terminal and takes no body, because the
-  // command, its arguments, and its folder are the server's choice alone. The token is typed in
-  // that terminal, never sent here.
-  // The bot account, shared by every repo, and turning the package on when that is the one step
-  // left. The POSTs take no body: the server decides from a fresh read, and "No thanks" to Home's
-  // setup offer carries nothing but itself.
+  // Each forge provider's bot identity (GitHub today). The GET only reads status (`?fresh=1` skips
+  // the server's five-minute cache of the host's answers; local state such as the package being on
+  // is read every time); the POST opens `roborepo git <provider> setup` in a terminal and takes no
+  // body, because the command, its arguments, and its folder are the server's choice alone. The
+  // token is typed in that terminal, never sent here.
+  // A provider's bot account, shared by every repo on its hosts, and turning the package on when
+  // that is the one step left. `?provider=<id>` names the provider (default: the first with an
+  // agent account). The POSTs take no body: the server decides from a fresh read, and "No thanks"
+  // to Home's setup offer carries nothing but itself.
+  {
+    method: "GET",
+    path: "/api/forge-providers",
+    handler: (req, res, { handlers }) => {
+      Promise.resolve()
+        .then(() => handlers.listForgeProviders())
+        .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (err) => sendError(res, err));
+      return true;
+    },
+  },
   {
     method: "GET",
     path: "/api/agent-identity",
     handler: (req, res, { qs, handlers }) => {
       const fresh = new URLSearchParams(qs).get("fresh") === "1";
       Promise.resolve()
-        .then(() => handlers.loadAgentIdentityAccount({ fresh }))
+        .then(() => handlers.loadAgentIdentityAccount({ fresh, ...providerParam(qs) }))
         .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (err) => sendError(res, err));
       return true;
     },
@@ -80,14 +92,14 @@ export const repositoriesRoutes = defineRoutes([
   {
     method: "POST",
     path: "/api/agent-identity/enable",
-    handler: (req, res, { handlers }) => {
+    handler: (req, res, { qs, handlers }) => {
       readJsonBody(req, (body, err) => {
         if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
         if (body && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)) {
           return send(res, 400, "application/json", JSON.stringify({ error: "expected an empty body" }));
         }
         Promise.resolve()
-          .then(() => handlers.turnOnAgentIdentity())
+          .then(() => handlers.turnOnAgentIdentity(providerParam(qs)))
           .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (error) => sendError(res, error));
       });
       return true;
@@ -96,14 +108,14 @@ export const repositoriesRoutes = defineRoutes([
   {
     method: "POST",
     path: "/api/agent-identity/update",
-    handler: (req, res, { handlers }) => {
+    handler: (req, res, { qs, handlers }) => {
       readJsonBody(req, (body, err) => {
         if (err) return send(res, 400, "application/json", JSON.stringify({ error: "invalid JSON body" }));
         if (body && (typeof body !== "object" || Array.isArray(body) || Object.keys(body).length > 0)) {
           return send(res, 400, "application/json", JSON.stringify({ error: "expected an empty body" }));
         }
         Promise.resolve()
-          .then(() => handlers.applyAgentGitRouting())
+          .then(() => handlers.applyAgentGitRouting(providerParam(qs)))
           .then((result) => send(res, 200, "application/json", JSON.stringify(result)), (error) => sendError(res, error));
       });
       return true;
@@ -211,6 +223,13 @@ function writeResult(res, fn) {
   } catch (err) {
     sendError(res, err);
   }
+}
+
+// `?provider=<id>` as a handler parameter, or nothing when the request names none, so the handler
+// picks its default.
+function providerParam(qs) {
+  const id = new URLSearchParams(qs).get("provider");
+  return id ? { providerId: id } : {};
 }
 
 function sendError(res, err) {

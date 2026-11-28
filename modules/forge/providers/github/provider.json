@@ -1,0 +1,19 @@
+{
+  "id": "github",
+  "displayName": "GitHub",
+  "hosts": ["github.com"],
+  "cli": {
+    "name": "gh",
+    "configSubfolder": "gh",
+    "configDirVariable": "GH_CONFIG_DIR",
+    "tokenVariables": ["GH_TOKEN", "GITHUB_TOKEN"],
+    "identityVariables": ["GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"]
+  },
+  "agent": {
+    "packageId": "github-agent-identity",
+    "stateFolder": "github-agent",
+    "commandNamespace": "github",
+    "networkDomains": ["github.com", "api.github.com"]
+  },
+  "capabilities": ["repository", "agent-identity", "branch-protection", "pull-requests"]
+}

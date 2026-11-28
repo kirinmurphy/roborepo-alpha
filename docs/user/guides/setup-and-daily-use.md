@@ -61,9 +61,11 @@ or run it any time in your own terminal (agents are denied it, so the token neve
 transcript):
 
 ```sh
-roborepo github setup
-roborepo github status    # read-only report
+roborepo git github setup
+roborepo git github status    # read-only report
 ```
+
+`roborepo github setup` and `roborepo github status` still work as the same commands.
 
 The setup walks you through each step and skips the ones already done:
 
@@ -80,7 +82,7 @@ The setup walks you through each step and skips the ones already done:
 In every repo with a github.com remote, agents' commits are authored by the bot, at its GitHub
 noreply address (`<id>+<login>@users.noreply.github.com`). This overrides a repo's own `user.name`
 and `user.email` for agents. Repos with no github.com remote (GitLab, local-only) keep your own
-author. This needs Git 2.36 or later; older Git keeps your author everywhere. A bot set up with an older RoboRepo gets the author on the next `roborepo github setup`.
+author. This needs Git 2.36 or later; older Git keeps your author everywhere. A bot set up with an older RoboRepo gets the author on the next `roborepo git github setup`.
 
 In the portal, **Agent GitHub Account** in Settings is the on/off switch. While it is off, Home
 offers the setup once (**No thanks** hides the offer for good). While it is on but the bot cannot
@@ -108,7 +110,7 @@ signed in as the bot, and your default browser is usually signed in as you.
 
 ### Renew the bot's token
 
-`roborepo doctor` and `roborepo github status` show a note when the token has 14 days or fewer
+`roborepo doctor` and `roborepo git github status` show a note when the token has 14 days or fewer
 left, and one for a token with no expiry date. Once GitHub stops accepting the token, because it
 expired or was revoked, agent pushes and `gh` calls fail with "Authentication failed" or "Bad
 credentials", and the agent tells you to renew it. Agents never fall back to your own credentials.
@@ -116,7 +118,7 @@ credentials", and the agent tells you to renew it. Agents never fall back to you
 To renew, run the setup again in your own terminal:
 
 ```sh
-roborepo github setup
+roborepo git github setup
 ```
 
 It recognizes the bot from the saved login and asks only for a new token. It opens your token list;

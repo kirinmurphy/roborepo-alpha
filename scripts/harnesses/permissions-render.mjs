@@ -11,6 +11,8 @@
 
 import os from "node:os";
 import { codexCredentialPermissions } from "./codex/credential-permissions.mjs";
+// The forge registry loads only provider data and modules/ code, so it adds no cycle back here.
+import { providersWithCapability } from "../../modules/forge/registry.mjs";
 
 export const PERMISSION_BLOCK_BEGIN = "# BEGIN GENERATED AGENT PERMISSIONS";
 export const PERMISSION_BLOCK_END = "# END GENERATED AGENT PERMISSIONS";
@@ -21,14 +23,25 @@ const end = PERMISSION_BLOCK_END;
 // the small set of named behaviors. Returns a NEW array; never mutates the manifest's own
 // behavior objects.
 //
-// With `agentIdentity` on (agent shells act as the GitHub bot), a behavior's `agentIdentityBucket`
-// replaces its default bucket first; personal overrides still win over both.
-export function resolveBehaviors(manifest, overrides = {}, { agentIdentity = false } = {}) {
+// `agentIdentityProviders` lists the forge providers (by id) whose agent identity package is on, so
+// agent shells act on that provider as its bot. A behavior's `agentIdentityBucket` replaces its
+// default bucket first when its `host` is one of them; personal overrides still win over both.
+export function resolveBehaviors(manifest, overrides = {}, { agentIdentityProviders = [] } = {}) {
   return (manifest.behaviors ?? []).map((b) => ({
     ...b,
     ...(b.pathsFrom === "temporaryLocations" ? { paths: temporaryLocationGlobs(manifest, "claude") } : {}),
-    bucket: overrides[b.id] ?? (agentIdentity ? b.agentIdentityBucket : undefined) ?? b.bucket,
+    bucket: overrides[b.id] ?? (identityBucketApplies(b, agentIdentityProviders) ? b.agentIdentityBucket : undefined) ?? b.bucket,
   }));
+}
+
+// A behavior tagged with a host lifts its bucket only under that provider's identity. One with no
+// host (git push, which reaches whatever remote it names) lifts only when every provider with an
+// agent account has its identity on, so a push to a host whose bot is off never loses its prompt.
+export function identityBucketApplies(behavior, agentIdentityProviders = []) {
+  if (!behavior.agentIdentityBucket || agentIdentityProviders.length === 0) return false;
+  if (behavior.host) return agentIdentityProviders.includes(behavior.host);
+  const all = providersWithCapability("agent-identity").map((provider) => provider.id);
+  return all.length > 0 && all.every((id) => agentIdentityProviders.includes(id));
 }
 
 // The folders agents may use for temporary files: manifest.temporaryLocations, the one list that the
@@ -100,7 +113,7 @@ function codexNetworkAccess(behaviors) {
   return findBehavior(behaviors, "go-online")?.bucket === "allow";
 }
 
-function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], credentials = { paths: [] }, readOnly = false, agentIdentity = false) {
+function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], credentials = { paths: [] }, readOnly = false, agentIdentityProviders = []) {
   const roots = [...new Set(workspaceRoots.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()))];
   const writable = readOnly ? [] : [...new Set(writablePaths)];
   const profile = readOnly ? "managed-read-only" : "managed-workspace";
@@ -122,19 +135,20 @@ function renderCodexProfile(behaviors, workspaceRoots = [], writablePaths = [], 
     for (const credential of credentials.paths) lines.push(`${quoteToml(credential)} = "deny"`);
   }
 
-  const networkOn = !readOnly && (agentIdentity || codexNetworkAccess(behaviors));
+  // A bot identity needs the network to reach its host; the domains come from its package.
+  const networkOn = !readOnly && (agentIdentityProviders.length > 0 || codexNetworkAccess(behaviors));
   lines.push("", `[permissions.${profile}.network]`, `enabled = ${networkOn ? "true" : "false"}`);
   return lines;
 }
 
-function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoots = [], writablePaths = [], agentIdentity = false } = {}) {
+function renderCodexPermissionBlock(behaviors, arbitraryCommands, { workspaceRoots = [], writablePaths = [], agentIdentityProviders = [] } = {}) {
   const sandboxMode = codexSandboxMode(behaviors);
   const lines = [begin, "# Source: manifests/inventory/agent-permissions.json", `approval_policy = ${quoteToml(codexApprovalPolicy(behaviors, arbitraryCommands))}`];
 
   const credentials = codexCredentialPermissions(behaviors);
   lines.push(...credentials.notes.map((note) => `# roborepo credential: ${note}`));
   if (sandboxMode === "workspace-write" || credentials.paths.length) {
-    lines.push(...renderCodexProfile(behaviors, workspaceRoots, writablePaths, credentials, sandboxMode === "read-only", agentIdentity));
+    lines.push(...renderCodexProfile(behaviors, workspaceRoots, writablePaths, credentials, sandboxMode === "read-only", agentIdentityProviders));
   } else {
     lines.push(`default_permissions = ${quoteToml(":read-only")}`);
   }
@@ -248,8 +262,8 @@ function renderCodexRule(pattern, decision) {
 
 // Command buckets map to native rules. Omitting an ask rule would let in-workspace commands
 // fall through without an explicit approval requirement.
-export function renderCodexRules(manifest, overrides = {}, { agentIdentity = false } = {}) {
-  const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity });
+export function renderCodexRules(manifest, overrides = {}, { agentIdentityProviders = [] } = {}) {
+  const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentityProviders });
   const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
   const lines = [];
   for (const b of behaviors) {
@@ -280,11 +294,11 @@ function scopedToolToClaude(tool, scopePath) {
 // Claude has a real 3-state permissions model (allow/deny/ask), so every resolved behavior and
 // arbitrary command maps directly to its native permission bucket.
 //
-// Under the GitHub agent identity, a behavior whose ask a hook decides (`askDecidedByHook`, the
+// Under an agent identity, a behavior whose ask a hook decides (`askDecidedByHook`, the
 // protected-branch hook for `git push`) keeps its non-identity bucket here: that hook already
 // approves the pushes it verifies, so Claude gains no allow rule and the hook still decides the rest.
-export function claudePermissions(manifest, overrides = {}, { home: _home = os.homedir(), agentIdentity = false } = {}) {
-  const identityBehaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity });
+export function claudePermissions(manifest, overrides = {}, { home: _home = os.homedir(), agentIdentityProviders = [] } = {}) {
+  const identityBehaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentityProviders });
   const defaultBehaviors = resolveBehaviors(manifest, overrides.behaviors);
   const behaviors = identityBehaviors.map((b, i) => (b.askDecidedByHook ? defaultBehaviors[i] : b));
   const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);

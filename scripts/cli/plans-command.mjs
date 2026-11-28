@@ -297,7 +297,7 @@ async function plansInitCommand(args) {
   let result;
   try {
     // Loaded only when origin does not answer: it names a bot that was never invited to the repo.
-    const explainUnreachable = async ({ cwd }) => (await import("./github-identity.mjs")).explainBotRepoAccess({ cwd });
+    const explainUnreachable = async ({ cwd }) => (await import("./forge-identity.mjs")).explainBotRepoAccess({ cwd });
     result = await initStore({ worktreeRoot: flags["worktree-root"] || "~/.worktrees", repoName: flags["repo-name"] || null, explainUnreachable });
   } catch (err) {
     return failDomain(err, flags.json);

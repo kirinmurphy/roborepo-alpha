@@ -143,19 +143,35 @@ The capture record schema, markers, experiments, and API routes are documented i
 
 ## Git host calls
 
-`modules/forge/` is the only code that runs the GitHub CLI. Nothing outside it calls `gh`, so the
-timeout, the disabled prompts, and the error mapping live in one place.
+Each Git host RoboRepo talks to is a **forge provider**: an adapter under
+`modules/forge/providers/<id>/` with a manifest (`provider.json`: hosts, CLI and its identity
+variables, agent package and state folder, command namespace, network domains) and the capabilities
+it implements. GitHub is the only shipped provider. Code outside a provider asks the registry for the
+provider that serves a repo's host and checks the capability it needs, so it never names a host.
+Only a provider's own folder runs its CLI (`gh` for GitHub), so the timeout, the disabled prompts,
+and the error mapping live in one place per provider.
 
 | Module | Owns |
 | --- | --- |
-| `modules/forge/index.mjs` | `forgeClient(host)`: returns the client for a Git host, or `{ supported: false }` for a host with none |
-| `modules/forge/github.mjs` | The `gh` runner and the GitHub calls built on it: repository permissions, effective branch rules, rulesets, and the job names from each active workflow's newest successful pull-request run. Maps a failed call to an HTTP answer or to `unavailable` |
-| `modules/forge/protection-policy.mjs` | The managed rulesets as data, and the comparisons between a ruleset and the policy |
-| `modules/forge/protection.mjs` | Reading a repo's state, deciding which hand-made rulesets are covered, and the apply-then-read-again flow |
+| `modules/forge/contract.mjs` | The capability vocabulary (`repository`, `agent-identity`, `branch-protection`, `pull-requests`), the methods each requires, and manifest validation. A provider declaring a capability without its methods is refused at load |
+| `modules/forge/registry.mjs` | The shipped providers, and `listForgeProviders`, `forgeProviderById`, `providerForHost`, `providerForRepositoryId`. Each takes an optional `providers` list so tests can pass a fake (`scripts/test/fixtures/forge-fake-provider/`) |
+| `modules/forge/index.mjs` | `forgeClient(host)`: the repository client for a host, or `{ supported: false }` for a host with no provider |
+| `modules/forge/agent-identity.mjs`, `agent-identity-findings.mjs` | The provider-neutral bot account reader: states, expiry warnings, package-state findings, over the provider's `agent-identity` methods |
+| `modules/forge/protection.mjs`, `protection-report.mjs` | Reading and applying branch protection through the repo's `branch-protection` capability, and the shared report shape |
+| `modules/forge/providers/github/` | The GitHub provider: `client.mjs` (the `gh` runner and REST calls, mapping a failed call to an HTTP answer or `unavailable`), `agent-identity.mjs` and `agent-identity-guide.mjs` (token, scopes, `hosts.yml`, collaborator access, CA bundle, author file, setup pages), `protection.mjs` and `protection-policy.mjs` (rulesets, classic protection, Actions-derived required checks), `pull-requests.mjs` (the calls `roborepo delivery` makes) |
 
-`modules/delivery/operations.mjs` takes its `gh` runner from `forgeClient("github.com")`. The
-`roborepo protect` command, doctor, and the portal's `/api/repositories/:id/protection` routes all
-call `readProtection` and `applyProtection` in `protection.mjs`, so the three report the same state.
+`modules/delivery/operations.mjs` finds the remote's provider with `repository.parseRemote` and
+calls its `pull-requests` methods. The `roborepo protect` command, doctor, and the portal's
+`/api/repositories/:id/protection` routes all call `readProtection` and `applyProtection` in
+`protection.mjs`, so the three report the same state. The shared commands
+`scripts/cli/forge-identity.mjs` (status, doctor) and `scripts/cli/forge-setup.mjs` (guided setup)
+take a provider id; each provider's command definitions (`roborepo git <commandNamespace> setup |
+status`) pass it.
+
+The protected-branch hooks import only Node built-ins, so they keep an inline `HOST_CLIS` table, one
+entry per provider; `scripts/test/forge-provider-parity-check.mjs` keeps each entry equal to its
+manifest. `scripts/test/forge-host-scoping-check.mjs` checks that every provider's package Git
+config and config patches name only that provider's hosts and variables.
 
 ## Tests
 

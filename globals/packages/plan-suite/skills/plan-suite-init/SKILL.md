@@ -33,7 +33,7 @@ git ls-remote --heads origin repo-plans
 - **`Repository not found` while the GitHub agent identity is on:** your Git goes out as the bot,
   and a new repo has not invited it yet. Step 5's check reads the repo as the user; when its
   `problems` include `not-collaborator` or `invite-pending`, say that the bot needs an invitation:
-  the user runs `roborepo github setup` in this repo, in their own terminal, then reruns
+  the user runs `roborepo git github setup` in this repo, in their own terminal, then reruns
   `/plan-suite-init`. When `not-collaborator` carries `owner: true`, the user is not an admin of
   the repo and setup cannot invite the bot: tell them to ask the repo's owner to invite it with
   Write access (the report's `ownerMessage` is ready to send), then rerun `/plan-suite-init`.
@@ -126,15 +126,15 @@ Agents can act on GitHub as a separate bot account, so GitHub itself refuses an 
 default branch or a merge without a person's approval. Check whether it is set up:
 
 ```bash
-roborepo github status --json
+roborepo git github status --json
 ```
 
 It only reads. Act on `state`:
 
 | `state` | Do |
 | --- | --- |
-| `not-set-up` | Offer it in two sentences: what it gives (the line above), and that the user runs `roborepo github setup` in their own terminal, which walks them through creating the bot and its token. Never run the setup yourself and never ask for the token: agents are denied the command, and a token pasted into chat lands in the transcript. |
-| `problem` | Report each entry under `problems`; rerunning `roborepo github setup` fixes or re-checks them. |
+| `not-set-up` | Offer it in two sentences: what it gives (the line above), and that the user runs `roborepo git github setup` in their own terminal, which walks them through creating the bot and its token. Never run the setup yourself and never ask for the token: agents are denied the command, and a token pasted into chat lands in the transcript. |
+| `problem` | Report each entry under `problems`; rerunning `roborepo git github setup` fixes or re-checks them. |
 | `healthy` | Report it in one line. |
 | `unavailable` | Report `reason` and that the identity was not checked. Setup is still complete. |
 
@@ -150,7 +150,7 @@ Branch protection: protected (3 managed rulesets created)
 ```
 
 Add a `GitHub agent identity:` line with the state step 5 found, for example
-`GitHub agent identity: not set up (run roborepo github setup in your own terminal)`.
+`GitHub agent identity: not set up (run roborepo git github setup in your own terminal)`.
 
 The branch protection line is always present and names the state step 4 ended in:
 

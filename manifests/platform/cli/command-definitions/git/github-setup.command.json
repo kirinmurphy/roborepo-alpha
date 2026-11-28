@@ -1,0 +1,14 @@
+{
+  "path": ["git", "github", "setup"],
+  "kind": "command",
+  "title": "setup",
+  "description": "Guided setup of the GitHub bot account agents use",
+  "order": 20,
+  "usage": "roborepo git github setup",
+  "execution": {
+    "adapter": "module",
+    "module": "scripts/cli/forge-setup.mjs",
+    "export": "forgeSetupCommand",
+    "prependArgs": ["github"]
+  }
+}

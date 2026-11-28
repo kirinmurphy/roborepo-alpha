@@ -42,7 +42,7 @@ function readCoreHooksFragment() {
 function renderClaudeRootConfig(current, manifest, overrides = {}, options = {}) {
   const rendered = JSON.parse(renderClaudeSettings(current, manifest, overrides, options));
   rendered.hooks = mergeHooksMap(rendered.hooks || {}, readCoreHooksFragment()).hooks;
-  const sandbox = claudeSandboxSettings(resolveBehaviors(manifest, overrides.behaviors, { agentIdentity: options.agentIdentity }));
+  const sandbox = claudeSandboxSettings(resolveBehaviors(manifest, overrides.behaviors, { agentIdentityProviders: options.agentIdentityProviders }));
   if (sandbox) rendered.sandbox = sandbox;
   return `${JSON.stringify(rendered, null, 2)}\n`;
 }

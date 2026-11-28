@@ -21,7 +21,9 @@ process.env.ROBOREPO_STATE_ROOT = stateRoot;
 const { expandPackageRuntimeRefs } = await import("../cli/package-runtime-assets.mjs");
 const { renderCodexConfig, resolveArbitraryCommands, resolveBehaviors } = await import("../harnesses/permissions-render.mjs");
 const { mergeCodexConfig } = await import("../cli/root-config-merge.mjs");
-const { AGENT_GITCONFIG_INCLUDE, agentGitRoutingGaps } = await import("../cli/agent-identity-package.mjs");
+const { agentGitconfigInclude, agentGitRoutingGaps } = await import("../cli/agent-identity-package.mjs");
+const { githubProvider } = await import("../../modules/forge/providers/github/index.mjs");
+const AGENT_GITCONFIG_INCLUDE = agentGitconfigInclude(githubProvider);
 const { rootConfigBaseline } = await import("../cli/paths.mjs");
 const { listHarnessProviders } = await import("../harnesses/registry.mjs");
 const { resolveHarnessPath } = await import("../harnesses/paths.mjs");
@@ -89,7 +91,7 @@ try {
     { ...baselineGitEnv, GIT_CONFIG_COUNT: "2", GIT_CONFIG_KEY_1: "include.path", GIT_CONFIG_VALUE_1: AGENT_GITCONFIG_INCLUDE },
   );
   configsOn = liveConfigs();
-  assert.deepEqual(agentGitRoutingGaps({ providers: agentShellProviders, read: readFrom(configsOn) }), [], "on: every agent shell includes the bot's Git settings");
+  assert.deepEqual(agentGitRoutingGaps(githubProvider, { providers: agentShellProviders, read: readFrom(configsOn) }), [], "on: every agent shell includes the bot's Git settings");
 
   const codexOn = codexConfig();
   assert.ok(codexOn.includes(`GH_CONFIG_DIR = ${JSON.stringify(ghDir)}`), "Codex shell env points at the bot's gh directory");
@@ -127,7 +129,7 @@ try {
   // the render `roborepo update` does after merging the shipped template into the live file.
   const template = fs.readFileSync(path.join(repoRoot, "generated", "codex", "config.toml"), "utf8");
   const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "manifests", "inventory", "agent-permissions.json"), "utf8"));
-  const rerender = (text) => renderCodexConfig(text, resolveBehaviors(manifest, {}, { agentIdentity: true }), resolveArbitraryCommands(manifest), "config.toml", { agentIdentity: true });
+  const rerender = (text) => renderCodexConfig(text, resolveBehaviors(manifest, {}, { agentIdentityProviders: ["github"] }), resolveArbitraryCommands(manifest), "config.toml", { agentIdentityProviders: ["github"] });
   const updated = rerender(mergeCodexConfig(template, codexOn));
   assert.match(updated, /\[permissions\.managed-workspace\.network\.domains\]/, "an update render keeps the GitHub domains");
   assert.match(updated, /network_proxy = true/);
@@ -199,7 +201,7 @@ try {
   const byId = readFrom;
   const names = providers.map((provider) => provider.manifest.displayName);
   const shipped = Object.fromEntries(providers.map((provider) => [provider.id, fs.readFileSync(rootConfigBaseline[provider.id], "utf8")]));
-  assert.deepEqual(agentGitRoutingGaps({ providers, read: byId(shipped) }), names, "the install baselines leave the pair to the package");
+  assert.deepEqual(agentGitRoutingGaps(githubProvider, { providers, read: byId(shipped) }), names, "the install baselines leave the pair to the package");
   const baselines = configsOn;
 
   // Edits the baselines as text, so the test needs no harness's config layout or format.
@@ -209,13 +211,13 @@ try {
     return [id, next];
   }));
   const withoutInclude = edited((text) => text.replaceAll(AGENT_GITCONFIG_INCLUDE, "~/elsewhere"));
-  assert.deepEqual(agentGitRoutingGaps({ providers, read: byId(withoutInclude) }), names, "configs without the include are reported");
+  assert.deepEqual(agentGitRoutingGaps(githubProvider, { providers, read: byId(withoutInclude) }), names, "configs without the include are reported");
   const countOfOne = edited((text) => text.replace(/(GIT_CONFIG_COUNT"?\s*[:=]\s*)"2"/, '$1"1"'));
-  assert.deepEqual(agentGitRoutingGaps({ providers, read: byId(countOfOne) }), names, "an include beyond GIT_CONFIG_COUNT does not count");
+  assert.deepEqual(agentGitRoutingGaps(githubProvider, { providers, read: byId(countOfOne) }), names, "an include beyond GIT_CONFIG_COUNT does not count");
   const [first] = providers;
   const [, ...others] = providers;
   const onlyFirst = byId({ [first.id]: baselines[first.id] });
-  assert.deepEqual(agentGitRoutingGaps({ providers, read: onlyFirst }), others.map((provider) => provider.manifest.displayName), "a harness whose config cannot be read is a gap, never healthy");
+  assert.deepEqual(agentGitRoutingGaps(githubProvider, { providers, read: onlyFirst }), others.map((provider) => provider.manifest.displayName), "a harness whose config cannot be read is a gap, never healthy");
 }
 
 // The `~/` include earlier releases rendered names the bot's file only under the default state root:
@@ -224,9 +226,11 @@ try {
   const legacy = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
   const module = JSON.stringify(path.join(repoRoot, "scripts", "cli", "agent-identity-package.mjs"));
   const includes = (value, stateEnv) => {
+    const provider = JSON.stringify(path.join(repoRoot, "modules", "forge", "providers", "github", "index.mjs"));
     const script = `import { includesAgentGitConfig } from ${module};
+      import { githubProvider } from ${provider};
       const pairs = { GIT_CONFIG_COUNT: "1", GIT_CONFIG_KEY_0: "include.path", GIT_CONFIG_VALUE_0: ${JSON.stringify(value)} };
-      console.log(includesAgentGitConfig((name) => pairs[name]));`;
+      console.log(includesAgentGitConfig((name) => pairs[name], githubProvider));`;
     const childEnv = { ...process.env, HOME: home, ...stateEnv };
     if (!stateEnv.ROBOREPO_STATE_ROOT) delete childEnv.ROBOREPO_STATE_ROOT;
     const result = spawnSync(process.execPath, ["--input-type=module", "-e", script], { env: childEnv, encoding: "utf8" });

@@ -1,18 +1,51 @@
-// The Agent GitHub account row on Settings: whether agents act on GitHub as their bot account, and
-// the one switch for it. Underneath it is the `github-agent-identity` package (it points agent
-// shells at the bot's login), but the switch only turns on once the bot works, so turning it on
-// never leaves agents without any GitHub login. Setting the bot up happens from Home, which knows
-// the repos the setup runs in; "Set it up" links there.
+// The agent account rows on Settings, one per forge provider with an agent account that the server
+// lists (GitHub today: "Agent GitHub account"): whether agents act on that host as their bot
+// account, and the one switch for it. Underneath each is the provider's package (for GitHub,
+// `github-agent-identity`, which points agent shells at the bot's login), but the switch only turns
+// on once the bot works, so turning it on never leaves agents without any login on the host. Setting
+// the bot up happens from Home, which knows the repos the setup runs in; "Set it up" links there.
 import { portalGetJson, portalPostJson } from "/portal/shared/api.js";
 
-const PACKAGE_ID = "github-agent-identity";
 const SETUP_LINK = "/?agent-identity=setup";
 
-export function mountAgentIdentitySetting(row, { onError }) {
+export const agentAccountLabel = (provider) => `Agent ${provider.displayName} account`;
+
+// `section` holds the heading and a row template; each provider gets its own copy of the row.
+export async function mountAgentIdentitySettings(section, { onError }) {
+  const list = section.querySelector('[data-slot="rows"]');
+  const template = section.querySelector("template");
+  let providers;
+  try {
+    providers = (await portalGetJson("/api/forge-providers")).filter((provider) => provider.capabilities.includes("agent-identity") && provider.packageId);
+  } catch (error) {
+    onError(error);
+    return;
+  }
+  if (providers.length === 0) {
+    section.hidden = true;
+    return;
+  }
+  // One provider keeps its own name on the heading; several share a general one.
+  const heading = section.querySelector('[data-slot="heading"]');
+  heading.textContent = providers.length === 1 ? `Agent ${providers[0].displayName} Account` : "Agent Accounts";
+  for (const provider of providers) {
+    const row = template.content.firstElementChild.cloneNode(true);
+    row.dataset.provider = provider.id;
+    list.append(row);
+    mountAgentIdentityRow(row, provider, { onError });
+  }
+}
+
+function mountAgentIdentityRow(row, provider, { onError }) {
   const slot = (name) => row.querySelector(`[data-slot="${name}"]`);
   const button = slot("action");
   const link = slot("link");
+  const host = provider.displayName;
+  const query = `provider=${encodeURIComponent(provider.id)}`;
   let report = null;
+
+  row.setAttribute("aria-label", agentAccountLabel(provider));
+  slot("description").textContent = `Agents push and open pull requests as a separate ${host} account, so ${host} itself stops them pushing to main or merging PRs no one approved.`;
 
   button.addEventListener("click", async () => {
     button.disabled = true;
@@ -20,9 +53,9 @@ export function mountAgentIdentitySetting(row, { onError }) {
     onError(null);
     try {
       if (report.packageEnabled) {
-        await portalPostJson("/api/config/packages", { id: PACKAGE_ID, enabled: false });
+        await portalPostJson("/api/config/packages", { id: provider.packageId, enabled: false });
       } else {
-        const result = await portalPostJson("/api/agent-identity/enable", {});
+        const result = await portalPostJson(`/api/agent-identity/enable?${query}`, {});
         if (!result.enabled) onError(new Error(result.message));
       }
       await load(true);
@@ -36,7 +69,7 @@ export function mountAgentIdentitySetting(row, { onError }) {
 
   async function load(fresh = false) {
     try {
-      report = await portalGetJson(`/api/agent-identity${fresh ? "?fresh=1" : ""}`);
+      report = await portalGetJson(`/api/agent-identity?${query}${fresh ? "&fresh=1" : ""}`);
       render();
     } catch (error) {
       slot("status").textContent = `Status unavailable: ${error.message}`;
@@ -60,7 +93,7 @@ export function mountAgentIdentitySetting(row, { onError }) {
       status = `${bot} is ready; agents act as you.`;
       action = "Turn on";
     } else {
-      status = bot ? `Off: ${bot} needs attention before agents can use it.` : "Off: agents act on GitHub as you.";
+      status = bot ? `Off: ${bot} needs attention before agents can use it.` : `Off: agents act on ${host} as you.`;
       linkText = "Set it up";
     }
     slot("status").textContent = status;

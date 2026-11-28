@@ -1,9 +1,10 @@
 // What a person does on github.com to give agents their bot account: the pages to open, the
-// classic token's scopes and note, and the expiry advice. `roborepo github setup` prints these
+// classic token's scopes and note, and the expiry advice. `roborepo git github setup` prints these
 // while it waits, and the portal's bot identity card links the same pages, so both say the same thing.
-import { EXPIRING_DAYS } from "./agent-identity.mjs";
+import { EXPIRING_DAYS, setupCommand, statusCommand } from "../../agent-identity-findings.mjs";
+import { githubSelf } from "./manifest.mjs";
 
-export const SETUP_COMMAND = "roborepo github setup";
+export const SETUP_COMMAND = setupCommand(githubSelf);
 export const TOKEN_SCOPES = ["repo", "read:org"];
 export const TOKEN_NOTE = "RoboRepo agents";
 
@@ -16,7 +17,7 @@ export const GITHUB_PAGES = {
 export const scopesText = () => `${TOKEN_SCOPES.join(" and ")} only (not workflow)`;
 
 export const expiryAdvice = () =>
-  `90 days is a good default. roborepo doctor and roborepo github status warn ${EXPIRING_DAYS} days before it ends; renew by rerunning ${SETUP_COMMAND}.`;
+  `90 days is a good default. roborepo doctor and ${statusCommand(githubSelf)} warn ${EXPIRING_DAYS} days before it ends; renew by rerunning ${SETUP_COMMAND}.`;
 
 // The portal's copy of the guide. Plain data, so the browser renders it without importing
 // server code. Each step is done signed in as the bot, which is often another browser or a private

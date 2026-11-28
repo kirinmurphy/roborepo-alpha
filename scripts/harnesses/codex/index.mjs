@@ -172,7 +172,7 @@ export const codexProvider = defineHarnessProvider({
       workspaceRoots: ({ cwd } = {}) => loadPermissionWorkspaceRootsForCwd(cwd),
       writablePaths: codexPlansStoreWritablePaths,
       render: (current, manifest, overrides, target, options = {}) => {
-        const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentity: options.agentIdentity });
+        const behaviors = resolveBehaviors(manifest, overrides.behaviors, { agentIdentityProviders: options.agentIdentityProviders });
         const arbitraryCommands = resolveArbitraryCommands(manifest, overrides.commands);
         const writablePaths = [...codexSandboxWritablePaths(manifest), ...(options.writablePaths ?? [])];
         return renderCodexConfig(current, behaviors, arbitraryCommands, target, { ...options, writablePaths });

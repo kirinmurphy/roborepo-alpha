@@ -39,12 +39,27 @@ const manifestPath = path.join(repoRoot, 'manifests', 'inventory', 'agent-permis
 const overridesPath = path.join(stateDir, 'command-overrides.json')
 const permissionManifestFound = hasPermissionManifest(repoRoot)
 
-// Whether agent shells act on GitHub as the bot: the github-agent-identity package installed its Git
-// settings file. The file is the signal because Codex may not pass shell_environment_policy
-// variables (GH_CONFIG_DIR) to hooks, and the package removes the file when it is turned off. The
+// Each forge provider with an agent account, by id, and the package that turns its identity on.
+// This hook runs standalone with only Node builtins, so it cannot load the forge registry; a check
+// (forge-provider-parity-check.mjs) keeps this table equal to the provider manifests.
+const AGENT_IDENTITY_PACKAGES = { github: 'github-agent-identity' }
+
+// The providers whose agent shells act as their bot: each one's package installed its Git settings
+// file. The file is the signal because Codex may not pass shell_environment_policy variables
+// (GH_CONFIG_DIR) to hooks, and the package removes the file when it is turned off. The
 // protected-branch-push hooks read the same file.
-function agentIdentityInstalled() {
-  return fs.existsSync(path.join(stateDir, 'package-runtime', 'github-agent-identity', 'gitconfig'))
+function agentIdentityProvidersInstalled() {
+  return Object.entries(AGENT_IDENTITY_PACKAGES)
+    .filter(([, packageId]) => fs.existsSync(path.join(stateDir, 'package-runtime', packageId, 'gitconfig')))
+    .map(([id]) => id)
+}
+
+// As the render's identityBucketApplies: a host-tagged behavior lifts only under its provider's
+// identity, and an untagged one only when every provider's identity is on.
+function identityBucketApplies(behavior, installed) {
+  if (!behavior.agentIdentityBucket || installed.length === 0) return false
+  if (behavior.host) return installed.includes(behavior.host)
+  return Object.keys(AGENT_IDENTITY_PACKAGES).every((id) => installed.includes(id))
 }
 
 function loadJson(p, fallback) {
@@ -77,13 +92,13 @@ function readHookInput() {
 // this hook can't import that module directly — it must run standalone with only Node builtins
 // (no repo-relative package resolution guaranteed from every Codex install layout). Duplicated
 // deliberately small and pure; keep in sync if the override-file shape changes.
-// With the GitHub agent identity on, a behavior's agentIdentityBucket replaces its default bucket,
+// Under a provider's agent identity, a behavior's agentIdentityBucket replaces its default bucket,
 // as the render does; personal overrides still win over both.
 function resolveBehaviors() {
-  const agentIdentity = agentIdentityInstalled()
+  const installed = agentIdentityProvidersInstalled()
   return (manifest.behaviors ?? []).map((b) => ({
     ...b,
-    bucket: overrides.behaviors?.[b.id] ?? (agentIdentity ? b.agentIdentityBucket : undefined) ?? b.bucket,
+    bucket: overrides.behaviors?.[b.id] ?? (identityBucketApplies(b, installed) ? b.agentIdentityBucket : undefined) ?? b.bucket,
   }))
 }
 

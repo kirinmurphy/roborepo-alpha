@@ -2,7 +2,7 @@
   "path": ["github"],
   "kind": "namespace",
   "title": "GitHub agent identity",
-  "description": "Let agents act on GitHub as a bot account",
+  "description": "Same as roborepo git github",
   "order": 457,
   "advanced": true
 }

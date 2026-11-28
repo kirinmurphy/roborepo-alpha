@@ -53,6 +53,11 @@ assert.ok(permissions.deny.includes("Read(//**/*.pem)"), "read-secrets Read deni
 const bucketOf = (rule) => ["allow", "ask", "deny"].filter((key) => permissions[key].includes(rule));
 // push-code at ask renders no Claude rule: an ask rule would outrank the protected-branch hook's
 // approval of a verified push. The force variants stay denied, and an explicit allow or deny renders.
+// The bot setup reads a token, so agents are denied both its forms; both status forms only read.
+for (const form of ["roborepo git github", "roborepo github"]) {
+  assert.deepEqual(bucketOf(`Bash(${form} setup:*)`), ["deny"], `${form} setup is denied to agents`);
+  assert.deepEqual(bucketOf(`Bash(${form} status:*)`), ["allow"], `${form} status is allowed`);
+}
 assert.deepEqual(bucketOf("Bash(git push:*)"), [], "push-code ask is left to the hook");
 assert.deepEqual(bucketOf("Bash(git push --force:*)"), ["deny"], "force pushes stay denied");
 for (const bucket of ["allow", "deny"]) {
@@ -75,7 +80,7 @@ for (const verb of ["checkout", "switch"]) {
 // other programs stay inside, or they would carry those programs out of it.
 for (const cli of ["roborepo", "./bin/roborepo"]) {
   assert.ok(!defaults.excludedCommands.includes(`${cli} *`), `${cli} is not excluded wholesale`);
-  for (const sub of ["plans", "delivery", "github status", "git worktrees", "update", "web", "telemetry mark"]) {
+  for (const sub of ["plans", "delivery", "github status", "git github status", "git worktrees", "update", "web", "telemetry mark"]) {
     assert.ok(defaults.excludedCommands.includes(`${cli} ${sub} *`), `${cli} ${sub} runs outside the sandbox`);
   }
   for (const sub of ["agent-run", "run", "browser", "runtime", "telemetry", "telemetry status", "scratch", "git", "package"]) {
