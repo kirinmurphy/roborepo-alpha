@@ -101,7 +101,7 @@ assert.ok(claudePermissions(manifest, { behaviors: { "push-code": "deny" } }, { 
       renderPermissionsTo(tmp, { manifest, agentIdentityProviders });
       const preview = previewPermissionRenders(tmp, { manifest, agentIdentityProviders }).find((entry) => entry.file === codexConfigFile);
       assert.ok(preview, "the Codex config is previewed");
-      assert.equal(preview.render(), fs.readFileSync(codexConfigFile, "utf8"), `identity ${agentIdentityProviders ? "on" : "off"}: the preview matches the live render`);
+      assert.equal(preview.render(), fs.readFileSync(codexConfigFile, "utf8"), `identity ${agentIdentityProviders.length ? "on" : "off"}: the preview matches the live render`);
     }
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

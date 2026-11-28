@@ -50,9 +50,16 @@ provider is its own plan.
    the second provider lands.
 6. **Hooks.** A `HOST_CLIS.<id>` entry in both `protected-branch-push.mjs` copies with its CLI,
    identity variables, config folder, package id, state folder, and its own denied and
-   allowed-as-agent lists.
+   allowed-as-agent lists, and an `AGENT_IDENTITY_PACKAGES` entry (`<id>: '<packageId>'`) in the
+   Codex `globals/harnesses/codex/hooks/permission-check.mjs`. The parity check fails until both
+   match the manifest.
 7. **Claude sandbox.** Exclude the provider's CLI and `git <commandNamespace> status` in
    `scripts/harnesses/claude/sandbox-settings.mjs`.
-8. **Checks.** The contract, parity, and host-scoping checks pick up the new provider from the
-   registry; add tests for its adapter methods beside the GitHub ones, and portal UI cases only if
-   the provider changes what the cards show.
+8. **Browser links.** `KNOWN_PROVIDER_HOSTS` in `modules/repositories/config.mjs` is a separate list
+   of hosts the portal builds web links for (it already names `gitlab.com`, `bitbucket.org`, and
+   `codeberg.org`). Add the new host there if it is missing, or derive the list from the registry.
+9. **Checks.** The contract, parity, and host-scoping checks pick up the new provider from the
+   registry, as do RoboRepo's own Git calls (`agentGitConfigPaths` in
+   `modules/repositories/git-exec.mjs`) and the Agents page's list of packages Settings controls;
+   add tests for its adapter methods beside the GitHub ones, and portal UI cases only if the
+   provider changes what the cards show.
