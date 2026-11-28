@@ -1,10 +1,10 @@
 ---
 id: m7gjz0p6
-next_action: Run /plan-promote on this plan to confirm the phases against the current code and move it to ready.
+next_action: Start Phase 1 with /plan-execute - add the forge provider contract and registry in modules/forge/, move the GitHub client into modules/forge/providers/github/, and keep every existing check passing unchanged.
 blocked_by: []
 depends_on: ["w7vls1yk"]
 related: ["f0jwe76j", "developer-runtime-remote-branch-status", "3xh2sq32"]
-reviewed_commit: 7303fe62116522317fbb6747c58ee8d48fc3382b
+reviewed_commit: ee7de424414abbd4711bb78d667f93d401f2a456
 worktree:
 ---
 
@@ -24,13 +24,23 @@ files, and output keep working unchanged.
 ## Context
 
 The GitHub bot identity (GitHub Integration Part 01, `w7vls1yk`, PR
-[kirinmurphy/roborepo-alpha#82](https://github.com/kirinmurphy/roborepo-alpha/pull/82), approved
-November 27, 2026) made agents push, open pull requests, and reply on review threads as a bot that
+[kirinmurphy/roborepo-alpha#82](https://github.com/kirinmurphy/roborepo-alpha/pull/82), merged as
+`687be5f6`) made agents push, open pull requests, and reply on review threads as a bot that
 GitHub itself stops from pushing to `main` or merging. During review the owner asked for the next
 step: GitHub should be one provider among several, and "whatever account the agent was created on
 should be responsible for doing things only with that provider." Part 01 left a seam for this (a
 host-keyed client map in `modules/forge/index.mjs`, a host table in the hooks, `host` tags in the
 permission inventory) and listed a forge-provider layer as future work.
+
+Two follow-ups to Part 01 have landed since and shape this plan:
+
+- [kirinmurphy/roborepo-alpha#95](https://github.com/kirinmurphy/roborepo-alpha/pull/95) made the
+  package gitconfig's nested includes relative to the installed file
+  (`../../github-agent/...`), and taught the protected-branch hooks to read commands inside
+  subshells, substitutions, and `timeout`/`xargs`/`npx` wrappers.
+- [kirinmurphy/roborepo-alpha#94](https://github.com/kirinmurphy/roborepo-alpha/pull/94) made the
+  local-config repair render permissions with the identity's buckets, so the "identity on" flag now
+  reaches a third renderer.
 
 Terms used below:
 
@@ -54,9 +64,14 @@ Terms used below:
   URL rewrites, commit author, CLI identity variables, network allowances, and API calls name only
   its hosts, and a test enforces that for every provider.
 - No behavior change for GitHub users: the `roborepo github` commands keep working with the same
-  output (as aliases of the new namespaced form), the same
+  flags and results (as aliases of the new namespaced form; the only changed text is that RoboRepo
+  now names the new form when it tells the user what to run), the same
   state folder (`~/.roborepo/github-agent/`), the same package id (`github-agent-identity`), the same
-  harness settings, and no `roborepo update` or re-setup required.
+  harness settings, and no `roborepo update` or re-setup required for the existing command forms.
+  The agent rules for the new `roborepo git github …` forms (deny setup, allow status, run status
+  outside the Claude sandbox) reach an installed harness only on its next `roborepo update`. Until
+  then the new setup form is not denied by rule, but setup still refuses to run without a real
+  terminal, so an agent shell cannot drive it.
 - A written checklist of what a second provider must supply, proven by a test-only fake provider.
 
 ## Non-goals
@@ -73,7 +88,7 @@ Terms used below:
 
 ## Current state
 
-All of this was read from the code at `7303fe62`.
+All of this was read from the code at `ee7de424` (main after #94 and #95).
 
 | Concern | Where it lives today | GitHub-specific parts |
 | --- | --- | --- |
@@ -86,11 +101,12 @@ All of this was read from the code at `7303fe62`.
 | Command definitions | `manifests/platform/cli/command-definitions/github/` (`namespace.json`, `setup.command.json`, `status.command.json`) | The top-level `github` namespace |
 | Status and doctor | `scripts/cli/github-identity.mjs`; `explainBotRepoAccess` also serves `roborepo plans init` (`scripts/cli/plans-command.mjs`) | Reads as GitHub only |
 | Package state and routing gaps | `scripts/cli/agent-identity-package.mjs` | `AGENT_GITCONFIG_INCLUDE` path, package id |
-| Portal | `scripts/cli/repository-agent-identity.mjs` (server); `portal/home/agent-identity.js` (card), `portal/home/templates.js` (menu label) | `supportsAgentIdentity` tests `startsWith("git:github.com/")`; label "Agent GitHub account" |
+| Portal | `scripts/cli/repository-agent-identity.mjs` (server); `scripts/cli/portal-routes-repositories.mjs` (routes); `portal/home/agent-identity.js` (card), `portal/home/templates.js` (menu label), `portal/home/index.html` (offer text), `portal/settings/agent-identity.js` (Settings on/off row) | Server: `host !== "github.com"` checks in the status read and in `launchAgentIdentitySetup`, which runs `github setup` and refuses with reason `not_github`. Client: `supportsAgentIdentity` tests `startsWith("git:github.com/")`, `SETUP_COMMAND_PATTERN` matches `roborepo github setup`; label "Agent GitHub account" in the menu, the Home offer, and Settings; Settings hardcodes `PACKAGE_ID = "github-agent-identity"` |
 | Delivery | `modules/delivery/operations.mjs` | `forgeClient("github.com")` fixed; a github.com-only remote URL pattern |
-| Package | `globals/packages/github-agent-identity/` | `gitconfig` (credential helper and `insteadOf` for `https://github.com`, author `includeIf` on github.com remotes), `rules.md`, config patches for `GIT_CONFIG_KEY_1`/`VALUE_1`, `GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, Codex network domains |
+| Package | `globals/packages/github-agent-identity/` | `gitconfig` (credential helper and `insteadOf` for `https://github.com`; a plain `include` of the setup-written `gitconfig.local`, whose only section is `http "https://github.com/"`; author `includeIf` on github.com remotes; nested paths `../../github-agent/...`), `rules.md`, config patches for `GIT_CONFIG_KEY_1`/`VALUE_1`, `GH_CONFIG_DIR`, `GH_TOKEN`, `GITHUB_TOKEN`, Codex network domains |
 | Permission inventory | `manifests/inventory/agent-permissions.json`: eight behaviors tagged `"host": "github"`; `agentIdentityBucket` read by `scripts/harnesses/permissions-render.mjs` | Behavior ids and `gh` prefixes |
-| Hooks | `protected-branch-push.mjs`, identical copies in `globals/system/hooks/claude/` and `globals/harnesses/codex/hooks/` | `HOST_CLIS.github`, `GH_IDENTITY_VARIABLES`, `agentIdentityActive` (package runtime path, `github-agent/gh`), `gh api` analysis |
+| "Identity on" flag | One boolean `agentIdentity` option, defaulted from `agentIdentityPackageEnabled()`, threaded through `scripts/harnesses/permissions-render.mjs` (`resolveBehaviors`, `claudePermissions`, `renderCodexRules`, and Codex network on), `scripts/cli/permissions-render.mjs` (`writeCodexRulesFile` and the render targets), and `scripts/cli/local-config-repair.mjs` | Means "the GitHub package is on" |
+| Hooks | `protected-branch-push.mjs`, identical copies in `globals/system/hooks/claude/` and `globals/harnesses/codex/hooks/` | `HOST_CLIS.github`, read by name in `classifyGh`; `GH_IDENTITY_VARIABLES`; `agentIdentityActive` (package runtime path, `github-agent/gh`); `codexShellsActAsBot` and `readCodexLayer` (Codex config must point `GH_CONFIG_DIR` at the bot and empty the tokens); `changesGhIdentity`; `gh api` analysis |
 | Codex permission hook | `globals/harnesses/codex/hooks/permission-check.mjs` | `agentIdentityInstalled()` checks the GitHub package's runtime gitconfig; `resolveBehaviors()` then applies every `agentIdentityBucket` from that one flag, mirroring the render |
 | Claude sandbox | `scripts/harnesses/claude/sandbox-settings.mjs` | `gh *` and `github status` excluded commands |
 | Browser links | `modules/repositories/config.mjs` `KNOWN_PROVIDER_HOSTS` | A separate list of four hosts |
@@ -172,7 +188,9 @@ the user.
 These rules hold for every provider and each has a test (see Validation):
 
 1. **Git routing is host-keyed.** Every `credential`, `url.*.insteadOf`, `http.<url>`, and
-   `includeIf` section in a provider's package gitconfig names only that provider's `hosts`.
+   `includeIf` section in a provider's package gitconfig, and in the files its setup writes
+   (`gitconfig.local`, `gitconfig.author` for GitHub), names only that provider's `hosts`. A plain
+   `include` is allowed only for a file in the provider's own state folder.
 2. **The author is host-conditional.** The bot is the commit author only in repos with a remote on
    the provider's hosts, through `includeIf "hasconfig:remote.*.url:..."` as GitHub does now.
 3. **API calls name their host.** Every CLI call pins the host (`--hostname github.com` or a
@@ -205,7 +223,10 @@ const HOST_CLIS = {
 }
 ```
 
-The classifier iterates the table by CLI name instead of reading `HOST_CLIS.github`. The `gh api`
+The classifier iterates the table by CLI name instead of reading `HOST_CLIS.github`. The other
+identity checks read the entry instead of the GitHub constants: `changesGhIdentity` checks every
+entry's `identityVariables`, and `codexShellsActAsBot` checks each entry's `configDirVariable`
+against that entry's bot folder and its other variables for empty values. The `gh api`
 analysis (merges, Authorization headers, GraphQL from files) stays a GitHub-only function attached
 to that entry. A test keeps each table entry equal to its provider manifest and keeps the two hook
 copies identical, extending the existing check that ties the `github` deny list to
@@ -215,20 +236,24 @@ copies identical, extending the existing check that ties the `github` deny list 
 
 `agent-permissions.json` keeps its behavior ids and `"host": "github"` tags. The tag becomes a
 provider id checked against the registry, so a typo or a provider with no adapter fails the
-inventory check. Two places apply `agentIdentityBucket` from one global "agent identity on" flag
-today: `scripts/harnesses/permissions-render.mjs` and the Codex hook's `resolveBehaviors()`, a
-standalone copy of the same merge. Both change together to apply it only when the behavior's own
-provider has its package installed, and the Codex hook's `agentIdentityInstalled()` becomes a check
-per provider entry.
+inventory check. Today one boolean "agent identity on" flag decides every `agentIdentityBucket`.
+The renderer (`scripts/harnesses/permissions-render.mjs`) takes it from its two callers,
+`scripts/cli/permissions-render.mjs` and `scripts/cli/local-config-repair.mjs`, and the Codex hook's
+`resolveBehaviors()` is a standalone copy of the same merge. All of them change together. The
+boolean becomes the set of provider ids whose agent package is on, and a behavior's
+`agentIdentityBucket` applies only when its own `host` is in that set. Codex network access follows
+the same set. The Codex hook's `agentIdentityInstalled()` becomes a check per provider entry. With
+only GitHub, the set is `["github"]` or empty, so the rendered output does not change.
 
 ### Commands and portal
 
 - Provider commands sit under one shared namespace, then the provider:
   `roborepo git github setup` and `roborepo git github status`, later `roborepo git gitlab setup`.
   The existing `git` namespace holds them beside its local commands (`git inventory`,
-  `git worktrees`), and its description widens to cover the Git host. Each provider's
-  subcommands come from its manifest's `agent.commandNamespace`, backed by shared code
-  (`scripts/cli/forge-setup.mjs`, `scripts/cli/forge-identity.mjs`).
+  `git worktrees`), and its description widens to cover the Git host. Command
+  definitions are static JSON, so each provider ships its own small definitions in the `git/`
+  folder, named by its manifest's `agent.commandNamespace` (a check ties the two), and all of them
+  call shared code (`scripts/cli/forge-setup.mjs`, `scripts/cli/forge-identity.mjs`).
 - `roborepo github setup` and `roborepo github status` stay as aliases with the same flags and
   output. Command definitions have no alias field, so an alias is a second definition pointing at
   the same module export: the existing files in
@@ -242,6 +267,10 @@ per provider entry.
 - The portal server adds `provider: { id, displayName }` to its response. The card and menu label
   read "Agent <displayName> account", which is "Agent GitHub account" for GitHub, and
   `supportsAgentIdentity` uses the providers the server lists instead of the `git:github.com/` prefix.
+  The server's host checks ask the registry for `agent-identity`. `launchAgentIdentitySetup` runs
+  `git <commandNamespace> setup` and refuses a repo without the capability with reason
+  `unsupported_host` instead of `not_github`. The client's `SETUP_COMMAND_PATTERN` matches both
+  command forms.
 
 ### Reconciling with the review-request design
 
@@ -305,14 +334,20 @@ can stop after any phase.
       methods, manifest validation) and `modules/forge/registry.mjs` (`listForgeProviders`,
       `providerForHost`, `providerForRepositoryId`). Move `modules/forge/github.mjs` into
       `modules/forge/providers/github/` with its manifest, and make `forgeClient(host)` a wrapper
-      over the registry so current callers keep working. Add a test-only fake provider.
+      over the registry so current callers keep working. Add a test-only fake provider for
+      `forge.example.test` under `scripts/test/fixtures/forge-fake-provider/`. The registry's lookups
+      take an optional provider list (default: the shipped providers), and tests pass the fake
+      through it, so the fake never ships in `modules/forge/providers/`. Before any code changes,
+      capture the "before" output for the comparison in Validation into `roborepo scratch m7gjz0p6`.
 - [ ] **Phase 2: identity and setup move into the provider.** Split `modules/forge/agent-identity.mjs`
       into the generic reader (states, findings, expiry, package-state findings) and the GitHub
       adapter (token info, scopes, `hosts.yml`, collaborator access, CA bundle, author file). Move the
       guide and setup steps of `scripts/cli/github-setup.mjs` behind `agent-identity`. Derive state
       paths from `agent.stateFolder`.
 - [ ] **Phase 3: commands, doctor, and portal through the registry.** Shared
-      `scripts/cli/forge-identity.mjs` and `forge-setup.mjs`. Add
+      `scripts/cli/forge-identity.mjs` and `forge-setup.mjs` replace `scripts/cli/github-identity.mjs`
+      and `scripts/cli/github-setup.mjs` (moved, not kept as wrappers; their importers (the command definitions, `plans-command.mjs`, `repository-agent-identity.mjs`, `scripts/doctor.sh`) and tests follow,
+      as Validation allows). Add
       `github.namespace.json`, `github-setup.command.json`, and `github-status.command.json` to
       `manifests/platform/cli/command-definitions/git/` (the folder's existing `worktrees.*` naming),
       widen `git/namespace.json`'s description to cover the Git host, and point the new definitions at the same exports as the existing
@@ -322,24 +357,58 @@ can stop after any phase.
       status prefix to `check-github-identity` in `manifests/inventory/agent-permissions.json`, and
       add `git github status` beside `github status` in the Claude sandbox's
       `ROBOREPO_UNSANDBOXED_SUBCOMMANDS` (`scripts/harnesses/claude/sandbox-settings.mjs`). Switch
-      RoboRepo's own text to the new form. Doctor iterates enabled providers. `scripts/cli/agent-identity-package.mjs` reads the
-      package id and gitconfig path from the manifest. Portal server returns `provider`; card and menu
-      label read from it; `supportsAgentIdentity` uses the server's list.
+      RoboRepo's own text to the new form, wherever Phase 2 left it: fix and next-step text in the
+      generic reader's findings, the GitHub provider's `guide()` and setup steps, the shared status
+      and setup commands (usage strings included), the portal copy, and code comments in those
+      files. Today the old form appears in seven files under these folders, all in scope:
+      `modules/forge/agent-identity.mjs`, `modules/forge/agent-identity-guide.mjs`,
+      `scripts/cli/github-identity.mjs`, `scripts/cli/github-setup.mjs` (both moved above),
+      `scripts/cli/repository-agent-identity.mjs`, `scripts/cli/portal-routes-repositories.mjs`, and
+      `portal/home/agent-identity.js`. `rg "roborepo github (setup|status)" modules
+      scripts/cli portal` should then find nothing. Docs, package rules, and the uninstall comment
+      in `scripts/install/uninstall-lib.sh` change in Phase 6; rendered files under `generated/`
+      and the alias definitions keep the old form on purpose. Doctor iterates enabled providers.
+      `scripts/cli/agent-identity-package.mjs` reads the package id and gitconfig path from the
+      manifest. Portal server returns `provider`, asks the registry instead of comparing the host to
+      `github.com`, and launches the new setup form (reason `unsupported_host` for a repo without
+      `agent-identity`); card and menu label read `provider`; `supportsAgentIdentity` uses the
+      server's list; `SETUP_COMMAND_PATTERN` matches both forms. The Settings row
+      (`portal/settings/agent-identity.js`) renders one row per provider the server lists, taking
+      the package id and "Agent <displayName> account" label from it instead of its
+      `PACKAGE_ID` constant; the Home offer's fixed "Agent GitHub account" text in
+      `portal/home/index.html` reads the same label.
 - [ ] **Phase 4: protection and delivery through capabilities.** `roborepo protect`, the setup's
       protection step, and the portal protect action ask for `branch-protection`.
       `modules/delivery/operations.mjs` uses `repository.parseRemote` and `pull-requests` instead of
       `forgeClient("github.com")` and its own URL pattern. `explainBotRepoAccess` asks the repo's provider.
-- [ ] **Phase 5: hooks and permissions.** Generalize `HOST_CLIS` and `agentIdentityActive` in both
-      `protected-branch-push.mjs` copies. Check permission `host` tags against the registry, and
-      apply `agentIdentityBucket` per provider in both `permissions-render.mjs` and the Codex
+- [ ] **Phase 5: hooks and permissions.** In both `protected-branch-push.mjs` copies, generalize
+      `HOST_CLIS`, `classifyGh`'s table lookup, `agentIdentityActive`, `changesGhIdentity`, and
+      `codexShellsActAsBot`/`readCodexLayer` to read each entry instead of the GitHub constants.
+      Check permission `host` tags against the registry. Replace the boolean `agentIdentity` option
+      with the set of enabled provider ids in `scripts/harnesses/permissions-render.mjs`,
+      `scripts/cli/permissions-render.mjs`, and `scripts/cli/local-config-repair.mjs`, and apply
+      `agentIdentityBucket` and Codex network access per provider there and in the Codex
       `permission-check.mjs` (`agentIdentityInstalled`, `resolveBehaviors`).
 - [ ] **Phase 6: scoping checks and docs.** Add the host-scoping test over every provider's package
-      files and config patches. Write the second-provider checklist into the maintainer docs.
+      files, setup-written Git files, and config patches. Write the second-provider checklist (the
+      "What a second provider needs" table, as steps) into the repo-local `roborepo-development`
+      skill, and make the other Documentation impact updates.
+- [ ] **Phase 7: register and gate.** Register each new check in the `ci` group of
+      `scripts/test/check-groups.json`. Run the touched checks locally, then let CI run the full gate
+      (`npm run check`) on the pull request, since hooks, harness config, and generated permissions
+      change. Run the before/after comparison in Validation on a machine with the bot set up.
 
 ## Validation
 
 The existing tests are the no-behavior-change proof. They must pass with only import-path edits and
-no changed expectations; a changed expected string means the phase changed behavior.
+no changed expectations, with two exceptions that Phase 3 makes on purpose:
+
+- Text that tells the user which command to run names `roborepo git github setup` (or `status`)
+  instead of `roborepo github setup`.
+- The portal setup launch runs `git github setup`, and refuses with reason `unsupported_host`
+  instead of `not_github`.
+
+Any other changed expected string means the phase changed behavior.
 
 | Existing check (`scripts/test/`) | Covers |
 | --- | --- |
@@ -351,14 +420,24 @@ no changed expectations; a changed expected string means the phase changed behav
 | `protected-branch-push-check.mjs` | Hook allow, ask, and deny decisions |
 | `github-agent-identity-package-check.mjs`, `github-agent-identity-render-check.mjs` | Package files and rendered harness config |
 | `git-exec-identity-check.mjs`, `permissions-render-live-characterization-check.mjs` | Git environment and permission buckets |
+| `local-config-repair-render-check.mjs` | The local-config repair keeps the identity's buckets |
+| `claude-sandbox-projection-check.mjs` | Commands the Claude sandbox runs outside it |
 
 New checks, each failing without its phase:
 
 - **Contract check:** the GitHub and fake providers load; a fake provider declaring a capability
   without one of its methods is refused at load with the missing method named.
-- **Fake provider end to end:** with a fake provider for `forge.example.test`, `roborepo protect` in
-  a repo on that host reports the capability as unavailable, status reports "not set up" under the
-  fake provider's name, and the portal response names it.
+- **Fake provider end to end:** with the fake provider for `forge.example.test` passed to the
+  registry, `roborepo protect`'s check in a repo on that host reports the capability as unavailable,
+  the shared status function in `scripts/cli/forge-identity.mjs` reports "not set up" under the fake
+  provider's name, and the portal response names it. The fake has no command definitions; it is
+  driven through the shared functions.
+- **Settings row per provider:** a portal UI spec (beside `portal-ui/agent-identity.spec.mjs`; the
+  Settings row has no spec today) shows one "Agent GitHub account" row whose switch turns
+  `github-agent-identity` on and off, and, given a server response listing a second provider, a
+  second row with that provider's label and package id.
+- **Command definitions match manifests:** for every shipped provider, the `git/` folder holds
+  `<commandNamespace>.namespace.json`, `-setup`, and `-status` definitions that call the shared exports.
 - **Host scoping:** for every provider, each section in its package gitconfig names only its
   `hosts`, its config patches set only its `cli.identityVariables` and `networkDomains`, and a
   repo with a remote on another host gets neither the bot's credential helper nor its author
@@ -373,11 +452,15 @@ New checks, each failing without its phase:
   `claude-sandbox-projection-check.mjs`).
 - **Hook parity:** in each `HOST_CLIS` entry, `cli`, `identityVariables`, and `configSubfolder`
   equal the manifest's `cli.*` values and `packageId` and `stateFolder` equal its `agent.*` values;
-  the Claude and Codex hook copies are byte-identical.
+  the Claude and Codex hook copies are byte-identical. A hook test with a second, fake table entry
+  shows that `changesGhIdentity` and the Codex config check react to that entry's variables too.
+- **Per-provider buckets:** with the fake provider's package on and GitHub's off, a behavior tagged
+  `host: github` keeps its default bucket in the Claude, Codex, and local-config-repair renders.
 
 Before calling the plan done, compare `roborepo github status --json`, `roborepo protect --check
---json`, and `roborepo doctor` output on a machine with the bot set up, before and after; they must
-be identical apart from timestamps.
+--json`, and `roborepo doctor` output on a machine with the bot set up, before (captured at the
+start of Phase 1) and after; they must
+be identical apart from timestamps and the setup command name in fix text.
 
 ## Risks
 
@@ -391,6 +474,15 @@ be identical apart from timestamps.
 - **Hook drift.** The inline hook table can drift from the manifest. Mitigation: the parity test.
 - **Scope creep into a GitLab build.** Mitigation: Non-goals; a second provider is its own plan.
 
+## Related plans
+
+| Plan | Relationship | What it means here |
+| --- | --- | --- |
+| GitHub Integration Part 01 (`w7vls1yk`) | Landed dependency (completed; #82, with follow-ups #94 and #95) | Everything this plan moves. Current state above is read after all three |
+| Protect a repo's plans and main branches (`3xh2sq32`) | Landed dependency (completed) | `roborepo protect` and the protection modules move behind `branch-protection` |
+| GitHub Integration Part 02 (`f0jwe76j`) | Related, no conflict (backlog) | Its fix skill calls `gh` directly from skill text and is GitHub-only by its own scope. Nothing here changes that |
+| GitHub Integration Part 03 (`developer-runtime-remote-branch-status`) | Plan-vs-plan conflict, resolved by order (backlog) | It puts a PR lookup in `modules/forge/github.mjs`, which Phase 1 moves. If Part 03 lands first, Phase 1 moves its lookup with the file. If this plan lands first, Part 03's lookup belongs in the GitHub provider's `pull-requests` capability, and Part 03's prose needs a separate revision. Neither plan blocks the other |
+
 ## Open questions
 
 None. The decisions made while writing this plan are in the Decision log.
@@ -399,7 +491,8 @@ None. The decisions made while writing this plan are in the Decision log.
 
 - November 27, 2026 (user decision): build all six phases now, rather than stopping after Phase 2
   with only the host-scoping test. Chosen because the owner asked for the full layer and each phase
-  is small and covered by existing tests.
+  is small and covered by existing tests. (Promotion later added Phase 7, which only registers
+  the new checks and runs the gate; see the promotion entry below.)
 - November 27, 2026 (user decision): several providers' Git includes go through one shared include
   file that lists each enabled provider's gitconfig, designed and migrated in the second-provider
   plan. This plan leaves GitHub's `GIT_CONFIG_KEY_1` slot untouched. Alternative: each package
@@ -418,6 +511,13 @@ None. The decisions made while writing this plan are in the Decision log.
   (`roborepo git github setup`). Chosen because it adds no new word and the `git` plan namespace
   already covers the Git host. Alternatives: `forge` (exact but jargon), `hosting`,
   `versioncontrol` (long, and GitHub hosts the repo rather than being the version control).
+- November 27, 2026 (promotion): the no-changed-expectations rule now names its two deliberate
+  exceptions, the new command name in fix text and the portal launch's arguments and refusal
+  reason, because Phase 3's already-decided text switch changes those strings. Phase 7 adds no
+  scope; it registers the new checks and leaves the full gate to CI.
+- November 27, 2026 (promotion): the portal launch's refusal reason becomes `unsupported_host`,
+  since `not_github` would be wrong for any second provider. The client and server are in this repo
+  and change together.
 
 ## Documentation impact
 
@@ -426,7 +526,7 @@ None. The decisions made while writing this plan are in the Decision log.
 | `docs/internal/cli-internals.md` (`## Git host calls`) | Describe the registry, contract, and provider folders in place of "the one home for `gh` calls" |
 | `docs/internal/docs-map.md` | Rows for branch protection and agent identity point at `modules/forge/providers/github/`; add a row for forge providers |
 | `docs/user/reference/roborepo-cli.md` | Document `roborepo git github setup` and `roborepo git github status`, the widened `git` namespace, and `roborepo github …` as aliases |
-| `docs/user/guides/setup-and-daily-use.md`, `docs/user/reference/repositories.md`, `docs/user/reference/claude-hooks.md`, `docs/user/reference/codex-hooks.md`, `docs/user/guides/plan/lifecycle/plan-suite.md`, `docs/internal/portal-architecture.md` | Name the new setup and status commands; hook behavior is unchanged |
+| `docs/user/guides/setup-and-daily-use.md`, `docs/user/reference/repositories.md`, `docs/user/reference/claude-hooks.md`, `docs/user/reference/codex-hooks.md`, `docs/user/guides/plan/lifecycle/plan-suite.md`, `docs/internal/portal-architecture.md`, `docs/internal/config-panel-internals.md` | Name the new setup and status commands; hook behavior is unchanged |
 | `globals/packages/github-agent-identity/rules.md`, `globals/packages/plan-suite/skills/plan-suite-init/SKILL.md` | Tell agents to send the user to the new setup command |
-| `globals/packages/github-agent-identity/package.config.json` (`description`) | Name the new setup command |
+| `globals/packages/github-agent-identity/package.config.json` (`description`), the comment in `scripts/install/uninstall-lib.sh` | Name the new setup command |
 | Repo-local `roborepo-development` skill | Name forge providers beside harness providers in its provider-adapter guidance, with the second-provider checklist |
