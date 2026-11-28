@@ -155,6 +155,7 @@ and the error mapping live in one place per provider.
 | --- | --- |
 | `modules/forge/contract.mjs` | The capability vocabulary (`repository`, `agent-identity`, `branch-protection`, `pull-requests`), the methods each requires, and manifest validation. A provider declaring a capability without its methods is refused at load |
 | `modules/forge/registry.mjs` | The shipped providers, and `listForgeProviders`, `forgeProviderById`, `providerForHost`, `providerForRepositoryId`. Each takes an optional `providers` list so tests can pass a fake (`scripts/test/fixtures/forge-fake-provider/`) |
+| `modules/forge/manifests.mjs` | The shipped providers' manifests without their adapters, for low-level modules the adapters import themselves (`modules/repositories/git-exec.mjs`), where importing the registry would be a cycle |
 | `modules/forge/index.mjs` | `forgeClient(host)`: the repository client for a host, or `{ supported: false }` for a host with no provider |
 | `modules/forge/agent-identity.mjs`, `agent-identity-findings.mjs` | The provider-neutral bot account reader: states, expiry warnings, package-state findings, over the provider's `agent-identity` methods |
 | `modules/forge/protection.mjs`, `protection-report.mjs` | Reading and applying branch protection through the repo's `branch-protection` capability, and the shared report shape |
