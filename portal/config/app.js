@@ -8,7 +8,7 @@
 // state.js (constants/pure lookups), and templates.js (markup). No markup construction should
 // live in this file — add a template in templates.js instead.
 
-import { portalSetUpdatedAt, portalHideLoading } from "/portal/shared/api.js";
+import { portalGetJson, portalSetUpdatedAt, portalHideLoading } from "/portal/shared/api.js";
 import { offerHookReview } from "/portal/shared/hook-review-offer.js";
 import * as api from "./api.js";
 import * as tmpl from "./templates.js";
@@ -21,10 +21,14 @@ import { onRepositoriesChanged } from "/portal/shared/repository-list-change.js"
 const modal = createConfigModal();
 const recommendationsDialog = createRecommendationsDialog();
 const disableDependentsDialog = createDisableDependentsDialog();
-// Packages whose on/off control lives on another page. Settings owns token telemetry and the agent
-// GitHub account, so a second toggle here would only duplicate them (and this one could switch
-// agents to a bot that is not set up yet); the terminal `roborepo config` view still lists them.
-const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry", "github-agent-identity"]);
+// Packages whose on/off control lives on another page. Settings owns token telemetry and each Git
+// host's agent account (its package id comes from the server's provider list), so a second toggle
+// here would only duplicate them (and this one could switch agents to a bot that is not set up
+// yet); the terminal `roborepo config` view still lists them.
+const agentAccountPackages = await portalGetJson("/api/forge-providers")
+  .then((providers) => providers.map((provider) => provider.packageId).filter(Boolean))
+  .catch(() => []);
+const PACKAGES_CONTROLLED_ELSEWHERE = new Set(["telemetry", ...agentAccountPackages]);
 
 function withoutPackagesControlledElsewhere(view) {
   return view

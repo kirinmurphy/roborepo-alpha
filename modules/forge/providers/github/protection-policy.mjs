@@ -2,11 +2,12 @@
 // ruleset's bypass list applies to every rule in it. The admin bypass on the merge ruleset must
 // not reach the integrity rules, or an admin token could force-push the default branch.
 import { isDeepStrictEqual } from "node:util";
+import { MERGE_POLICY_KEY } from "../../protection-report.mjs";
 
 export const MANAGED_PREFIX = "roborepo-";
 export const PLANS_BRANCH = "repo-plans";
 export const DEFAULT_BRANCH_REF = "~DEFAULT_BRANCH";
-export const MERGE_POLICY_KEY = "main-merge";
+export { MERGE_POLICY_KEY };
 
 // GitHub's built-in repository role ids: 5 is admin (4 is write, 2 is maintain).
 const REPO_ADMIN_BYPASS = { actor_id: 5, actor_type: "RepositoryRole", bypass_mode: "always" };

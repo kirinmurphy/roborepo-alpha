@@ -37,17 +37,21 @@
           <button type="button" data-btn="secondary" id="telemetry-toggle" aria-describedby="telemetry-description" disabled></button>
         </div>
       </section>
-      <section class="portal-section settings-section" aria-labelledby="agent-identity-title">
-        <header class="portal-section-head"><h2 id="agent-identity-title">Agent GitHub Account</h2></header>
-        <div class="settings-control-row" id="agent-identity-row">
-          <div class="settings-control-copy">
-            <div class="settings-token-active" data-slot="active" hidden><span class="settings-token-active-dot" aria-hidden="true"></span>Agents use their bot account</div>
-            <strong data-slot="status" role="status">Checking…</strong>
-            <span>Agents push and open pull requests as a separate GitHub account, so GitHub itself stops them pushing to main or merging PRs no one approved.</span>
+      <!-- agent-identity.js: one row per Git host provider with an agent account, as the server lists them. -->
+      <section class="portal-section settings-section" id="agent-identity-section" aria-labelledby="agent-identity-title">
+        <header class="portal-section-head"><h2 id="agent-identity-title" data-slot="heading">Agent Accounts</h2></header>
+        <div data-slot="rows"></div>
+        <template>
+          <div class="settings-control-row agent-identity-row" role="group">
+            <div class="settings-control-copy">
+              <div class="settings-token-active" data-slot="active" hidden><span class="settings-token-active-dot" aria-hidden="true"></span>Agents use their bot account</div>
+              <strong data-slot="status" role="status">Checking…</strong>
+              <span data-slot="description"></span>
+            </div>
+            <a data-btn="text" data-slot="link" hidden></a>
+            <button type="button" data-btn="secondary" data-slot="action" hidden></button>
           </div>
-          <a data-btn="text" data-slot="link" hidden></a>
-          <button type="button" data-btn="secondary" data-slot="action" hidden></button>
-        </div>
+        </template>
       </section>
     </main>
     {{REPOSITORY_SOURCES}}

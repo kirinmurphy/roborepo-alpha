@@ -212,9 +212,9 @@ the browser where the bot is signed in, instead of a link that would open in you
 wait. The card from the offer or Settings lists items 1 to 3. A bot with admin access is lowered to
 Write on github.com, in the repo's collaborator settings. For a repo someone else administers,
 items 4 and 5 say to ask the owner, and the card has a message to copy and send them: invite the bot
-with Write access, and the branch rules to add. `roborepo github status` prints the same message.
+with Write access, and the branch rules to add. `roborepo git github status` prints the same message.
 
-**Open setup** opens a terminal running `roborepo github setup` in the repo's folder (macOS), because
+**Open setup** opens a terminal running `roborepo git github setup` in the repo's folder (macOS), because
 the bot's login and token are typed there, never in the portal. On another OS, or when the terminal
 does not open, the command to copy takes the button's place. Coming back to the portal window
 re-reads an open card, so it shows what you did elsewhere; **Check again** appears only when GitHub

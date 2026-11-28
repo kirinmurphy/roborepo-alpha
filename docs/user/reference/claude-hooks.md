@@ -203,7 +203,7 @@ all three hold: the agent identity is installed (its Git config file
 `~/.roborepo/package-runtime/github-agent-identity/gitconfig` exists); the hook's own
 `GH_CONFIG_DIR` is exactly the agent identity's folder, `~/.roborepo/github-agent/gh` (or, under
 Codex only, unset); and the command does not change who `gh` acts as. Under Claude the variable must be set: a session started
-before you ran `roborepo github setup` has none, so its `gh` acts as you and `gh api` stays denied
+before you ran `roborepo git github setup` has none, so its `gh` acts as you and `gh api` stays denied
 until you start a new session. Codex starts its hooks without its shells' variables, so under Codex
 an unset `GH_CONFIG_DIR` is accepted. If the hook inherits `GH_TOKEN`, `GITHUB_TOKEN`,
 `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, or `GH_HOST`, `gh` acts as that token's owner rather
@@ -270,7 +270,7 @@ the working directory before `~/.gemini/.env`, so a repo's own `.env` would hide
 settings. The bot is a plain collaborator with write access, not an
 administrator, and is not on a ruleset's bypass list, so GitHub itself rejects an agent push to
 `main` and an agent merge without a person's approval. Your own terminal, `gh`, and SSH pushes keep
-your identity and your bypass. `roborepo github setup` creates it
+your identity and your bypass. `roborepo git github setup` creates it
 ([Setup And Daily Use](../guides/setup-and-daily-use.md#let-agents-act-as-a-github-bot)).
 
 The package works through these settings in agent shells only:
@@ -284,10 +284,10 @@ The package works through these settings in agent shells only:
   through a second pair of agents' `GIT_CONFIG_*` variables that the package adds (and removes
   when it is turned off), replaces inherited credential helpers for github.com with
   `gh auth git-credential` (other hosts keep yours), and rewrites SSH remotes to HTTPS. It also makes the bot the author of agents'
-  commits in repos with a github.com remote, once `roborepo github setup` has run (Git 2.36 or later).
+  commits in repos with a github.com remote, once `roborepo git github setup` has run (Git 2.36 or later).
 
 It also adds a short rule to the agents' instructions: when `git` or `gh` fails authentication, the
-bot's token has likely expired, so the agent stops and asks you to rerun `roborepo github setup`.
+bot's token has likely expired, so the agent stops and asks you to rerun `roborepo git github setup`.
 
 ## When Installed Hooks Run
 

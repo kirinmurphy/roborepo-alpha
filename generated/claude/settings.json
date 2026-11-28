@@ -29,6 +29,7 @@
       "Bash(gh run view:*)",
       "Bash(gh repo view:*)",
       "Bash(gh pr create:*)",
+      "Bash(roborepo git github status:*)",
       "Bash(roborepo github status:*)",
       "Bash(roborepo agent-run:*)",
       "Bash(roborepo doctor:*)",
@@ -126,6 +127,7 @@
       "Bash(gh release:*)",
       "Bash(gh workflow run:*)",
       "Bash(gh api:*)",
+      "Bash(roborepo git github setup:*)",
       "Bash(roborepo github setup:*)"
     ],
     "ask": [
@@ -248,6 +250,7 @@
       "git switch *",
       "roborepo plans *",
       "roborepo delivery *",
+      "roborepo git github status *",
       "roborepo github status *",
       "roborepo git worktrees *",
       "roborepo web *",
@@ -274,6 +277,7 @@
       "roborepo package dev *",
       "./bin/roborepo plans *",
       "./bin/roborepo delivery *",
+      "./bin/roborepo git github status *",
       "./bin/roborepo github status *",
       "./bin/roborepo git worktrees *",
       "./bin/roborepo web *",

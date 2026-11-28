@@ -38,7 +38,9 @@ const ROBOREPO_UNSANDBOXED_SUBCOMMANDS = Object.freeze([
   // Fetches over SSH and calls GitHub through gh, like the git and gh entries above.
   "delivery",
   // Reads your own gh login from the keychain, which read-secrets denies, and calls api.github.com
-  // as the agent bot, which reach-allowed-hosts does not list. `github setup` is denied to agents.
+  // as the agent bot, which reach-allowed-hosts does not list. Setup is denied to agents. Both the
+  // shared form and its alias.
+  "git github status",
   "github status",
   // Adds and removes linked worktrees, whose records under .git/worktrees the sandbox keeps read-only.
   "git worktrees",

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "github-agent-identity",
   "label": "GitHub Agent Identity",
-  "description": "Agents push, open pull requests, and read and reply to review threads as a separate GitHub bot account, which GitHub itself stops from pushing to main or merging without approval. Set it up with `roborepo github setup`.",
+  "description": "Agents push, open pull requests, and read and reply to review threads as a separate GitHub bot account, which GitHub itself stops from pushing to main or merging without approval. Set it up with `roborepo git github setup`.",
   "lifecycle": "optional",
   "defaultEnabled": false,
   "permissionsRender": true,

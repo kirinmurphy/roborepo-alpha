@@ -1,11 +1,14 @@
 import { isDeepStrictEqual } from "node:util";
-import { forgeClient } from "../forge/index.mjs";
+import { capabilityHostNames, forgeProviderById, providerForRemoteUrl } from "../forge/index.mjs";
 import { runGitProcess } from "../repositories/git-exec.mjs";
-import { normalizeGitRemote } from "../repositories/identity.mjs";
 import { GIT_NETWORK_TIMEOUT_MS } from "../repositories/git-remote-operations.mjs";
 
-// Delivery refuses any remote that is not github.com before it reaches a `gh` call.
-const { run: gh } = forgeClient("github.com");
+// Delivery refuses any remote that no forge provider with pull requests parses before it reaches a
+// host call; the provider that parsed the remote makes every call that follows.
+const pullRequestProvider = (url) => {
+  const found = providerForRemoteUrl(url);
+  return found?.provider.manifest.capabilities.includes("pull-requests") ? found : null;
+};
 
 async function git(cwd, args) {
   const result = await runGitProcess(cwd, args, { timeoutMs: GIT_NETWORK_TIMEOUT_MS });
@@ -87,38 +90,36 @@ async function localDeliveryTarget(cwd) {
   }
   const fetchUrls = await git(cwd, ["remote", "get-url", "--all", remote]);
   const pushUrls = await git(cwd, ["remote", "get-url", "--push", "--all", remote]);
-  const githubTransport = /^(?:https:\/\/github\.com\/|ssh:\/\/(?:git@)?github\.com\/|git@github\.com:)[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:\.git)?$/;
-  const repository = normalizeGitRemote(fetchUrls)?.toLowerCase();
-  const fetchValid = !fetchUrls.includes("\n") && githubTransport.test(fetchUrls)
-    && /^git:github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository || "");
-  const pushValid = !pushUrls.includes("\n") && githubTransport.test(pushUrls);
-  refuseMismatches(`Remote ${remote} must resolve to one matching GitHub fetch and push repository`, [
-    [fetchValid, "its fetch URL is not one GitHub repository URL"],
-    [pushValid, "its push URL is not one GitHub repository URL"],
-    [!fetchValid || !pushValid || normalizeGitRemote(pushUrls)?.toLowerCase() === repository,
+  const fetched = pullRequestProvider(fetchUrls);
+  const pushed = pullRequestProvider(pushUrls);
+  const hosts = capabilityHostNames("pull-requests");
+  refuseMismatches(`Remote ${remote} must resolve to one matching ${hosts} fetch and push repository`, [
+    [Boolean(fetched), `its fetch URL is not one ${hosts} repository URL`],
+    [Boolean(pushed), `its push URL is not one ${hosts} repository URL`],
+    [!fetched || !pushed || (pushed.provider === fetched.provider && pushed.host === fetched.host && pushed.repo === fetched.repo),
       "its push URL names a different repository than its fetch URL"],
   ]);
-  const repo = repository.slice(4);
-  return { branch, head, remote, upstream, fetchUrls, pushUrls, repo };
+  // `repo` is `<host>/<owner>/<name>`, the form every provider call pins its host with.
+  const repo = `${fetched.host}/${fetched.repo}`;
+  return { branch, head, remote, upstream, fetchUrls, pushUrls, repo, providerId: fetched.provider.id };
 }
+
+const pullRequestsOf = (target) => forgeProviderById(target.providerId).adapters.pullRequests;
 
 async function currentPullRequest(cwd) {
   const target = await localDeliveryTarget(cwd);
   const { repo, branch, head } = target;
-  const repoInfo = JSON.parse(await gh(cwd, [
-    "repo", "view", repo, "--json", "defaultBranchRef,nameWithOwner,url",
-  ]));
+  const host = pullRequestsOf(target);
+  const ownerRepo = repo.slice(repo.indexOf("/") + 1);
+  const repoInfo = await host.repositoryInfo(cwd, repo);
+  const repositoryUrl = host.repositoryUrl(repo);
   refuseMismatches("Pull request delivery requires a feature branch in the configured repository", [
-    [repoInfo.url?.toLowerCase() === `https://${repo}`, `repository url is ${repoInfo.url}, expected https://${repo}`],
-    [repoInfo.nameWithOwner?.toLowerCase() === repo.slice("github.com/".length),
-      `repository is ${repoInfo.nameWithOwner}, expected ${repo.slice("github.com/".length)}`],
-    [Boolean(repoInfo.defaultBranchRef?.name), "repository reports no default branch"],
-    [repoInfo.defaultBranchRef?.name !== branch, `current branch ${branch} is the default branch`],
+    [repoInfo.url?.toLowerCase() === repositoryUrl, `repository url is ${repoInfo.url}, expected ${repositoryUrl}`],
+    [repoInfo.fullName?.toLowerCase() === ownerRepo, `repository is ${repoInfo.fullName}, expected ${ownerRepo}`],
+    [Boolean(repoInfo.defaultBranch), "repository reports no default branch"],
+    [repoInfo.defaultBranch !== branch, `current branch ${branch} is the default branch`],
   ]);
-  const prs = JSON.parse(await gh(cwd, [
-    "pr", "list", "--repo", repo, "--head", branch, "--state", "open",
-    "--json", "number,headRefName,headRefOid,baseRefName,isCrossRepository,state,url",
-  ]));
+  const prs = await host.findPullRequests(cwd, repo, branch);
   if (!Array.isArray(prs) || prs.length !== 1) {
     throw new Error(`Expected exactly one open pull request for ${branch}, found ${Array.isArray(prs) ? prs.length : "an unreadable list"}`);
   }
@@ -130,7 +131,7 @@ async function currentPullRequest(cwd) {
     [pr.headRefName === branch, `head branch is ${pr.headRefName}, expected ${branch}`],
     [pr.headRefOid === head, `head commit is ${pr.headRefOid}, expected pushed head ${head}`],
     [Boolean(pr.baseRefName) && pr.baseRefName !== branch, `base branch ${pr.baseRefName} must differ from ${branch}`],
-    [pr.url?.toLowerCase() === `https://${repo}/pull/${pr.number}`, `url is ${pr.url}, expected https://${repo}/pull/${pr.number}`],
+    [pr.url?.toLowerCase() === host.pullRequestUrl(repo, pr.number), `url is ${pr.url}, expected ${host.pullRequestUrl(repo, pr.number)}`],
   ]);
   return { pr, target };
 }
@@ -143,21 +144,20 @@ export async function updatePullRequest(cwd, operation, value) {
   if (operation === "pr-body" && typeof value !== "string") throw new Error("Expected a UTF-8 pull request body");
   const { pr, target } = await currentPullRequest(cwd);
   const { repo, branch, head } = target;
+  const host = pullRequestsOf(target);
   if (operation === "retry-ci") {
-    const run = JSON.parse(await gh(cwd, [
-      "run", "view", value, "--repo", repo,
-      "--json", "databaseId,headBranch,headSha,status,conclusion,url",
-    ]));
+    const run = await host.checkRun(cwd, repo, value);
+    const runUrl = host.checkRunUrl(repo, value);
     refuseMismatches("Workflow run must be a failed completed run for this repository and current PR head", [
-      [String(run.databaseId) === value, `run id is ${run.databaseId}, expected ${value}`],
+      [String(run.id) === value, `run id is ${run.id}, expected ${value}`],
       [run.headBranch === branch, `run branch is ${run.headBranch}, expected ${branch}`],
       [run.headSha === head, `run commit is ${run.headSha}, expected pushed head ${head}`],
-      [run.url?.toLowerCase() === `https://${repo}/actions/runs/${value}`, `run url is ${run.url}, expected https://${repo}/actions/runs/${value}`],
+      [run.url?.toLowerCase() === runUrl, `run url is ${run.url}, expected ${runUrl}`],
       [run.status === "completed", `run status is ${run.status}, expected completed`],
       [run.conclusion === "failure", `run conclusion is ${run.conclusion}, expected failure`],
     ]);
   }
-  // GitHub reads can take long enough for another session to change the selected repository.
+  // Host reads can take long enough for another session to change the selected repository.
   const current = await localDeliveryTarget(cwd);
   // Names only the changed keys: the target holds remote URLs, which can carry tokens.
   const changed = Object.keys(target).filter((key) => !isDeepStrictEqual(current[key], target[key]));
@@ -165,11 +165,11 @@ export async function updatePullRequest(cwd, operation, value) {
     throw new Error(`Current branch, head, or upstream configuration changed during pull request validation: ${changed.join(", ")}`);
   }
   if (operation === "pr-body") {
-    await gh(cwd, ["pr", "edit", String(pr.number), "--repo", repo, "--body-file", "-"], value);
+    await host.editBody(cwd, repo, pr.number, value);
   } else if (operation === "pr-ready") {
-    await gh(cwd, ["pr", "ready", String(pr.number), "--repo", repo]);
+    await host.markReady(cwd, repo, pr.number);
   } else {
-    await gh(cwd, ["run", "rerun", value, "--repo", repo, "--failed"]);
+    await host.rerunFailedChecks(cwd, repo, value);
   }
   return `${operation} completed for ${pr.url} at ${head}`;
 }

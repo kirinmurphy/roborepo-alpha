@@ -51,8 +51,8 @@ try {
   // The setup module reads its state root at import, so the environment is set before importing it.
   Object.assign(process.env, env);
   for (const name of inherited) delete process.env[name];
-  const { runSetup, interactiveInput } = await import("../cli/github-setup.mjs");
-  const { refreshCaBundle } = await import("../../modules/forge/agent-identity.mjs");
+  const { runSetup, interactiveInput } = await import("../cli/forge-setup.mjs");
+  const { refreshCaBundle } = await import("../../modules/forge/providers/github/agent-identity.mjs");
   // Answers come from a list, one per question, like the lines a person would type.
   const setup = async (answers) => {
     const lines = answers === "" ? [] : answers.replace(/\n$/, "").split("\n");
@@ -476,7 +476,7 @@ try {
   assert.equal(result.status, 1, result.stdout + result.stderr);
   assert.match(result.stderr, /The bot is not ready/);
   assert.match(result.stderr, /robo-bot is an admin of example\/project/);
-  assert.match(result.stderr, /Fix: .*roborepo github setup|Fix: Lower robo-bot/);
+  assert.match(result.stderr, /Fix: .*roborepo git github setup|Fix: Lower robo-bot/);
   assert.ok(!packageOn(), "the package stays off");
   assert.ok(!fs.existsSync(path.join(stateRoot, "enabled-packages.json")) || !fs.readFileSync(path.join(stateRoot, "enabled-packages.json"), "utf8").includes("github-agent-identity"));
   assert.doesNotMatch(result.stdout, /Agents now act/);
@@ -547,7 +547,11 @@ try {
   assert.ok(!fs.existsSync(path.join(stateRoot, "github-agent")), "nothing was written");
   assert.equal(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"), before);
   assert.ok(!(piped.stdout + piped.stderr).includes(TOKEN));
-  console.log("✓ Without a terminal the CLI refuses, whatever the environment says.");
+  // The shared form refuses the same way: one command under two names.
+  const shared = spawnSync(process.execPath, [cli, "git", "github", "setup"], { cwd: checkout, env, encoding: "utf8", input: "" });
+  assert.deepEqual([shared.status, shared.stdout, shared.stderr], [piped.status, piped.stdout, piped.stderr], "roborepo git github setup refuses exactly as its alias does");
+  assert.match(shared.stderr, /^roborepo git github setup asks questions/);
+  console.log("✓ Without a terminal the CLI refuses, whatever the environment says, under both command names.");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }

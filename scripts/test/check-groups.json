@@ -103,6 +103,9 @@
     "doctor-protection-check.mjs",
     "github-identity-status-check.mjs",
     "github-setup-check.mjs",
+    "forge-provider-contract-check.mjs",
+    "forge-provider-parity-check.mjs",
+    "forge-host-scoping-check.mjs",
     "run-tmpdir-check.mjs",
     "install-drift-check.mjs"
   ]

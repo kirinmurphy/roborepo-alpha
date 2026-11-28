@@ -290,7 +290,7 @@ printout, and onboarding label those rows "Claude only".
 | Provider constants | `excludedCommands`, `filesystem.allowWrite: ["~/.npm"]` plus the home-folder `temporaryLocations`, `network.allowLocalBinding: false` |
 
 `excludedCommands` names individual `roborepo` subcommands rather than the whole CLI: the plans
-store, delivery, the read-only GitHub identity check (`github status`), linked worktrees, the web
+store, delivery, the read-only GitHub identity check (`git github status`, and its alias `github status`), linked worktrees, the web
 portal, telemetry commands that write capture state,
 and the commands that write harness config. Commands that launch other programs (`agent-run`, `run`,
 `browser`) stay sandboxed, so a wrapper cannot carry a test suite, scenario or script out of the

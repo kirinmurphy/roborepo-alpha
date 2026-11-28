@@ -3,7 +3,8 @@
 // checkout the process happens to be in.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { GIT_NETWORK_TIMEOUT_MS } from "../repositories/git-remote-operations.mjs";
+import { GIT_NETWORK_TIMEOUT_MS } from "../../../repositories/git-remote-operations.mjs";
+import { ForgeError } from "../../errors.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -26,15 +27,11 @@ export async function runGh(cwd, args, input = "", { timeoutMs = GIT_NETWORK_TIM
   return result.stdout;
 }
 
-// Why a GitHub read or write failed, in the two forms callers branch on: `kind: "http"` carries
-// the status and message GitHub answered with; `kind: "unavailable"` means no answer was received
-// (gh missing, not signed in, timed out, or the network failed) and `message` says which.
-export class GitHubError extends Error {
-  constructor(kind, message, { status = null } = {}) {
-    super(message);
+// Why a GitHub read or write failed; ForgeError describes the two kinds callers branch on.
+export class GitHubError extends ForgeError {
+  constructor(kind, message, options) {
+    super(kind, message, options);
     this.name = "GitHubError";
-    this.kind = kind;
-    this.status = status;
   }
 }
 

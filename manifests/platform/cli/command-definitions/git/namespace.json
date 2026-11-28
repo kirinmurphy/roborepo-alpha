@@ -2,6 +2,6 @@
   "path": ["git"],
   "kind": "namespace",
   "title": "Git",
-  "description": "Inspect local git repositories",
+  "description": "Inspect local git repositories and set up agent accounts on the Git host",
   "order": 450
 }

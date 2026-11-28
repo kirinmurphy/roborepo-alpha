@@ -4,7 +4,7 @@ import os from "node:os";
 import { repoRoot } from "./paths.mjs";
 import { writeRootConfig } from "./root-config-writes.mjs";
 import { commandOverridesPath, recordAppRoot } from "./state-paths.mjs";
-import { agentIdentityPackageEnabled } from "./agent-identity-package.mjs";
+import { enabledAgentIdentityProviderIds } from "./agent-identity-package.mjs";
 import { listHarnessProviders } from "../harnesses/registry.mjs";
 import {
   resolveBehaviors,
@@ -101,11 +101,11 @@ export const CODEX_RULES_HOME_SUB = "rules/roborepo.rules";
 // checkout (an old install did that) is left alone, so this never writes into the repo; the install
 // step replaces that link. A link anywhere else (a dotfiles folder) is written through, like a real
 // folder. Returns whether the file changed.
-export function writeCodexRulesFile(codexHome, { manifest = loadPermissionManifest(), agentIdentity = agentIdentityPackageEnabled() } = {}) {
+export function writeCodexRulesFile(codexHome, { manifest = loadPermissionManifest(), agentIdentityProviders = enabledAgentIdentityProviderIds() } = {}) {
   const file = path.join(codexHome, CODEX_RULES_HOME_SUB);
   const dir = path.dirname(file);
   if (linksIntoCheckout(dir)) return false;
-  const content = renderCodexRules(manifest, {}, { agentIdentity });
+  const content = renderCodexRules(manifest, {}, { agentIdentityProviders });
   const isFile = fs.existsSync(file) && fs.lstatSync(file).isFile();
   if (isFile && fs.readFileSync(file, "utf8") === content) return false;
   fs.mkdirSync(dir, { recursive: true });
@@ -140,7 +140,7 @@ function linksIntoCheckout(dir) {
 // Always global scope — no project override. `createClaude` retained for callers that might target
 // a fresh directory (e.g. a scratch/test harness home); default global-only usage never needs it.
 // `overrides` is the FULL override-file shape: { behaviors: {id: bucket}, commands: {key: {tokens, bucket}} }.
-// `agentIdentity` defaults to whether the GitHub agent identity package is enabled; pass it
+// `agentIdentityProviders` defaults to the forge providers whose agent identity package is enabled; pass it
 // explicitly to override.
 //
 // Iterates the provider registry rather than a fixed provider list, so a newly registered harness
@@ -148,7 +148,7 @@ function linksIntoCheckout(dir) {
 // "permissions" capability is skipped by contract, not by omission.
 export function renderPermissionsTo(
   baseDir,
-  { manifest = loadPermissionManifest(), overrides = {}, createClaude = false, workspaceRoots = [], cwd = process.cwd(), agentIdentity = agentIdentityPackageEnabled() } = {},
+  { manifest = loadPermissionManifest(), overrides = {}, createClaude = false, workspaceRoots = [], cwd = process.cwd(), agentIdentityProviders = enabledAgentIdentityProviderIds() } = {},
 ) {
   const touched = [];
 
@@ -166,11 +166,11 @@ export function renderPermissionsTo(
 
     fs.mkdirSync(path.dirname(target.file), { recursive: true });
     const cur = target.seedCurrent && fileExists ? fs.readFileSync(target.file, "utf8") : "";
-    const rendered = provider.adapters.permissions.render(cur, manifest, overrides, target.file, { ...permissionOptionsForProvider(provider, { cwd, workspaceRoots }), agentIdentity });
+    const rendered = provider.adapters.permissions.render(cur, manifest, overrides, target.file, { ...permissionOptionsForProvider(provider, { cwd, workspaceRoots }), agentIdentityProviders });
     writeRootConfig(provider.id, target.file, rendered);
     if (provider.id === "claude") ensureClaudePermissionHookAssets(baseDir);
     touched.push(target.file);
-    if (provider.id === "codex" && writeCodexRulesFile(target.homeDir, { manifest, agentIdentity })) {
+    if (provider.id === "codex" && writeCodexRulesFile(target.homeDir, { manifest, agentIdentityProviders })) {
       touched.push(path.join(target.homeDir, CODEX_RULES_HOME_SUB));
     }
   }
@@ -190,7 +190,7 @@ export function renderPermissionsTo(
 // update runs from, so a comparison from any other folder would report a false difference.
 export function previewPermissionRenders(
   baseDir,
-  { manifest = loadPermissionManifest(), overrides = {}, cwd = process.cwd(), agentIdentity = agentIdentityPackageEnabled() } = {},
+  { manifest = loadPermissionManifest(), overrides = {}, cwd = process.cwd(), agentIdentityProviders = enabledAgentIdentityProviderIds() } = {},
 ) {
   const previews = [];
   for (const provider of listHarnessProviders()) {
@@ -206,7 +206,7 @@ export function previewPermissionRenders(
       file: target.file,
       current,
       cwdDependent: typeof adapter.workspaceRoots === "function" || typeof adapter.writablePaths === "function",
-      render: () => adapter.render(target.seedCurrent && current !== null ? current : "", manifest, overrides, target.file, { ...permissionOptionsForProvider(provider, { cwd }), agentIdentity }),
+      render: () => adapter.render(target.seedCurrent && current !== null ? current : "", manifest, overrides, target.file, { ...permissionOptionsForProvider(provider, { cwd }), agentIdentityProviders }),
     });
   }
   return previews;
@@ -220,13 +220,13 @@ export function previewPermissionRenders(
 export function rootConfigPermissionRender(
   providerId,
   file,
-  { baseDir = os.homedir(), manifest = loadPermissionManifest(), overrides = readPermissionOverrides(), cwd = process.cwd(), agentIdentity = agentIdentityPackageEnabled() } = {},
+  { baseDir = os.homedir(), manifest = loadPermissionManifest(), overrides = readPermissionOverrides(), cwd = process.cwd(), agentIdentityProviders = enabledAgentIdentityProviderIds() } = {},
 ) {
   const provider = listHarnessProviders().find((entry) => entry.id === providerId);
   if (!provider?.manifest.capabilities.includes("permissions")) return null;
   const target = permissionsTargetFor(provider.manifest, baseDir);
   if (!target?.seedCurrent || path.resolve(target.file) !== path.resolve(file)) return null;
-  const options = { ...permissionOptionsForProvider(provider, { cwd }), agentIdentity };
+  const options = { ...permissionOptionsForProvider(provider, { cwd }), agentIdentityProviders };
   return (text) => provider.adapters.permissions.render(text, manifest, overrides, target.file, options);
 }
 
@@ -252,8 +252,8 @@ export function renderPermissionsToHome({
   overrides = {},
   workspaceRoots,
   cwd = process.cwd(),
-  agentIdentity,
+  agentIdentityProviders,
 } = {}) {
   recordAppRoot();
-  return renderPermissionsTo(home, { manifest, overrides, workspaceRoots, cwd, ...(agentIdentity === undefined ? {} : { agentIdentity }) });
+  return renderPermissionsTo(home, { manifest, overrides, workspaceRoots, cwd, ...(agentIdentityProviders === undefined ? {} : { agentIdentityProviders }) });
 }

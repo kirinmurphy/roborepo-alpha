@@ -22,6 +22,7 @@ import { execFile, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { SHIPPED_FORGE_MANIFESTS } from "../forge/manifests.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -140,23 +141,26 @@ const REPOSITORY_ENV = [
   "GIT_COMMON_DIR",
 ];
 
-// The Git settings file the github-agent-identity package installs, as RoboRepo renders it into agent
-// shells' `include.path` pair.
-const AGENT_GITCONFIG_REL = path.join("package-runtime", "github-agent-identity", "gitconfig");
-const AGENT_GITCONFIG_RENDERED = "~/.roborepo/package-runtime/github-agent-identity/gitconfig";
-
-function agentGitConfigPaths() {
+// The Git settings file each forge provider's agent identity package installs (for GitHub,
+// `package-runtime/github-agent-identity/gitconfig`), as RoboRepo renders it into agent shells'
+// `include.path` pair: with `~/.roborepo`, or expanded under the home folder or the state root.
+export function agentGitConfigPaths({ manifests = SHIPPED_FORGE_MANIFESTS } = {}) {
   // Resolved as roots.mjs resolves it, so a relative state root matches the absolute include rendered.
   const stateRoot = process.env.ROBOREPO_STATE_ROOT ? path.resolve(process.env.ROBOREPO_STATE_ROOT) : path.join(os.homedir(), ".roborepo");
-  return new Set([
-    AGENT_GITCONFIG_RENDERED,
-    path.join(os.homedir(), ".roborepo", AGENT_GITCONFIG_REL),
-    path.join(stateRoot, AGENT_GITCONFIG_REL),
-  ]);
+  const paths = new Set();
+  for (const manifest of manifests) {
+    const packageId = manifest.capabilities.includes("agent-identity") ? manifest.agent?.packageId : null;
+    if (!packageId) continue;
+    const relative = path.join("package-runtime", packageId, "gitconfig");
+    paths.add(`~/.roborepo/package-runtime/${packageId}/gitconfig`);
+    paths.add(path.join(os.homedir(), ".roborepo", relative));
+    paths.add(path.join(stateRoot, relative));
+  }
+  return paths;
 }
 
 // The GIT_CONFIG_KEY_n / GIT_CONFIG_VALUE_n pairs RoboRepo itself renders into agent shells:
-// `core.hooksPath`, and `include.path` naming the agent identity's Git settings file.
+// `core.hooksPath`, and `include.path` naming an agent identity's Git settings file.
 function renderedAgentGitConfigPair(key, value) {
   if (key === "core.hooksPath") return true;
   return key === "include.path" && agentGitConfigPaths().has(value);

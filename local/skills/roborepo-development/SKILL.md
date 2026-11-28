@@ -35,6 +35,7 @@ schema, resource-type validation depth, apply/reconcile behavior, and the comple
 | Conflict / collision behavior on install | `docs/user/reference/config-collision-handling.md` |
 | Rules generation + layering | `docs/internal/rules-parity-and-layering.md` |
 | Provider registry, capability adapters, and new harnesses | `docs/internal/harness-provider-interface.md`, `scripts/harnesses/registry.mjs` |
+| Git host (forge) providers and adding a second one | `references/forge-providers.md`, `modules/forge/registry.mjs` |
 | Skill/command mechanisms and trigger fixtures | `docs/internal/skills-and-commands.md`, `docs/user/reference/roborepo-skills.md` |
 | Where every doc lives | `docs/internal/docs-map.md` |
 | Hook behavior (Claude / Codex) | `docs/user/reference/{claude,codex}-hooks.md`, `docs/internal/hooks-internals.md` |
@@ -83,6 +84,11 @@ Everything else (the two symlink levels, the layer table) lives in
   never from a static list or a hard-coded `"claude"` / `"Codex"` branch. Text a person reads
   says "your harness settings" unless it names harnesses from that list. Before adding a harness
   check outside a provider, ask which provider method should answer it; if none does, add one.
+- **Git-host-specific code lives in forge providers, the same way.** Anything GitHub does its own
+  way (`gh`, tokens, rulesets, pull request calls) goes in `modules/forge/providers/github/`; other
+  code asks `modules/forge/registry.mjs` for the repo's provider and its capability. Each provider's
+  agent account acts only on that provider's hosts. Read `references/forge-providers.md` before
+  touching that layer or adding a provider.
 - **Adding any skill:** prefer `roborepo package dev create` / `package dev add-skill`. Shared skill →
   a package under `globals/packages/`, then run `roborepo skill sync-global` to refresh the machine-local cache and
   harness views. Shared command surfaces are rendered from package `slash-command` resources; run

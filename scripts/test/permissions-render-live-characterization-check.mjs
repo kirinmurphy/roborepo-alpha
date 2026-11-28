@@ -78,13 +78,23 @@ function makeHome() {
     fs.mkdirSync(path.join(home, ".codex"), { recursive: true });
     fs.writeFileSync(path.join(home, ".codex", "config.toml"), "model_reasoning_effort = \"high\"\n");
     fs.mkdirSync(path.join(home, ".gemini"), { recursive: true });
-    const { touched } = renderPermissionsTo(home, { manifest, cwd: home, agentIdentity: false });
+    const { touched } = renderPermissionsTo(home, { manifest, cwd: home, agentIdentityProviders: [] });
     // Codex also gets its rules/roborepo.rules prefix-rule file, rendered for the identity state.
     const codexRules = path.join(home, ".codex", "rules", "roborepo.rules");
     assert.equal(touched.length, 4, "all three present harness targets and Codex's rules file are touched");
     assert.ok(touched.includes(codexRules), "Codex's rules file is touched");
     assert.equal(fs.readFileSync(codexRules, "utf8"), renderCodexRules(manifest), "Codex's rules file is the identity-off render");
-    assert.equal(renderPermissionsTo(home, { manifest, cwd: home, agentIdentity: false }).touched.includes(codexRules), false, "an unchanged rules file is not rewritten");
+    assert.equal(renderPermissionsTo(home, { manifest, cwd: home, agentIdentityProviders: [] }).touched.includes(codexRules), false, "an unchanged rules file is not rewritten");
+    // Both forms of the bot commands: setup is forbidden to agents, status is allowed, with the
+    // identity off and on.
+    for (const providers of [[], ["github"]]) {
+      const rules = renderCodexRules(manifest, {}, { agentIdentityProviders: providers });
+      for (const form of [["roborepo", "git", "github"], ["roborepo", "github"]]) {
+        const pattern = (verb) => JSON.stringify([...form, verb]).replaceAll(",", ", ");
+        assert.ok(rules.includes(`prefix_rule(pattern=${pattern("setup")}, decision="forbidden")`), `${form.join(" ")} setup is forbidden (providers: ${providers})`);
+        assert.ok(rules.includes(`prefix_rule(pattern=${pattern("status")}, decision="allow")`), `${form.join(" ")} status is allowed (providers: ${providers})`);
+      }
+    }
 
     const settings = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
     assert.equal(settings.model, undefined, "model key is always stripped from Claude settings");

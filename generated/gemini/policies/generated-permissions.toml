@@ -258,8 +258,20 @@ priority = 500
 
 [[rule]]
 toolName = "run_shell_command"
+commandPrefix = "roborepo git github setup"
+decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
 commandPrefix = "roborepo github setup"
 decision = "deny"
+priority = 500
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "roborepo git github status"
+decision = "allow"
 priority = 500
 
 [[rule]]

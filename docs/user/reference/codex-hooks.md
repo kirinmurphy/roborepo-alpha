@@ -140,7 +140,7 @@ the permission hook denies it.
 Codex's sandbox blocks GitHub by default, so Codex cannot push, and it hands pushes back to you.
 With the optional [GitHub Agent Identity](claude-hooks.md#acting-as-a-github-bot) package on, the
 sandbox opens network access for `github.com` and `api.github.com` only. Codex's sandbox denies
-`*.pem` files, so `roborepo github setup` copies the system CA bundle to
+`*.pem` files, so `roborepo git github setup` copies the system CA bundle to
 `~/.roborepo/github-agent/ca-bundle.crt` and points Git at the copy; `roborepo doctor` warns when
 the copy goes stale after a system update. Codex then pushes feature branches as the bot without a prompt (the hooks still
 deny protected branches), and the `gh` rules follow the identity as for Claude: `gh api` and the

@@ -28,9 +28,9 @@ const backupPath = path.join(home, ".claude", "settings_original_20990101-000000
 const manifest = loadPermissionManifest();
 
 // The installed settings as update leaves them: the generated baseline, then the permission render.
-function installActive(agentIdentity) {
+function installActive(agentIdentityProviders) {
   fs.writeFileSync(settingsPath, baselineText);
-  renderPermissionsTo(home, { manifest, agentIdentity });
+  renderPermissionsTo(home, { manifest, agentIdentityProviders });
   return JSON.parse(fs.readFileSync(settingsPath, "utf8"));
 }
 
@@ -41,25 +41,25 @@ function writeBackup(settings) {
   fs.utimesSync(backupPath, future, future);
 }
 
-const claudePlan = (agentIdentity) => buildLocalConfigRepairPlans({ agentIdentity }).find((plan) => plan.harness === "claude");
+const claudePlan = (agentIdentityProviders) => buildLocalConfigRepairPlans({ agentIdentityProviders }).find((plan) => plan.harness === "claude");
 
 // Identity on, nothing lost: the lifted rules are not a repair candidate.
 {
-  const active = installActive(true);
+  const active = installActive(["github"]);
   assert.ok(active.permissions.allow.includes("Bash(gh api:*)"), "precondition: identity render allows gh api");
   assert.ok(!active.permissions.deny.includes("Bash(gh api:*)"), "precondition: identity render does not deny gh api");
   writeBackup(active);
-  const plan = claudePlan(true);
+  const plan = claudePlan(["github"]);
   assert.equal(plan, undefined, `identity on: no repair proposed, got ${JSON.stringify(plan?.keyDiff)}`);
 }
 
 // Identity on, the backup predates the identity (identity-off permissions) and holds one setting the
 // active file lost: only that setting is proposed, and the repaired file keeps the lifted rules.
 {
-  const offRender = installActive(false);
-  installActive(true);
+  const offRender = installActive([]);
+  installActive(["github"]);
   writeBackup({ ...offRender, userOnlySetting: "keep-me" });
-  const plan = claudePlan(true);
+  const plan = claudePlan(["github"]);
   assert.ok(plan, "identity on: the lost setting is still recovered");
   const keys = [...plan.keyDiff.added, ...plan.keyDiff.changed].map((entry) => entry.key);
   assert.deepEqual(keys, ["userOnlySetting"], `only the lost setting is proposed, got ${keys.join(", ")}`);
@@ -72,8 +72,17 @@ const claudePlan = (agentIdentity) => buildLocalConfigRepairPlans({ agentIdentit
 
 // Identity off, nothing lost: still quiet.
 {
-  writeBackup(installActive(false));
-  assert.equal(claudePlan(false), undefined, "identity off: no repair proposed");
+  writeBackup(installActive([]));
+  assert.equal(claudePlan([]), undefined, "identity off: no repair proposed");
+}
+
+// Only another provider's identity on: GitHub's rules keep their defaults, so a backup holding the
+// identity-off permissions is still nothing to repair, and the render denies gh api.
+{
+  const fakeOnly = installActive(["fake-forge"]);
+  assert.ok(fakeOnly.permissions.deny.includes("Bash(gh api:*)"), "another provider's identity leaves gh api denied");
+  writeBackup(fakeOnly);
+  assert.equal(claudePlan(["fake-forge"]), undefined, "another provider's identity: no repair proposed");
 }
 
 console.log("ok: local-config repair ignores rules the permission render owns");

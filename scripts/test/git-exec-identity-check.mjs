@@ -5,7 +5,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { runGitProcess, runGitProcessSync } from "../../modules/repositories/git-exec.mjs";
+import { agentGitConfigPaths, runGitProcess, runGitProcessSync } from "../../modules/repositories/git-exec.mjs";
+import { githubProvider } from "../../modules/forge/providers/github/index.mjs";
+import { fakeManifest, fakeProvider } from "./fixtures/forge-fake-provider/index.mjs";
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), "roborepo-git-identity-"));
 const home = path.join(root, "home");
@@ -123,6 +125,14 @@ try {
   process.env.GIT_CONFIG_PARAMETERS = "'http.proxyAuthMethod=basic' 'unterminated";
   assert.equal((await get("http.proxyAuthMethod", keep)).ok, false, "a malformed value keeps nothing");
   delete process.env.GIT_CONFIG_PARAMETERS;
+
+  // The kept includes come from every forge provider with an agent account, not from GitHub alone.
+  const withFake = agentGitConfigPaths({ manifests: [githubProvider.manifest, fakeProvider.manifest] });
+  for (const id of ["github-agent-identity", fakeManifest.agent.packageId]) {
+    assert.ok(withFake.has(`~/.roborepo/package-runtime/${id}/gitconfig`), `${id}'s rendered include is kept`);
+    assert.ok(withFake.has(path.join(stateRoot, "package-runtime", id, "gitconfig")), `${id}'s include under the state root is kept`);
+  }
+  assert.ok(![...agentGitConfigPaths()].some((entry) => entry.includes(fakeManifest.agent.packageId)), "the shipped list has no fake provider");
 
   console.log("git-exec identity check passed");
 } finally {

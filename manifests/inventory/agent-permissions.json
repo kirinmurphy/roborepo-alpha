@@ -486,9 +486,15 @@
       "id": "set-up-github-identity",
       "label": "Set up the GitHub agent identity",
       "host": "github",
-      "description": "The guided setup (roborepo github setup) reads a token, so agents never run it. Run it in your own terminal.",
+      "description": "The guided setup (roborepo git github setup, or its alias roborepo github setup) reads a token, so agents never run it. Run it in your own terminal.",
       "kind": "commands",
       "commands": [
+        [
+          "roborepo",
+          "git",
+          "github",
+          "setup"
+        ],
         [
           "roborepo",
           "github",
@@ -502,9 +508,15 @@
       "id": "check-github-identity",
       "label": "Check the GitHub agent identity",
       "host": "github",
-      "description": "Reads whether the GitHub bot identity is set up and healthy (roborepo github status). Changes nothing.",
+      "description": "Reads whether the GitHub bot identity is set up and healthy (roborepo git github status, or its alias roborepo github status). Changes nothing.",
       "kind": "commands",
       "commands": [
+        [
+          "roborepo",
+          "git",
+          "github",
+          "status"
+        ],
         [
           "roborepo",
           "github",

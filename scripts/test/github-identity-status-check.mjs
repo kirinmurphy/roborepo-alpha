@@ -40,7 +40,7 @@ try {
   // A token exported in the caller's shell would outrank the fixture's sign-in in fake gh.
   for (const name of ["GH_CONFIG_DIR", "GH_TOKEN", "GITHUB_TOKEN"]) delete env[name];
   const node = (script, args, extraEnv = {}) => spawnSync(process.execPath, [path.join(repoRoot, script), ...args], { cwd: checkout, env: { ...env, ...extraEnv }, encoding: "utf8" });
-  const line = () => node("scripts/cli/github-identity.mjs", ["--doctor"]);
+  const line = () => node("scripts/cli/forge-identity.mjs", ["--doctor"]);
   const doctor = (extraEnv = {}) => spawnSync("bash", [path.join(repoRoot, "scripts/doctor.sh"), "--verbose"], { cwd: checkout, env: { ...env, ...extraEnv }, encoding: "utf8" });
 
   // The managed rulesets, made by the real `roborepo protect` against the fake.
@@ -87,7 +87,7 @@ try {
 
   // Not set up: an ok line, and no GitHub call at all.
   start({ hosts: "none", enabled: false });
-  expectLine(0, /^GitHub agent identity not set up \(optional\) — run roborepo github setup in your own terminal$/);
+  expectLine(0, /^GitHub agent identity not set up \(optional\) — run roborepo git github setup in your own terminal$/);
   assert.deepEqual(gh.calls(), []);
 
   start();
@@ -95,7 +95,7 @@ try {
   // The package selected, with the Git settings file it installs gone: Git skips the include, so
   // agents' pushes go out as you, and status says so instead of calling it healthy.
   fs.rmSync(agentGitconfig);
-  expectLine(1, /problem for example\/project: Agents' git pushes still go out as you, because the Git settings file .* is missing\. — run roborepo github setup/);
+  expectLine(1, /problem for example\/project: Agents' git pushes still go out as you, because the Git settings file .* is missing\. — run roborepo git github setup/);
   start();
   // With the bot otherwise ready, turning the package on is the whole fix; with anything else
   // wrong, the setup fixes it and turns the package on at the end.
@@ -106,7 +106,7 @@ try {
   {
     const report = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
     const off = report.problems.find((entry) => entry.id === "package-off");
-    assert.match(off.fix, /^Run roborepo github setup in your own terminal; it fixes the above/, "the setup is the step when more than the package is missing");
+    assert.match(off.fix, /^Run roborepo git github setup in your own terminal; it fixes the above/, "the setup is the step when more than the package is missing");
     assert.equal(report.problems.at(-1).id, "package-off", "the package finding follows what the bot account lacks");
   }
   start({ collaborators: [{ login: BOT, permission: "admin" }] });
@@ -229,7 +229,7 @@ try {
   // The portal's invite step: a non-GitHub repo makes no GitHub call, and a bot invitation the owner
   // already sent is accepted even when you cannot read the repo's invitations.
   const invite = (repositoryId) => {
-    const script = `import { inviteBotToRepo } from ${JSON.stringify(path.join(repoRoot, "scripts/cli/github-identity.mjs"))};\nconsole.log(JSON.stringify(await inviteBotToRepo({ repositoryId: ${JSON.stringify(repositoryId)}, botLogin: ${JSON.stringify(BOT)} })));`;
+    const script = `import { inviteBotToRepo } from ${JSON.stringify(path.join(repoRoot, "scripts/cli/forge-identity.mjs"))};\nconsole.log(JSON.stringify(await inviteBotToRepo({ repositoryId: ${JSON.stringify(repositoryId)}, botLogin: ${JSON.stringify(BOT)} })));`;
     const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: checkout, env, encoding: "utf8" });
     assert.equal(run.status, 0, run.stderr);
     return JSON.parse(run.stdout);
@@ -250,7 +250,7 @@ try {
   // The portal's account cache key changes when the token is replaced for the same bot, and never
   // holds the token.
   const facts = () => {
-    const script = `import { readLocalAccountFacts } from ${JSON.stringify(path.join(repoRoot, "scripts/cli/github-identity.mjs"))};\nconsole.log(JSON.stringify(readLocalAccountFacts()));`;
+    const script = `import { agentIdentityProvider, readLocalAccountFacts } from ${JSON.stringify(path.join(repoRoot, "scripts/cli/forge-identity.mjs"))};\nconsole.log(JSON.stringify(readLocalAccountFacts(agentIdentityProvider("github"))));`;
     const run = spawnSync(process.execPath, ["--input-type=module", "-e", script], { cwd: checkout, env, encoding: "utf8" });
     assert.equal(run.status, 0, run.stderr);
     return run.stdout.trim();
@@ -318,7 +318,7 @@ try {
   expectLine(0, /^GitHub agent identity: agents act as robo-bot on example\/project$/);
   // A token with no expiry date works but gets a note naming the setup command.
   start({ token: { expires: null } });
-  expectLine(1, /token never expires.* — regenerate it with an expiry date.*roborepo github setup/);
+  expectLine(1, /token never expires.* — regenerate it with an expiry date.*roborepo git github setup/);
   const noExpiry = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
   assert.equal(noExpiry.state, "healthy", "a token without expiry is advice, not a problem");
   assert.ok(noExpiry.problems.some((item) => item.id === "no-expiry" && item.severity === "warn"));
@@ -329,13 +329,30 @@ try {
     start({ ca });
     const report = JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout);
     const entry = report.problems.find((item) => item.id === "ca-bundle-stale");
-    assert.ok(entry && entry.severity === "warn" && /roborepo github setup/.test(entry.fix), `${ca} copy is reported`);
+    assert.ok(entry && entry.severity === "warn" && /roborepo git github setup/.test(entry.fix), `${ca} copy is reported`);
     assert.equal(report.state, "healthy", "a stale copy is advice, not a problem");
   }
   start();
   assert.ok(!JSON.parse(node("scripts/cli/main.mjs", ["github", "status", "--json"]).stdout).problems.some((item) => item.id === "ca-bundle-stale"), "a matching copy is not reported");
   console.log("✓ ca-bundle-stale is reported when the copy is missing or differs, and not when it matches.");
   console.log("✓ Each identity state maps to its doctor line; a warning is a hint, a problem is a hint, never a failure.");
+
+  // `roborepo git github status` and its alias `roborepo github status` are one command: the same
+  // output and exit code, healthy and with a problem, as JSON and as text.
+  for (const state of [{}, { collaborators: [{ login: BOT, permission: "admin" }] }]) {
+    for (const json of [["--json"], []]) {
+      start(state);
+      const shared = node("scripts/cli/main.mjs", ["git", "github", "status", ...json]);
+      const alias = node("scripts/cli/main.mjs", ["github", "status", ...json]);
+      assert.deepEqual([alias.status, alias.stdout, alias.stderr], [shared.status, shared.stdout, shared.stderr], `both forms print the same${json.length ? " JSON" : " text"}`);
+    }
+  }
+  assert.equal(node("scripts/cli/main.mjs", ["git", "github", "status", "--bogus"]).status, 2);
+  const help = node("scripts/cli/main.mjs", ["help", "git"]);
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /\bgithub\b/, "roborepo help git lists the github namespace");
+  assert.match(node("scripts/cli/main.mjs", ["--help"]).stdout, /\bgit\b/, "roborepo --help lists git");
+  console.log("✓ roborepo git github status and roborepo github status print the same output with the same exit code.");
 
   // The status command: exit codes and JSON.
   start();
@@ -369,7 +386,7 @@ try {
   gh.clearCalls();
   let refused = JSON.parse(init().stdout).error;
   assert.equal(refused.message, "Agents act on GitHub as the bot account, and it cannot reach example/project yet, so nothing was set up.");
-  assert.match(refused.resolution, /^Run `roborepo github setup` in this repo, in your own terminal; it invites the bot\./);
+  assert.match(refused.resolution, /^Run `roborepo git github setup` in this repo, in your own terminal; it invites the bot\./);
   assert.ok(gh.calls().length > 0 && gh.calls().every((call) => call.configDir === null && !["PUT", "PATCH", "POST", "DELETE"].includes(call.method)), "the check reads once as you and changes nothing");
   // When you cannot see the repo either, the general reason stays.
   start({ failure: "repo-forbidden" });
@@ -379,14 +396,14 @@ try {
   fs.rmSync(agentGitconfig, { force: true });
   // A shell whose Git does not go out as the bot is not the bot's problem; nothing is read.
   gh.clearCalls();
-  const { explainBotRepoAccess } = await import("../cli/github-identity.mjs");
+  const { explainBotRepoAccess } = await import("../cli/forge-identity.mjs");
   assert.equal(await explainBotRepoAccess({ cwd: uninvited, env: {} }), null);
   assert.deepEqual(gh.calls(), []);
   console.log("✓ plans init names the bot's missing invitation when you can see the repo and the bot cannot.");
 
   // Outside a GitHub repo doctor adds no line.
   start();
-  const other = spawnSync(process.execPath, [path.join(repoRoot, "scripts/cli/github-identity.mjs"), "--doctor"], { cwd: clone("gitlab", "git@gitlab.com:example/project.git"), env, encoding: "utf8" });
+  const other = spawnSync(process.execPath, [path.join(repoRoot, "scripts/cli/forge-identity.mjs"), "--doctor"], { cwd: clone("gitlab", "git@gitlab.com:example/project.git"), env, encoding: "utf8" });
   assert.deepEqual([other.status, other.stdout], [0, ""]);
   assert.deepEqual(gh.calls(), []);
 
