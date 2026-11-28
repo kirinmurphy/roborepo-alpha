@@ -1,9 +1,9 @@
 ---
 id: skills-vs-commands-invocation-policy
-next_action: Reproduce supported native command listing and invocation, then choose presentation and repository/global precedence with the cross-package invocation workstream.
+next_action: Check whether current Codex loads anything from ~/.codex/commands, then choose how each provider exposes manual workflows and stop generating Codex wrappers that nothing loads.
 blocked_by: []
 depends_on: []
-related: ["harness-parity-todo", "wrap-up-coderabbit-integration-plan", "0jped168", "o9zwxuav"]
+related: ["harness-parity-todo", "0jped168", "o9zwxuav", "plans-portal-live-refresh-and-static-preflight"]
 reviewed_commit: 57f8f2199b6db87d829af8d41e387800518024c9
 ---
 
@@ -15,6 +15,10 @@ Finish skill activation and native invocation policy using the shipped package/r
 plane. Settle command presentation, expand trigger evidence, and define the remaining local/global
 precedence boundary before changing how users invoke workflows.
 
+This plan also owns the cross-package Codex correction: RoboRepo generates and installs Codex
+slash-command wrappers into a directory that current Codex may not read. The Plans portal's static
+command help ([[plans-portal-live-refresh-and-static-preflight]]) waits on this decision.
+
 ## Context
 
 Skill/slash-command resources, invocation/risk metadata, command rendering, `roborepo skill audit`,
@@ -25,8 +29,23 @@ in `scripts/cli/package-catalog.mjs`, `skill-trigger-check.mjs`, `skill-trigger-
 Static trigger fixtures establish description/phrase consistency, not actual model selection.
 [[0jped168]] owns repeatable live-agent evals. Codex's declared commands directory and the old
 assumption that it lacks skill discovery need native verification; generating wrappers does not
-prove discoverability. [[wrap-up-coderabbit-integration-plan]] Workstream 1 owns implementing the
-cross-package native invocation correction.
+prove discoverability.
+
+### Codex command wrappers
+
+Every package with a skill-backed slash command also gets a Codex wrapper:
+
+| Fact | Source |
+| --- | --- |
+| The Codex provider declares a commands directory, `~/.codex/commands` | `globals/harnesses/codex/provider.json` |
+| Wrappers are generated and tracked for Codex as well as Claude | `generated/packages/plan-suite/codex/commands/` (7 files), `generated/packages/case-study-pack/codex/commands/case-study.md` |
+| Rendering and install paths come from the command renderer | `scripts/cli/slash-commands.mjs`, `scripts/cli/skill-command-config.mjs` |
+
+Tests prove only that these files are generated and copied. An earlier investigation reported that
+Codex does not scan `~/.codex/commands`, and that manual skill invocation in Codex is `$<skill>` or
+`/skills`. It also reported that `~/.codex/prompts` is deprecated and shows entries as
+`/prompts:<name>`, so moving wrappers there is not a fix. None of this has been rechecked against
+a current Codex version.
 
 ## Goals
 
@@ -53,6 +72,12 @@ choosing among these alternatives; the old package counts and “Codex-only shim
 | Label aliases | Preserves distinct descriptions | Adds presentation noise; provider support may differ |
 | Deliver only the required native entry | Removes redundant wrappers | Must prove manual invocation remains available on each provider |
 
+For Codex, the last option is forced if Codex is confirmed not to read `~/.codex/commands`: Codex
+gets no wrappers, and its manual entry is the installed skill, invoked as `$<skill>`. The
+`slash-command` entrypoint then accepts only harnesses with a verified command directory, and a
+skill that must not run implicitly sets `policy.allow_implicit_invocation: false` in its
+`agents/openai.yaml`. The table's choice stays open for Claude.
+
 ### Repository and global precedence
 
 This plan owns the unresolved decision formerly tracked by [[harness-parity-todo]]. Determine how
@@ -63,8 +88,18 @@ tradeoff before selecting product behavior.
 
 ## Implementation plan
 
-- [ ] Reproduce listing/manual invocation on supported provider versions and choose command
-      presentation; coordinate delivery with Workstream 1 of [[wrap-up-coderabbit-integration-plan]].
+- [ ] Reproduce listing/manual invocation on supported provider versions, including whether Codex
+      reads `~/.codex/commands`, and choose command presentation.
+- [ ] If Codex does not read it: stop rendering Codex wrappers, and stop package status from
+      reporting a Codex wrapper as installed. Codex's provider declares the `slash-commands`
+      capability, and `roborepo package dev create` gives a new command to every harness that has
+      it, so removing that capability from Codex may be the whole fix; otherwise reject or warn on a
+      `codex` `slash-command` entrypoint in package validation.
+- [ ] On update and repair, remove only RoboRepo-generated wrappers from `~/.codex/commands`
+      (files carrying the generated marker), report other files there as unmanaged, and never
+      delete the directory.
+- [ ] Correct docs and portal labels that imply Codex command parity, showing `/<name>` for Claude
+      and `$<name>` for Codex.
 - [ ] Expand trigger fixtures beyond the initial risk set and tune descriptions when real
       examples expose over-broad or missing conditions; keep sibling-workflow near misses.
 - [ ] Audit risk and activation classifications for security-sensitive and persistent workflows.
@@ -78,7 +113,11 @@ tradeoff before selecting product behavior.
 
 ## Validation
 
-Run `roborepo skill audit --check`, `roborepo skill triggers --check`,
+Codex wrapper checks, written to fail before the change: no Codex wrapper is generated or
+installed for a skill-backed command; the Claude wrapper still is; package status shows `/<name>`
+for Claude and `$<name>` for Codex; repair removes only marked wrappers and leaves a user file in
+place. Run
+`roborepo skill audit --check`, `roborepo skill triggers --check`,
 `roborepo skill render-commands --check`, and the relevant package/skill checks. Validate runtime
 manual discovery separately from generated-file existence. Compare representative auto matches,
 near misses, explicit workflows, native metadata, and repository/global resources. Implemented
