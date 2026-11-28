@@ -55,10 +55,14 @@ provider is its own plan.
    match the manifest.
 7. **Claude sandbox.** Exclude the provider's CLI and `git <commandNamespace> status` in
    `scripts/harnesses/claude/sandbox-settings.mjs`.
-8. **Browser links.** `KNOWN_PROVIDER_HOSTS` in `modules/repositories/config.mjs` is a separate list
+8. **Portal and doctor.** Home keeps one account read, for the first listed provider: its offer,
+   account card, and setup note (`portal/home/agent-identity.js`). Key them by provider so a repo
+   on the new host shows its own account and setup command. Doctor's crash line in
+   `scripts/doctor.sh` names GitHub; make it name the provider or none.
+9. **Browser links.** `KNOWN_PROVIDER_HOSTS` in `modules/repositories/config.mjs` is a separate list
    of hosts the portal builds web links for (it already names `gitlab.com`, `bitbucket.org`, and
    `codeberg.org`). Add the new host there if it is missing, or derive the list from the registry.
-9. **Checks.** The contract, parity, and host-scoping checks pick up the new provider from the
+10. **Checks.** The contract, parity, and host-scoping checks pick up the new provider from the
    registry, as do RoboRepo's own Git calls (`agentGitConfigPaths` in
    `modules/repositories/git-exec.mjs`) and the Agents page's list of packages Settings controls;
    add tests for its adapter methods beside the GitHub ones, and portal UI cases only if the

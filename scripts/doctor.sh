@@ -481,7 +481,8 @@ check_agent_identity() {
   set -e
   [[ -z "${output}" && "${status}" -eq 0 ]] && return 0
   if [[ "${status}" -ne 0 && "${status}" -ne 1 ]]; then
-    fail "agent identity check crashed: ${output}"
+    # GitHub is the only provider today, and this keeps doctor's wording unchanged for it.
+    fail "GitHub agent identity check crashed: ${output}"
     return 0
   fi
   # The exit code is the worst line's level, so with several providers every line takes it.
