@@ -608,7 +608,9 @@ None. The decisions made while writing this plan are in the Decision log.
 - [x] The second-provider checklist missed the Codex permission hook table, the hardcoded package spots, and `KNOWN_PROVIDER_HOSTS` — fixed (d5de920d)
 - [x] A render check's message read "identity on" for an empty provider list — fixed (d5de920d)
 - [x] git-exec importing the forge registry made a cycle, so a GitHub provider module loaded first threw at load — fixed (3135d77d)
+- [x] Doctor's crash line lost "GitHub" from its wording — fixed (8d448421)
 
 ### Verification
 - Validation pass 1 at d5ec928b (fresh-context subagent): 4 actionable fix findings, all fixed in d5de920d
 - Validation pass 2 at d5de920d (fresh-context subagent): 1 blocking fix finding, fixed in 3135d77d; the Agents page's degraded read went to the Decision Log
+- Validation pass 3 at 2d3005b4 (fresh-context subagent): 1 actionable fix finding, fixed in 8d448421; Home's one-account read added to the second-provider checklist
