@@ -558,6 +558,18 @@ None. The decisions made while writing this plan are in the Decision log.
 - November 28, 2026 (implementation): the second-provider checklist is a reference file
   (`references/forge-providers.md`) in the repo-local `roborepo-development` skill, linked from its
   doc table and a new rule, to keep `SKILL.md` short.
+- November 28, 2026 (implementation): the capability method sets are wider than the Proposed
+  design's table. `pull-requests` has what delivery actually calls (`repositoryInfo`,
+  `findPullRequests`, `checkRun`, `editBody`, `markReady`, `rerunFailedChecks`, and the URL
+  builders); `agent-identity` splits reading and setup into the steps status, doctor, the portal,
+  and setup each call. Alternative: the table's coarser methods, which would push GitHub-shaped
+  orchestration back into shared code. `contract.mjs` lists the methods.
+- November 28, 2026 (implementation): `KNOWN_PROVIDER_HOSTS` (browser links,
+  `modules/repositories/config.mjs`) stays a separate list; it already names hosts with no forge
+  provider and serves only web links. The second-provider checklist names it.
+- November 28, 2026 (implementation): if `/api/forge-providers` fails, Home shows no agent badge and
+  Settings shows an error instead of the row, where before both decided from the repo id alone.
+  Accepted as a degraded read: the same server answers every other portal request.
 
 ## Documentation impact
 
@@ -586,3 +598,14 @@ None. The decisions made while writing this plan are in the Decision log.
 - [ ] `roborepo git github setup` and `roborepo github setup` behave the same on the interactive
       already-done path with the real bot. Needs a person: setup needs a real terminal and agents
       are denied it; the check covers both forms only on the no-terminal refusal path.
+
+## Review
+
+### Findings
+- [x] RoboRepo's own Git calls kept only GitHub's agent include (`modules/repositories/git-exec.mjs`) — fixed (d5de920d)
+- [x] The Agents page hid only GitHub's identity package (`portal/config/app.js`) — fixed (d5de920d)
+- [x] The second-provider checklist missed the Codex permission hook table, the hardcoded package spots, and `KNOWN_PROVIDER_HOSTS` — fixed (d5de920d)
+- [x] A render check's message read "identity on" for an empty provider list — fixed (d5de920d)
+
+### Verification
+- Validation pass 1 at d5ec928b (fresh-context subagent): 4 actionable fix findings, all fixed in d5de920d
