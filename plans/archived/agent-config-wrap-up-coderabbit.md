@@ -1,6 +1,6 @@
 ---
 id: wrap-up-coderabbit-integration-plan
-next_action: Verify native workflow discovery across supported providers and scope the cross-package correction separately from optional CodeRabbit integration.
+next_action:
 blocked_by: []
 depends_on: []
 related: []
@@ -492,3 +492,7 @@ RoboRepo. Test only the orchestration contract and pass representative vendor re
 - Guided, important-only, report-only, and explicit skip paths work.
 - Review fixes are validated and committed separately; nothing is pushed.
 - Wrap Up still completes when CodeRabbit is unavailable, skipped, or finds no changes.
+
+## Archived
+
+2026-11-28: Abandoned with the deprecated /session-close workflow (its package now lives in globals/packages-archived/session-close), so CodeRabbit review inside Wrap-Up will not be built. The Codex command-wrapper correction (Workstream 1) is not specific to Wrap-Up and moved to Skills vs. Commands: Invocation & Risk Policy (skills-vs-commands-invocation-policy).
