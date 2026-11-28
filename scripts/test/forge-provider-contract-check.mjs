@@ -109,6 +109,20 @@ try {
   assert.deepEqual(claudePermissions(manifest, {}, { agentIdentityProviders: ["fake-forge"] }), claudePermissions(manifest, {}, { agentIdentityProviders: [] }));
   assert.equal(renderCodexRules(manifest, {}, { agentIdentityProviders: ["fake-forge"] }), renderCodexRules(manifest, {}, { agentIdentityProviders: [] }));
   console.log("✓ A host-tagged identity bucket follows only its own provider in the Claude and Codex renders.");
+
+  // The manifest-only list (for modules the adapters themselves import) names exactly the shipped
+  // providers, and every forge module loads as a program's first import, so no module the
+  // adapters reach imports the registry back.
+  const { SHIPPED_FORGE_MANIFESTS } = await import("../../modules/forge/manifests.mjs");
+  assert.deepEqual(SHIPPED_FORGE_MANIFESTS, listForgeProviders().map((provider) => provider.manifest));
+  const forgeModules = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory()
+    ? forgeModules(path.join(dir, entry.name))
+    : entry.name.endsWith(".mjs") ? [path.join(dir, entry.name)] : []));
+  for (const file of forgeModules(path.join(repoRoot, "modules", "forge"))) {
+    const loaded = spawnSync(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(new URL(`file://${file}`).href)})`], { encoding: "utf8" });
+    assert.equal(loaded.status, 0, `${path.relative(repoRoot, file)} loads on its own: ${loaded.stderr}`);
+  }
+  console.log("✓ Every forge module loads as the first import, and the manifest list matches the registry.");
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
 }

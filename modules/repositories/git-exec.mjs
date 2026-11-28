@@ -22,7 +22,7 @@ import { execFile, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { listForgeProviders } from "../forge/registry.mjs";
+import { SHIPPED_FORGE_MANIFESTS } from "../forge/manifests.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -144,12 +144,12 @@ const REPOSITORY_ENV = [
 // The Git settings file each forge provider's agent identity package installs (for GitHub,
 // `package-runtime/github-agent-identity/gitconfig`), as RoboRepo renders it into agent shells'
 // `include.path` pair: with `~/.roborepo`, or expanded under the home folder or the state root.
-export function agentGitConfigPaths({ providers } = {}) {
+export function agentGitConfigPaths({ manifests = SHIPPED_FORGE_MANIFESTS } = {}) {
   // Resolved as roots.mjs resolves it, so a relative state root matches the absolute include rendered.
   const stateRoot = process.env.ROBOREPO_STATE_ROOT ? path.resolve(process.env.ROBOREPO_STATE_ROOT) : path.join(os.homedir(), ".roborepo");
   const paths = new Set();
-  for (const provider of listForgeProviders(providers ? { providers } : {})) {
-    const packageId = provider.manifest.capabilities.includes("agent-identity") ? provider.manifest.agent?.packageId : null;
+  for (const manifest of manifests) {
+    const packageId = manifest.capabilities.includes("agent-identity") ? manifest.agent?.packageId : null;
     if (!packageId) continue;
     const relative = path.join("package-runtime", packageId, "gitconfig");
     paths.add(`~/.roborepo/package-runtime/${packageId}/gitconfig`);

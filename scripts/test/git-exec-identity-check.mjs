@@ -127,7 +127,7 @@ try {
   delete process.env.GIT_CONFIG_PARAMETERS;
 
   // The kept includes come from every forge provider with an agent account, not from GitHub alone.
-  const withFake = agentGitConfigPaths({ providers: [githubProvider, fakeProvider] });
+  const withFake = agentGitConfigPaths({ manifests: [githubProvider.manifest, fakeProvider.manifest] });
   for (const id of ["github-agent-identity", fakeManifest.agent.packageId]) {
     assert.ok(withFake.has(`~/.roborepo/package-runtime/${id}/gitconfig`), `${id}'s rendered include is kept`);
     assert.ok(withFake.has(path.join(stateRoot, "package-runtime", id, "gitconfig")), `${id}'s include under the state root is kept`);
